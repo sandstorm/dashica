@@ -1,0 +1,20 @@
+{
+  "name": "@dashica/linux-x64",
+  "version": "0.1.0",
+  "description": "The Linux 64-bit binary for dashica, a code-first monitoring dashboard (Grafana alternative).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sandstorm/dashica.git"
+  },
+  "license": "MIT",
+  "preferUnplugged": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ]
+}

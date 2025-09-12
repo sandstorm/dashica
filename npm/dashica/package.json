@@ -1,0 +1,29 @@
+{
+  "name": "dashica",
+  "version": "0.1.0",
+  "description": "A code-first monitoring dashboard (Grafana alternative).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sandstorm/dashica.git"
+  },
+  "main": "lib/main.js",
+  "types": "lib/main.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "dashica": "bin/dashica"
+  },
+  "optionalDependencies": {
+    "@dashica/darwin-arm64": "0.25.9",
+    "@dashica/darwin-x64": "0.25.9",
+    "@dashica/linux-arm": "0.25.9",
+    "@dashica/linux-arm64": "0.25.9",
+    "@dashica/linux-ia32": "0.25.9",
+    "@dashica/linux-x64": "0.25.9",
+    "@dashica/win32-arm64": "0.25.9",
+    "@dashica/win32-ia32": "0.25.9",
+    "@dashica/win32-x64": "0.25.9"
+  },
+  "license": "MIT"
+}
