@@ -1,0 +1,231 @@
+@import url("observablehq:default.css");
+
+/* Dark Mode */
+@import url("observablehq:theme-air.css") (prefers-color-scheme: light);
+@import url("observablehq:theme-near-midnight.css") (prefers-color-scheme: dark);
+
+@import url("observablehq:theme-alt.css");
+@import url("observablehq:theme-wide.css");
+
+/* TODO embed locally once https://github.com/observablehq/framework/issues/1573 is fixed */
+@import url('https://fonts.googleapis.com/css2?family=Gabarito:wght@400..900&display=swap');
+
+/* latin */
+@font-face {
+    font-family: 'Gabarito';
+}
+
+:root {
+    --sans-serif: "Gabarito", sans-serif;
+    --serif: "Gabarito";
+}
+
+dialog::backdrop {
+    background-color: rgba(1, 1, 1, 0.5);
+}
+
+.decoratedChart {
+    position: relative;
+}
+
+.decoratedChart--isRerendering {
+    opacity: 0.5;
+}
+
+.decoratedChart__floatingMenu {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0.5rem;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 200ms;
+}
+
+.decoratedChart__floatingMenu a {
+    cursor: pointer;
+}
+
+.decoratedChart:hover .decoratedChart__floatingMenu {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal {
+    position: relative;
+}
+
+.modal__close {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0.5rem;
+}
+
+.globalTimeSelector {
+    position: fixed;
+    top: 0px;
+    right: 0;
+    padding-top: 10px;
+    padding-left: 10px;
+    margin-left: -10px;
+    padding-right: 40px;
+    border-left: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+    background-color: var(--theme-background);
+    z-index: 1000;
+    border-bottom-left-radius: 5px;
+}
+
+.globalTimeSelector form {
+    --input-width: 120px;
+    --label-width: 0px;
+}
+
+.globalTimeSelector__from form {
+    --input-width: 160px;
+    --label-width: 0px;
+}
+.globalTimeSelector__to form {
+    --input-width: 160px;
+    --label-width: 0px;
+}
+.globalTimeSelector__apply form {
+    --input-width: 20px;
+    --label-width: 0px;
+}
+
+.recordDetails {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+}
+
+.recordDetails__record {
+    flex-grow: 0;
+    align-items: stretch;
+    flex-basis: 32rem; /* 128 * 0.25rem = 32rem */
+    max-width: 32rem; /* lg = 32rem */
+    padding: 10px;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    transition: box-shadow 300ms;
+}
+
+.recordDetails__record p {
+    margin: 0;
+}
+
+.recordDetails__record:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.font-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.font-bold {
+    font-weight: 700;
+}
+
+.break-all {
+    word-break: break-all;
+}
+
+
+.stats {
+    margin-left: auto;
+    margin-right: auto;
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1px;
+}
+
+@media (min-width: 640px) {
+    .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .stats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.stats__stat {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: 1rem;
+    row-gap: 0.5rem;
+}
+.stats__stat dt {
+    font-size: 0.875rem; /* 14px */
+    line-height: 1rem; /* 24px */
+    font-weight: 500;
+    color: #6b7280; /* gray-500 */
+
+}
+
+.stats__stat dd {
+    width: 100%;
+    flex: none;
+    font-size: 3rem; /* text-5xl = 3rem (48px) */
+    line-height: 2.5rem; /* /10 = 2.5rem (40px) */
+    font-weight: 500;
+    letter-spacing: -0.025em; /* tracking-tight */
+}
+
+.autoTable {
+    width: 100%;
+}
+
+.autoTable td {
+    max-width: 600px;
+}
+
+.sqlFilterInput {
+    position: fixed;
+    top: 0;
+    width: 650px;
+    background: var(--theme-background);
+    z-index: 950;
+}
+
+.sqlFilterInput__help {
+    color: #ccc;
+    font-size: 0.8em;
+}
+
+
+.autoTable .autoTable__timestampDate {
+    color: #ccc;
+}
+
+.observablehq-pre-container, ol, p, h1, h2, h3{max-width: none}
+
+#observablehq-center {
+    margin-top: 4rem;
+}
+
+@container (min-width: 1080px) {
+    .grid-cols-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .grid-cols-5 .grid-colspan-2 {
+        grid-column: span 2;
+    }
+    .grid-cols-5 .grid-colspan-4 {
+        grid-column: span 4;
+    }
+    .grid-cols-5 .grid-colspan-4 {
+        grid-column: span 4;
+    }
+}

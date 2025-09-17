@@ -1,0 +1,20 @@
+# This compose stack is only used during development // for tests
+
+services:
+  # http://localhost:8123/play?
+  # metrics for Grafana, contains monitoring
+  clickhouse:
+    image: "clickhouse/clickhouse-server:25.3.2"
+    # we do not need persistent storage here, but we could add it.
+    ulimits:
+      nofile: 262144
+    environment:
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: password
+      CLICKHOUSE_DB: monitoring
+    ports:
+      - "28123:8123"
+      - "29001:9000"
+    volumes:
+      - './deployment/local-dev/clickhouse:/docker-entrypoint-initdb.d/'
+      - './deployment/local-dev/clickhouse/test_prod_dumps/:/var/lib/clickhouse/user_files/test_prod_dumps/'
