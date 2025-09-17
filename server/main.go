@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/caddyserver/certmagic"
 	"github.com/rs/zerolog"
+	app "github.com/sandstorm/dashica"
 	"github.com/sandstorm/dashica/server/alerting"
 	"github.com/sandstorm/dashica/server/clickhouse"
 	"github.com/sandstorm/dashica/server/core"
@@ -85,14 +86,16 @@ func main() {
 	startupLogger.Info().
 		Msg("Logging initialized. Starting to boot...")
 
-	fileSystem := os.DirFS(".").(fs.ReadFileFS)
-	if _, err = fs.Stat(fileSystem, "build/dashica"); os.IsNotExist(err) {
-		startupLogger.Fatal().
-			Msg("did NOT find build/dashica in working directory.")
+	var fileSystem fs.ReadFileFS = app.EmbeddedFileSystem
+	if config.DevMode {
+		fileSystem = os.DirFS(".").(fs.ReadFileFS)
+		if _, err = fs.Stat(fileSystem, "build/dashica"); os.IsNotExist(err) {
+			startupLogger.Fatal().
+				Msg("did NOT find build/dashica in working directory.")
+		}
+		startupLogger.Debug().
+			Msg("Using live filesystem instead of the embedded one for hot-reloading of SQL files to work")
 	}
-	startupLogger.Debug().
-		Msg("Using live filesystem instead of the embedded one for hot-reloading of SQL files to work")
-
 	// --- App Startup ---
 	timeProvider := core.NewRealTimeProvider()
 	clickhouseClientManager := clickhouse.NewManager(config, logger)
