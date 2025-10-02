@@ -1,0 +1,46 @@
+layout {
+    pane split_direction="horizontal" {
+        pane split_direction="vertical" {
+            // all these panes will be laid out horizontally next to each other
+
+            // A command which should be directly executed, e.g. to open a connection
+            // to a required server.
+            /*pane command="dev" name="dev up-tunnel (Clickhouse)" {
+                args "up-tunnel"
+            }*/
+
+            // A command which is optional and should start only when requested
+            /*pane command="dev" name="dev up-tunnel-swtt (Solarwatt)" {
+                args "up-tunnel-swtt"
+                start_suspended true
+            }*/
+            pane command="dev" name="!! to QUIT all processes at once, press Ctrl+Q" {
+                args "up-observablehq"
+            }
+        }
+        pane split_direction="vertical" {
+            // all these panes will be laid out vertically next to each other
+            pane command="./dev.sh" focus=true {
+                args "up-server"
+                // start_suspended true
+            }
+        }
+    }
+
+    //pane size=2 borderless=true {
+    //    plugin location="zellij:status-bar"
+    //}
+}
+on_force_close "quit"
+//mouse_mode true
+simplified_ui true
+copy_command "pbcopy"                     // osx
+show_startup_tips false
+show_release_notes false
+
+ui {
+    pane_frames {
+        hide_session_name true
+    }
+}
+

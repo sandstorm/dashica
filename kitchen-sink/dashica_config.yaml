@@ -1,0 +1,27 @@
+
+# !!! THIS FILE IS IN .gitignore
+# !!! BECAUSE IT CONTAINS SENSITIVE PWs
+
+clickhouse:
+
+  default:
+    url: http://127.0.0.1:28123
+    user: admin
+    password: password
+    database: default
+    query_file_patterns:
+      - /content/__testing
+
+
+  alert_storage:
+    url: http://127.0.0.1:28123
+    user: admin
+    password: password
+    database: default
+    query_file_patterns:
+      - /__testing
+
+log:
+  to_stdout: true
+dev_mode: true
+

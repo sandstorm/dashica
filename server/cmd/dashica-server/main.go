@@ -2,6 +2,13 @@ package main
 
 import (
 	"context"
+	"io/fs"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/caddyserver/certmagic"
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/server/alerting"
@@ -10,12 +17,6 @@ import (
 	"github.com/sandstorm/dashica/server/httpserver"
 	"github.com/sandstorm/dashica/server/util/logging"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"io/fs"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	// Profiling
 	_ "net/http/pprof"
@@ -85,13 +86,17 @@ func main() {
 	startupLogger.Info().
 		Msg("Logging initialized. Starting to boot...")
 
-	fileSystem := os.DirFS(".").(fs.ReadFileFS)
-	if _, err = fs.Stat(fileSystem, "build/dashica"); os.IsNotExist(err) {
+	workingDir, err := os.Getwd()
+	if err != nil {
 		startupLogger.Fatal().
-			Msg("did NOT find build/dashica in working directory.")
+			Err(err).
+			Msg("could not find working directory")
 	}
+
+	fileSystem := os.DirFS(workingDir).(fs.ReadFileFS)
 	startupLogger.Debug().
-		Msg("Using live filesystem instead of the embedded one for hot-reloading of SQL files to work")
+		Str("Current working directory", workingDir).
+		Msg("Using live filesystem")
 
 	// --- App Startup ---
 	timeProvider := core.NewRealTimeProvider()

@@ -1,0 +1,10 @@
+alerts:
+  shopOrderFailures:
+    query_path: ./test-data/alert-simple-threshold.sql
+    # with (optionally) these SQL params
+    params:
+      event_dataset: shop_order_failures
+    alert_if:
+      value_gt: 1000
+    message: ERROR - too many failures
+    check_every: '@15minutes'

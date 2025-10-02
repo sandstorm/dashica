@@ -2,16 +2,16 @@ package httpserver
 
 import (
 	"fmt"
-	"github.com/rs/zerolog"
-	app "github.com/sandstorm/dashica"
-	"github.com/sandstorm/dashica/server/alerting"
-	"github.com/sandstorm/dashica/server/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
 	"io/fs"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/server/alerting"
+	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/server/core"
 )
 
 func NewHttpHandler(config *core.AppConfig, logger zerolog.Logger, fileSystem fs.ReadFileFS, clickhouseClientManager *clickhouse.Manager, alertManager *alerting.AlertManager, alertEvaluator *alerting.AlertEvaluator, alertResultStore *alerting.AlertResultStore) (http.Handler, error) {
@@ -45,8 +45,8 @@ func NewHttpHandler(config *core.AppConfig, logger zerolog.Logger, fileSystem fs
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(u))
 
 	} else {
-		var distFS, _ = fs.Sub(app.EmbeddedFileSystem, "dist")
-		mux.Handle("/", noDirListing(http.FileServerFS(distFS)))
+		//var distFS, _ = fs.Sub(app.EmbeddedFileSystem, "dist")
+		//mux.Handle("/", noDirListing(http.FileServerFS(distFS)))
 	}
 
 	handler := http.Handler(mux)

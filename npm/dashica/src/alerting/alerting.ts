@@ -1,5 +1,5 @@
 import * as Plot from "@observablehq/plot";
-import {clickhouse} from "../index.js";
+import {clickhouse} from "../../index.js";
 import {decorateChart} from "../component/index.js";
 import type {QueryResult, ViewOptions} from "../types.js";
 import {timeBar} from "../chart/index.js";

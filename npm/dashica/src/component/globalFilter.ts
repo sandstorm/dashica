@@ -1,5 +1,5 @@
 import {withRuntime} from "../util/runtime.js";
-import {clickhouse} from "../index.js";
+import {clickhouse} from "../../index.js";
 import {sqlFilterInput} from "./sqlFilterInput.js";
 import {globalTimeSelector} from "./index.js";
 

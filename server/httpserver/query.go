@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
-	"github.com/sandstorm/dashica/server/querying"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/server/querying"
 )
 
 type queryHandler struct {
@@ -110,11 +111,7 @@ func (qh queryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("missing required 'fileName' parameter")
 	}
 
-	basePath := "client/"
-	filePath := path.Clean(path.Join(basePath, fileName))
-	if !strings.HasPrefix(filePath, basePath) {
-		return fmt.Errorf("invalid file path: %s", filePath)
-	}
+	filePath := path.Clean(strings.TrimLeft(fileName, "./"))
 	fileContent, err := qh.fileSystem.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("reading file %s: %w", fileName, err)
