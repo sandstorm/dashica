@@ -8,7 +8,7 @@ function tests_run_all() {
     docker compose up -d
 
     _log_yellow "Starting tests"
-    (cd app && go test -cover ./...)
+    (cd server && go test -cover ./...)
 }
 
 # runs a single test on the local machine, eg dev tests_run_single TestFoo_Bar
@@ -59,7 +59,7 @@ function tests_run_pattern() {
 function tests_run_all_ci() {
   _log_yellow "Starting tests"
   export APP_ENV=testing_ci
-  (cd app && go test -cover ./...)
+  (cd server && go test -cover ./...)
 }
 
 # waits at most $3 seconds for the port $1:$2 to become open

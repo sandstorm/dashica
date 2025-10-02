@@ -1,7 +1,6 @@
 package test_server
 
 import (
-	app "github.com/sandstorm/dashica"
 	"github.com/sandstorm/dashica/server/core"
 	"io/fs"
 	"os"
@@ -24,9 +23,7 @@ func LoadTestingConfig(t *testing.T) (*core.AppConfig, fs.FS) {
 		t.Fatal(err)
 	}
 
-	var fileSystem fs.FS = app.EmbeddedFileSystem
-
-	fileSystem = os.DirFS(".")
+	fileSystem := os.DirFS(".")
 	return config, fileSystem
 }
 

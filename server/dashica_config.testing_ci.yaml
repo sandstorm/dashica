@@ -1,0 +1,24 @@
+
+clickhouse:
+
+  default:
+    url: http://clickhouse:8123
+    user: admin
+    password: password
+    database: default
+    query_file_patterns:
+      - /content/__testing
+
+
+  alert_storage:
+    url: http://clickhouse:8123
+    user: admin
+    password: password
+    database: default
+    query_file_patterns:
+      - /__testing
+
+log:
+  to_stdout: true
+dev_mode: true
+
