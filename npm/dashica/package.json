@@ -12,6 +12,7 @@
   "bin": {
     "dashica": "bin/dashica"
   },
+  "type": "module",
   "dependencies": {
     "@clickhouse/client-web": "^1.11.0",
     "@codemirror/lang-sql": "^6.8.0",

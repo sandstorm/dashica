@@ -1,9 +1,17 @@
 {
   "dependencies": {
-    "dashica": "file:../npm/dashica"
+    "dashica": "file:../npm/dashica",
+    "run-pty": "^5.0.0"
   },
   "scripts": {
-    "build": "observable build",
+    "build": "dashica build",
+    "server": "dashica server",
+
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --preview",
+
+
+
+
     "dev": "rm -Rf src/dashica; ln -s ../../node_modules/dashica/ src/dashica; observable preview --no-open"
   }
 }

@@ -4,6 +4,15 @@
 
 clickhouse:
 
+#  playground:
+#    url: https://play.clickhouse.com:443
+#    user: explorer
+#    password:
+#    database: default
+#    query_file_patterns:
+#      - /src/docs
+
+
   default:
     url: http://127.0.0.1:28123
     user: admin

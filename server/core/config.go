@@ -3,15 +3,17 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/knadh/koanf/providers/confmap"
 	"os"
 	"time"
+
+	"github.com/knadh/koanf/providers/confmap"
+
+	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
-	"strings"
 )
 
 // AppConfig is the main config struct which is returned from LoadConfig.
@@ -165,10 +167,6 @@ func validateConfig(config *AppConfig) error {
 
 		if ch.Database == "" {
 			return fmt.Errorf("ClickHouse '%s': database is required", key)
-		}
-
-		if ch.User != "" && ch.Password == "" {
-			return fmt.Errorf("ClickHouse '%s': Password is required if username is given", key)
 		}
 	}
 
