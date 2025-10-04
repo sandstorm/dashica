@@ -36,5 +36,4 @@ clickhouse:
 
 log:
   to_stdout: true
-dev_mode: true
 

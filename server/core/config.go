@@ -186,21 +186,21 @@ func validateConfig(config *AppConfig) error {
 // PrintConfig prints the current configuration (with sensitive data masked)
 func PrintConfig(config *AppConfig) {
 	fmt.Println("============= CONFIG ====================")
-	fmt.Println("ClickHouse Configurations:")
+	fmt.Println("clickhouse:")
 	for key, ch := range config.ClickHouse {
-		fmt.Printf("  [%s]:\n", key)
-		fmt.Printf("    URL: %s\n", ch.URL)
-		fmt.Printf("    User: %s\n", ch.User)
-		fmt.Printf("    Password: %s\n", maskSecret(ch.Password))
-		fmt.Printf("    Database: %s\n", ch.Database)
+		fmt.Printf("  \"%s\":\n", key)
+		fmt.Printf("    url: %s\n", ch.URL)
+		fmt.Printf("    user: %s\n", ch.User)
+		fmt.Printf("    password: %s\n", maskSecret(ch.Password))
+		fmt.Printf("    database: %s\n", ch.Database)
 		fmt.Printf("    query_file_patterns: %s\n", ch.QueryFilePatterns)
 	}
 
-	fmt.Println("Logging Configuration:")
-	fmt.Printf("  Stdout: %v\n", config.Log.ToStdout)
-	fmt.Printf("  Filename: %s\n", config.Log.FileName)
-	fmt.Printf("  Host Group: %s\n", config.Log.HostGroup)
-	fmt.Printf("  Host Name: %s\n", config.Log.HostName)
+	fmt.Println("log:")
+	fmt.Printf("  to_stdout: %v\n", config.Log.ToStdout)
+	fmt.Printf("  filename: %s\n", config.Log.FileName)
+	fmt.Printf("  host_group: %s\n", config.Log.HostGroup)
+	fmt.Printf("  host_name: %s\n", config.Log.HostName)
 
 	fmt.Println("Let's Encrypt Configuration:")
 	fmt.Printf("  Enabled: %v\n", config.LetsEncrypt.Enabled)
@@ -210,8 +210,7 @@ func PrintConfig(config *AppConfig) {
 		// Print other Let's Encrypt settings if needed
 	}
 
-	fmt.Println("Development Configuration:")
-	fmt.Printf("  Observable Proxy URL: %v\n", config.DevMode)
+	fmt.Printf("dev_mode: %v\n", config.DevMode)
 
 	fmt.Println("Authentication Configuration:")
 	fmt.Printf("  Enabled: %v\n", config.Auth.Enabled)
