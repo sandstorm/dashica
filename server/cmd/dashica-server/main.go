@@ -96,6 +96,7 @@ func main() {
 	fileSystem := os.DirFS(workingDir).(fs.ReadFileFS)
 	startupLogger.Debug().
 		Str("Current working directory", workingDir).
+		Str("base directory", workingDir).
 		Msg("Using live filesystem")
 
 	// --- App Startup ---

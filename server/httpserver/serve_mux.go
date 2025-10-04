@@ -45,8 +45,8 @@ func NewHttpHandler(config *core.AppConfig, logger zerolog.Logger, fileSystem fs
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(u))
 
 	} else {
-		//var distFS, _ = fs.Sub(app.EmbeddedFileSystem, "dist")
-		//mux.Handle("/", noDirListing(http.FileServerFS(distFS)))
+		var publicFS, _ = fs.Sub(fileSystem, "public")
+		mux.Handle("/", noDirListing(http.FileServerFS(publicFS)))
 	}
 
 	handler := http.Handler(mux)
