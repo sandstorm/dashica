@@ -5,9 +5,9 @@
   },
   "type": "module",
   "scripts": {
-    "build": "dashica build-frontend",
+    "dist": "dashica dist --build ../",
     "clickhouse-cli": "dashica clickhouse-cli",
 
-    "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../"
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --dev --build ../"
   }
 }
