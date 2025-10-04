@@ -115,8 +115,7 @@ func LoadConfig(appEnv string, forTesting bool) (*AppConfig, error) {
 func loadDefaultConfig(k *koanf.Koanf) error {
 	// Setup default values
 	defaultConfig := map[string]interface{}{
-		"logs.stdout":                         true,
-		"logs.filename":                       "app.log",
+		"log.to_stdout":                       true,
 		"letsencrypt.enabled":                 false,
 		"letsencrypt.dev_http_port":           80,
 		"letsencrypt.dev_https_port":          443,

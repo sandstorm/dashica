@@ -44,12 +44,54 @@ const config = {
     head: `
         <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.3.0/dist/iconify-icon.min.js"></script>
 `,
-    style: 'style.css',
-
     // The path to the source root.
-    root: "src",
+    //root: "src",
 
     pages: [
+        {
+            name: "Getting Started",
+            open: true,
+            pages: [
+                {
+                    name: "Installation",
+                    path: "/docs/01_installation",
+                },
+                {
+                    name: "Your first Dashboard",
+                    path: "/docs/02_first_dashboard",
+                },
+                {
+                    name: "Building & Deployment",
+                    path: "/docs/03_deployment",
+                },
+            ]
+        },
+        {
+            name: "Chart Types",
+            open: true,
+            pages: [
+            ]
+        },
+        {
+            name: "Customization & Advanced Topics",
+            open: true,
+            pages: [
+                {
+                    name: "Introduction to Customization",
+                    path: "/docs/21_intro_customization",
+                },
+                {
+                    name: "Custom Sidebar Menu",
+                },
+                {
+                    name: "Custom Styles",
+                },
+                {
+                    name: "Configuration Reference",
+                    //path: "/docs/21_intro_customization",
+                },
+            ]
+        },
         {
             name: "Clickhouse",
             open: false,

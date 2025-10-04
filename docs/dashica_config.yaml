@@ -34,6 +34,3 @@ clickhouse:
     query_file_patterns:
       - /__testing
 
-log:
-  to_stdout: true
-

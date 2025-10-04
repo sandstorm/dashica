@@ -164,16 +164,6 @@ git clean -X -f
 update `README.template.md`, then run `dev gen-readme` to update README.md. This will pull in code snippets from
 `app/src/content/__testing/example-git.md` via gomplate to README.md.
 
-### ==(your topic here)==
-
-==e.g.==
-
-- ==running importers==
-- ==executing database migrations==
-- ==compiling CSS/JS==
-- ==debugging==
-- ==sending mails or debugging mail sending==
-
 # User Manual
 
 ## Project Setup
