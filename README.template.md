@@ -31,8 +31,7 @@ Main Features and ideas:
 <!-- TOC -->
 * [Dashica](#dashica)
 * [Development](#development)
-  * [Development Setup](#development-setup)
-    * [Prerequisites](#prerequisites)
+  * [Development Setup](#development-setup-)
   * [Running Tests](#running-tests)
   * [Development Cookbook / Tips and Tricks](#development-cookbook--tips-and-tricks)
     * [Starting from Scratch again / dropping all data in the container](#starting-from-scratch-again--dropping-all-data-in-the-container)
@@ -78,6 +77,7 @@ Main Features and ideas:
 * [Production Setup](#production-setup)
   * [-----------](#------------1)
 * [Architecture](#architecture)
+* [Thanks to](#thanks-to)
 <!-- TOC -->
 
 # Development
@@ -175,6 +175,10 @@ update `README.template.md`, then run `dev gen-readme` to update README.md. This
 - ==sending mails or debugging mail sending==
 
 # User Manual
+
+## Project Setup
+
+TODO describe package.json setup, dashica_config.yaml, and observablehq.config.js
 
 ## system configuration using `dashica_config.yaml`
 

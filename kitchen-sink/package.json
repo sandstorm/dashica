@@ -7,7 +7,7 @@
     "build": "dashica build",
     "server": "dashica server",
 
-    "preview": "run-pty      % dashica preview-frontend        % dashica server --preview",
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../ --preview",
 
 
 
