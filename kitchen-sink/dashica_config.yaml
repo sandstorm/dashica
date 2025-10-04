@@ -14,7 +14,11 @@ clickhouse:
 
 
   default:
+    # for dashica backend
     url: http://127.0.0.1:28123
+
+    # for connection via "dashica clickhouse-cli" command
+    nativeHostPort: 127.0.0.1:29001
     user: admin
     password: password
     database: default

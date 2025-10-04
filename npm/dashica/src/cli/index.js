@@ -13,6 +13,7 @@ const commands = {
     'build-frontend': () => import('./commands/build-frontend.js'),
     'preview-frontend': () => import('./commands/preview-frontend.js'),
     'server': () => import('./commands/server.js'),
+    'clickhouse-cli': () => import('./commands/clickhouse-cli.js'),
     init: () => import('./commands/init.js'),
     help: () => import('./commands/help.js'),
 };

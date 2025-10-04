@@ -14,29 +14,22 @@
   },
   "type": "module",
   "dependencies": {
-    "@clickhouse/client-web": "^1.11.0",
     "@codemirror/lang-sql": "^6.8.0",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.36.4",
-    "@iconify/json": "^2.2.323",
     "@observablehq/framework": "^1.13.2",
     "@observablehq/inputs": "^0.12.0",
     "@observablehq/plot": "^0.6.17",
-    "alpinejs": "^3.14.9",
     "apache-arrow": "^19.0.1",
     "codemirror": "^6.0.1",
     "d3-brush": "^3.0.0",
-    "d3-dsv": "^3.0.1",
     "d3-selection": "^3.0.0",
-    "d3-time-format": "^4.1.0",
-    "htl": "^0.3.1"
+    "htl": "^0.3.1",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "@types/alpinejs": "^3.13.11",
     "@types/d3-brush": "^3.0.6",
-    "@types/d3-selection": "^3.0.11",
-    "rimraf": "^5.0.5",
-    "vitest": "^3.0.9"
+    "@types/d3-selection": "^3.0.11"
   },
   "optionalDependencies": {
     "@dashica/darwin-arm64": "0.25.9",

@@ -38,9 +38,6 @@ function setup() {
   _log_yellow "Setting up your project"
   which gomplate > /dev/null || brew install gomplate
   npm i
-  pushd kitchen-sink
-  ./dev.sh setup
-  popd
   _log_green "Done. To get started:"
   _log_green "  cd kitchen-sink"
   _log_green "  dev up"

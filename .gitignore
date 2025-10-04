@@ -1,4 +1,4 @@
 /npm/@dashica/*/bin/dashica-server
 **/dashica-server.exe
-/node_modules
 server/build/
+node_modules

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "dashica build-frontend",
+    "clickhouse-cli": "dashica clickhouse-cli",
 
     "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../"
   }
