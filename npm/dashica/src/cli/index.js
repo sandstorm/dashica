@@ -10,7 +10,7 @@ const [,, command, ...args] = process.argv;
 
 // Command registry
 const commands = {
-    build: () => import('./commands/build.js'),
+    'build-frontend': () => import('./commands/build-frontend.js'),
     'preview-frontend': () => import('./commands/preview-frontend.js'),
     'server': () => import('./commands/server.js'),
     init: () => import('./commands/init.js'),

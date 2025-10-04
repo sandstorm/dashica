@@ -41,8 +41,8 @@ const config = {
     // ],
 
     // Content to add to the head of the page, e.g. for a favicon:
-    head: `<link rel="icon" href="observable.png" type="image/png" sizes="32x32">
-<script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.3.0/dist/iconify-icon.min.js"></script>
+    head: `
+        <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.3.0/dist/iconify-icon.min.js"></script>
 `,
     style: 'style.css',
 

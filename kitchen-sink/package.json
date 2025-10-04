@@ -3,11 +3,12 @@
     "dashica": "file:../npm/dashica",
     "run-pty": "^5.0.0"
   },
+  "type": "module",
   "scripts": {
-    "build": "dashica build",
+    "build": "dashica build-frontend",
     "server": "dashica server",
 
-    "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../ --preview",
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../",
 
 
 
