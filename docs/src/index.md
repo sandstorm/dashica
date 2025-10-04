@@ -1,6 +1,6 @@
 # Dashica
 
-Welcome to the Dashica kitchen-sink. Use the sidebar to explore.
+Welcome to the Dashica Docs. Use the sidebar to explore.
 
 Quick links:
 - Documentation Overview: /docs/index

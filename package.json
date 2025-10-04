@@ -2,6 +2,6 @@
   "name": "dashica-root-project",
   "workspaces": [
     "npm/dashica",
-    "kitchen-sink" 
+    "docs"
   ]
 }

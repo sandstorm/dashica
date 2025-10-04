@@ -39,8 +39,8 @@ function setup() {
   which gomplate > /dev/null || brew install gomplate
   npm i
   _log_green "Done. To get started:"
-  _log_green "  cd kitchen-sink"
-  _log_green "  dev up"
+  _log_green "  cd docs/"
+  _log_green "  npm run preview"
   _log_green "http://127.0.0.1:8080"
 }
 
