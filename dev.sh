@@ -64,27 +64,6 @@ function build-all() {
   _log_green "All artifacts written to npm/@dashica/"
 }
 
-# Go tests (from server directory)
-function test-go() {
-  pushd server >/dev/null
-  go test ./...
-  popd >/dev/null
-}
-
-# Go vet
-function vet-go() {
-  pushd server >/dev/null
-  go vet ./...
-  popd >/dev/null
-}
-
-# Go fmt (checks and writes)
-function fmt-go() {
-  pushd server >/dev/null
-  go fmt ./...
-  popd >/dev/null
-}
-
 # Clean build artifacts and caches
 function clean() {
   _log_yellow "Cleaning build artifacts, npm/@dashica platform outputs, and Go caches"
