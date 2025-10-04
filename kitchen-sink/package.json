@@ -6,13 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "dashica build-frontend",
-    "server": "dashica server",
 
-    "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../",
-
-
-
-
-    "dev": "rm -Rf src/dashica; ln -s ../../node_modules/dashica/ src/dashica; observable preview --no-open"
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --build ../"
   }
 }
