@@ -24,10 +24,7 @@ export async function symlinkDashicaFrontendSourceCode() {
     const dashicaModulePath = findDashicaModulePath();
 
     const dashicaPath = join(process.cwd(), 'src', 'dashica');
-    if (existsSync(dashicaPath)) {
-        await rm(dashicaPath, {recursive: true, force: true});
-        console.log(`Removed ${dashicaPath}`);
-    }
+    await rm(dashicaPath, {recursive: true, force: true});
 
     // Create symlink from src/dashica to the found dashica module
     await symlink(dashicaModulePath, dashicaPath, 'dir');
