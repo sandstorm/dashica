@@ -80,7 +80,7 @@ const config = {
                     name: "Introduction to Customization",
                     path: "/docs/21_intro_customization",
                 },
-                {
+                /*{
                     name: "Custom Sidebar Menu",
                 },
                 {
@@ -97,7 +97,7 @@ const config = {
                 {
                     name: "dashica_config.yaml reference",
                     //path: "/docs/21_intro_customization",
-                },
+                },*/
             ]
         },
         {

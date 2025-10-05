@@ -1,6 +1,6 @@
-import {dirname, join} from "path";
+import {dirname, join, resolve, relative} from "path";
 import {existsSync} from "fs";
-import {rm, symlink} from "fs/promises";
+import {readdir, rm, symlink, mkdir, cp} from "fs/promises";
 import {createRequire} from 'module';
 import {spawn} from "node:child_process";
 
@@ -37,12 +37,12 @@ export async function symlinkDashicaFrontendSourceCode() {
 /**
  * Resolve the dashica-server binary to use, or build it if requested.
  *
- * - understands the "build" and "bin" flags.
+ * - understands the "build" and "bin" and "embed" flags.
  *
  * @param flags
  * @returns {Promise<void>}
  */
-export async function resolveDashicaServer(flags) {
+export async function resolveDashicaServerAndCompileIfNeeded(flags) {
 
     let dashicaServerBin = null;
 
@@ -54,18 +54,33 @@ export async function resolveDashicaServer(flags) {
         }
 
         console.log(`Building dashica-server with base directory: ${flags['build']}`);
-
         const serverSourceDirectory = join(flags['build'], 'server');
         if (!existsSync(serverSourceDirectory)) {
-            console.error(`ERROR: Server source directory "${serverSourceDirectory}" does not exist.`);
+            console.error(`ERROR: Server source directory "${join(flags['build'], 'server')}" does not exist.`);
             process.exit(1);
         }
 
         // Build the Go server & wait for build to complete
         dashicaServerBin = join(serverSourceDirectory, 'build', 'dashica-server');
-        const buildProcess = spawn('go', ['build', '-C', serverSourceDirectory, '-o', 'build/dashica-server', './cmd/dashica-server'], {
+        let buildArgs = ['build-server'];
+        if (flags['embed']) {
+            console.log(`embedding ./dist into server at ${serverSourceDirectory}/dist`);
+            if (existsSync(join(serverSourceDirectory, 'dist'))) {
+                await rm(join(serverSourceDirectory, 'dist'), {recursive: true, force: true});
+            }
+            await copyFiles(
+                'dist/',
+                join(serverSourceDirectory, 'dist'),
+                // copy all files for embedding except for dashica-server and dashica_config*.yaml
+                (entry) =>
+                    entry.name !== 'dashica-server' &&
+                    !entry.name.startsWith('dashica_config')
+            );
+            buildArgs = ['build-server-embedded'];
+        }
+        const buildProcess = spawn(resolve(join(flags['build'], 'dev.sh')), buildArgs, {
             stdio: 'inherit',
-            cwd: process.cwd(),
+            cwd: resolve(flags['build']),
             env: process.env,
         });
         await new Promise((resolve, reject) => {
@@ -79,11 +94,16 @@ export async function resolveDashicaServer(flags) {
         });
 
         console.log(`build complete: ${serverSourceDirectory}/build/dashica-server`);
+    } else {
+        if (flags['embed']) {
+            console.error(`ERROR: --embed must be used together with --build.`);
+            process.exit(1);
+        }
     }
 
     // Take a pre-built dashica-server binary if requested
     if (flags['bin']) {
-        if (!existsSync(flags['bin']) ) {
+        if (!existsSync(flags['bin'])) {
             console.error(`ERROR: dashica-server binary "${flags['bin']}" does not exist.`);
             process.exit(1);
         }
@@ -98,5 +118,35 @@ export async function resolveDashicaServer(flags) {
         process.exit(1);
     }
 
+
     return dashicaServerBin;
+}
+
+
+export async function copyFiles(srcRoot, destRoot, filterFn) {
+    async function walk(dir) {
+        const entries = await readdir(dir, {withFileTypes: true});
+        for (const entry of entries) {
+            const fullPath = join(dir, entry.name);
+            if (entry.isDirectory()) {
+                await walk(fullPath);
+            } else if (entry.isFile() && filterFn(entry)) {
+                const rel = relative(srcRoot, fullPath);
+                const destPath = join(destRoot, rel);
+                await mkdir(dirname(destPath), {recursive: true});
+                console.log("SRC", srcRoot, "dir", dir, "fullpath", fullPath, "destpath", destPath);
+                await cp(fullPath, destPath);
+            }
+        }
+    }
+
+    try {
+        await walk(srcRoot);
+    } catch (err) {
+        if (err && err.code === 'ENOENT') {
+            console.warn(`Warning: '${srcRoot}' directory not found; no files copied.`);
+            return;
+        }
+        console.warn(`Warning: Error while copying files: ${err.message}`);
+    }
 }

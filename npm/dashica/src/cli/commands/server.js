@@ -1,7 +1,5 @@
 import {spawn} from 'node:child_process';
-import {existsSync, constants} from 'node:fs';
-import {join} from "node:path";
-import {resolveDashicaServer} from "./_utils.js";
+import {resolveDashicaServerAndCompileIfNeeded} from "./_utils.js";
 
 export default async function build({flags, args, packageRoot}) {
     // Validate flags - throw error if unknown flags
@@ -12,7 +10,7 @@ export default async function build({flags, args, packageRoot}) {
         process.exit(1);
     }
 
-    const dashicaServerBin = await resolveDashicaServer(flags);
+    const dashicaServerBin = await resolveDashicaServerAndCompileIfNeeded(flags);
 
     const env = Object.assign({}, process.env);
     if (flags.dev) {

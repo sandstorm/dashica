@@ -14,7 +14,7 @@ set -e
 
 GO_FLAGS=(-trimpath -ldflags "-s -w")
 DIST_DIR="dist"
-BIN_DIR="server/bin"
+BIN_DIR="build"
 MAIN_PKG="./cmd/dashica-server"
 
 # Centralized platform targets used by build-all and clean
@@ -47,9 +47,15 @@ function setup() {
 # Build Go server for current platform
 function build-server() {
   _log_yellow "Building dashica-server for current platform"
-  mkdir -p "$BIN_DIR"
-  CGO_ENABLED=0 go build "${GO_FLAGS[@]}" -o "$BIN_DIR/dashica-server" "$MAIN_PKG"
-  _log_green "Built: $BIN_DIR/dashica-server"
+  CGO_ENABLED=0 go build -C ./server "${GO_FLAGS[@]}" -o "$BIN_DIR/dashica-server" "$MAIN_PKG"
+  _log_green "Built: ./server/$BIN_DIR/dashica-server"
+}
+
+# Build Go server for current platform
+function build-server-embedded() {
+  _log_yellow "Building dashica-server with embedded files from dist/ for current platform"
+  CGO_ENABLED=0 go build -C ./server "${GO_FLAGS[@]}" -tags embed -o "$BIN_DIR/dashica-server" "$MAIN_PKG"
+  _log_green "Built: ./server/$BIN_DIR/dashica-server"
 }
 
 # Cross-compile for common platforms into npm/@dashica outDir layout

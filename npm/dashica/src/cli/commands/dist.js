@@ -1,13 +1,13 @@
 import {build as observableBuild} from "@observablehq/framework/dist/build.js"
 import {readConfig as observableReadConfig} from "@observablehq/framework/dist/config.js"
-import {resolveDashicaServer, symlinkDashicaFrontendSourceCode} from "./_utils.js";
-import {cp, readdir, mkdir, rm} from "fs/promises";
-import path from "path";
+import {copyFiles, resolveDashicaServerAndCompileIfNeeded, symlinkDashicaFrontendSourceCode} from "./_utils.js";
+import {cp, rm} from "fs/promises";
+import {join} from "path";
 import {existsSync} from "fs";
 
 export default async function dist({ flags, args, packageRoot }) {
     // Validate flags - throw error if unknown flags
-    const knownFlags = ['build', 'bin'];
+    const knownFlags = ['build', 'bin', 'embed'];
     const unknownFlags = Object.keys(flags).filter(flag => !knownFlags.includes(flag));
     if (unknownFlags.length > 0) {
         console.error(`ERROR: Unknown flags: ${unknownFlags.join(', ')}. Known flags: ${knownFlags.join(', ')}`);
@@ -33,42 +33,23 @@ export default async function dist({ flags, args, packageRoot }) {
     config.output = 'dist/public';
     await observableBuild({ config: config });
 
-    console.log('Copying dashica-server binary to dist/');
-    const dashicaServerBin = await resolveDashicaServer(flags);
-    cp(dashicaServerBin, 'dist/dashica-server');
-
-    console.log('Copying dashica_config.yaml to dist/');
-    cp('dashica_config.yaml', 'dist/dashica_config.yaml');
+    console.log(`Building dashica-server with base directory: ${flags['build']}`);
+    const serverSourceDirectory = join(flags['build'], 'server');
 
     console.log('Copying all *.sql files from src/ to dist/');
-    await copySqlFiles('src', 'dist/src');
+    await copyFiles('src', 'dist/src', (entry) => entry.name.endsWith('.sql'));
+
+    console.log('Copying dashica_config.yaml to dist/');
+    await cp('dashica_config.yaml', 'dist/dashica_config.yaml');
+
+    console.log('Copying dashica-server binary to dist/');
+    const dashicaServerBin = await resolveDashicaServerAndCompileIfNeeded(flags, serverSourceDirectory);
+    await cp(dashicaServerBin, 'dist/dashica-server');
+
+    if (flags['embed']) {
+        await rm("dist/public", {recursive: true, force: true});
+        await rm("dist/src", {recursive: true, force: true});
+    }
 
     console.log('✓ Build complete');
-}
-
-async function copySqlFiles(srcRoot, destRoot) {
-    async function walk(dir) {
-        const entries = await readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            if (entry.isDirectory()) {
-                await walk(fullPath);
-            } else if (entry.isFile() && entry.name.endsWith('.sql')) {
-                const rel = path.relative(srcRoot, fullPath);
-                const destPath = path.join(destRoot, rel);
-                await mkdir(path.dirname(destPath), { recursive: true });
-                await cp(fullPath, destPath);
-            }
-        }
-    }
-
-    try {
-        await walk(srcRoot);
-    } catch (err) {
-        if (err && err.code === 'ENOENT') {
-            console.warn("Warning: 'src' directory not found; no SQL files copied.");
-            return;
-        }
-        console.warn(`Warning: Error while copying SQL files: ${err.message}`);
-    }
 }

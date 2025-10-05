@@ -60,21 +60,30 @@ You'll pull in the current **source code of [sandstorm/dashica](https://github.c
 
 Use this if you want to develop dashica in tandem with your project.
 
+We suggest to add the dashica source code as Git Submodule into the `dashica-src` folder of your project:
+
+```bash
+git submodule add https://github.com/sandstorm/dashica.git dashica-src
+
+# to update:
+git submodule init && git submodule update
+```
+
 Package.json looks as follows:
 
 ```json
 
 {
   "dependencies": {
-    "dashica": "file:/path/to/dashica-src", // !!! path to Dashica Git Clone
+    "dashica": "file:./dashica-src/npm/dashica", // !!! path to Dashica Git Clone + /npm/dashica
     "run-pty": "^5.0.0"
   },
   "type": "module",
   "scripts": {
-    "dist": "dashica dist --build /path/to/dashica-src", // !!! compile the server yourself
+    "dist": "dashica dist --build ./dashica-src", // !!! compile the server yourself
     "clickhouse-cli": "dashica clickhouse-cli",
 
-    "preview": "run-pty      % dashica preview-frontend        % dashica server --dev --build /path/to/dashica-src" // !!! compile the server yourself
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --dev --build ./dashica-src" // !!! compile the server yourself
   }
 }
 ```
@@ -96,20 +105,30 @@ You'll pull in the current **source code of [sandstorm/dashica](https://github.c
 
 Use this if you **need a static binary for easiest deployment.**
 
+We suggest to add the dashica source code as Git Submodule into the `dashica-src` folder of your project:
+
+```bash
+git submodule add https://github.com/sandstorm/dashica.git dashica-src
+
+# to update:
+git submodule init && git submodule update
+```
+
+
 Package.json looks as follows:
 
 ```json
 
 {
   "dependencies": {
-    "dashica": "file:/path/to/dashica-src", // !!! path to Dashica Git Clone
+    "dashica": "file:./dashica-src/npm/dashica", // !!! path to Dashica Git Clone + /npm/dashica
     "run-pty": "^5.0.0"
   },
   "type": "module",
   "scripts": {
-    "dist": "dashica dist --build /path/to/dashica-src --embed", // !!! compile the server yourself, and EMBED the dist/ folder.
+    "dist": "dashica dist --build ./dashica-src --embed", // !!! compile the server yourself, and EMBED the dist/ folder.
     "clickhouse-cli": "dashica clickhouse-cli",
 
-    "preview": "run-pty      % dashica preview-frontend        % dashica server --dev --build /path/to/dashica-src" // !!! compile the server yourself
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --dev --build ./dashica-src" // !!! compile the server yourself
   }
 }

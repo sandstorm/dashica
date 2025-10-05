@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io/fs"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/caddyserver/certmagic"
 	"github.com/rs/zerolog"
+	app "github.com/sandstorm/dashica/server"
 	"github.com/sandstorm/dashica/server/alerting"
 	"github.com/sandstorm/dashica/server/clickhouse"
 	"github.com/sandstorm/dashica/server/core"
@@ -93,7 +93,7 @@ func main() {
 			Msg("could not find working directory")
 	}
 
-	fileSystem := os.DirFS(workingDir).(fs.ReadFileFS)
+	fileSystem := app.GetFileSystem(workingDir)
 	startupLogger.Debug().
 		Str("Current working directory", workingDir).
 		Str("base directory", workingDir).
