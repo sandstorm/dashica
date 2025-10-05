@@ -33,9 +33,6 @@ export default async function dist({ flags, args, packageRoot }) {
     config.output = 'dist/public';
     await observableBuild({ config: config });
 
-    console.log(`Building dashica-server with base directory: ${flags['build']}`);
-    const serverSourceDirectory = join(flags['build'], 'server');
-
     console.log('Copying all *.sql files from src/ to dist/');
     await copyFiles('src', 'dist/src', (entry) => entry.name.endsWith('.sql'));
 
@@ -44,7 +41,7 @@ export default async function dist({ flags, args, packageRoot }) {
         await cp('dashica_config.yaml', 'dist/dashica_config.yaml');
 
         console.log('Copying dashica-server binary to dist/');
-        const dashicaServerBin = await resolveDashicaServerAndCompileIfNeeded(flags, serverSourceDirectory);
+        const dashicaServerBin = await resolveDashicaServerAndCompileIfNeeded(flags);
         await cp(dashicaServerBin, 'dist/dashica-server');
     }
 
