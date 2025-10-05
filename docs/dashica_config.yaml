@@ -24,6 +24,7 @@ clickhouse:
     database: default
     query_file_patterns:
       - /content/__testing
+      - /src/docs
 
 
   alert_storage:

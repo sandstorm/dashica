@@ -4,9 +4,9 @@
 
 ## Styling customization
 
-create a `src/style.css` file. If this is found, this is used as entrypoint.
+create a `src/style.css` file. If this is found, this is used as entrypoint for CSS.
 
-The `style.css` should include the following line:
+The `src/style.css` should include the following line:
 
 ```css
 /* import the dashica CSS */
