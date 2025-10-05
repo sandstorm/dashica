@@ -8,7 +8,7 @@ class CustomPreviewServer extends PreviewServer {
     async _readConfig() {
         const config = await observableReadConfig(this._config, this._root);
 
-        //config.root = 'src';
+        config.root = 'src';
 
         if (existsSync("src/style.css")) {
             config.style = { path: "style.css" } ;

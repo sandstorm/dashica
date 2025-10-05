@@ -48,7 +48,7 @@ clickhouse:
 ## Running the project locally
 
 ```bash
-# install dashica
+# install dashica from NPM
 npm install
 
 # start the development server
@@ -56,6 +56,9 @@ npm run preview
 ```
 
 now, browse to http://localhost:8080/ to see Dashica in action. It will still be quite empty, as you do not have any dashboards yet.
+
+> NOTE: You can also install dashica from your local development checkout; this is helpful if you want to
+> make changes to the Dashica source code (golang or frontend library). This is described in TODO.
 
 ## Adding an empty dashboard
 

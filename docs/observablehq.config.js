@@ -45,7 +45,7 @@ const config = {
         <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.3.0/dist/iconify-icon.min.js"></script>
 `,
     // The path to the source root.
-    //root: "src",
+    root: "src",
 
     pages: [
         {
@@ -87,7 +87,15 @@ const config = {
                     name: "Custom Styles",
                 },
                 {
-                    name: "Configuration Reference",
+                    name: "",
+                    //path: "/docs/21_intro_customization",
+                },
+                {
+                    name: "Multiple ClickHouse Instances",
+                    //path: "/docs/21_intro_customization",
+                },
+                {
+                    name: "dashica_config.yaml reference",
                     //path: "/docs/21_intro_customization",
                 },
             ]
