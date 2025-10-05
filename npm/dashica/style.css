@@ -187,8 +187,15 @@ dialog::backdrop {
     width: 100%;
 }
 
+.autoTable table {
+    max-width: unset;
+}
+
 .autoTable td {
     max-width: 600px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
 }
 
 .sqlFilterInput {
