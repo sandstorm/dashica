@@ -5,6 +5,10 @@ import * as component from './src/component/index.js';
 
 import {withRuntime} from './src/util/runtime.js';
 
+import Alpine from 'alpinejs';
+window.Alpine = Alpine;
+Alpine.start();
+
 export {
     alerting,
     chart,

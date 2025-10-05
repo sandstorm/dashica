@@ -25,7 +25,8 @@
     "d3-brush": "^3.0.0",
     "d3-selection": "^3.0.0",
     "htl": "^0.3.1",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "alpinejs": "^3.15.0"
   },
   "devDependencies": {
     "@types/d3-brush": "^3.0.6",
