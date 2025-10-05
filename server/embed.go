@@ -17,6 +17,6 @@ import (
 var EmbeddedFileSystem embed.FS
 
 func GetFileSystem(workingDir string) fs.ReadFileFS {
-	var baseFs, _ = fs.Sub(EmbeddedFileSystem, "dist").(fs.ReadFileFS)
-	return baseFs
+	var baseFs, _ = fs.Sub(EmbeddedFileSystem, "dist")
+	return baseFs.(fs.ReadFileFS)
 }
