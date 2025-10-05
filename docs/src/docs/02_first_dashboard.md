@@ -41,11 +41,11 @@ const viewOptions = view(component.viewOptions());
 Create a .sql file in `src/` - we usually create a subfolder for each dashboard, and place the SQL file there;
 but you are free to use any structure you like.
 
-    -- src/02_first_dashboard/git_commits_overview.sql
+    -- src/02_first_dashboard/git_commits_by_year.sql
     SELECT
         toString(toYear(time)) as year,
         count(*) as commitCount
-    FROM git.commits
+    FROM git_commits
     GROUP BY year;
 
 ## Render this SQL file as a Bar Chart
@@ -55,7 +55,7 @@ Then, we can render this SQL as a Bar Chart with the following snippet:
 ```js echo
 display(chart.barVertical(
     await clickhouse.query(
-        '/src/docs/02_first_dashboard/git_commits_overview.sql',
+        '/src/docs/02_first_dashboard/git_commits_by_year.sql',
         {filters}
     ), {
         viewOptions, invalidation, // Pass through global view options & Invalidation promise
@@ -73,7 +73,7 @@ The `clickhouse.query()` function is used to execute SQL queries against the Cli
 
 ```js echo
 clickhouse.query(
-    '/src/docs/02_first_dashboard/git_commits_overview.sql',
+    '/src/docs/02_first_dashboard/git_commits_by_year.sql',
 )
 ```
 
@@ -83,7 +83,7 @@ as array. You can, however, use the `.toArray()` function on the result set to c
 
 ```js echo
 const result = await clickhouse.query(
-    '/src/docs/02_first_dashboard/git_commits_overview.sql',
+    '/src/docs/02_first_dashboard/git_commits_by_year.sql',
 );
 display(result.toArray());
 ```

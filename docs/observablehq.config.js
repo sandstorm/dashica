@@ -70,6 +70,10 @@ const config = {
             name: "Chart Types",
             open: true,
             pages: [
+                {
+                    name: "barVertical",
+                    path: "/docs/10_barVertical",
+                },
             ]
         },
         {

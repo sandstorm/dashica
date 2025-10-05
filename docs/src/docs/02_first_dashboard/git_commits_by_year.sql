@@ -1,5 +1,5 @@
 SELECT
     toString(toYear(time)) as year,
     count(*) as commitCount
-FROM git.commits
+FROM git_commits
 GROUP BY year;
