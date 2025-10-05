@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	app "github.com/sandstorm/dashica/server"
 	"github.com/sandstorm/dashica/server/alerting"
 	"github.com/sandstorm/dashica/server/clickhouse"
 	"github.com/sandstorm/dashica/server/core"
@@ -46,7 +45,7 @@ func NewHttpHandler(config *core.AppConfig, logger zerolog.Logger, fileSystem fs
 		mux.Handle("/", httputil.NewSingleHostReverseProxy(u))
 
 	} else {
-		var publicFS, _ = fs.Sub(fileSystem, app.GetPublicDir())
+		var publicFS, _ = fs.Sub(fileSystem, "public")
 		mux.Handle("/", noDirListing(http.FileServerFS(publicFS)))
 	}
 

@@ -13,7 +13,3 @@ import (
 func GetFileSystem(workingDir string) fs.ReadFileFS {
 	return os.DirFS(workingDir).(fs.ReadFileFS)
 }
-
-func GetPublicDir() string {
-	return "public"
-}
