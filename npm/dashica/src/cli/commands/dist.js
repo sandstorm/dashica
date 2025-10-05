@@ -7,7 +7,7 @@ import {existsSync} from "fs";
 
 export default async function dist({ flags, args, packageRoot }) {
     // Validate flags - throw error if unknown flags
-    const knownFlags = ['build', 'bin', 'embed'];
+    const knownFlags = ['build', 'bin', 'embed', 'skip-server-build'];
     const unknownFlags = Object.keys(flags).filter(flag => !knownFlags.includes(flag));
     if (unknownFlags.length > 0) {
         console.error(`ERROR: Unknown flags: ${unknownFlags.join(', ')}. Known flags: ${knownFlags.join(', ')}`);
@@ -39,12 +39,14 @@ export default async function dist({ flags, args, packageRoot }) {
     console.log('Copying all *.sql files from src/ to dist/');
     await copyFiles('src', 'dist/src', (entry) => entry.name.endsWith('.sql'));
 
-    console.log('Copying dashica_config.yaml to dist/');
-    await cp('dashica_config.yaml', 'dist/dashica_config.yaml');
+    if (!flags['skip-server-build']) {
+        console.log('Copying dashica_config.yaml to dist/');
+        await cp('dashica_config.yaml', 'dist/dashica_config.yaml');
 
-    console.log('Copying dashica-server binary to dist/');
-    const dashicaServerBin = await resolveDashicaServerAndCompileIfNeeded(flags, serverSourceDirectory);
-    await cp(dashicaServerBin, 'dist/dashica-server');
+        console.log('Copying dashica-server binary to dist/');
+        const dashicaServerBin = await resolveDashicaServerAndCompileIfNeeded(flags, serverSourceDirectory);
+        await cp(dashicaServerBin, 'dist/dashica-server');
+    }
 
     if (flags['embed']) {
         await rm("dist/public", {recursive: true, force: true});
