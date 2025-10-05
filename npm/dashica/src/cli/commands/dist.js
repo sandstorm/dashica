@@ -31,6 +31,16 @@ export default async function dist({ flags, args, packageRoot }) {
 
     const config = await observableReadConfig(undefined, undefined);
     config.output = 'dist/public';
+
+    config.root = 'src';
+
+    if (existsSync("src/style.css")) {
+        config.style = { path: "style.css" } ;
+    } else {
+        // Fallback to default dashica styles
+        config.style = { path: "dashica/style.css" } ;
+    }
+
     await observableBuild({ config: config });
 
     console.log('Copying all *.sql files from src/ to dist/');
