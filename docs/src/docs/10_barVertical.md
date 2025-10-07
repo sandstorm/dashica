@@ -9,6 +9,21 @@ const viewOptions = view(component.viewOptions());
 
 The barVertical chart displays data as vertical bars, with categories on the x-axis and numeric values on the y-axis.
 
+The `barVertical` chart is ideal for:
+- Comparing categories (e.g. commits per year)
+- Displaying aggregated values
+- Stacking data by additional dimensions
+
+**When to use?** Use barVertical when your data has categorical x-values and numeric y-values.
+
+## Data Requirements
+
+Your SQL query should return the following column types:
+- **x-axis**: Text/String (categorical data like "2020", "2021", "admin", "user")
+- **y-axis**: Numeric (Integer/Float for counts, sums, averages)
+- **fill** (optional): Text/String for stacking categories
+
+
 ## Minimal Example
 
 ```js echo
@@ -131,3 +146,15 @@ display(chart.barVertical(
 - `height`: chart height in px
 - all charts use 100% of their available width and are responsive.
 - `marginLeft`: margin on the left side of the chart. extend if you need space for wider labels
+- `marginTop`: margin on the top side of the chart. extend if you need space for wider labels
+- `marginRight`: margin on the right side of the chart. extend if you need space for wider labels
+- `marginBottom`: margin on the bottom side of the chart. extend if you need space for wider labels
+- `color`: color scale options, (TODO DESCRIBE)
+
+## Tips and Tricks
+
+### Disabling the legend
+
+```
+color: { legend: false }
+``` 

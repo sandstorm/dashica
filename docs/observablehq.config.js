@@ -61,6 +61,14 @@ const config = {
                     path: "/docs/02_first_dashboard",
                 },
                 {
+                    name: "Query API",
+                    path: "/docs/03_query_api",
+                },
+                {
+                    name: "Charting Basics",
+                    path: "/docs/04_charting_basics",
+                },
+                {
                     name: "Building & Deployment",
                     path: "/docs/03_deployment",
                 },
