@@ -1,1 +1,6 @@
 @import url("dashica/style.css");
+
+h2 {
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+}

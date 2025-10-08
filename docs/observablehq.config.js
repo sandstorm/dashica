@@ -49,7 +49,7 @@ const config = {
 
     pages: [
         {
-            name: "Getting Started",
+            name: "User Manual",
             open: true,
             pages: [
                 {
@@ -61,26 +61,54 @@ const config = {
                     path: "/docs/02_first_dashboard",
                 },
                 {
-                    name: "Query API",
-                    path: "/docs/03_query_api",
+                    name: "Writing SQL Queries",
+                    path: "/docs/03_queries",
                 },
                 {
                     name: "Charting Basics",
                     path: "/docs/04_charting_basics",
                 },
                 {
+                    name: "Alerting",
+                    path: "/docs/05_alerting",
+                },
+                {
                     name: "Building & Deployment",
-                    path: "/docs/03_deployment",
+                    path: "/docs/06_deployment",
                 },
             ]
         },
         {
-            name: "Chart Types",
+            name: "Chart + Component Types",
             open: true,
             pages: [
                 {
+                    name: "autoTable + recordDetails",
+                    path: "/docs/10_autoTable",
+                },
+                {
+                    name: "barHorizontal",
+                    path: "/docs/10_barHorizontal",
+                },
+                {
                     name: "barVertical",
                     path: "/docs/10_barVertical",
+                },
+                {
+                    name: "stats",
+                    path: "/docs/10_stats",
+                },
+                {
+                    name: "timeBar",
+                    path: "/docs/10_timeBar",
+                },
+                {
+                    name: "timeHeatmap",
+                    path: "/docs/10_timeHeatmap",
+                },
+                {
+                    name: "timeHeatmapOrdinal",
+                    path: "/docs/10_timeHeatmapOrdinal",
                 },
             ]
         },
@@ -92,25 +120,39 @@ const config = {
                     name: "Introduction to Customization",
                     path: "/docs/21_intro_customization",
                 },
-                /*{
-                    name: "Custom Sidebar Menu",
+                {
+                    name: "Custom Menu",
+                    path: "/docs/22_custom_menu",
                 },
                 {
-                    name: "Custom Styles",
+                    name: "Template Pages",
+                    path: "/docs/23_template_pages",
                 },
                 {
-                    name: "",
-                    //path: "/docs/21_intro_customization",
+                    name: "Custom Chart Colors",
+                    path: "/docs/24_custom_chart_colors",
+                },
+                {
+                    name: "Trend Display",
+                    path: "/docs/25_trend_display",
+                },
+                {
+                    name: "Custom Charts",
+                    path: "/docs/26_custom_charts",
                 },
                 {
                     name: "Multiple ClickHouse Instances",
-                    //path: "/docs/21_intro_customization",
+                    path: "/docs/27_multiple_clickhouse",
                 },
                 {
                     name: "dashica_config.yaml reference",
-                    //path: "/docs/21_intro_customization",
-                },*/
+                    path: "/docs/28_dashica_config_reference",
+                },
             ]
+        },
+        {
+            name: "Development Notes (unsorted)",
+            path: "/docs/30_development_notes",
         },
         {
             name: "Clickhouse",
