@@ -186,7 +186,7 @@ Dashica automatically injects these parameters that you can use in your queries:
 
 **Example:**
 
-```sql
+```
 SELECT
     count(*) as total_events,
     count(*) / ({__to:Int64} - {__from:Int64}) as events_per_second
@@ -202,7 +202,7 @@ These parameters are particularly useful for calculations that need the total ti
 You can use the `visibility()` helper to defer query execution until a component becomes visible. This improves
 performance by only running queries when their results will be displayed:
 
-```js
+```
 const data = await visibility().then(() => clickhouse.query(
     '/content/path/to/query.sql',
     {filters, params: {}}
@@ -314,20 +314,24 @@ display(n);
 ### Using the Query in a Chart
 
 ```js
+const fixedColorsForErrorLevels = {
+    legend: true,
+    domain: ['2xx', '3xx', '4xx', '5xx', '0xx', 'other'],
+    range: ['#56AF18', '#F4C83E', '#F77C39', '#D73027', '#CCCCCC', '#8E44AD'],
+    unknown: '#8E44AD',
+};
+
 const data = await clickhouse.query(
     '/src/docs/03_queries/complete_example.sql',
-    {
-        filters,  // Global time range and filters
-        params: {
-            tenant: 'my-tenant'
-        }
-    }
+    { filters }
 );
 
-display(chart.lineChart(data, {
+display(chart.timeBar(data, {
+    invalidation,
     x: 'timestamp',
     y: 'request_count',
-    color: 'project'
+    fill: 'statusGroup',
+    color: fixedColorsForErrorLevels,
 }));
 ```
 
