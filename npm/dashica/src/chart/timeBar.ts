@@ -76,9 +76,7 @@ async function _bars(data: QueryResult, props: ChartProps) {
 
     const x = schema.requiredColumn(props.x, 'x');
     let xBucketSize = props.xBucketSize;
-    if (!xBucketSize) {
-        throw new Error('xBucketSize must be specified.')
-    }
+
     let numberOfUniqueXValues = undefined;
     let domain = undefined;
     let yTransform = undefined;
@@ -91,6 +89,11 @@ async function _bars(data: QueryResult, props: ChartProps) {
         // This also effects the hover-labels.
         yTransform = (x: number) => x / xBucketSize * 1000;
     }
+
+    if (!xBucketSize) {
+        throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.')
+    }
+
     if (data.dashicaResolvedTimeRange?.from && data.dashicaResolvedTimeRange?.to) {
         domain = [data.dashicaResolvedTimeRange.from, data.dashicaResolvedTimeRange.to]
         numberOfUniqueXValues = Math.floor((data.dashicaResolvedTimeRange.to - data.dashicaResolvedTimeRange.from) / xBucketSize);
