@@ -2,11 +2,6 @@
 
 Your dashboards are all written in Markdown, with reactive JavaScript sprinkled throughout, and are placed in the `src/` folder.
 
-Dashica dashboards are built around **Observable Framework**, so we highly recommend to at least read the following docs:
-
-- basics of JavaScript in Observable Framework: https://observablehq.com/framework/javascript
-- Observable Plot - the Plotting library used by Dashica: https://observablehq.com/framework/lib/plot
-
 To get started, create a new file in the `src/` folder, and add the following code:
 
     ```js
@@ -179,6 +174,48 @@ string to the global filter. By default, all charts will be updated when the glo
 
 ${component.sqlFilterButton(`Only GET`, `request__method = 'GET'`)}
 ${component.sqlFilterButton(`Only POST`, `request__method = 'POST'`)}
+
+## Dashboard Design
+
+You can use quite some pre-defined CSS classes to style your dashboards, f.e. a grid can be built like this:
+
+<div class="grid grid-cols-4">
+  <div class="card"><h1>A</h1></div>
+  <div class="card"><h1>B</h1></div>
+  <div class="card"><h1>C</h1></div>
+  <div class="card"><h1>D</h1></div>
+</div>
+
+
+    <div class="grid grid-cols-4">
+      <div class="card"><h1>A</h1></div>
+      <div class="card"><h1>B</h1></div>
+      <div class="card"><h1>C</h1></div>
+      <div class="card"><h1>D</h1></div>
+    </div>
+
+<div class="grid grid-cols-2">
+  <div class="card"><h1>A</h1>1 × 1</div>
+  <div class="card grid-rowspan-2"><h1>B</h1>1 × 2</div>
+  <div class="card"><h1>C</h1>1 × 1</div>
+  <div class="card grid-colspan-2"><h1>D</h1>2 × 1</div>
+</div>
+
+    <div class="grid grid-cols-2">
+      <div class="card"><h1>A</h1>1 × 1</div>
+      <div class="card grid-rowspan-2"><h1>B</h1>1 × 2</div>
+      <div class="card"><h1>C</h1>1 × 1</div>
+      <div class="card grid-colspan-2"><h1>D</h1>2 × 1</div>
+    </div>
+
+## Observable Framework and Observable Plot
+
+Dashica dashboards are built around **Observable Framework**, so we highly recommend to skim over some of the following docs:
+
+- Markdown and HTML styling: https://observablehq.com/framework/markdown
+- basics of JavaScript in Observable Framework: https://observablehq.com/framework/javascript
+- Observable Plot - the Plotting library used by Dashica: https://observablehq.com/framework/lib/plot
+- Documentation & Lots of examples on Observable Plot: https://observablehq.com/plot/
 
 ## Next Steps
 
