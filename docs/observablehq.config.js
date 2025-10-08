@@ -61,6 +61,10 @@ const config = {
                     path: "/docs/02_first_dashboard",
                 },
                 {
+                    name: "Usage Philosophy",
+                    path: "/docs/02_usage_philosophy",
+                },
+                {
                     name: "Writing SQL Queries",
                     path: "/docs/03_queries",
                 },
