@@ -1,10 +1,17 @@
-## Chart Types
+```js
+import hljs from 'npm:highlight.js';
+import {chart, clickhouse, component} from '/dashica/index.js';
+
+const filters = view(component.globalFilter());
+const viewOptions = view(component.viewOptions());
+```
+
+# Chart Types
 
 Dashica offers multiple pre-configured [Observable Plot](https://observablehq.com/plot/getting-started) chart types to
-visualize your data effectively. The key to selecting the right chart depends on understanding your data dimensions (x /
-y usually, maybe additionally fill).
+visualize your data effectively. The key to selecting the right chart depends on understanding your data dimensions.
 
-### Understanding Data Types
+# Understanding Data Types
 
 **Categorical/Ordinal Data:**
 
@@ -16,7 +23,7 @@ y usually, maybe additionally fill).
 - Represents measurements on a continuous scale
 - Examples: response times (ms), load times, CPU usage percentages
 
-### Use the following rules to decide which chart type to use:
+## Use the following rules to decide which chart type to use:
 
 1. Time is important:
     1. the other dimension represents **aggregated statistical** values like *counts* or *averages*: use `timeBar`
@@ -50,7 +57,7 @@ direction TB;
 ```
 
 
-## Common Chart Options
+# Common Chart Options
 
 All charts have the following options:
 
@@ -66,3 +73,36 @@ All charts have the following options:
 - `marginRight`: margin on the right side of the chart. extend if you need space for wider labels
 - `marginBottom`: margin on the bottom side of the chart. extend if you need space for wider labels
 
+# Channels
+
+The SQL result is passed to every chart as data - and in the chart options, you need to specify which columns to use for which "axis".
+
+Axes like `x`, `y`, `fill`, or `fx`/`fy` (for faceting) are called [channels](https://observablehq.com/plot/features/marks#marks-have-channels).
+
+Let's start with an example:
+
+```js echo
+display(chart.barVertical(
+    await clickhouse.query(
+        '/src/docs/10_queries/requests_by_status.sql',
+        {filters}
+    ), {
+        viewOptions, invalidation,
+        x: 'statusGroup', // <-- channel
+        y: 'requests', // <-- channel
+        
+        height: 100,
+    }
+));
+```
+
+In the example above, `x` and `y` are channels. They are used to specify which columns to use for the x- and y-axis.
+
+You can specify a channel in the following ways:
+
+- a field (column) name, **in 90% of all cases, you'll need this**
+- an accessor function, or
+- an array of values of the same length and order as the data.
+
+Instead of using accessor functions etc, we recommend to do the calculation in
+the SQL query itself.
