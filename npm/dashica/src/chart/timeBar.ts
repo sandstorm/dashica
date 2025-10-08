@@ -137,7 +137,7 @@ async function _bars(data: QueryResult, props: ChartProps) {
                 tip: props.tip !== undefined ? props.tip : true,
                 fill: props.fill || '#A8C1D1',
                 // HEURISTIC to determine whether to add an inset or not
-                insetLeft: numberOfUniqueXValues === undefined || !props.width ? 0 : (numberOfUniqueXValues * 2 < props.width ? 1 : 0), // a bit of padding between the bars. - HEURISTIC
+                insetLeft: numberOfUniqueXValues === undefined || !props.width || props.fx ? 0 : (numberOfUniqueXValues * 2 < props.width ? 1 : 0), // a bit of padding between the bars. - HEURISTIC
             }),
             _brushMark,
             Plot.ruleY([0]),
