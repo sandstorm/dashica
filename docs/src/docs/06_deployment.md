@@ -132,3 +132,13 @@ Package.json looks as follows:
     "preview": "run-pty      % dashica preview-frontend        % dashica server --dev --build ./dashica-src" // !!! compile the server yourself
   }
 }
+```
+
+> In case you want to build the server without a Node.js environment (e.g. during Continuous Integration), you can use the following commands:
+> 
+> ```bash
+> # copy the output of the frontend build into the server build at the correct location
+> cp ...YOUR_PATH_TO/dist/ server/dist
+> # run the server build
+> ./dev.sh build-server-embedded
+> ```
