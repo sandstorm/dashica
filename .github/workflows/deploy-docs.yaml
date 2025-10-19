@@ -31,9 +31,9 @@ jobs:
       - name: Install dependencies and build (including server)
         run: |
           npm i
-          pushd docs/
+          cd docs/
           npm run dist
-          popd
+          cd ..
 
       # Upload build artifacts
       - name: Upload build artifacts
