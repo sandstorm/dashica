@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
 
-project_name: dashica
+project_name: dashica-server
 before:
   hooks:
     - go mod tidy
@@ -39,10 +39,10 @@ dockers_v2:
     flags:
       - --pull
     labels:
-      org.opencontainers.image.title: "{{ .ProjectName }}"
-      org.opencontainers.image.description: "{{ .ProjectName }}"
-      org.opencontainers.image.url: "https://github.com/sandstorm/{{ .ProjectName }}"
-      org.opencontainers.image.source: "https://github.com/sandstorm/{{ .ProjectName }}"
+      org.opencontainers.image.title: "dashica"
+      org.opencontainers.image.description: "dashica"
+      org.opencontainers.image.url: "https://github.com/sandstorm/dashica"
+      org.opencontainers.image.source: "https://github.com/sandstorm/dashica"
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.created: "{{ time \"2006-01-02T15:04:05Z07:00\" }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
