@@ -1,4 +1,6 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
 project_name: dashica
 before:
   hooks:
@@ -47,11 +49,10 @@ dockers_v2:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ incpatch .Tag }}-next"
+  version_template: "{{ incpatch .Tag }}-next"
 changelog:
   sort: asc
   filters:
     exclude:
       - '^docs:'
       - '^test:'
-
