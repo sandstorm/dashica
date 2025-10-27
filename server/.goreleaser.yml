@@ -43,6 +43,7 @@ dockers_v2:
     #  - linux/arm64
     flags:
       - --pull
+    sbom: "false"
     labels:
       org.opencontainers.image.title: "dashica"
       org.opencontainers.image.description: "dashica"
