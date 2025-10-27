@@ -10,7 +10,6 @@ require (
 	github.com/adhocore/gronx v1.19.5
 	github.com/caddyserver/certmagic v0.22.2
 	github.com/goccy/go-yaml v1.17.1
-	github.com/knadh/koanf/parsers/dotenv v1.0.0
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/confmap v0.1.0
 	github.com/knadh/koanf/providers/env v1.0.0
@@ -25,7 +24,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/knadh/koanf/maps v0.1.1 // indirect
 	github.com/libdns/libdns v0.2.3 // indirect

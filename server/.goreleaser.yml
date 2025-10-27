@@ -33,10 +33,11 @@ dockers_v2:
       - "{{ .Version }}"
       - latest
     dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
+    platforms:
+      - linux/amd64
+      - linux/arm64/v8
+    flags:
       - --pull
-      - --platform=linux/amd64,linux/arm64/v8
     labels:
       org.opencontainers.image.title: "{{ .ProjectName }}"
       org.opencontainers.image.description: "{{ .ProjectName }}"
