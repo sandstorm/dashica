@@ -17,7 +17,6 @@ builds:
       - linux
       - windows
       - darwin
-      - freebsd
     goarch:
       - amd64
       - arm64
@@ -37,10 +36,11 @@ dockers_v2:
     tags:
       - "{{ .Version }}"
       - latest
-    dockerfile: Dockerfile
-    platforms:
-      - linux/amd64
-      - linux/arm64/v8
+    dockerfile: Dockerfile.goreleaser
+    #platforms:
+    #  - linux/amd64
+    #  - linux/arm64/v8
+    #  - linux/arm64
     flags:
       - --pull
     labels:
