@@ -1,6 +1,5 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
-
 project_name: dashica-server
 release:
   github:
@@ -32,7 +31,7 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end -}}
 dockers_v2:
   - images:
-      - ghcr.io/sandstorm/{{ .ProjectName }}
+      - ghcr.io/sandstorm/dashica
     tags:
       - "{{ .Version }}"
       - latest
