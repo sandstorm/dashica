@@ -135,8 +135,8 @@ func main() {
 		}
 	}()
 
-	if !config.DevMode {
-		// Start alert scheduler only in production
+	if !config.DevMode && len(config.Alerting.HelvetikitAlertingUrl) > 0 {
+		// Start alert scheduler only in production, and if alerting is actually configured
 		go func() {
 			err := alertManager.RunAlertScheduler()
 			if err != nil {
