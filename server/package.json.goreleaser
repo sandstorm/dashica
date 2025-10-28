@@ -1,0 +1,15 @@
+{
+  "dependencies": {
+    "dashica": "file:/npm/dashica",
+    "run-pty": "^5.0.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dashica": "dashica",
+    "dist": "dashica dist --bin /usr/bin/dashica-server",
+    "clickhouse-cli": "dashica clickhouse-cli",
+
+    "preview": "run-pty      % dashica preview-frontend        % dashica server --bin /usr/bin/dashica-server",
+    "preview:noninteractive": "run-pty --auto-exit     % dashica preview-frontend        % dashica server --bin /usr/bin/dashica-server"
+  }
+}

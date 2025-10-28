@@ -1,6 +1,16 @@
 FROM node:25.0-bookworm-slim
 ARG TARGETPLATFORM
-RUN echo $TARGETPLATFORM
 COPY $TARGETPLATFORM/dashica-server /usr/bin/
+
+RUN mkdir -p /npm && mkdir -p /app/src && echo "Hello World" >> /app/src/index.md
+COPY ./npm/dashica ./npm/dashica
+RUN cd /npm/dashica && npm install
+
+
+ADD ./package.json.goreleaser /app/package.json
+WORKDIR /app
+RUN cd /app && npm install
+
 STOPSIGNAL SIGINT
-ENTRYPOINT ["/usr/bin/dashica-server"]
+# ENTRYPOINT ["/bin/bash"]
+CMD ["/usr/local/bin/npm", "run", "preview:noninteractive"]

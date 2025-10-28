@@ -9,6 +9,11 @@ release:
 before:
   hooks:
     - go mod tidy
+    # needed for inclusion into Docker image
+    - rm -Rf npm
+    - mkdir -p npm
+    - cp -R ../npm/dashica npm/dashica
+    - cd npm/dashica && npm install && cd ../../
 builds:
   - env:
       - CGO_ENABLED=0
@@ -36,6 +41,10 @@ dockers_v2:
       - "{{ .Version }}"
       - latest
     dockerfile: Dockerfile.goreleaser
+    extra_files:
+      # copied from before hook
+      - npm/dashica
+      - package.json.goreleaser
     #platforms:
     #  - linux/amd64
     #  - linux/arm64/v8

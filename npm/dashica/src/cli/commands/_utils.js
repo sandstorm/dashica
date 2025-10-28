@@ -8,6 +8,10 @@ const require = createRequire(import.meta.url);
 
 
 function findDashicaModulePath() {
+    // workaround for build in Docker, not sure why.
+    if (existsSync('node_modules/dashica/package.json')) {
+        return process.cwd() + "/node_modules/dashica";
+    }
     try {
         // This will find dashica/package.json in node_modules, traversing up as needed
         const packageJsonPath = require.resolve('dashica/package.json');
