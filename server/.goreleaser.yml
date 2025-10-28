@@ -13,7 +13,9 @@ before:
     - rm -Rf npm
     - mkdir -p npm
     - cp -R ../npm/dashica npm/dashica
-    - cd npm/dashica && npm install && cd ../../
+    - cd npm/dashica
+    - npm install
+    - cd ../../
 builds:
   - env:
       - CGO_ENABLED=0
