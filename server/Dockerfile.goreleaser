@@ -13,4 +13,4 @@ RUN cd /app && npm install
 
 STOPSIGNAL SIGINT
 # ENTRYPOINT ["/bin/bash"]
-CMD ["/usr/local/bin/npm", "run", "preview:noninteractive"]
+CMD ["/usr/local/bin/npm", "run", "run:noninteractive"]

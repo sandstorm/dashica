@@ -29,9 +29,13 @@ export async function symlinkDashicaFrontendSourceCode() {
 
     const dashicaPath = join(process.cwd(), 'src', 'dashica');
     await rm(dashicaPath, {recursive: true, force: true});
+    await mkdir(dashicaPath);
 
     // Create symlink from src/dashica to the found dashica module
-    await symlink(dashicaModulePath, dashicaPath, 'dir');
+    await symlink(dashicaModulePath+'/index.ts', dashicaPath+'/index.ts');
+    await symlink(dashicaModulePath+'/style.css', dashicaPath+'/style.css');
+    await symlink(dashicaModulePath+'/src', dashicaPath+'/src', 'dir');
+    //await symlink(dashicaModulePath, dashicaPath, 'dir');
     console.log(`Created symlink: ${dashicaPath} -> ${dashicaModulePath}`);
 }
 

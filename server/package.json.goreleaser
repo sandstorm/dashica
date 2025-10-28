@@ -10,6 +10,6 @@
     "clickhouse-cli": "dashica clickhouse-cli",
 
     "preview": "run-pty      % dashica preview-frontend        % dashica server --bin /usr/bin/dashica-server",
-    "preview:noninteractive": "run-pty --auto-exit     % dashica preview-frontend        % dashica server --bin /usr/bin/dashica-server"
+    "run:noninteractive": "cd /app; dashica dist --skip-server-build; cp dashica_config.yaml /app/dist/; cd /app/dist/; /usr/bin/dashica-server"
   }
 }
