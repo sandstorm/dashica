@@ -22,7 +22,7 @@ func (qh speedscopeQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	// TODO: SANITIZE FILE STRING -> SECURITY!!! -> NO PARENT PATH TRAVERSAL ETC.
-	fileContent, err := qh.fileSystem.ReadFile("client" + fileName)
+	fileContent, err := qh.fileSystem.ReadFile(fileName)
 	if err != nil {
 		return fmt.Errorf("reading file %s: %w", fileName, err)
 	}
