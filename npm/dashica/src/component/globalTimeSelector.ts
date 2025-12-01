@@ -6,12 +6,14 @@ const name = "globalTimeSelector";
 const spacingX = (factor: number) => html`
     <div style="width: ${factor * 5}px;"></div>`;
 
+let autoRefreshIntervalId: number|undefined = undefined;
 
 export function globalTimeSelector() {
     const urlParams = new URLSearchParams(window.location.search);
 
     const fromParam = urlParams.get('from');
     const toParam = urlParams.get('to');
+    const autoRefreshParam = urlParams.get('autoRefresh');
 
     let presetFromUrlOrDefault = _defaultPreset;
     let fromDateInputValue: Date|undefined = undefined;
@@ -31,6 +33,35 @@ export function globalTimeSelector() {
         }
     }
 
+    const triggerUpdate = () => {
+        window.dispatchEvent(new CustomEvent('dashica-stop-all-running-filter-requests'));
+        fromDateInputValue = undefined;
+        toDateInputValue = undefined;
+        replaceStateParam('from', presetInput.value.from);
+        replaceStateParam('to', presetInput.value.to);
+        root.dispatchEvent(new CustomEvent("input", { bubbles: true }));
+    }
+
+    const startStopAutoRefresh = (enabled: boolean) => {
+        if (enabled) {
+            autoRefreshIntervalId = window.setInterval(() => {
+                console.log("auto refresh triggered");
+                triggerUpdate()
+            }, 60 * 1000); // every minute
+        } else {
+            if (!autoRefreshIntervalId) {
+                return;
+            }
+            window.clearInterval(autoRefreshIntervalId);
+            autoRefreshIntervalId = undefined;
+        }
+    }
+
+    const autoRefreshIsEnabled = autoRefreshParam === '1'
+    if (autoRefreshIsEnabled) {
+        startStopAutoRefresh(true);
+    }
+
     const presetInput = Inputs.select<IntervalPreset>(presets, {
         keyof: (preset) => preset.label,
         value: presetFromUrlOrDefault,
@@ -38,6 +69,7 @@ export function globalTimeSelector() {
 
     const fromDateInput = Inputs.datetime({value: fromDateInputValue})
     const toDateInput = Inputs.datetime({value: toDateInputValue})
+    const autoRefreshCheckbox = Inputs.toggle({label: 'Auto Refresh', value: autoRefreshIsEnabled});
     const applyButton = Inputs.button("Apply")
 
     const root = html`<div class="globalTimeSelector" style="display: flex; align-items: start">
@@ -52,18 +84,19 @@ export function globalTimeSelector() {
             ${spacingX(2)}
             <div class="globalTimeSelector__to">${stopPropagation(toDateInput)}</div>
             ${spacingX(2)}
+            <div class="globalTimeSelector__autoRefresh">${stopPropagation(autoRefreshCheckbox)}</div>
+            ${spacingX(2)}
             <div class="globalTimeSelector__apply">${stopPropagation(applyButton)}</div>
         </div>
     </div>`;
 
-    presetInput.addEventListener('input', (event: Event) => {
-        window.dispatchEvent(new CustomEvent('dashica-stop-all-running-filter-requests'));
-        fromDateInputValue = undefined;
-        toDateInputValue = undefined;
-        replaceStateParam('from', presetInput.value.from);
-        replaceStateParam('to', presetInput.value.to);
-        root.dispatchEvent(new CustomEvent("input", { bubbles: true }));
-    });
+    presetInput.addEventListener('input', triggerUpdate)
+
+    autoRefreshCheckbox.addEventListener('change', (event: Event) => {
+        const target = event.target as HTMLInputElement;
+        replaceStateParam('autoRefresh', target.checked ? '1' : '0');
+        startStopAutoRefresh(target.checked);
+    })
 
     function handleApply() {
         if (fromDateInput.value && toDateInput.value) {
