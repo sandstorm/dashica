@@ -97,6 +97,11 @@ dialog::backdrop {
     --label-width: 0px;
 }
 
+.globalTimeSelector__autoRefresh form {
+    --input-width: 30px;
+    --label-width: 75px;
+}
+
 .recordDetails {
     display: flex;
     flex-wrap: wrap;
