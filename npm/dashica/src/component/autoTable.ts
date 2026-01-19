@@ -29,6 +29,32 @@ export function autoTable(origDataForSchema: any, data: any, extProps: any): HTM
     props.format = props.format || {};
     props.width = props.width || {};
 
+    /*const exampleDataPerField: {[key: string]: any[]} = {};
+    for (let i = 0; i < 10; i++) {
+        if (!data[i]) {
+            break;
+        }
+        origDataForSchema?.schema?.fields?.forEach((field: Field) => {
+            if (!exampleDataPerField[field.name]) {
+                exampleDataPerField[field.name] = [];
+            }
+            exampleDataPerField[field.name].push(data[i][field.name]);
+        });
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+        ctx.font = `13px`;
+        ctx.
+    }
+
+
+
+    console.log("exampleDataPerField", exampleDataPerField);
+
+*/
     origDataForSchema?.schema?.fields?.forEach((field: Field) => {
         if (DataType.isTimestamp(field)) {
             props.width[field.name] = '110px';
