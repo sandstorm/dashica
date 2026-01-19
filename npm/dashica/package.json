@@ -20,17 +20,19 @@
     "@observablehq/framework": "^1.13.2",
     "@observablehq/inputs": "^0.12.0",
     "@observablehq/plot": "^0.6.17",
+    "alpinejs": "^3.15.0",
     "apache-arrow": "^19.0.1",
     "codemirror": "^6.0.1",
     "d3-brush": "^3.0.0",
     "d3-selection": "^3.0.0",
     "htl": "^0.3.1",
-    "yaml": "^2.8.1",
-    "alpinejs": "^3.15.0"
+    "tabulator-tables": "^6.3.1",
+    "yaml": "^2.8.1"
   },
   "devDependencies": {
     "@types/d3-brush": "^3.0.6",
-    "@types/d3-selection": "^3.0.11"
+    "@types/d3-selection": "^3.0.11",
+    "@types/tabulator-tables": "^6.3.1"
   },
   "optionalDependencies": {
     "@dashica/darwin-arm64": "0.25.9",

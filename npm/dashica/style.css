@@ -7,6 +7,9 @@
 @import url("observablehq:theme-alt.css");
 @import url("observablehq:theme-wide.css");
 
+@import url("tabulator-tables/dist/css/tabulator.css") (prefers-color-scheme: light);
+@import url("tabulator-tables/dist/css/tabulator_midnight.css") (prefers-color-scheme: dark);
+
 /* TODO embed locally once https://github.com/observablehq/framework/issues/1573 is fixed */
 @import url('https://fonts.googleapis.com/css2?family=Gabarito:wght@400..900&display=swap');
 

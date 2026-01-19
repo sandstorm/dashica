@@ -7,6 +7,7 @@ import {recordDetails} from './recordDetails.js';
 import {sqlFilterInput} from './sqlFilterInput.js';
 import {sqlFilterButton} from './sqlFilterButton.js';
 import {viewOptions} from './viewOptions.js';
+import {tabulatorTable} from './tabulatorTable.js';
 
 export {
     autoTable,
@@ -18,5 +19,6 @@ export {
     recordDetails,
     sqlFilterInput,
     viewOptions,
-    sqlFilterButton
+    sqlFilterButton,
+    tabulatorTable
 }
