@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sandstorm/dashica/dashboard"
-	fieldDef "github.com/sandstorm/dashica/dashboard/field"
+	fieldDef "github.com/sandstorm/dashica/lib/dashboard/field"
 )
 
+type SqlBuildCtx interface {
+}
+
 type SqlBuilder interface {
-	Build(dashboardEnv dashboard.DashboardEnv, queryName string)
+	Build(dashboardEnv SqlBuildCtx, queryName string)
 	From(table string) SqlBuilder
 	Where(clause string) SqlBuilder
 	Select(field fieldDef.Field) SqlBuilder
@@ -58,11 +60,11 @@ func (b *builderImpl) GroupBy(field fieldDef.Field) SqlBuilder {
 	return &cloned
 }
 
-func (b *builderImpl) Build(dashboardEnv dashboard.DashboardEnv, queryName string) {
+func (b *builderImpl) Build(dashboardEnv SqlBuildCtx, queryName string) {
 	var sb strings.Builder
 
 	// Write query name comment
-	sb.WriteString(fmt.Sprintf("-- WARNING: This is an auto-generated query file, generated from %s.\n", dashboardEnv.PageLoaderScript))
+	sb.WriteString(fmt.Sprintf("-- WARNING: This is an auto-generated query file, generated from TODO.\n"))
 	sb.WriteString(fmt.Sprintf("-- DO NOT MODIFY MANUALLY; as changes will be overwritten\n"))
 
 	// Write SELECT clause
@@ -125,7 +127,7 @@ func (b *builderImpl) Build(dashboardEnv dashboard.DashboardEnv, queryName strin
 	query := strings.TrimRight(sb.String(), "\n")
 	query += ";"
 
-	dashboardEnv.WriteSqlScript(queryName, query)
+	//dashboardEnv.WriteSqlScript(queryName, query)
 }
 
 var _ SqlBuilder = &builderImpl{}

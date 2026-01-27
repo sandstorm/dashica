@@ -3,7 +3,9 @@ package dashboard
 import (
 	"net/http"
 
-	"github.com/sandstorm/dashica/dashboard/widget"
+	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/components/layout"
+	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
 type Dashboard interface {
@@ -29,7 +31,7 @@ func (d *dashboardImpl) Widget(w widget.TimeBarBuilder) Dashboard {
 
 func (d *dashboardImpl) WithDefaultLayout() Dashboard {
 	cloned := *d
-	cloned.layout = nil
+	cloned.layout = layout.DefaultPage()
 	return &cloned
 }
 

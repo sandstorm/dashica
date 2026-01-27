@@ -12,6 +12,7 @@ import (
 
 type Dashica interface {
 	Config() config.Config
+	Log() zerolog.Logger
 }
 
 func New() Dashica {
@@ -46,20 +47,26 @@ func New() Dashica {
 	zerolog.DefaultContextLogger = &logger
 
 	logger.Info().
-		Str(logging.EventDataset, logging.EventDataset_Falco_Startup).
-		Msg("Logging initialized. Starting to boot Falco Reactor...")
+		Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+		Msg("Logging initialized. Starting to boot Dashica...")
 
 	return &DashicaImpl{
 		cfg: cfg,
+		log: logger,
 	}
 }
 
 type DashicaImpl struct {
 	cfg *config.Config
+	log zerolog.Logger
 }
 
 func (d *DashicaImpl) Config() config.Config {
 	return *d.cfg
+}
+
+func (d *DashicaImpl) Log() zerolog.Logger {
+	return d.log
 }
 
 var _ Dashica = (*DashicaImpl)(nil)

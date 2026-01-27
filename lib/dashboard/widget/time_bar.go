@@ -7,14 +7,12 @@ import (
 	"os"
 	"text/template"
 
-	"github.com/sandstorm/dashica/dashboard"
 	//"github.com/sandstorm/dashica/dashboard"
-	"github.com/sandstorm/dashica/dashboard/field"
-	"github.com/sandstorm/dashica/dashboard/sql"
+	"github.com/sandstorm/dashica/lib/dashboard/field"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
 type TimeBarBuilder interface {
-	//Build(dashboardEnv dashboard.DashboardEnv, queryName string)
 	X(xField field.TimestampedField) TimeBarBuilder
 	Y(yField field.Field) TimeBarBuilder
 }
@@ -53,7 +51,7 @@ type RenderContext struct {
 	b       interface{}
 }
 
-func (b *baseBuilder) renderJs(dashboardEnv dashboard.DashboardEnv, queryName string, text string) {
+func (b *baseBuilder) renderJs(queryName string, text string) {
 	tpl := template.Must(template.New(queryName).Parse(text))
 
 	fmt.Println("```js")

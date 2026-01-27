@@ -7,7 +7,6 @@ import (
 
 	"github.com/Azhovan/rigging"
 	"github.com/Azhovan/rigging/sourceenv"
-	"github.com/Azhovan/rigging/sourcefile"
 )
 
 type Config struct {
@@ -26,7 +25,7 @@ type LoggingConfig struct {
 
 func LoadConfigAndFailOnError(print bool) *Config {
 	loader := rigging.NewLoader[Config]().
-		WithSource(sourcefile.New("dashica_config.yaml", sourcefile.Options{})).
+		//WithSource(sourcefile.New("dashica_config.yaml", sourcefile.Options{})).
 		WithSource(sourceenv.New(sourceenv.Options{Prefix: "APP_"}))
 
 	cfg, err := loader.Load(context.Background())

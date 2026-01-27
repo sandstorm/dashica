@@ -1,7 +1,10 @@
 {
-  "name": "dashica-root-project",
-  "workspaces": [
-    "npm/dashica",
-    "docs"
-  ]
+  "name": "dashica",
+  "dependencies": {
+    "esbuild": "^0.27.2",
+    "esbuild-plugin-tailwindcss": "^2.1.0"
+  },
+  "devDependencies": {
+    "daisyui": "^5.5.14"
+  }
 }
