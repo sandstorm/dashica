@@ -1,0 +1,10 @@
+package widget_component
+
+templ CollapsibleGroup(content templ.Component) {
+    <details class="collapse bg-base-100 border-base-300 border">
+      <summary class="collapse-title font-semibold">How do I create an account?</summary>
+      <div class="collapse-content text-sm">
+        @content
+      </div>
+    </details>
+}

@@ -1,14 +1,20 @@
 package layout
 
-templ PageMenu() {
-    <ul class="menu bg-base-200 rounded-box w-56">
-      <li>
-        <h2 class="menu-title">Title</h2>
-        <ul>
-          <li><a>Item 1</a></li>
-          <li><a>Item 2</a></li>
-          <li><a>Item 3</a></li>
-        </ul>
-      </li>
+import (
+	"github.com/sandstorm/dashica/lib/dashboard"
+)
+
+templ PageMenu(dashboardExecutionContext dashboard.DashboardExecutionContext) {
+    <ul class="menu">
+    for _, group := range dashboardExecutionContext.DashboardGroups {
+        <li>
+            <h2 class="menu-title">{group.Title}</h2>
+            <ul>
+            for _, entry := range group.Entries {
+                <li><a href={entry.Url} class={templ.KV("menu-active", entry.Url == dashboardExecutionContext.CurrentHandlerUrl)}>{entry.Title}</a></li>
+            }
+            </ul>
+        </li>
+      }
     </ul>
 }

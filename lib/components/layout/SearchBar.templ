@@ -1,0 +1,156 @@
+package layout
+
+import (
+	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/util"
+)
+templ SearchBar(filterButtons []dashboard.FilterButton) {
+
+    <div x-data="searchBar" x-init="init()" class="bg-base-100 border-b border-base-300 shadow-lg sticky top-0 z-50">
+        <div class="mx-auto px-4 sm:px-6 lg:px-8 py-4">
+
+            <!-- Row 1: SQL Filter with Form Control -->
+            <div class="form-control mb-4">
+                <label class="label">
+                    <span class="label-text flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                        </svg>
+                        <strong>Additional SQL Filters</strong>
+                        <span x-show="sqlFilter" class="badge badge-primary badge-sm">active</span>
+                    </span>
+                </label>
+                <div class="relative">
+                    <textarea
+                            id="sqlFilter"
+                            x-model="sqlFilter"
+                            @input="autoGrow($event.target); debouncedUpdateUrl()"
+                            class="textarea textarea-bordered textarea-primary w-full font-mono text-sm auto-grow focus:textarea-primary"
+                            placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
+                            rows="1"
+                    ></textarea>
+                    <button
+                            x-show="sqlFilter"
+                            @click="sqlFilter = ''; updateUrl()"
+                            class="btn btn-ghost btn-circle btn-sm absolute right-2 top-2"
+                            title="Clear filter"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Row 2: Time Range Selector + Auto-refresh -->
+            <div class="flex flex-nowrap items-center gap-3">
+
+                <!-- Time Range Presets with Join -->
+                <div class="flex items-center gap-2">
+                    <div class="tooltip tooltip-bottom" data-tip="Time range">
+                        <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+
+                    <div class="join">
+                        <template x-for="preset in timePresets" :key="preset.value">
+                            <button
+                                    @click="selectTimePreset(preset)"
+                                    :class="timeRange === preset.value ? 'btn-active' : ''"
+                                    class="btn btn-sm join-item"
+                                    x-text="preset.label"
+                            ></button>
+                        </template>
+                        <button
+                                @click="openCustomDatePicker()"
+                                :class="timeRange === 'custom' ? 'btn-active' : ''"
+                                class="btn btn-sm join-item"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            Custom
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Date Range Input -->
+                <div x-show="timeRange === 'custom'" x-cloak x-transition class="form-control">
+                    <input
+                            x-ref="datePicker"
+                            type="text"
+                            class="input input-sm input-bordered input-primary w-96 font-mono"
+                            placeholder="Select date range"
+                            readonly
+                    >
+                </div>
+
+                <!-- Divider -->
+                <div class="divider divider-horizontal m-0"></div>
+
+                <!-- Auto Refresh Controls -->
+                <div class="flex items-center gap-3">
+                    <!-- Toggle with Form Control -->
+                    <div class="form-control">
+                        <label class="label cursor-pointer gap-2">
+                            <span class="label-text font-medium">Auto-refresh</span>
+                            <input
+                                    type="checkbox"
+                                    x-model="autoRefresh"
+                                    @change="toggleAutoRefresh()"
+                                    class="toggle toggle-primary toggle-sm"
+                            >
+                        </label>
+                    </div>
+
+                    <!-- Refresh Interval Select -->
+                    <select
+                            x-show="autoRefresh"
+                            x-cloak
+                            x-transition
+                            x-model.number="refreshInterval"
+                            @change="restartAutoRefresh()"
+                            class="select select-sm select-bordered select-primary"
+                    >
+                        <option value="5">5s</option>
+                        <option value="10">10s</option>
+                        <option value="30">30s</option>
+                        <option value="60">1m</option>
+                        <option value="300">5m</option>
+                    </select>
+
+                    <!-- Countdown with Loading -->
+                    <div x-show="autoRefresh && countdown > 0" x-cloak x-transition class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-xs text-primary"></span>
+                        <kbd class="kbd kbd-sm" x-text="countdown + 's'"></kbd>
+                    </div>
+
+                    <div>
+                        <button
+                                @click="refreshData()"
+                                class="btn btn-sm btn-circle btn-ghost"
+                        >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 3: Custom filters -->
+            <div class="flex flex-nowrap items-center gap-3">
+                <!-- Time Range Presets with Join -->
+                <div class="flex items-center gap-2">
+                    for _, filterButton := range filterButtons {
+                        <button x-data="filterButton"
+                                @click={ "addFilter(" + util.JsonEncode(filterButton.QueryPart) + ")" }
+                                class="btn btn-sm"
+                        >{filterButton.Title}</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}

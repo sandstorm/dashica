@@ -3,8 +3,6 @@ package sql
 import (
 	"fmt"
 	"strings"
-
-	fieldDef "github.com/sandstorm/dashica/lib/dashboard/field"
 )
 
 type SqlBuildCtx interface {
@@ -14,31 +12,31 @@ type SqlBuilder interface {
 	Build(dashboardEnv SqlBuildCtx, queryName string)
 	From(table string) SqlBuilder
 	Where(clause string) SqlBuilder
-	Select(field fieldDef.Field) SqlBuilder
-	PrependSelect(field fieldDef.Field) SqlBuilder
-	GroupBy(x fieldDef.Field) SqlBuilder
+	Select(field Field) SqlBuilder
+	PrependSelect(field Field) SqlBuilder
+	GroupBy(x Field) SqlBuilder
 }
 
 type builderImpl struct {
-	selectF []fieldDef.Field
+	selectF []Field
 	from    string
 	where   []string
-	groupBy []fieldDef.Field
+	groupBy []Field
 }
 
 func New() SqlBuilder {
 	return &builderImpl{}
 }
 
-func (b *builderImpl) Select(field fieldDef.Field) SqlBuilder {
+func (b *builderImpl) Select(field Field) SqlBuilder {
 	cloned := *b
 	cloned.selectF = append(cloned.selectF, field)
 	return &cloned
 }
 
-func (b *builderImpl) PrependSelect(field fieldDef.Field) SqlBuilder {
+func (b *builderImpl) PrependSelect(field Field) SqlBuilder {
 	cloned := *b
-	cloned.selectF = append([]fieldDef.Field{field}, cloned.selectF...)
+	cloned.selectF = append([]Field{field}, cloned.selectF...)
 	return &cloned
 }
 
@@ -54,7 +52,7 @@ func (b *builderImpl) Where(clause string) SqlBuilder {
 	return &cloned
 }
 
-func (b *builderImpl) GroupBy(field fieldDef.Field) SqlBuilder {
+func (b *builderImpl) GroupBy(field Field) SqlBuilder {
 	cloned := *b
 	cloned.groupBy = append(cloned.groupBy, field)
 	return &cloned

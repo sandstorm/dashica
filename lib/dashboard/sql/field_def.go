@@ -1,4 +1,4 @@
-package field
+package sql
 
 type Field interface {
 	Definition() string

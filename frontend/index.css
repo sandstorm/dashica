@@ -8,3 +8,7 @@
     --color-secondary: teal;
      */
 }
+
+@import "./components/application.css";
+@import "./components/searchBar.css";
+@import "flatpickr/dist/flatpickr.min.css";

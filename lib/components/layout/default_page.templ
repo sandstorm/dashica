@@ -1,6 +1,11 @@
 package layout
 
-templ DefaultPage() {
+import (
+	"github.com/sandstorm/dashica/lib/dashboard"
+)
+
+
+templ DefaultPage(dashboardExecutionContext dashboard.DashboardExecutionContext, filterButtons []dashboard.FilterButton, content templ.Component) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>
@@ -10,10 +15,19 @@ templ DefaultPage() {
 			<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon/apple-touch-icon.png"/>
 			<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon/favicon-32x32.png"/>
 			<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon/favicon-16x16.png"/>
-			<script src="/assets/js/htmx.min.js"></script>
+			<script src="/public/dist/index.js" defer></script>
 		</head>
 		<body class="bg-gray-100">
-            @PageMenu()
+            <div class="application">
+                <aside class="application__sidebar">
+                    @PageMenu(dashboardExecutionContext)
+                </aside>
+                <main class="application__main">
+                    @SearchBar(filterButtons)
+
+                    @content
+                </main>
+            </div>
 		</body>
 	</html>
 }

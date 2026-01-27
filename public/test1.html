@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard Header Preview</title>
+
+    <!-- Tailwind + daisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            plugins: [daisyui],
+        }
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.18/dist/full.min.css" rel="stylesheet" />
+
+    <!-- Alpine -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- flatpickr -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+</head>
+
+<body class="bg-base-100">
+
+<div
+        x-data="dashboardHeader()"
+        x-init="init()"
+        class="border-b bg-base-200"
+>
+    <div class="max-w-7xl mx-auto p-4 flex flex-wrap gap-4 items-end">
+
+        <!-- SQL FILTER -->
+        <div class="flex-1 min-w-[280px]">
+            <label class="label text-sm font-medium">SQL filter</label>
+            <textarea
+                    x-model.debounce.400ms="sql"
+                    @input="autoGrow($event)"
+                    rows="1"
+                    placeholder="AND status = 'ok'"
+                    class="textarea textarea-bordered w-full resize-none font-mono bg-base-100"
+            ></textarea>
+        </div>
+
+        <!-- MODE TOGGLE -->
+        <div class="join">
+            <button
+                    class="btn join-item"
+                    :class="mode === 'quick' && 'btn-primary'"
+                    @click="mode='quick'"
+            >Quick</button>
+            <button
+                    class="btn join-item"
+                    :class="mode === 'custom' && 'btn-primary'"
+                    @click="mode='custom'"
+            >Custom</button>
+        </div>
+
+        <!-- QUICK MODE -->
+        <div x-show="mode === 'quick'" class="flex gap-2">
+            <select class="select select-bordered" x-model="quickRange">
+                <option value="5m">Last 5 min</option>
+                <option value="15m">Last 15 min</option>
+                <option value="1h">Last 1 hour</option>
+                <option value="24h">Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+            </select>
+
+            <select class="select select-bordered" x-model.number="refresh">
+                <option :value="0">No refresh</option>
+                <option :value="5">5s</option>
+                <option :value="30">30s</option>
+                <option :value="60">1m</option>
+            </select>
+        </div>
+
+        <!-- CUSTOM MODE -->
+        <div x-show="mode === 'custom'" class="w-[260px]">
+            <input
+                    x-ref="picker"
+                    class="input input-bordered w-full"
+                    placeholder="Select date range"
+            >
+        </div>
+
+    </div>
+</div>
+
+<!-- MOCK CONTENT -->
+<div class="max-w-7xl mx-auto p-6 text-sm opacity-70">
+    <div>Open devtools console to see reload events.</div>
+    <div>Reload page → state restored from URL.</div>
+</div>
+
+<script>
+    function dashboardHeader() {
+        return {
+            sql: '',
+            mode: 'quick',
+            quickRange: '24h',
+            from: null,
+            to: null,
+            refresh: 0,
+            timer: null,
+            picker: null,
+
+            init() {
+                this.loadFromUrl()
+                this.initPicker()
+
+                this.$watch(() => [
+                    this.sql,
+                    this.mode,
+                    this.quickRange,
+                    this.from,
+                    this.to,
+                    this.refresh
+                ], () => this.syncUrl())
+
+                this.$watch('refresh', () => this.resetTimer())
+                this.$watch('quickRange', () => this.triggerReload())
+                this.$watch('mode', () => this.resetTimer())
+
+                this.resetTimer()
+            },
+
+            initPicker() {
+                this.picker = flatpickr(this.$refs.picker, {
+                    mode: 'range',
+                    enableTime: true,
+                    dateFormat: 'Y-m-d H:i',
+                    defaultDate: this.from && this.to ? [this.from, this.to] : null,
+                    onChange: (dates) => {
+                        this.from = dates[0]?.toISOString() ?? null
+                        this.to   = dates[1]?.toISOString() ?? null
+                        this.triggerReload()
+                    }
+                })
+            },
+
+            autoGrow(e) {
+                e.target.style.height = 'auto'
+                e.target.style.height = e.target.scrollHeight + 'px'
+            },
+
+            triggerReload() {
+                console.log('[reload]', {
+                    sql: this.sql,
+                    mode: this.mode,
+                    range: this.quickRange,
+                    from: this.from,
+                    to: this.to
+                })
+            },
+
+            resetTimer() {
+                clearInterval(this.timer)
+                if (this.mode === 'quick' && this.refresh > 0) {
+                    this.timer = setInterval(
+                        () => this.triggerReload(),
+                        this.refresh * 1000
+                    )
+                }
+            },
+
+            loadFromUrl() {
+                const p = new URLSearchParams(location.search)
+                this.sql        = p.get('sql') ?? ''
+                this.mode       = p.get('mode') ?? 'quick'
+                this.quickRange = p.get('range') ?? '24h'
+                this.from       = p.get('from')
+                this.to         = p.get('to')
+                this.refresh    = Number(p.get('refresh') ?? 0)
+            },
+
+            syncUrl() {
+                const p = new URLSearchParams()
+
+                if (this.sql) p.set('sql', this.sql)
+                p.set('mode', this.mode)
+
+                if (this.mode === 'quick') {
+                    p.set('range', this.quickRange)
+                    if (this.refresh) p.set('refresh', this.refresh)
+                } else {
+                    if (this.from) p.set('from', this.from)
+                    if (this.to)   p.set('to', this.to)
+                }
+
+                history.replaceState({}, '', '?' + p.toString())
+            }
+        }
+    }
+</script>
+
+</body>
+</html>

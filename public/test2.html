@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Header - DaisyUI Components</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.6.0/dist/full.min.css" rel="stylesheet" type="text/css" />
+
+    <!-- Flatpickr -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* Custom flatpickr theme to match DaisyUI */
+        .flatpickr-calendar {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            border-radius: 0.5rem;
+            border: 1px solid hsl(var(--bc) / 0.2);
+        }
+
+        .flatpickr-day.selected {
+            background: hsl(var(--p));
+            border-color: hsl(var(--p));
+        }
+
+        /* Auto-growing textarea */
+        .auto-grow {
+            min-height: 3rem;
+            max-height: 200px;
+        }
+    </style>
+</head>
+<body class="bg-base-200">
+
+<!-- Main Dashboard Header -->
+<div x-data="dashboardHeader()" x-init="init()" class="bg-base-100 border-b border-base-300 shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+
+        <!-- Row 1: SQL Filter with Form Control -->
+        <div class="form-control mb-4">
+            <label class="label">
+                <span class="label-text flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    <strong>Additional SQL Filters</strong>
+                    <span x-show="sqlFilter" class="badge badge-primary badge-sm">active</span>
+                </span>
+            </label>
+            <div class="relative">
+                <textarea
+                        id="sqlFilter"
+                        x-model="sqlFilter"
+                        @input="autoGrow($event.target); debouncedUpdateUrl()"
+                        class="textarea textarea-bordered textarea-primary w-full font-mono text-sm auto-grow focus:textarea-primary"
+                        placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
+                        rows="1"
+                ></textarea>
+                <button
+                        x-show="sqlFilter"
+                        @click="sqlFilter = ''; updateUrl()"
+                        class="btn btn-ghost btn-circle btn-sm absolute right-2 top-2"
+                        title="Clear filter"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Row 2: Time Range Selector + Auto-refresh -->
+        <div class="flex flex-wrap items-center gap-3">
+
+            <!-- Time Range Presets with Join -->
+            <div class="flex items-center gap-2">
+                <div class="tooltip tooltip-bottom" data-tip="Time range">
+                    <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+
+                <div class="join">
+                    <template x-for="preset in timePresets" :key="preset.value">
+                        <button
+                                @click="selectTimePreset(preset)"
+                                :class="timeRange === preset.value ? 'btn-active' : ''"
+                                class="btn btn-sm join-item"
+                                x-text="preset.label"
+                        ></button>
+                    </template>
+                    <button
+                            @click="openCustomDatePicker()"
+                            :class="timeRange === 'custom' ? 'btn-active' : ''"
+                            class="btn btn-sm join-item"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        Custom
+                    </button>
+                </div>
+            </div>
+
+            <!-- Custom Date Range Input -->
+            <div x-show="timeRange === 'custom'" x-cloak x-transition class="form-control">
+                <input
+                        x-ref="datePicker"
+                        type="text"
+                        class="input input-sm input-bordered input-primary w-72 font-mono"
+                        placeholder="Select date range"
+                        readonly
+                >
+            </div>
+
+            <!-- Divider -->
+            <div class="divider divider-horizontal m-0"></div>
+
+            <!-- Auto Refresh Controls -->
+            <div class="flex items-center gap-3">
+                <!-- Toggle with Form Control -->
+                <div class="form-control">
+                    <label class="label cursor-pointer gap-2">
+                        <span class="label-text font-medium">Auto-refresh</span>
+                        <input
+                                type="checkbox"
+                                x-model="autoRefresh"
+                                @change="toggleAutoRefresh()"
+                                class="toggle toggle-primary toggle-sm"
+                        >
+                    </label>
+                </div>
+
+                <!-- Refresh Interval Select -->
+                <select
+                        x-show="autoRefresh"
+                        x-cloak
+                        x-transition
+                        x-model.number="refreshInterval"
+                        @change="restartAutoRefresh()"
+                        class="select select-sm select-bordered select-primary"
+                >
+                    <option value="5">5s</option>
+                    <option value="10">10s</option>
+                    <option value="30">30s</option>
+                    <option value="60">1m</option>
+                    <option value="300">5m</option>
+                </select>
+
+                <!-- Countdown with Loading -->
+                <div x-show="autoRefresh && countdown > 0" x-cloak x-transition class="flex items-center gap-2">
+                    <span class="loading loading-spinner loading-xs text-primary"></span>
+                    <kbd class="kbd kbd-sm" x-text="countdown + 's'"></kbd>
+                </div>
+
+                <!-- Manual Refresh Button with Tooltip -->
+                <div class="tooltip tooltip-bottom" data-tip="Refresh now">
+                    <button
+                            @click="refreshData()"
+                            class="btn btn-sm btn-circle btn-ghost"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Active Filters Summary with Alert -->
+        <div x-show="sqlFilter || timeRange !== 'last24h'" x-cloak x-transition class="mt-4">
+            <div class="alert alert-info">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <span class="font-semibold">Active filters:</span>
+                    <div class="badge badge-primary badge-outline" x-show="timeRange === 'custom'" x-text="'📅 ' + customDateRange"></div>
+                    <div class="badge badge-primary badge-outline" x-show="timeRange !== 'custom'" x-text="'⏱️ ' + timePresets.find(p => p.value === timeRange)?.label"></div>
+                    <div class="badge badge-warning badge-outline" x-show="sqlFilter">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                        </svg>
+                        Custom SQL
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Demo Content Area -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Stats Cards -->
+    <div class="stats shadow mb-6 w-full">
+        <div class="stat">
+            <div class="stat-figure text-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div class="stat-title">Total Requests</div>
+            <div class="stat-value text-primary">2.8K</div>
+            <div class="stat-desc">↗︎ 12% (30 days)</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-secondary">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                </svg>
+            </div>
+            <div class="stat-title">Avg Response Time</div>
+            <div class="stat-value text-secondary">127ms</div>
+            <div class="stat-desc">↘︎ 8% (30 days)</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-figure text-accent">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+            </div>
+            <div class="stat-title">Error Rate</div>
+            <div class="stat-value text-accent">0.3%</div>
+            <div class="stat-desc">↘︎ 2% (30 days)</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Chart Card 1 -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">
+                    <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Request Volume
+                    <div class="badge badge-secondary">Live</div>
+                </h2>
+                <div class="h-64 bg-gradient-to-br from-primary/10 to-primary/30 rounded-lg flex items-center justify-center relative overflow-hidden">
+                    <!-- Mock chart visualization -->
+                    <div class="absolute inset-0 flex items-end justify-around p-4 gap-1">
+                        <div class="bg-primary w-full h-[45%] rounded-t-lg opacity-70"></div>
+                        <div class="bg-primary w-full h-[65%] rounded-t-lg opacity-70"></div>
+                        <div class="bg-primary w-full h-[55%] rounded-t-lg opacity-70"></div>
+                        <div class="bg-primary w-full h-[80%] rounded-t-lg opacity-70"></div>
+                        <div class="bg-primary w-full h-[70%] rounded-t-lg opacity-70"></div>
+                        <div class="bg-primary w-full h-[90%] rounded-t-lg"></div>
+                    </div>
+                    <div class="relative z-10 text-center bg-base-100/90 backdrop-blur-sm p-4 rounded-lg shadow-lg">
+                        <div class="text-4xl font-bold text-primary">2,847</div>
+                        <div class="text-sm opacity-70">requests/min</div>
+                    </div>
+                </div>
+                <div class="card-actions justify-end mt-2">
+                    <button class="btn btn-sm btn-ghost">View Details</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Card 2 -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title">
+                    <svg class="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                    Response Time Trend
+                    <div class="badge badge-accent">Optimized</div>
+                </h2>
+                <div class="h-64 bg-gradient-to-br from-secondary/10 to-secondary/30 rounded-lg flex items-center justify-center relative overflow-hidden">
+                    <!-- Mock line chart -->
+                    <svg class="absolute inset-0 w-full h-full p-4" viewBox="0 0 300 200" preserveAspectRatio="none">
+                        <polyline
+                                fill="none"
+                                stroke="hsl(var(--s))"
+                                stroke-width="3"
+                                points="0,100 50,80 100,90 150,60 200,70 250,40 300,50"
+                                opacity="0.7"
+                        />
+                    </svg>
+                    <div class="relative z-10 text-center bg-base-100/90 backdrop-blur-sm p-4 rounded-lg shadow-lg">
+                        <div class="text-4xl font-bold text-secondary">127ms</div>
+                        <div class="text-sm opacity-70">avg latency</div>
+                    </div>
+                </div>
+                <div class="card-actions justify-end mt-2">
+                    <button class="btn btn-sm btn-ghost">View Details</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- State Debug Card -->
+        <div class="card bg-base-100 shadow-xl md:col-span-2">
+            <div class="card-body">
+                <h2 class="card-title">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                    Component State
+                    <div class="badge badge-neutral">Debug</div>
+                </h2>
+                <div x-data="dashboardHeader()" x-init="init()" class="overflow-x-auto">
+                    <div class="mockup-code">
+                        <pre data-prefix="$"><code>dashboard.getState()</code></pre>
+                        <pre data-prefix=">" class="text-success"><code x-text="JSON.stringify({
+    sqlFilter,
+    timeRange,
+    customDateRange,
+    autoRefresh,
+    refreshInterval,
+    countdown,
+    url: window.location.search
+}, null, 2)"></code></pre>
+                    </div>
+                </div>
+                <div class="card-actions justify-between items-center mt-2">
+                    <div class="text-sm opacity-70">
+                        <kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">K</kbd> for console
+                    </div>
+                    <button class="btn btn-sm btn-ghost">Copy JSON</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification Area -->
+        <div x-data="dashboardHeader()" x-init="init()" class="md:col-span-2">
+            <div x-show="lastRefresh" x-transition class="toast toast-end">
+                <div class="alert alert-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Dashboard refreshed!</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function dashboardHeader() {
+        return
+    }
+
+    window.addEventListener('dashboard-refresh', (e) => {
+        console.log('📊 Dashboard refresh triggered:', e.detail);
+    });
+</script>
+
+</body>
+</html>

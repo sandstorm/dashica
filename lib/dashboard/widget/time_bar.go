@@ -1,57 +1,65 @@
 package widget
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
-	"os"
-	"text/template"
+	"net/http"
 
-	//"github.com/sandstorm/dashica/dashboard"
-	"github.com/sandstorm/dashica/lib/dashboard/field"
+	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/components/widget_component"
+	"github.com/sandstorm/dashica/lib/util/handler_collector"
+
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-type TimeBarBuilder interface {
-	X(xField field.TimestampedField) TimeBarBuilder
-	Y(yField field.Field) TimeBarBuilder
-}
-
-type baseBuilder struct {
-}
-
-type builderImpl struct {
-	baseBuilder
+type TimeBar struct {
 	sql   sql.SqlBuilder
-	x     field.TimestampedField
-	y     field.Field
+	x     sql.TimestampedField
+	y     sql.Field
 	title string
+	id    string
 }
 
-func (b *builderImpl) X(xField field.TimestampedField) TimeBarBuilder {
+func (b *TimeBar) X(xField sql.TimestampedField) *TimeBar {
 	cloned := *b
 	cloned.x = xField
 	return &cloned
 }
 
-func (b *builderImpl) Y(yField field.Field) TimeBarBuilder {
+func (b *TimeBar) Y(yField sql.Field) *TimeBar {
 	cloned := *b
 	cloned.y = yField
 	return &cloned
 }
+func (b *TimeBar) Id(id string) *TimeBar {
+	cloned := *b
+	cloned.id = id
+	return &cloned
+}
 
-func NewTimeBar(sql sql.SqlBuilder) TimeBarBuilder {
-	return &builderImpl{
+func NewTimeBar(sql sql.SqlBuilder) *TimeBar {
+	return &TimeBar{
 		sql: sql,
 	}
 }
 
-type RenderContext struct {
-	sqlPath string
-	b       interface{}
+func (b *TimeBar) Render() templ.Component {
+	return widget_component.TimeBar()
 }
 
-func (b *baseBuilder) renderJs(queryName string, text string) {
+func (b *TimeBar) CollectHandlers(registerHandler handler_collector.HandlerCollector) error {
+	if len(b.id) == 0 {
+		return fmt.Errorf("timeBar: id is required")
+	}
+	err := registerHandler.Handle(b.id, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		println("TIME BAR HANDLER CALLED")
+	}))
+	if err != nil {
+		return fmt.Errorf("timeBar: %w", err)
+	}
+	return nil
+}
+
+/*func (b *baseBuilder) renderJs(queryName string, text string) {
 	tpl := template.Must(template.New(queryName).Parse(text))
 
 	fmt.Println("```js")
@@ -64,9 +72,9 @@ func (b *baseBuilder) renderJs(queryName string, text string) {
 	}
 
 	fmt.Println("```")
-}
+}*/
 
-/*func (b builderImpl) Build(dashboardEnv dashboard.DashboardEnv, queryName string) {
+/*func (b TimeBar) Build(dashboardEnv dashboard.DashboardEnv, queryName string) {
 b.sql.
 	PrependSelect(b.x).
 	GroupBy(b.x).
@@ -103,12 +111,4 @@ display(
 `)
 }*/
 
-func marshal(input any) string {
-	res, err := json.Marshal(input)
-	if err != nil {
-		log.Fatalln("ERRORR", err)
-	}
-	return string(res)
-}
-
-var _ TimeBarBuilder = &builderImpl{}
+var _ InteractiveWidget = (*TimeBar)(nil)

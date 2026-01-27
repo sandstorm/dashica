@@ -1,8 +1,6 @@
-import {html} from "htl";
+export default () => ({
 
-export function sqlFilterButton(label: string, sqlFilter: string) {
-    const linkEl = html`<button>${label}</button>`;
-    linkEl.addEventListener('click', () => {
+    addFilter(sqlFilter) {
         if (sqlFilter.includes('...')) {
             const parameter = prompt("Parameter value");
             if (parameter) {
@@ -10,6 +8,5 @@ export function sqlFilterButton(label: string, sqlFilter: string) {
             }
         }
         window.dispatchEvent(new CustomEvent('dashica-add-filter', {detail: sqlFilter}));
-    })
-    return linkEl;
-}
+    }
+})
