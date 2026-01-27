@@ -8,12 +8,13 @@ import (
 	"text/template"
 
 	"github.com/sandstorm/dashica/dashboard"
+	//"github.com/sandstorm/dashica/dashboard"
 	"github.com/sandstorm/dashica/dashboard/field"
 	"github.com/sandstorm/dashica/dashboard/sql"
 )
 
 type TimeBarBuilder interface {
-	Build(dashboardEnv dashboard.DashboardEnv, queryName string)
+	//Build(dashboardEnv dashboard.DashboardEnv, queryName string)
 	X(xField field.TimestampedField) TimeBarBuilder
 	Y(yField field.Field) TimeBarBuilder
 }
@@ -57,7 +58,7 @@ func (b *baseBuilder) renderJs(dashboardEnv dashboard.DashboardEnv, queryName st
 
 	fmt.Println("```js")
 	renderContext := &RenderContext{
-		sqlPath: "/" + dashboardEnv.SqlScriptPath(queryName),
+		sqlPath: "/",
 	}
 	err := tpl.Execute(os.Stdout, renderContext)
 	if err != nil {
@@ -67,25 +68,25 @@ func (b *baseBuilder) renderJs(dashboardEnv dashboard.DashboardEnv, queryName st
 	fmt.Println("```")
 }
 
-func (b builderImpl) Build(dashboardEnv dashboard.DashboardEnv, queryName string) {
-	b.sql.
-		PrependSelect(b.x).
-		GroupBy(b.x).
-		Select(b.y).
-		Build(dashboardEnv, queryName)
+/*func (b builderImpl) Build(dashboardEnv dashboard.DashboardEnv, queryName string) {
+b.sql.
+	PrependSelect(b.x).
+	GroupBy(b.x).
+	Select(b.y).
+	Build(dashboardEnv, queryName)
 
-	b.title = "Bla"
+b.title = "Bla"
 
-	// Write query name comment
-	/*fmt.Printf("```js\n")
-	fmt.Printf("display\n")
-	fmt.Printf("    chart.timeBar(\n")
-	fmt.Printf("        await clickhouse.query(%s, {}),\n", marshal("/" + dashboardEnv.SqlScriptPath(queryName))
-	fmt.Printf("        await clickhouse.query(\n")
-	fmt.Printf("```\n")
-	fmt.Printf("-- DO NOT MODIFY MANUALLY; as changes will be overwritten\n"))*/
+// Write query name comment
+/*fmt.Printf("```js\n")
+fmt.Printf("display\n")
+fmt.Printf("    chart.timeBar(\n")
+fmt.Printf("        await clickhouse.query(%s, {}),\n", marshal("/" + dashboardEnv.SqlScriptPath(queryName))
+fmt.Printf("        await clickhouse.query(\n")
+fmt.Printf("```\n")
+fmt.Printf("-- DO NOT MODIFY MANUALLY; as changes will be overwritten\n"))*/
 
-	b.renderJs(dashboardEnv, queryName, `
+/*	b.renderJs(dashboardEnv, queryName, `
 display(
 	chart.timeBar(
 		await clickhouse.query(
@@ -102,7 +103,7 @@ display(
 	)
 );
 `)
-}
+}*/
 
 func marshal(input any) string {
 	res, err := json.Marshal(input)
