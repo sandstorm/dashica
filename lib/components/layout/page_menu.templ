@@ -6,7 +6,7 @@ import (
 
 templ PageMenu(dashboardExecutionContext dashboard.DashboardExecutionContext) {
     <ul class="menu">
-    for _, group := range dashboardExecutionContext.DashboardGroups {
+    for _, group := range *dashboardExecutionContext.DashboardGroups {
         <li>
             <h2 class="menu-title">{group.Title}</h2>
             <ul>

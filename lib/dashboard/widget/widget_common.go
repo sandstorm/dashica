@@ -20,7 +20,7 @@ func (w Widgets) CollectHandlers(registerHandler handler_collector.HandlerCollec
 }
 
 type WidgetDefinition interface {
-	Render() templ.Component
+	Render() (templ.Component, error)
 }
 
 type InteractiveWidget interface {

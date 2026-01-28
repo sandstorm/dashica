@@ -15,7 +15,7 @@ templ DefaultPage(dashboardExecutionContext dashboard.DashboardExecutionContext,
 			<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon/apple-touch-icon.png"/>
 			<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon/favicon-32x32.png"/>
 			<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon/favicon-16x16.png"/>
-			<script src="/public/dist/index.js" defer></script>
+			<script src="/public/dist/index.js"></script>
 		</head>
 		<body class="bg-gray-100">
             <div class="application">
@@ -25,7 +25,9 @@ templ DefaultPage(dashboardExecutionContext dashboard.DashboardExecutionContext,
                 <main class="application__main">
                     @SearchBar(filterButtons)
 
-                    @content
+                    <div class="application__content prose lg:prose-xl">
+                        @content
+                    </div>
                 </main>
             </div>
 		</body>

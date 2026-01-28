@@ -42,8 +42,8 @@ func NewTimeBar(sql sql.SqlBuilder) *TimeBar {
 	}
 }
 
-func (b *TimeBar) Render() templ.Component {
-	return widget_component.TimeBar()
+func (b *TimeBar) Render() (templ.Component, error) {
+	return widget_component.TimeBar(), nil
 }
 
 func (b *TimeBar) CollectHandlers(registerHandler handler_collector.HandlerCollector) error {

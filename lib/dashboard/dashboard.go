@@ -18,7 +18,7 @@ type Dashboard interface {
 
 type DashboardExecutionContext struct {
 	// DashboardGroups returns the registered dashboard groups for this Dashica instance (e.g. for building a menu)
-	DashboardGroups []DashboardGroup
+	DashboardGroups *[]DashboardGroup
 	// current handler URL - to determine the current page
 	CurrentHandlerUrl string
 	FilterButtons     []FilterButton
@@ -74,8 +74,12 @@ func (d *dashboardImpl) FilterButton(title string, queryPart string) Dashboard {
 }
 
 func (d *dashboardImpl) CollectHandlers(handlerCollector handler_collector.HandlerCollector, dashboardExecutionContext DashboardExecutionContext) error {
-	components := util.Map(d.widgets, func(w widget.WidgetDefinition) templ.Component { return w.Render() })
-	err := handlerCollector.HandleRoot(templ.Handler(d.layout(dashboardExecutionContext, d.filterButtons, templ.Join(components...))))
+	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.Render() })
+	if err != nil {
+		return fmt.Errorf("rendering widgets: %w", err)
+	}
+
+	err = handlerCollector.HandleRoot(templ.Handler(d.layout(dashboardExecutionContext, d.filterButtons, templ.Join(components...))))
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}

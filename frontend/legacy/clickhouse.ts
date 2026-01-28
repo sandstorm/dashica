@@ -1,4 +1,4 @@
-import type {QueryResult} from "./types.js";
+import type {QueryResult} from "../types";
 import * as Arrow from 'apache-arrow';
 
 export interface QueryOptions {

@@ -100,7 +100,7 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 	dashb.CollectHandlers(
 		d.handlerCollector.Nested(url),
 		dashboard.DashboardExecutionContext{
-			DashboardGroups:   d.dashboardGroups[:],
+			DashboardGroups:   &d.dashboardGroups,
 			CurrentHandlerUrl: url,
 		},
 	)
