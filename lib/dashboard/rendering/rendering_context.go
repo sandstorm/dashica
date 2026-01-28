@@ -1,13 +1,33 @@
 package rendering
 
-import "github.com/a-h/templ"
+import (
+	"io/fs"
 
-type RenderingContext struct {
+	"github.com/a-h/templ"
+	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/server/alerting"
+)
+
+type DashboardContext struct {
 	// MainMenu returns the registered dashboard groups for this Dashica instance (e.g. for building a menu)
 	MainMenu *[]MenuGroup
 	// current handler URL - to determine the current page
 	CurrentHandlerUrl string
 	FilterButtons     []FilterButton
+
+	Deps Dependencies
+}
+
+type Dependencies struct {
+	ClickhouseClientManager *clickhouse.Manager
+	Logger                  zerolog.Logger
+	TimeProvider            config.TimeProvider
+	FileSystem              fs.ReadFileFS
+	AlertResultStore        *alerting.AlertResultStore
+	AlertEvaluator          *alerting.AlertEvaluator
+	AlertManager            *alerting.AlertManager
 }
 
 type MenuGroup struct {
@@ -25,4 +45,4 @@ type FilterButton struct {
 	QueryPart string
 }
 
-type LayoutFunc func(renderingContext RenderingContext, filterButtons []FilterButton, content templ.Component) templ.Component
+type LayoutFunc func(renderingContext DashboardContext, filterButtons []FilterButton, content templ.Component) templ.Component

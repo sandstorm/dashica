@@ -2,7 +2,7 @@ package httpserver
 
 import (
 	"fmt"
-	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"net/http"
 	"regexp"
 )

@@ -6,9 +6,9 @@ import (
 
 	"github.com/adhocore/gronx"
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
-	"github.com/sandstorm/dashica/server/util/logging"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/logging"
 
 	"strings"
 	"time"
@@ -156,10 +156,10 @@ func (b *BatchEvaluator) calculateBuckets(ctx context.Context, executionTimes []
 		return nil, nil
 	}
 
-	// Replace --NOW-- in the bucket expression with the ClickHouse input_datetime reference
+	// Replace --NOW-- in the bucket expression with the Clickhouse input_datetime reference
 	bucketExpr := strings.ReplaceAll(bucketExpression, "--NOW--", "input_datetime")
 
-	// Build the ClickHouse query to calculate buckets for all execution times
+	// Build the Clickhouse query to calculate buckets for all execution times
 	executionTimesTs := make([]string, 0, len(executionTimes))
 	for _, t := range executionTimes {
 		executionTimesTs = append(executionTimesTs, fmt.Sprintf("%d", t.Unix()))
@@ -226,7 +226,7 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 			fmt.Errorf("evaluating resultset row: %w", err)
 		}
 		// Persist the result with the timestamp from the execution time
-		alertResult.Timestamp = core.Time(executionTime)
+		alertResult.Timestamp = config.Time(executionTime)
 
 		err = b.alertResultStore.PersistResultAndNotifyIfChanged(alertDefinition.Id, alertResult, noNotification)
 		if err != nil {

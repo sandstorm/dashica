@@ -43,11 +43,11 @@ func NewTimeBar(sql sql.SqlBuilder) *TimeBar {
 	}
 }
 
-func (b *TimeBar) BuildComponents(renderingContext rendering.RenderingContext) (templ.Component, error) {
+func (b *TimeBar) BuildComponents(renderingContext rendering.DashboardContext) (templ.Component, error) {
 	return widget_component.TimeBar(), nil
 }
 
-func (b *TimeBar) CollectHandlers(registerHandler handler_collector.HandlerCollector) error {
+func (b *TimeBar) CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
 	if len(b.id) == 0 {
 		return fmt.Errorf("timeBar: id is required")
 	}

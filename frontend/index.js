@@ -9,12 +9,14 @@ import searchBar from './components/searchBar'
 import timeBar from './components/timeBar'
 import {timeBar as timeBarChart} from './chart/timeBar'
 import {clickhouseFactory} from './legacy/clickhouse'
+import "./store"
 
-Alpine.plugin(intersect)
+Alpine.plugin(intersect);
 
 Alpine.data('filterButton', filterButton);
 Alpine.data('searchBar', searchBar);
 Alpine.data('timeBar', timeBar);
+
 
 Alpine.start()
 window.Alpine = Alpine

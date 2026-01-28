@@ -16,7 +16,7 @@ import (
 // ScriptWrapperRenderer wraps script tags with additional JavaScript
 type ScriptWrapperRenderer struct {
 	html.Config
-	renderingContext rendering.RenderingContext
+	renderingContext rendering.DashboardContext
 }
 
 // RegisterFuncs registers the renderer for HTML blocks
@@ -93,7 +93,7 @@ func extractContent(n *ast.HTMLBlock, source []byte) []byte {
 }
 
 // NewScriptWrapperRenderer creates a new script wrapper renderer
-func NewScriptWrapperRenderer(renderingContext rendering.RenderingContext, opts ...html.Option) renderer.NodeRenderer {
+func NewScriptWrapperRenderer(renderingContext rendering.DashboardContext, opts ...html.Option) renderer.NodeRenderer {
 	r := &ScriptWrapperRenderer{
 		renderingContext: renderingContext,
 		Config:           html.NewConfig(),

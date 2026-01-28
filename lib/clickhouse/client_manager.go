@@ -2,23 +2,25 @@ package clickhouse
 
 import (
 	"fmt"
+
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/core"
+	"github.com/sandstorm/dashica/lib/config"
+
 	"strings"
 	"sync"
 )
 
-// Manager manages multiple ClickHouse clients
+// Manager manages multiple Clickhouse clients
 type Manager struct {
-	config  *core.AppConfig
+	config  *config.Config
 	clients map[string]*Client
 	// mutex protecting clients map
 	mu     sync.RWMutex
 	logger zerolog.Logger
 }
 
-// NewManager creates a new ClickHouse client manager
-func NewManager(config *core.AppConfig, logger zerolog.Logger) *Manager {
+// NewManager creates a new Clickhouse client manager
+func NewManager(config *config.Config, logger zerolog.Logger) *Manager {
 	return &Manager{
 		config:  config,
 		clients: make(map[string]*Client),

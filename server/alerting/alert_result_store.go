@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
+
 	"sync"
 )
 
 // NewAlertResultStore creates the persistence adapter for storing alert results (i.e. "X is red now, Y is OK again")
-// in ClickHouse.
+// in Clickhouse.
 // the passed clickhouseClient is the correct connection where alerts should be stored in.
 //
 // only persists alerts if there status changes (e.g. from "OK" to "error", or from "error" to "warn").
@@ -49,11 +50,11 @@ ORDER BY alert_id_group, alert_id_key
 `
 
 type currentAlertStatus struct {
-	AlertIdGroup    string    `json:"alert_id_group"`
-	AlertIdKey      string    `json:"alert_id_key"`
-	LatestTimestamp core.Time `json:"latest_timestamp"`
-	LatestStatus    string    `json:"latest_status"`
-	LatestMessage   string    `json:"latest_message"`
+	AlertIdGroup    string      `json:"alert_id_group"`
+	AlertIdKey      string      `json:"alert_id_key"`
+	LatestTimestamp config.Time `json:"latest_timestamp"`
+	LatestStatus    string      `json:"latest_status"`
+	LatestMessage   string      `json:"latest_message"`
 }
 
 func (s currentAlertStatus) AlertId() AlertId {

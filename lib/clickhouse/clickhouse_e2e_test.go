@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestClickhouseE2E performs end-to-end tests with a real ClickHouse database
+// TestClickhouseE2E performs end-to-end tests with a real Clickhouse database
 func TestClickhouseE2E(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	config, _ := testServer.LoadTestingConfig(t)

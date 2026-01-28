@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

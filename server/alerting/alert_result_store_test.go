@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/server/core"
 	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
 	"github.com/stretchr/testify/require"
 )
 
-// TestAlertResultStore tests with a real ClickHouse database
+// TestAlertResultStore tests with a real Clickhouse database
 func TestAlertResultStore(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	config, _ := testServer.LoadTestingConfig(t)

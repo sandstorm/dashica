@@ -13,12 +13,12 @@ import (
 
 	"github.com/adhocore/gronx/pkg/tasker"
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/core"
-	"github.com/sandstorm/dashica/server/util/logging"
+	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/logging"
 )
 
 type AlertManager struct {
-	config           *core.AppConfig
+	config           *config.Config
 	logger           zerolog.Logger
 	fileSystem       fs.FS
 	alertEvaluator   *AlertEvaluator
@@ -31,7 +31,7 @@ type AlertManager struct {
 	loadedAlertDefinitions []AlertDefinition
 }
 
-func NewAlertManager(config *core.AppConfig, logger zerolog.Logger, fileSystem fs.FS, alertEvaluator *AlertEvaluator, alertResultStore *AlertResultStore) *AlertManager {
+func NewAlertManager(config *config.Config, logger zerolog.Logger, fileSystem fs.FS, alertEvaluator *AlertEvaluator, alertResultStore *AlertResultStore) *AlertManager {
 	logger = logger.With().
 		Str(logging.EventDataset, logging.EventDataset_Dashica_Alerting_Manager).
 		Logger()

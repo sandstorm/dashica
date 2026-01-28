@@ -8,10 +8,10 @@ import (
 
 type Widgets []WidgetDefinition
 
-func (w Widgets) CollectHandlers(registerHandler handler_collector.HandlerCollector) error {
+func (w Widgets) CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
 	for _, widget := range w {
 		if interactive, ok := widget.(InteractiveWidget); ok {
-			err := interactive.CollectHandlers(registerHandler)
+			err := interactive.CollectHandlers(ctx, registerHandler)
 			if err != nil {
 				return err
 			}
@@ -21,10 +21,10 @@ func (w Widgets) CollectHandlers(registerHandler handler_collector.HandlerCollec
 }
 
 type WidgetDefinition interface {
-	BuildComponents(renderingContext rendering.RenderingContext) (templ.Component, error)
+	BuildComponents(ctx rendering.DashboardContext) (templ.Component, error)
 }
 
 type InteractiveWidget interface {
 	WidgetDefinition
-	CollectHandlers(registerHandler handler_collector.HandlerCollector) error
+	CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error
 }

@@ -10,14 +10,14 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/server/querying"
 )
 
-type queryHandler struct {
-	clickhouseClientManager *clickhouse.Manager
-	logger                  zerolog.Logger
-	fileSystem              fs.ReadFileFS
+type QueryHandler struct {
+	ClickhouseClientManager *clickhouse.Manager
+	Logger                  zerolog.Logger
+	FileSystem              fs.ReadFileFS
 }
 
 type DashboardFilters struct {
@@ -87,7 +87,7 @@ func (f DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, clic
 			To:   intPtr(int64(toInt) * 1000),
 		}, nil
 	} else {
-		return nil, nil
+		return nil, fmt.Errorf("no time range given")
 	}
 
 	opts := clickhouse.DefaultQueryOptions()
@@ -105,19 +105,19 @@ func intPtr(i int64) *int64 {
 	return &i
 }
 
-func (qh queryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
+func (qh QueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
 	fileName := r.URL.Query().Get("fileName")
 	if fileName == "" {
 		return fmt.Errorf("missing required 'fileName' parameter")
 	}
 
 	filePath := path.Clean(strings.TrimLeft(fileName, "./"))
-	fileContent, err := qh.fileSystem.ReadFile(filePath)
+	fileContent, err := qh.FileSystem.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("reading file %s: %w", fileName, err)
 	}
 
-	client, err := qh.clickhouseClientManager.GetClientForSqlFile(fileName)
+	client, err := qh.ClickhouseClientManager.GetClientForSqlFile(fileName)
 	if err != nil {
 		return fmt.Errorf("get clickhouse client for %s: %w", fileName, err)
 	}

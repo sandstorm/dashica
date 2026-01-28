@@ -10,9 +10,9 @@ import (
 
 	"github.com/caddyserver/certmagic"
 	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	app "github.com/sandstorm/dashica/server"
 	"github.com/sandstorm/dashica/server/alerting"
-	"github.com/sandstorm/dashica/server/clickhouse"
 	"github.com/sandstorm/dashica/server/core"
 	"github.com/sandstorm/dashica/server/httpserver"
 	"github.com/sandstorm/dashica/server/util/logging"

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/core"
+	"github.com/sandstorm/dashica/lib/config"
+
 	"io"
 	"net/http"
 	"net/url"
@@ -14,10 +16,10 @@ import (
 	"time"
 )
 
-// Client represents a ClickHouse HTTP client for a specific server
+// Client represents a Clickhouse HTTP client for a specific server
 type Client struct {
 	Id           string
-	serverConfig *core.ClickHouseConfig
+	serverConfig *config.ClickHouseConfig
 	httpClient   *http.Client
 	logger       zerolog.Logger
 
@@ -25,8 +27,8 @@ type Client struct {
 	introspectedSchemaCached *IntrospectedSchema
 }
 
-// NewClient creates a new ClickHouse HTTP client for a specific server
-func NewClient(serverConfig *core.ClickHouseConfig, id string, logger zerolog.Logger) *Client {
+// NewClient creates a new Clickhouse HTTP client for a specific server
+func NewClient(serverConfig *config.ClickHouseConfig, id string, logger zerolog.Logger) *Client {
 	return &Client{
 		Id:           id,
 		serverConfig: serverConfig,
@@ -40,7 +42,7 @@ func NewClient(serverConfig *core.ClickHouseConfig, id string, logger zerolog.Lo
 // QueryOptions represents options that can be set when making a query
 type QueryOptions struct {
 	Format      string            // Output format (default: JSONEachRow)
-	Settings    map[string]string // ClickHouse settings
+	Settings    map[string]string // Clickhouse settings
 	Parameters  map[string]string // Query parameters
 	Compression bool              // Enable compression
 }
@@ -153,7 +155,7 @@ func (c *Client) QueryToHandler(ctx context.Context, query string, options Query
 	}
 	defer resp.Body.Close()
 
-	// Copy headers from ClickHouse response to the output response
+	// Copy headers from Clickhouse response to the output response
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)

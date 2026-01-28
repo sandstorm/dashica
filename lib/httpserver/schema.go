@@ -3,7 +3,7 @@ package httpserver
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/sandstorm/dashica/server/clickhouse"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"net/http"
 )
 

@@ -14,7 +14,7 @@ type Dashboard interface {
 	Widget(w widget.WidgetDefinition) Dashboard
 	WithLayout(layout rendering.LayoutFunc) Dashboard
 	FilterButton(title string, queryPart string) Dashboard
-	CollectHandlers(handlerCollector handler_collector.HandlerCollector, renderingContext rendering.RenderingContext) error
+	CollectHandlers(ctx rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error
 }
 
 func New() Dashboard {
@@ -48,17 +48,17 @@ func (d *dashboardImpl) FilterButton(title string, queryPart string) Dashboard {
 	return &cloned
 }
 
-func (d *dashboardImpl) CollectHandlers(handlerCollector handler_collector.HandlerCollector, renderingContext rendering.RenderingContext) error {
-	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(renderingContext) })
+func (d *dashboardImpl) CollectHandlers(ctx rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
+	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(ctx) })
 	if err != nil {
 		return fmt.Errorf("building components: %w", err)
 	}
 
-	err = handlerCollector.HandleRoot(templ.Handler(d.layout(renderingContext, d.filterButtons, templ.Join(components...))))
+	err = handlerCollector.HandleRoot(templ.Handler(d.layout(ctx, d.filterButtons, templ.Join(components...))))
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}
-	return d.widgets.CollectHandlers(handlerCollector.Nested("/api"))
+	return d.widgets.CollectHandlers(ctx, handlerCollector.Nested("/api"))
 }
 
 var _ Dashboard = &dashboardImpl{}

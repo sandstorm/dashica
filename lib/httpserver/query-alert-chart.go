@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/server/alerting"
-	"github.com/sandstorm/dashica/server/clickhouse"
 	"net/http"
 )
 

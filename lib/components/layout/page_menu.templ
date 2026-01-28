@@ -4,7 +4,7 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-templ PageMenu(renderingContext rendering.RenderingContext) {
+templ PageMenu(renderingContext rendering.DashboardContext) {
     <ul class="menu">
     for _, group := range *renderingContext.MainMenu {
         <li>

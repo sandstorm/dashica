@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
+	app "github.com/sandstorm/dashica/server"
+	"github.com/sandstorm/dashica/server/alerting"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -23,7 +26,11 @@ type Dashica interface {
 }
 
 func New() Dashica {
-	cfg := config.LoadConfigAndFailOnError(true)
+	cfg, err := config.LoadConfig(os.Getenv("APP_ENV"), false)
+	if err != nil {
+		println("Failed to load config: ", err.Error())
+		os.Exit(1)
+	}
 
 	// --- Logger initialization ---
 
@@ -34,7 +41,7 @@ func New() Dashica {
 
 	var logger zerolog.Logger
 	logWriter := &lumberjack.Logger{
-		Filename:   cfg.Log.OutputFilePath,
+		Filename:   cfg.Log.FileName,
 		MaxSize:    500, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28, // days
@@ -60,11 +67,44 @@ func New() Dashica {
 	mux := http.NewServeMux()
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("dashica-src/public/"))))
 
+	timeProvider := config.NewRealTimeProvider()
+	clickhouseClientManager := clickhouse.NewManager(cfg, logger)
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		logger.Fatal().
+			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+			Err(err).
+			Msg("could not find working directory")
+	}
+
+	fileSystem := app.GetFileSystem(workingDir)
+	alertTargetClickhouseClient, err := clickhouseClientManager.GetClient("alert_storage")
+	if err != nil {
+		logger.Fatal().
+			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+			Msg("did NOT find clickhouse 'alert_target' (needed for alert result storage) in dashica_config.yaml.")
+	}
+	alertResultStore := alerting.NewAlertResultStore(logger, alertTargetClickhouseClient)
+	alertEvaluator := alerting.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
+	alertManager := alerting.NewAlertManager(cfg, logger, fileSystem, alertEvaluator, alertResultStore)
+
+	deps := rendering.Dependencies{
+		clickhouseClientManager,
+		logger,
+		timeProvider,
+		fileSystem,
+		alertResultStore,
+		alertEvaluator,
+		alertManager,
+	}
+
 	return &DashicaImpl{
 		cfg:              cfg,
 		log:              logger,
 		handler:          mux,
 		handlerCollector: handler_collector.NewValidatingCollector(mux, logger),
+		deps:             deps,
 	}
 }
 
@@ -74,6 +114,7 @@ type DashicaImpl struct {
 	handler          http.Handler
 	dashboardGroups  []rendering.MenuGroup
 	handlerCollector handler_collector.HandlerCollector
+	deps             rendering.Dependencies
 }
 
 func (d *DashicaImpl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -99,11 +140,12 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		Msg("Registering new dashboard")
 
 	dashb.CollectHandlers(
-		d.handlerCollector.Nested(url),
-		rendering.RenderingContext{
+		rendering.DashboardContext{
 			MainMenu:          &d.dashboardGroups,
 			CurrentHandlerUrl: url,
+			Deps:              d.deps,
 		},
+		d.handlerCollector.Nested(url),
 	)
 
 	// add to the last dashboard group

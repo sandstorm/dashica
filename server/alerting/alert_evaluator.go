@@ -7,15 +7,15 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/server/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
-	"github.com/sandstorm/dashica/server/util/logging"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/logging"
 )
 
 type AlertEvaluator struct {
 	logger            zerolog.Logger
 	clickhouseManager *clickhouse.Manager
-	timeProvider      core.TimeProvider
+	timeProvider      config.TimeProvider
 }
 
 const AlertStateError = "error"
@@ -32,10 +32,10 @@ type AlertResult struct {
 	Message string
 
 	// Execution Timestamp
-	Timestamp core.Time
+	Timestamp config.Time
 }
 
-func NewAlertEvaluator(logger zerolog.Logger, clickhouseManager *clickhouse.Manager, timeProvider core.TimeProvider) *AlertEvaluator {
+func NewAlertEvaluator(logger zerolog.Logger, clickhouseManager *clickhouse.Manager, timeProvider config.TimeProvider) *AlertEvaluator {
 	logger = logger.With().
 		Str(logging.EventDataset, logging.EventDataset_Dashica_Alerting_Evaluator).
 		Logger()
@@ -169,7 +169,7 @@ func (e AlertEvaluator) withTimestamp(a *AlertResult) *AlertResult {
 	return a
 }
 
-func (e AlertEvaluator) WithTimeProvider(timeProvider core.TimeProvider) *AlertEvaluator {
+func (e AlertEvaluator) WithTimeProvider(timeProvider config.TimeProvider) *AlertEvaluator {
 	return &AlertEvaluator{
 		logger:            e.logger,
 		clickhouseManager: e.clickhouseManager,
@@ -177,7 +177,7 @@ func (e AlertEvaluator) WithTimeProvider(timeProvider core.TimeProvider) *AlertE
 	}
 }
 
-func preprocessSql(alertDefinition AlertDefinition, timeProvider core.TimeProvider) string {
+func preprocessSql(alertDefinition AlertDefinition, timeProvider config.TimeProvider) string {
 	bucket := strings.ReplaceAll(alertDefinition.QueryBucketExpression, "--NOW--", timeProvider.NowSqlString())
 
 	sql := alertDefinition.Query
