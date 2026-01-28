@@ -1,17 +1,17 @@
 package layout
 
 import (
-	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-templ PageMenu(dashboardExecutionContext dashboard.DashboardExecutionContext) {
+templ PageMenu(renderingContext rendering.RenderingContext) {
     <ul class="menu">
-    for _, group := range *dashboardExecutionContext.DashboardGroups {
+    for _, group := range *renderingContext.MainMenu {
         <li>
             <h2 class="menu-title">{group.Title}</h2>
             <ul>
             for _, entry := range group.Entries {
-                <li><a href={entry.Url} class={templ.KV("menu-active", entry.Url == dashboardExecutionContext.CurrentHandlerUrl)}>{entry.Title}</a></li>
+                <li><a href={entry.Url} class={templ.KV("menu-active", entry.Url == renderingContext.CurrentHandlerUrl)}>{entry.Title}</a></li>
             }
             </ul>
         </li>

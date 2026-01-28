@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -71,7 +72,7 @@ type DashicaImpl struct {
 	cfg              *config.Config
 	log              zerolog.Logger
 	handler          http.Handler
-	dashboardGroups  []dashboard.DashboardGroup
+	dashboardGroups  []rendering.MenuGroup
 	handlerCollector handler_collector.HandlerCollector
 }
 
@@ -88,7 +89,7 @@ func (d *DashicaImpl) Log() zerolog.Logger {
 }
 
 func (d *DashicaImpl) RegisterDashboardGroup(title string) Dashica {
-	d.dashboardGroups = append(d.dashboardGroups, dashboard.DashboardGroup{Title: title})
+	d.dashboardGroups = append(d.dashboardGroups, rendering.MenuGroup{Title: title})
 	return d
 }
 
@@ -99,17 +100,16 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 
 	dashb.CollectHandlers(
 		d.handlerCollector.Nested(url),
-		dashboard.DashboardExecutionContext{
-			DashboardGroups:   &d.dashboardGroups,
+		rendering.RenderingContext{
+			MainMenu:          &d.dashboardGroups,
 			CurrentHandlerUrl: url,
 		},
 	)
 
 	// add to the last dashboard group
-	d.dashboardGroups[len(d.dashboardGroups)-1].Entries = append(d.dashboardGroups[len(d.dashboardGroups)-1].Entries, dashboard.DashboardGroupEntry{
-		Title:     url,
-		Url:       url,
-		Dashboard: dashb,
+	d.dashboardGroups[len(d.dashboardGroups)-1].Entries = append(d.dashboardGroups[len(d.dashboardGroups)-1].Entries, rendering.MenuGroupEntry{
+		Title: url,
+		Url:   url,
 	})
 	return d
 }

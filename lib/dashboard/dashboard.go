@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/util"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -11,45 +12,19 @@ import (
 
 type Dashboard interface {
 	Widget(w widget.WidgetDefinition) Dashboard
-	WithLayout(layout LayoutFunc) Dashboard
+	WithLayout(layout rendering.LayoutFunc) Dashboard
 	FilterButton(title string, queryPart string) Dashboard
-	CollectHandlers(handlerCollector handler_collector.HandlerCollector, dashboardExecutionCtx DashboardExecutionContext) error
-}
-
-type DashboardExecutionContext struct {
-	// DashboardGroups returns the registered dashboard groups for this Dashica instance (e.g. for building a menu)
-	DashboardGroups *[]DashboardGroup
-	// current handler URL - to determine the current page
-	CurrentHandlerUrl string
-	FilterButtons     []FilterButton
-}
-
-type DashboardGroup struct {
-	Title   string
-	Entries []DashboardGroupEntry
-}
-
-type DashboardGroupEntry struct {
-	Title     string
-	Url       string
-	Dashboard Dashboard
+	CollectHandlers(handlerCollector handler_collector.HandlerCollector, renderingContext rendering.RenderingContext) error
 }
 
 func New() Dashboard {
 	return &dashboardImpl{}
 }
 
-type LayoutFunc func(dashboardExecutionContext DashboardExecutionContext, filterButtons []FilterButton, content templ.Component) templ.Component
-
-type FilterButton struct {
-	Title     string
-	QueryPart string
-}
-
 type dashboardImpl struct {
 	widgets       widget.Widgets
-	layout        LayoutFunc
-	filterButtons []FilterButton
+	layout        rendering.LayoutFunc
+	filterButtons []rendering.FilterButton
 }
 
 func (d *dashboardImpl) Widget(w widget.WidgetDefinition) Dashboard {
@@ -58,7 +33,7 @@ func (d *dashboardImpl) Widget(w widget.WidgetDefinition) Dashboard {
 	return &cloned
 }
 
-func (d *dashboardImpl) WithLayout(layout LayoutFunc) Dashboard {
+func (d *dashboardImpl) WithLayout(layout rendering.LayoutFunc) Dashboard {
 	cloned := *d
 	cloned.layout = layout
 	return &cloned
@@ -66,24 +41,24 @@ func (d *dashboardImpl) WithLayout(layout LayoutFunc) Dashboard {
 
 func (d *dashboardImpl) FilterButton(title string, queryPart string) Dashboard {
 	cloned := *d
-	cloned.filterButtons = append(cloned.filterButtons, FilterButton{
+	cloned.filterButtons = append(cloned.filterButtons, rendering.FilterButton{
 		Title:     title,
 		QueryPart: queryPart,
 	})
 	return &cloned
 }
 
-func (d *dashboardImpl) CollectHandlers(handlerCollector handler_collector.HandlerCollector, dashboardExecutionContext DashboardExecutionContext) error {
-	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.Render() })
+func (d *dashboardImpl) CollectHandlers(handlerCollector handler_collector.HandlerCollector, renderingContext rendering.RenderingContext) error {
+	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(renderingContext) })
 	if err != nil {
-		return fmt.Errorf("rendering widgets: %w", err)
+		return fmt.Errorf("building components: %w", err)
 	}
 
-	err = handlerCollector.HandleRoot(templ.Handler(d.layout(dashboardExecutionContext, d.filterButtons, templ.Join(components...))))
+	err = handlerCollector.HandleRoot(templ.Handler(d.layout(renderingContext, d.filterButtons, templ.Join(components...))))
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}
-	return d.widgets.CollectHandlers(handlerCollector.Nested("/widgets"))
+	return d.widgets.CollectHandlers(handlerCollector.Nested("/api"))
 }
 
 var _ Dashboard = &dashboardImpl{}

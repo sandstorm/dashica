@@ -2,6 +2,7 @@ package widget
 
 import (
 	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
@@ -20,7 +21,7 @@ func (w Widgets) CollectHandlers(registerHandler handler_collector.HandlerCollec
 }
 
 type WidgetDefinition interface {
-	Render() (templ.Component, error)
+	BuildComponents(renderingContext rendering.RenderingContext) (templ.Component, error)
 }
 
 type InteractiveWidget interface {

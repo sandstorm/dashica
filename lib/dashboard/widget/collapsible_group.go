@@ -5,6 +5,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
@@ -23,8 +24,8 @@ func (w *CollapsibleGroup) Widget(widget WidgetDefinition) *CollapsibleGroup {
 	return &cloned
 }
 
-func (w *CollapsibleGroup) Render() (templ.Component, error) {
-	components, err := util.MapHandleError(w.widgets, func(w WidgetDefinition) (templ.Component, error) { return w.Render() })
+func (w *CollapsibleGroup) BuildComponents(renderingContext rendering.RenderingContext) (templ.Component, error) {
+	components, err := util.MapHandleError(w.widgets, func(w WidgetDefinition) (templ.Component, error) { return w.BuildComponents(renderingContext) })
 	if err != nil {
 		return nil, fmt.Errorf("collapsibleGroup: rendering widgets: %w", err)
 	}

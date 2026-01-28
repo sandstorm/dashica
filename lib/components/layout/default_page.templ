@@ -1,11 +1,11 @@
 package layout
 
 import (
-	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
 
-templ DefaultPage(dashboardExecutionContext dashboard.DashboardExecutionContext, filterButtons []dashboard.FilterButton, content templ.Component) {
+templ DefaultPage(renderingContext rendering.RenderingContext, filterButtons []rendering.FilterButton, content templ.Component) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>
@@ -20,7 +20,7 @@ templ DefaultPage(dashboardExecutionContext dashboard.DashboardExecutionContext,
 		<body class="bg-gray-100">
             <div class="application">
                 <aside class="application__sidebar">
-                    @PageMenu(dashboardExecutionContext)
+                    @PageMenu(renderingContext)
                 </aside>
                 <main class="application__main">
                     @SearchBar(filterButtons)

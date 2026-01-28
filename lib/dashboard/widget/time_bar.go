@@ -6,6 +6,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -42,7 +43,7 @@ func NewTimeBar(sql sql.SqlBuilder) *TimeBar {
 	}
 }
 
-func (b *TimeBar) Render() (templ.Component, error) {
+func (b *TimeBar) BuildComponents(renderingContext rendering.RenderingContext) (templ.Component, error) {
 	return widget_component.TimeBar(), nil
 }
 

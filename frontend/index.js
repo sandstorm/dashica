@@ -8,7 +8,7 @@ import filterButton from './components/filterButton'
 import searchBar from './components/searchBar'
 import timeBar from './components/timeBar'
 import {timeBar as timeBarChart} from './chart/timeBar'
-import * as clickhouse from './legacy/clickhouse'
+import {clickhouseFactory} from './legacy/clickhouse'
 
 Alpine.plugin(intersect)
 
@@ -18,7 +18,9 @@ Alpine.data('timeBar', timeBar);
 
 Alpine.start()
 window.Alpine = Alpine
-window.LegacyScriptWrapper = function(innerScript) {
+window.LegacyScriptWrapper = function(baseUrl, innerScript) {
+    console.log("BaseURL", baseUrl);
+
     const chart = {
         timeBar: timeBarChart
     };
@@ -26,6 +28,8 @@ window.LegacyScriptWrapper = function(innerScript) {
     const visibility = () => Promise.resolve(true); // TODO: we disable intersection observing for now
 
     const filters = {}; // TODO: Filter support
+
+    const clickhouse = clickhouseFactory(baseUrl);
 
     innerScript({chart, visibility, clickhouse, filters});
 }

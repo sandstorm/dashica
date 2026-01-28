@@ -3,9 +3,11 @@ package widget
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget/legacy_markdown"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 	"github.com/yuin/goldmark"
@@ -30,7 +32,7 @@ func (w *LegacyMarkdown) File(path string) *LegacyMarkdown {
 	return &cloned
 }
 
-func (w *LegacyMarkdown) Render() (templ.Component, error) {
+func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.RenderingContext) (templ.Component, error) {
 	contents, err := os.ReadFile(w.file)
 	if err != nil {
 		return nil, fmt.Errorf("reading file %s: %w", w.file, err)
@@ -49,7 +51,7 @@ func (w *LegacyMarkdown) Render() (templ.Component, error) {
 		goldmark.WithRenderer(
 			renderer.NewRenderer(
 				renderer.WithNodeRenderers(
-					util.Prioritized(legacy_markdown.NewScriptWrapperRenderer(html.WithUnsafe()), 100),
+					util.Prioritized(legacy_markdown.NewScriptWrapperRenderer(renderingContext, html.WithUnsafe()), 100),
 				),
 			),
 		),
@@ -62,8 +64,11 @@ func (w *LegacyMarkdown) Render() (templ.Component, error) {
 	return templ.Raw(buf.String()), nil
 }
 
-func (w *LegacyMarkdown) CollectHandlers(collector handler_collector.HandlerCollector) {
-	//w.widgets.CollectHandlers(collector)
+func (w *LegacyMarkdown) CollectHandlers(collector handler_collector.HandlerCollector) error {
+	return collector.Handle("query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		println("LEGACY QUERY CALLED")
+	}))
+
 }
 
-var _ WidgetDefinition = (*LegacyMarkdown)(nil)
+var _ InteractiveWidget = (*LegacyMarkdown)(nil)

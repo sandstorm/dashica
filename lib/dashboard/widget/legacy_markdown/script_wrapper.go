@@ -2,8 +2,11 @@ package legacy_markdown
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	util2 "github.com/sandstorm/dashica/lib/util"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
@@ -13,6 +16,7 @@ import (
 // ScriptWrapperRenderer wraps script tags with additional JavaScript
 type ScriptWrapperRenderer struct {
 	html.Config
+	renderingContext rendering.RenderingContext
 }
 
 // RegisterFuncs registers the renderer for HTML blocks
@@ -62,7 +66,7 @@ func (r *ScriptWrapperRenderer) wrapScript(w io.Writer, scriptContent []byte) {
 		w.Write([]byte("<script>\n"))
 
 		w.Write([]byte("/* This script was wrapped by the Markdown renderer */\n"))
-		w.Write([]byte("window.LegacyScriptWrapper(async function({chart, visibility, clickhouse, filters}) {\n"))
+		w.Write([]byte(fmt.Sprintf("window.LegacyScriptWrapper(%s, async function({chart, visibility, clickhouse, filters}) {\n", util2.JsonEncode(r.renderingContext.CurrentHandlerUrl))))
 		w.Write(scriptContent)
 		w.Write([]byte("});\n"))
 
@@ -89,9 +93,10 @@ func extractContent(n *ast.HTMLBlock, source []byte) []byte {
 }
 
 // NewScriptWrapperRenderer creates a new script wrapper renderer
-func NewScriptWrapperRenderer(opts ...html.Option) renderer.NodeRenderer {
+func NewScriptWrapperRenderer(renderingContext rendering.RenderingContext, opts ...html.Option) renderer.NodeRenderer {
 	r := &ScriptWrapperRenderer{
-		Config: html.NewConfig(),
+		renderingContext: renderingContext,
+		Config:           html.NewConfig(),
 	}
 	for _, opt := range opts {
 		opt.SetHTMLOption(&r.Config)
