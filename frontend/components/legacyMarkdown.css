@@ -1,0 +1,12 @@
+.legacyMarkdown {
+    .card {
+        figure {
+            display: block;
+            
+            h2 {
+                font-weight: bold;
+            }
+        }
+    }
+
+}

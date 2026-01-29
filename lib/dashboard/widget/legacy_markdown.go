@@ -13,9 +13,7 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
-	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
-	"github.com/yuin/goldmark/util"
 )
 
 type LegacyMarkdown struct {
@@ -40,26 +38,15 @@ func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.DashboardCon
 
 	var buf bytes.Buffer
 
-	replacements := map[string]string{
-		"logVolumeSystemlog":   `<div class="chart" id="log-volume-systemlog">Log Volume Chart</div>`,
-		"logVolumeWithoutInfo": `<div class="chart" id="log-volume-without-info">Log Volume Without Info</div>`,
-		"eventDatasetCounts":   `<div class="chart" id="event-dataset-counts">Event Dataset Counts</div>`,
-	}
-
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM, legacy_markdown.NewPlaceholderExtension(replacements)),
+		goldmark.WithExtensions(extension.GFM, legacy_markdown.NewPlaceholderExtension(func(name string) (replacement string, found bool) {
+			return fmt.Sprintf(`<div x-data="legacyInlinePlaceholder('%s')" class="not-prose"></div>`, name), true
+		}, renderingContext)),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),
 		goldmark.WithRendererOptions(
 			html.WithUnsafe(),
-		),
-		goldmark.WithRenderer(
-			renderer.NewRenderer(
-				renderer.WithNodeRenderers(
-					util.Prioritized(legacy_markdown.NewScriptWrapperRenderer(renderingContext, html.WithUnsafe()), 100),
-				),
-			),
 		),
 	)
 
@@ -67,7 +54,7 @@ func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.DashboardCon
 		return nil, fmt.Errorf("converting markdown %s to HTML: %w", w.file, err)
 	}
 
-	return templ.Raw(buf.String()), nil
+	return templ.Raw(`<div class="legacyMarkdown">` + buf.String() + `</div>`), nil
 }
 
 func (w *LegacyMarkdown) CollectHandlers(ctx rendering.DashboardContext, collector handler_collector.HandlerCollector) error {

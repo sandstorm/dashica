@@ -11,5 +11,6 @@
 }
 
 @import "./components/application.css";
+@import "./components/legacyMarkdown.css";
 @import "./components/searchBar.css";
 @import "flatpickr/dist/flatpickr.min.css";

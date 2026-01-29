@@ -24,6 +24,35 @@ window.Alpine = Alpine
 
 window.exports = Alpine.reactive({});
 
+Alpine.data('legacyInlinePlaceholder', (placeholderName) => ({
+    init() {
+        Alpine.effect(() => {
+            console.log("Rendering", placeholderName, "with component", window.exports[placeholderName])
+            const domNodeToRender = window.exports[placeholderName];
+            if (!domNodeToRender) {
+                return console.warn(
+                    "Legacy component", placeholderName, "not found. Did you forget to export it?"
+                );
+            }
+
+            if (domNodeToRender.then) {
+                domNodeToRender.then(domNode => {
+                    this.$el.innerHTML = "";
+                    if (domNode) {
+                        this.$el.appendChild(domNode);
+                    }
+                })
+            } else {
+                this.$el.innerHTML = "";
+                if (domNodeToRender) {
+                    this.$el.appendChild(domNodeToRender);
+                }
+
+            }
+        })
+    }
+}));
+
 window.LegacyScriptWrapper = function(baseUrl, innerScript) {
     const wrappingDomNode = document.createElement('div');
 

@@ -25,7 +25,7 @@ templ DefaultPage(renderingContext rendering.DashboardContext, filterButtons []r
                 <main class="application__main">
                     @SearchBar(filterButtons)
 
-                    <div class="application__content prose lg:prose-xl">
+                    <div class="application__content prose max-w-none">
                         @content
                     </div>
                 </main>
