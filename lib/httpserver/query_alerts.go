@@ -6,15 +6,15 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog"
+	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/server/alerting"
 )
 
 type queryAlertsHandler struct {
 	clickhouseClientManager *clickhouse.Manager
 	logger                  zerolog.Logger
-	alertManager            *alerting.AlertManager
-	alertResultStore        *alerting.AlertResultStore
+	alertManager            *alerting2.AlertManager
+	alertResultStore        *alerting2.AlertResultStore
 	devMode                 bool
 }
 

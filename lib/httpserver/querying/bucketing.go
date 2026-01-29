@@ -1,9 +1,10 @@
 package querying
 
 import (
-	"github.com/sandstorm/dashica/server/util"
 	"regexp"
 	"strings"
+
+	"github.com/sandstorm/dashica/server/util"
 )
 
 var Bucketing = &bucketingImpl{

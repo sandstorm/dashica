@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/sandstorm/dashica/server/alerting"
+	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 )
 
 type debugCalculateAlertsHandler struct {
-	batchEvaluator   *alerting.BatchEvaluator
-	alertResultStore *alerting.AlertResultStore
+	batchEvaluator   *alerting2.BatchEvaluator
+	alertResultStore *alerting2.AlertResultStore
 }
 
 func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {

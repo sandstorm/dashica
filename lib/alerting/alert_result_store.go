@@ -3,6 +3,7 @@ package alerting
 import (
 	"context"
 	"fmt"
+
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
@@ -13,7 +14,6 @@ import (
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 	app "github.com/sandstorm/dashica/server"
-	"github.com/sandstorm/dashica/server/alerting"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -85,9 +85,9 @@ func New() Dashica {
 			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
 			Msg("did NOT find clickhouse 'alert_target' (needed for alert result storage) in dashica_config.yaml.")
 	}
-	alertResultStore := alerting.NewAlertResultStore(logger, alertTargetClickhouseClient)
-	alertEvaluator := alerting.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
-	alertManager := alerting.NewAlertManager(cfg, logger, fileSystem, alertEvaluator, alertResultStore)
+	alertResultStore := alerting2.NewAlertResultStore(logger, alertTargetClickhouseClient)
+	alertEvaluator := alerting2.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
+	alertManager := alerting2.NewAlertManager(cfg, logger, fileSystem, alertEvaluator, alertResultStore)
 
 	deps := rendering.Dependencies{
 		clickhouseClientManager,

@@ -1,7 +1,9 @@
 import {html} from "htl";
-import {decorateChart} from "../component/decorateChart.js";
+//import {decorateChart} from "../component/decorateChart.js";
 import type {QueryResult} from "../types";
 import {SchemaAnalyzer} from "../util/schema.js";
+
+import './stats.css';
 
 interface ChartProps {
     title?: string;
@@ -30,7 +32,7 @@ async function _stats(data: QueryResult, props: ChartProps): Promise<HTMLElement
         </dl>`
     );
 }
-export const stats = decorateChart(_stats);
+export const stats = _stats;
 
 const renderStat = (props: ChartProps) => (stat: Stat): HTMLElement => {
     const color = stat.color ?? props.fill ?? 'oklch(0.21 0.034 264.665)';

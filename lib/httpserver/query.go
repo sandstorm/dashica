@@ -12,7 +12,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/server/querying"
+	querying2 "github.com/sandstorm/dashica/lib/httpserver/querying"
 )
 
 type QueryHandler struct {
@@ -98,7 +98,7 @@ func (f *DashboardFilters) ResolveTimeRangeFromDb(ctx context.Context, clickhous
 
 // ResolveTimeRangeFromDbAsTime calculates the actual time range as seen by the database, such that the charts
 // can display the full range; and returns it as JSON string.
-func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, clickhouseClient *clickhouse.Client) (*querying.TimeRange, error) {
+func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, clickhouseClient *clickhouse.Client) (*querying2.TimeRange, error) {
 	query := ""
 	f.calculateLegacyFilters()
 
@@ -111,7 +111,7 @@ func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, cli
 	if fromOk && fromStr != "" && toOk && toStr != "" {
 		query = fmt.Sprintf(`SELECT (%s)::Int64 * 1000 as from, (%s)::Int64 * 1000 as to`, fromStr, toStr)
 	} else if toIntOk && fromIntOk {
-		return &querying.TimeRange{
+		return &querying2.TimeRange{
 			From: intPtr(int64(fromInt) * 1000),
 			To:   intPtr(int64(toInt) * 1000),
 		}, nil
@@ -123,7 +123,7 @@ func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, cli
 	opts.Settings["output_format_json_quote_decimals"] = "0"
 	opts.Settings["output_format_json_quote_64bit_integers"] = "0"
 	opts.Settings["output_format_json_quote_64bit_floats"] = "0"
-	result, err := clickhouse.QueryJSONFirst[querying.TimeRange](ctx, clickhouseClient, query, opts)
+	result, err := clickhouse.QueryJSONFirst[querying2.TimeRange](ctx, clickhouseClient, query, opts)
 	if err != nil {
 		return nil, fmt.Errorf("SQL query: %w", err)
 	}
@@ -232,7 +232,7 @@ func (qh QueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
 		w.Header().Add("X-Dashica-Resolved-Time-Range", string(resolvedTimeRangeJson))
 
 		// adjust bucketing in query
-		q, bucketSizeMs := querying.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
+		q, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
 		query = q
 		if bucketSizeMs != nil {
 			w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *bucketSizeMs))

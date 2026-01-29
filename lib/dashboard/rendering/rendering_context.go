@@ -5,9 +5,9 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog"
+	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
-	"github.com/sandstorm/dashica/server/alerting"
 )
 
 type DashboardContext struct {
@@ -25,9 +25,9 @@ type Dependencies struct {
 	Logger                  zerolog.Logger
 	TimeProvider            config.TimeProvider
 	FileSystem              fs.ReadFileFS
-	AlertResultStore        *alerting.AlertResultStore
-	AlertEvaluator          *alerting.AlertEvaluator
-	AlertManager            *alerting.AlertManager
+	AlertResultStore        *alerting2.AlertResultStore
+	AlertEvaluator          *alerting2.AlertEvaluator
+	AlertManager            *alerting2.AlertManager
 }
 
 type MenuGroup struct {

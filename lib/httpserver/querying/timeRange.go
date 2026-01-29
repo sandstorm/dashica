@@ -1,8 +1,9 @@
 package querying
 
 import (
-	"github.com/sandstorm/dashica/server/util"
 	"time"
+
+	"github.com/sandstorm/dashica/server/util"
 )
 
 type TimeRange struct {

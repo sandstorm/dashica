@@ -6,14 +6,14 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog"
+	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/server/alerting"
 )
 
 type queryAlertChartHandler struct {
 	clickhouseClientManager *clickhouse.Manager
 	logger                  zerolog.Logger
-	alertManager            *alerting.AlertManager
+	alertManager            *alerting2.AlertManager
 }
 
 func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
@@ -22,7 +22,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return fmt.Errorf("missing required 'alertId' parameter")
 	}
 
-	alertDefinition := qh.alertManager.GetAlertDefinition(alerting.AlertIdFromString(alertId))
+	alertDefinition := qh.alertManager.GetAlertDefinition(alerting2.AlertIdFromString(alertId))
 	if alertDefinition == nil {
 		return fmt.Errorf("alert definition %s not found", alertId)
 	}

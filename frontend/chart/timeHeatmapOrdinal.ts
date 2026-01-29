@@ -1,6 +1,6 @@
 import * as Plot from "@observablehq/plot";
 import type {ChannelValueSpec, QueryResult, ViewOptions} from "../types";
-import {decorateChart} from "../component/decorateChart.js";
+//import {decorateChart} from "../component/decorateChart.js";
 import {SchemaAnalyzer} from "../util/schema.js";
 import {_brushMark} from "./timeBrush_.js";
 
@@ -77,4 +77,5 @@ async function _heatmapOrdinal(data: QueryResult, props: ChartProps) {
         ]
     })
 }
-export const timeHeatmapOrdinal = decorateChart(_heatmapOrdinal)
+//export const timeHeatmapOrdinal = decorateChart(_heatmapOrdinal)
+export const timeHeatmapOrdinal = _heatmapOrdinal

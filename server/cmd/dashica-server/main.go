@@ -10,9 +10,9 @@ import (
 
 	"github.com/caddyserver/certmagic"
 	"github.com/rs/zerolog"
+	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	app "github.com/sandstorm/dashica/server"
-	"github.com/sandstorm/dashica/server/alerting"
 	"github.com/sandstorm/dashica/server/core"
 	"github.com/sandstorm/dashica/server/httpserver"
 	"github.com/sandstorm/dashica/server/util/logging"
@@ -108,9 +108,9 @@ func main() {
 		startupLogger.Fatal().
 			Msg("did NOT find clickhouse 'alert_target' (needed for alert result storage) in dashica_config.yaml.")
 	}
-	alertResultStore := alerting.NewAlertResultStore(logger, alertTargetClickhouseClient)
-	alertEvaluator := alerting.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
-	alertManager := alerting.NewAlertManager(config, logger, fileSystem, alertEvaluator, alertResultStore)
+	alertResultStore := alerting2.NewAlertResultStore(logger, alertTargetClickhouseClient)
+	alertEvaluator := alerting2.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
+	alertManager := alerting2.NewAlertManager(config, logger, fileSystem, alertEvaluator, alertResultStore)
 
 	// on startup, discover all alert definitions
 	err = alertManager.DiscoverAlertDefinitions()

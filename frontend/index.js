@@ -9,6 +9,10 @@ import searchBar from './components/searchBar'
 import timeBar from './components/timeBar'
 import {timeBar as timeBarChart} from './chart/timeBar'
 import {barVertical as barVerticalChart} from './chart/barVertical'
+import {barHorizontal as barHorizontalChart} from './chart/barHorizontal'
+import {timeHeatmap as timeHeatmapChart} from './chart/timeHeatmap'
+import {timeHeatmapOrdinal as timeHeatmapOrdinalChart} from './chart/timeHeatmapOrdinal'
+import {stats as statsChart} from './chart/stats'
 import {clickhouseFactory} from './legacy/clickhouse'
 import "./store"
 
@@ -54,14 +58,18 @@ Alpine.data('legacyInlinePlaceholder', (placeholderName) => ({
 }));
 
 window.LegacyScriptWrapper = function(baseUrl, innerScript) {
-    const wrappingDomNode = document.createElement('div');
 
+    // recompute window.exports.[value] if one of the charts change.
     Alpine.effect(function() {
         const filters = Alpine.store('urlState').getCombinedFilter();
 
         const chart = {
             timeBar: timeBarChart,
             barVertical: barVerticalChart,
+            barHorizontal: barHorizontalChart,
+            timeHeatmap: timeHeatmapChart,
+            timeHeatmapOrdinal: timeHeatmapOrdinalChart,
+            stats: statsChart,
         };
 
         const visibility = () => Promise.resolve(true); // TODO: we disable intersection observing for now

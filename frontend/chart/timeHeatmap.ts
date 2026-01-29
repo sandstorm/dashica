@@ -1,9 +1,9 @@
 import * as Plot from "@observablehq/plot";
 import type {ChannelValueSpec, QueryResult, ViewOptions} from "../types";
-import {decorateChart} from "../component/decorateChart.js";
+//import {decorateChart} from "../component/decorateChart.js";
 import {SchemaAnalyzer} from "../util/schema.js";
 import {_brushMark} from "./timeBrush_.js";
-import {Generators} from "observablehq:stdlib";
+//import {Generators} from "observablehq:stdlib";
 
 interface ChartProps {
     viewOptions?: ViewOptions;
@@ -41,7 +41,10 @@ async function _heatmap(data: QueryResult, props: ChartProps) {
     }
 
     const y = schema.requiredColumn(props.y, 'y');
-    const dark = await Generators.dark().next();
+    //const dark = await Generators.dark().next();
+
+    // TODO SEE ME
+    const dark = false;
     //console.log("D", dark.value);
     // @ts-ignore
     return Plot.plot({
@@ -61,7 +64,7 @@ async function _heatmap(data: QueryResult, props: ChartProps) {
             axis: true,
         },
         color: {
-            scheme: dark.value ? 'inferno' : 'blues',
+            scheme: dark ? 'inferno' : 'blues',
             legend: true,
         },
         marks: [
@@ -81,4 +84,5 @@ async function _heatmap(data: QueryResult, props: ChartProps) {
         ]
     })
 }
-export const timeHeatmap = decorateChart(_heatmap)
+//export const timeHeatmap = decorateChart(_heatmap)
+export const timeHeatmap = _heatmap
