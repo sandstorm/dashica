@@ -222,7 +222,7 @@ func (r *combinedRenderer) wrapJavaScriptCode(w io.Writer, jsCode []byte) {
 	// Write wrapped script
 	w.Write([]byte("<script>\n"))
 	w.Write([]byte("/* JavaScript code block wrapped by Markdown renderer */\n"))
-	w.Write([]byte(fmt.Sprintf("window.LegacyScriptWrapper(%s, async function({chart, visibility, clickhouse, filters, viewOptions, invalidation, exports}) {\n",
+	w.Write([]byte(fmt.Sprintf("window.LegacyScriptWrapper(%s, document.currentScript, async function({chart, component, view, visibility, clickhouse, filters, viewOptions, invalidation, exports}) {\n",
 		util2.JsonEncode(r.renderingContext.CurrentHandlerUrl))))
 	w.Write(modified)
 	w.Write([]byte("\n});\n"))

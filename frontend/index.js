@@ -15,6 +15,8 @@ import {timeHeatmapOrdinal as timeHeatmapOrdinalChart} from './chart/timeHeatmap
 import {stats as statsChart} from './chart/stats'
 import {clickhouseFactory} from './legacy/clickhouse'
 import "./store"
+import {autoTable} from "./legacyComponents/autoTable";
+import * as Inputs from '@observablehq/inputs';
 
 Alpine.plugin(intersect);
 
@@ -27,6 +29,8 @@ Alpine.start()
 window.Alpine = Alpine
 
 window.exports = Alpine.reactive({});
+window.Inputs = Inputs;
+
 
 Alpine.data('legacyInlinePlaceholder', (placeholderName) => ({
     init() {
@@ -57,7 +61,12 @@ Alpine.data('legacyInlinePlaceholder', (placeholderName) => ({
     }
 }));
 
-window.LegacyScriptWrapper = function(baseUrl, innerScript) {
+window.LegacyScriptWrapper = function(baseUrl, thisScriptDomNode, innerScript) {
+
+    const displayContainer = document.createElement('div');
+    displayContainer.textContent = '';
+
+    thisScriptDomNode.parentNode.insertBefore(displayContainer, thisScriptDomNode.nextSibling);
 
     // recompute window.exports.[value] if one of the charts change.
     Alpine.effect(function() {
@@ -71,6 +80,9 @@ window.LegacyScriptWrapper = function(baseUrl, innerScript) {
             timeHeatmapOrdinal: timeHeatmapOrdinalChart,
             stats: statsChart,
         };
+        const component = {
+            autoTable
+        };
 
         const visibility = () => Promise.resolve(true); // TODO: we disable intersection observing for now
 
@@ -79,7 +91,22 @@ window.LegacyScriptWrapper = function(baseUrl, innerScript) {
         const viewOptions = [];
         const invalidation = new Promise(() => {});
 
-        innerScript({chart, visibility, clickhouse, filters, viewOptions, invalidation, exports: window.exports});
+        let calledDisplayInstances = 0;
+        displayContainer.innerHTML = '';
+
+        const display = (domNode) => {
+            calledDisplayInstances++;
+            displayContainer.appendChild(domNode);
+        }
+
+        const view = (result) => {
+            // TODO: if Result is DOM node, ATTACH TO OUTER AND SET UP EVENT HDL. RETURN REACTIVE THINGIE
+            display(result);
+
+            result.value;
+        };
+
+        innerScript({chart, component, view, visibility, clickhouse, filters, viewOptions, invalidation, exports: window.exports});
     })
 
 }
