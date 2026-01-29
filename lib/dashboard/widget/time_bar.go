@@ -7,13 +7,14 @@ import (
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
 type TimeBar struct {
-	sql   sql.SqlBuilder
+	sql   *sql.SqlQuery
 	x     sql.TimestampedField
 	y     sql.SqlField
 	title string
@@ -37,28 +38,47 @@ func (b *TimeBar) Id(id string) *TimeBar {
 	return &cloned
 }
 
-func (b *TimeBar) Where(s string) *TimeBar {
+func (b *TimeBar) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeBar {
 	cloned := *b
-	cloned.sql = cloned.sql.Where(s)
+	cloned.sql = cloned.sql.With(opts...)
 	return &cloned
 }
 
-func NewTimeBar(sql sql.SqlBuilder) *TimeBar {
+func NewTimeBar(sql *sql.SqlQuery) *TimeBar {
 	return &TimeBar{
 		sql: sql,
 	}
 }
 
-func (b *TimeBar) BuildComponents(renderingContext rendering.DashboardContext) (templ.Component, error) {
-	return widget_component.TimeBar(), nil
+func (b *TimeBar) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
+	if len(b.id) == 0 {
+		b.id = ctx.NextWidgetId()
+	}
+
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "timeBar", "{}"), nil
 }
 
-func (b *TimeBar) CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+func (b *TimeBar) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
 	if len(b.id) == 0 {
-		return fmt.Errorf("timeBar: id is required")
+		b.id = ctx.NextWidgetId()
 	}
-	err := registerHandler.Handle(b.id, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		println("TIME BAR HANDLER CALLED")
+
+	qh := httpserver.QueryHandler{
+		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,
+		Logger:                  ctx.Deps.Logger,
+		FileSystem:              ctx.Deps.FileSystem,
+	}
+	query := b.sql.With(
+		sql.PrependSelect(b.x),
+		sql.GroupBy(b.x),
+		sql.Select(b.y),
+	)
+
+	err := registerHandler.Handle(b.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := qh.HandleQuery(query, w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	if err != nil {
 		return fmt.Errorf("timeBar: %w", err)

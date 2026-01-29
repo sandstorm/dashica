@@ -10,7 +10,7 @@ type Widgets []WidgetDefinition
 
 type WidgetsMap map[string]WidgetDefinition
 
-func (w Widgets) CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+func (w Widgets) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
 	for _, widget := range w {
 		if interactive, ok := widget.(InteractiveWidget); ok {
 			err := interactive.CollectHandlers(ctx, registerHandler)
@@ -22,7 +22,7 @@ func (w Widgets) CollectHandlers(ctx rendering.DashboardContext, registerHandler
 	return nil
 }
 
-func (w WidgetsMap) CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+func (w WidgetsMap) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
 	for _, widget := range w {
 		if interactive, ok := widget.(InteractiveWidget); ok {
 			err := interactive.CollectHandlers(ctx, registerHandler)
@@ -35,10 +35,10 @@ func (w WidgetsMap) CollectHandlers(ctx rendering.DashboardContext, registerHand
 }
 
 type WidgetDefinition interface {
-	BuildComponents(ctx rendering.DashboardContext) (templ.Component, error)
+	BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error)
 }
 
 type InteractiveWidget interface {
 	WidgetDefinition
-	CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error
+	CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error
 }

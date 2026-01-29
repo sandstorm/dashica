@@ -30,7 +30,7 @@ func (w *LegacyMarkdown) File(path string) *LegacyMarkdown {
 	return &cloned
 }
 
-func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.DashboardContext) (templ.Component, error) {
+func (w *LegacyMarkdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
 	contents, err := os.ReadFile(w.file)
 	if err != nil {
 		return nil, fmt.Errorf("reading file %s: %w", w.file, err)
@@ -41,7 +41,7 @@ func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.DashboardCon
 	md := goldmark.New(
 		goldmark.WithExtensions(extension.GFM, legacy_markdown.NewPlaceholderExtension(func(name string) (replacement string, found bool) {
 			return fmt.Sprintf(`<div x-data="legacyInlinePlaceholder('%s')" class="not-prose"></div>`, name), true
-		}, renderingContext)),
+		}, *ctx)),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),
@@ -57,7 +57,7 @@ func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.DashboardCon
 	return templ.Raw(`<div class="legacyMarkdown">` + buf.String() + `</div>`), nil
 }
 
-func (w *LegacyMarkdown) CollectHandlers(ctx rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
+func (w *LegacyMarkdown) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
 
 	return collector.Handle("query", httpserver.ErrorHandler(httpserver.QueryHandler{
 		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,

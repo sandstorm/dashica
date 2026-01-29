@@ -14,7 +14,7 @@ type Dashboard interface {
 	Widget(w widget.WidgetDefinition) Dashboard
 	WithLayout(layout rendering.LayoutFunc) Dashboard
 	FilterButton(title string, queryPart string) Dashboard
-	CollectHandlers(ctx rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error
+	CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error
 }
 
 func New() Dashboard {
@@ -48,13 +48,13 @@ func (d *dashboardImpl) FilterButton(title string, queryPart string) Dashboard {
 	return &cloned
 }
 
-func (d *dashboardImpl) CollectHandlers(ctx rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
+func (d *dashboardImpl) CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
 	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(ctx) })
 	if err != nil {
 		return fmt.Errorf("building components: %w", err)
 	}
 
-	err = handlerCollector.HandleRoot(templ.Handler(d.layout(ctx, d.filterButtons, templ.Join(components...))))
+	err = handlerCollector.HandleRoot(templ.Handler(d.layout(*ctx, d.filterButtons, templ.Join(components...))))
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}

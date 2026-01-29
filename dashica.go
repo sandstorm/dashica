@@ -140,14 +140,19 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		Str("url", url).
 		Msg("Registering new dashboard")
 
-	dashb.CollectHandlers(
-		rendering.DashboardContext{
+	err := dashb.CollectHandlers(
+		&rendering.DashboardContext{
 			MainMenu:          &d.dashboardGroups,
 			CurrentHandlerUrl: url,
 			Deps:              d.deps,
 		},
 		d.handlerCollector.Nested(url),
 	)
+	if err != nil {
+		d.log.Fatal().
+			Err(err).
+			Msg("Failed to register dashboard")
+	}
 
 	// add to the last dashboard group
 	d.dashboardGroups[len(d.dashboardGroups)-1].Entries = append(d.dashboardGroups[len(d.dashboardGroups)-1].Entries, rendering.MenuGroupEntry{

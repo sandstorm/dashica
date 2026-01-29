@@ -6,7 +6,6 @@ import intersect from '@alpinejs/intersect'
 
 import filterButton from './components/filterButton'
 import searchBar from './components/searchBar'
-import timeBar from './components/timeBar'
 import {timeBar as timeBarChart} from './chart/timeBar'
 import {barVertical as barVerticalChart} from './chart/barVertical'
 import {barHorizontal as barHorizontalChart} from './chart/barHorizontal'
@@ -15,6 +14,8 @@ import {timeHeatmapOrdinal as timeHeatmapOrdinalChart} from './chart/timeHeatmap
 import {stats as statsChart} from './chart/stats'
 import {clickhouseFactory} from './legacy/clickhouse'
 import "./store"
+import "./components/chart";
+
 import {autoTable} from "./legacyComponents/autoTable";
 import * as Inputs from '@observablehq/inputs';
 
@@ -22,10 +23,8 @@ Alpine.plugin(intersect);
 
 Alpine.data('filterButton', filterButton);
 Alpine.data('searchBar', searchBar);
-Alpine.data('timeBar', timeBar);
 
 
-Alpine.start()
 window.Alpine = Alpine
 
 window.exports = Alpine.reactive({});

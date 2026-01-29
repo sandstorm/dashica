@@ -31,8 +31,8 @@ func (w *CollapsibleGroup) Widget(widget WidgetDefinition) *CollapsibleGroup {
 	return &cloned
 }
 
-func (w *CollapsibleGroup) BuildComponents(renderingContext rendering.DashboardContext) (templ.Component, error) {
-	components, err := util.MapHandleError(w.widgets, func(w WidgetDefinition) (templ.Component, error) { return w.BuildComponents(renderingContext) })
+func (w *CollapsibleGroup) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
+	components, err := util.MapHandleError(w.widgets, func(w WidgetDefinition) (templ.Component, error) { return w.BuildComponents(ctx) })
 	if err != nil {
 		return nil, fmt.Errorf("collapsibleGroup: rendering widgets: %w", err)
 	}
@@ -40,8 +40,8 @@ func (w *CollapsibleGroup) BuildComponents(renderingContext rendering.DashboardC
 	return widget_component.CollapsibleGroup(w.title, templ.Join(components...)), nil
 }
 
-func (w *CollapsibleGroup) CollectHandlers(ctx rendering.DashboardContext, collector handler_collector.HandlerCollector) {
-	w.widgets.CollectHandlers(ctx, collector)
+func (w *CollapsibleGroup) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
+	return w.widgets.CollectHandlers(ctx, collector)
 }
 
 var _ WidgetDefinition = (*CollapsibleGroup)(nil)

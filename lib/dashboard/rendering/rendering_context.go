@@ -2,6 +2,7 @@ package rendering
 
 import (
 	"io/fs"
+	"strconv"
 
 	"github.com/a-h/templ"
 	"github.com/rs/zerolog"
@@ -18,6 +19,13 @@ type DashboardContext struct {
 	FilterButtons     []FilterButton
 
 	Deps Dependencies
+
+	nextWidgetId int
+}
+
+func (c *DashboardContext) NextWidgetId() string {
+	c.nextWidgetId++
+	return strconv.Itoa(c.nextWidgetId)
 }
 
 type Dependencies struct {

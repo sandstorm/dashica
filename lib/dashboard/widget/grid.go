@@ -52,11 +52,11 @@ func (g *Grid) Gap(gap string) *Grid {
 	return &cloned
 }
 
-func (g *Grid) BuildComponents(renderingContext rendering.DashboardContext) (templ.Component, error) {
+func (g *Grid) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
 	areaComponents := make(map[string]templ.Component)
 
 	for name, widget := range g.areas {
-		component, err := widget.BuildComponents(renderingContext)
+		component, err := widget.BuildComponents(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("grid: rendering area '%s': %w", name, err)
 		}
@@ -66,7 +66,7 @@ func (g *Grid) BuildComponents(renderingContext rendering.DashboardContext) (tem
 	return widget_component.Grid(g.template, g.gap, areaComponents), nil
 }
 
-func (g *Grid) CollectHandlers(ctx rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
+func (g *Grid) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
 	return g.areas.CollectHandlers(ctx, collector)
 }
 

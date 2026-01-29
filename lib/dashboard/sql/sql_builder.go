@@ -5,60 +5,62 @@ import (
 	"strings"
 )
 
+// TODO REMOVE ME
 type SqlBuildCtx interface {
 }
 
-type SqlBuilder interface {
-	Build(dashboardEnv SqlBuildCtx, queryName string)
-	From(table string) SqlBuilder
-	Where(clause string) SqlBuilder
-	Select(field SqlField) SqlBuilder
-	PrependSelect(field SqlField) SqlBuilder
-	GroupBy(x SqlField) SqlBuilder
-}
-
-type builderImpl struct {
+type SqlQuery struct {
 	selectF []SqlField
 	from    string
 	where   []string
 	groupBy []SqlField
 }
 
-func New() SqlBuilder {
-	return &builderImpl{}
+type SqlBuilderOption func(*SqlQuery)
+
+func Select(field SqlField) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.selectF = append(b.selectF, field)
+	}
+}
+func PrependSelect(field SqlField) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.selectF = append([]SqlField{field}, b.selectF...)
+	}
 }
 
-func (b *builderImpl) Select(field SqlField) SqlBuilder {
+func From(table string) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.from = table
+	}
+}
+func Where(clause string) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.where = append(b.where, clause)
+	}
+}
+func GroupBy(field SqlField) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.groupBy = append(b.groupBy, field)
+	}
+}
+
+func New(opts ...SqlBuilderOption) *SqlQuery {
+	b := &SqlQuery{}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
+}
+func (b *SqlQuery) With(opts ...SqlBuilderOption) *SqlQuery {
 	cloned := *b
-	cloned.selectF = append(cloned.selectF, field)
+	for _, opt := range opts {
+		opt(&cloned)
+	}
 	return &cloned
 }
 
-func (b *builderImpl) PrependSelect(field SqlField) SqlBuilder {
-	cloned := *b
-	cloned.selectF = append([]SqlField{field}, cloned.selectF...)
-	return &cloned
-}
-
-func (b *builderImpl) From(table string) SqlBuilder {
-	cloned := *b
-	cloned.from = table
-	return &cloned
-}
-
-func (b *builderImpl) Where(clause string) SqlBuilder {
-	cloned := *b
-	cloned.where = append(cloned.where, clause)
-	return &cloned
-}
-
-func (b *builderImpl) GroupBy(field SqlField) SqlBuilder {
-	cloned := *b
-	cloned.groupBy = append(cloned.groupBy, field)
-	return &cloned
-}
-
-func (b *builderImpl) Build(dashboardEnv SqlBuildCtx, queryName string) {
+func (b *SqlQuery) Build() string {
 	var sb strings.Builder
 
 	// Write query name comment
@@ -125,7 +127,5 @@ func (b *builderImpl) Build(dashboardEnv SqlBuildCtx, queryName string) {
 	query := strings.TrimRight(sb.String(), "\n")
 	query += ";"
 
-	//dashboardEnv.WriteSqlScript(queryName, query)
+	return query
 }
-
-var _ SqlBuilder = &builderImpl{}

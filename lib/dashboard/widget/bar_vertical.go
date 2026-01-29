@@ -14,7 +14,7 @@ import (
 )
 
 type BarVertical struct {
-	sql          sql.SqlBuilder
+	sql          *sql.SqlQuery
 	x            sql.SqlField
 	y            sql.SqlField
 	fill         *sql.SqlField
@@ -31,7 +31,7 @@ type BarVertical struct {
 	colorScheme  string
 }
 
-func NewBarVertical(sql sql.SqlBuilder) *BarVertical {
+func NewBarVertical(sql *sql.SqlQuery) *BarVertical {
 	return &BarVertical{
 		sql: sql,
 	}
@@ -121,15 +121,15 @@ func (b *BarVertical) ColorScheme(scheme string) *BarVertical {
 	return &cloned
 }
 
-func (b *BarVertical) Where(s string) *BarVertical {
+func (b *BarVertical) AdjustQuery(opts ...sql.SqlBuilderOption) *BarVertical {
 	cloned := *b
-	cloned.sql = cloned.sql.Where(s)
+	cloned.sql = cloned.sql.With(opts...)
 	return &cloned
 }
 
-func (b *BarVertical) BuildComponents(renderingContext rendering.DashboardContext) (templ.Component, error) {
+func (b *BarVertical) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
 	if len(b.id) == 0 {
-		return nil, fmt.Errorf("barVertical: id is required")
+		b.id = ctx.NextWidgetId()
 	}
 
 	chartProps := b.buildChartProps()
@@ -138,15 +138,15 @@ func (b *BarVertical) BuildComponents(renderingContext rendering.DashboardContex
 		return nil, fmt.Errorf("barVertical: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart("barVertical", string(chartPropsJSON)), nil
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "barVertical", string(chartPropsJSON)), nil
 }
 
 func (b *BarVertical) buildChartProps() map[string]interface{} {
 	props := make(map[string]interface{})
 
 	// Required fields
-	props["x"] = b.x.Alias
-	props["y"] = b.y.Alias
+	props["x"] = b.x.Alias()
+	props["y"] = b.y.Alias()
 
 	// Optional fields
 	if b.title != "" {
@@ -171,13 +171,13 @@ func (b *BarVertical) buildChartProps() map[string]interface{} {
 		props["marginTop"] = *b.marginTop
 	}
 	if b.fill != nil {
-		props["fill"] = (*b.fill).Alias
+		props["fill"] = (*b.fill).Alias()
 	}
 	if b.fx != nil {
-		props["fx"] = (*b.fx).Alias
+		props["fx"] = (*b.fx).Alias()
 	}
 	if b.fy != nil {
-		props["fy"] = (*b.fy).Alias
+		props["fy"] = (*b.fy).Alias()
 	}
 	if b.colorScheme != "" {
 		props["color"] = map[string]string{"scheme": b.colorScheme}
@@ -186,25 +186,35 @@ func (b *BarVertical) buildChartProps() map[string]interface{} {
 	return props
 }
 
-func (b *BarVertical) CollectHandlers(ctx rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+func (b *BarVertical) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
 	if len(b.id) == 0 {
-		return fmt.Errorf("barVertical: id is required")
+		b.id = ctx.NextWidgetId()
 	}
 
 	// Build the SQL query
-	sqlBuilder := b.sql.
-		PrependSelect(b.x).
-		GroupBy(b.x).
-		Select(b.y)
+	query := b.sql.With(
+		sql.PrependSelect(b.x),
+		sql.GroupBy(b.x),
+		sql.Select(b.y),
+	)
 
 	if b.fill != nil {
-		sqlBuilder = sqlBuilder.PrependSelect(*b.fill).GroupBy(*b.fill)
+		query = query.With(
+			sql.PrependSelect(*b.fill),
+			sql.GroupBy(*b.fill),
+		)
 	}
 	if b.fx != nil {
-		sqlBuilder = sqlBuilder.PrependSelect(*b.fx).GroupBy(*b.fx)
+		query = query.With(
+			sql.PrependSelect(*b.fx),
+			sql.GroupBy(*b.fx),
+		)
 	}
 	if b.fy != nil {
-		sqlBuilder = sqlBuilder.PrependSelect(*b.fy).GroupBy(*b.fy)
+		query = query.With(
+			sql.PrependSelect(*b.fy),
+			sql.GroupBy(*b.fy),
+		)
 	}
 
 	err := registerHandler.Handle(b.id, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
