@@ -13,7 +13,7 @@ func Timestamp15Min() TimestampedField {
 	}
 }
 
-func JsonExtractString(jsonStrField string, paths ...string) Field {
+func JsonExtractString(jsonStrField string, paths ...string) SqlField {
 	quotedPaths := make([]string, len(paths))
 	for i, path := range paths {
 		quotedPaths[i] = fmt.Sprintf("'%s'", path)
@@ -25,7 +25,7 @@ func JsonExtractString(jsonStrField string, paths ...string) Field {
 	}
 }
 
-func Count() Field {
+func Count() SqlField {
 	return &fieldImpl{
 		definition: "count(*)",
 		alias:      "cnt",

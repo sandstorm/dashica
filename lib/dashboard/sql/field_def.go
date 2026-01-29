@@ -1,13 +1,17 @@
 package sql
 
-type Field interface {
+type SqlField interface {
 	Definition() string
 	Alias() string
-	WithAlias(alias string) Field
+	WithAlias(alias string) SqlField
+}
+
+func Field(definition string) SqlField {
+	return &fieldImpl{definition: definition}
 }
 
 type TimestampedField interface {
-	Field
+	SqlField
 	XBucketSizeMs() int64
 }
 
@@ -29,10 +33,10 @@ func (f *fieldImpl) Alias() string {
 	return f.alias
 }
 
-func (f *fieldImpl) WithAlias(alias string) Field {
+func (f *fieldImpl) WithAlias(alias string) SqlField {
 	cloned := *f
 	cloned.alias = alias
 	return &cloned
 }
 
-var _ Field = (*fieldImpl)(nil)
+var _ SqlField = (*fieldImpl)(nil)

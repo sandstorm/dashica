@@ -15,7 +15,7 @@ import (
 type TimeBar struct {
 	sql   sql.SqlBuilder
 	x     sql.TimestampedField
-	y     sql.Field
+	y     sql.SqlField
 	title string
 	id    string
 }
@@ -26,7 +26,7 @@ func (b *TimeBar) X(xField sql.TimestampedField) *TimeBar {
 	return &cloned
 }
 
-func (b *TimeBar) Y(yField sql.Field) *TimeBar {
+func (b *TimeBar) Y(yField sql.SqlField) *TimeBar {
 	cloned := *b
 	cloned.y = yField
 	return &cloned
@@ -34,6 +34,12 @@ func (b *TimeBar) Y(yField sql.Field) *TimeBar {
 func (b *TimeBar) Id(id string) *TimeBar {
 	cloned := *b
 	cloned.id = id
+	return &cloned
+}
+
+func (b *TimeBar) Where(s string) *TimeBar {
+	cloned := *b
+	cloned.sql = cloned.sql.Where(s)
 	return &cloned
 }
 

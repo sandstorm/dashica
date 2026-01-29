@@ -12,31 +12,31 @@ type SqlBuilder interface {
 	Build(dashboardEnv SqlBuildCtx, queryName string)
 	From(table string) SqlBuilder
 	Where(clause string) SqlBuilder
-	Select(field Field) SqlBuilder
-	PrependSelect(field Field) SqlBuilder
-	GroupBy(x Field) SqlBuilder
+	Select(field SqlField) SqlBuilder
+	PrependSelect(field SqlField) SqlBuilder
+	GroupBy(x SqlField) SqlBuilder
 }
 
 type builderImpl struct {
-	selectF []Field
+	selectF []SqlField
 	from    string
 	where   []string
-	groupBy []Field
+	groupBy []SqlField
 }
 
 func New() SqlBuilder {
 	return &builderImpl{}
 }
 
-func (b *builderImpl) Select(field Field) SqlBuilder {
+func (b *builderImpl) Select(field SqlField) SqlBuilder {
 	cloned := *b
 	cloned.selectF = append(cloned.selectF, field)
 	return &cloned
 }
 
-func (b *builderImpl) PrependSelect(field Field) SqlBuilder {
+func (b *builderImpl) PrependSelect(field SqlField) SqlBuilder {
 	cloned := *b
-	cloned.selectF = append([]Field{field}, cloned.selectF...)
+	cloned.selectF = append([]SqlField{field}, cloned.selectF...)
 	return &cloned
 }
 
@@ -52,7 +52,7 @@ func (b *builderImpl) Where(clause string) SqlBuilder {
 	return &cloned
 }
 
-func (b *builderImpl) GroupBy(field Field) SqlBuilder {
+func (b *builderImpl) GroupBy(field SqlField) SqlBuilder {
 	cloned := *b
 	cloned.groupBy = append(cloned.groupBy, field)
 	return &cloned

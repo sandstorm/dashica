@@ -1,0 +1,27 @@
+package widget_component
+
+import (
+    "fmt"
+    "strings"
+)
+
+func gridTemplateAreas(template []string) string {
+    quoted := make([]string, len(template))
+    for i, row := range template {
+        quoted[i] = fmt.Sprintf("'%s'", row)
+    }
+    return strings.Join(quoted, " ")
+}
+
+templ Grid(template []string, gap string, areas map[string]templ.Component) {
+    <div
+        class={ fmt.Sprintf("grid gap-%s", gap) }
+        style={ fmt.Sprintf("grid-template-areas: %s", gridTemplateAreas(template)) }
+    >
+        for name, component := range areas {
+            <div style={ fmt.Sprintf("grid-area: %s", name) }>
+                @component
+            </div>
+        }
+    </div>
+}

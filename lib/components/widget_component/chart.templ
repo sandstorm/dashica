@@ -1,0 +1,11 @@
+package widget_component
+
+templ Chart(chartType string, chartPropsJSON string) {
+    <div
+        x-data="chart"
+        data-chart-type={chartType}
+        data-chart-props={ chartPropsJSON }
+    >
+        <div class="loading loading-spinner loading-lg"></div>
+    </div>
+}
