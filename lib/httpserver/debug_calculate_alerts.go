@@ -3,9 +3,9 @@ package httpserver
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/sandstorm/dashica/server/alerting"
 	"net/http"
-	"time"
+
+	"github.com/sandstorm/dashica/server/alerting"
 )
 
 type debugCalculateAlertsHandler struct {
@@ -31,18 +31,11 @@ func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
 
-		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), da.alertResultStore.ClickhouseClient())
-		from := time.Unix(*resolvedTimeRange.From/1000, 0)
-		to := time.Unix(*resolvedTimeRange.To/1000, 0)
-		if err != nil {
-			return fmt.Errorf("resolving time range: %w", err)
-		}
 		//w.Header().Add("X-Dashica-Resolved-TimeTs-Range", resolvedTimeRange)
 
 		if err := da.batchEvaluator.EvaluateAlerts(
 			r.Context(),
-			from, to,
+			filters.From(), filters.To(),
 		); err != nil {
 			return err
 		}

@@ -8,6 +8,7 @@ import filterButton from './components/filterButton'
 import searchBar from './components/searchBar'
 import timeBar from './components/timeBar'
 import {timeBar as timeBarChart} from './chart/timeBar'
+import {barVertical as barVerticalChart} from './chart/barVertical'
 import {clickhouseFactory} from './legacy/clickhouse'
 import "./store"
 
@@ -20,18 +21,28 @@ Alpine.data('timeBar', timeBar);
 
 Alpine.start()
 window.Alpine = Alpine
+
+window.exports = Alpine.reactive({});
+
 window.LegacyScriptWrapper = function(baseUrl, innerScript) {
-    console.log("BaseURL", baseUrl);
+    const wrappingDomNode = document.createElement('div');
 
-    const chart = {
-        timeBar: timeBarChart
-    };
+    Alpine.effect(function() {
+        const filters = Alpine.store('urlState').getCombinedFilter();
 
-    const visibility = () => Promise.resolve(true); // TODO: we disable intersection observing for now
+        const chart = {
+            timeBar: timeBarChart,
+            barVertical: barVerticalChart,
+        };
 
-    const filters = {}; // TODO: Filter support
+        const visibility = () => Promise.resolve(true); // TODO: we disable intersection observing for now
 
-    const clickhouse = clickhouseFactory(baseUrl);
+        const clickhouse = clickhouseFactory(baseUrl);
 
-    innerScript({chart, visibility, clickhouse, filters});
+        const viewOptions = [];
+        const invalidation = new Promise(() => {});
+
+        innerScript({chart, visibility, clickhouse, filters, viewOptions, invalidation, exports: window.exports});
+    })
+
 }

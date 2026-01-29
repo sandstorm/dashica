@@ -1,5 +1,5 @@
 import * as Plot from "@observablehq/plot";
-import {decorateChart} from "../component/decorateChart.js";
+//import {decorateChart} from "../component/decorateChart.js";
 import type {ChannelValue, ChannelValueSpec, QueryResult, ViewOptions} from "../types";
 import type {ScaleOptions} from "@observablehq/plot/src/scales";
 
@@ -96,4 +96,5 @@ async function _vertical(data: QueryResult, props: ChartProps) {
     });
 }
 
-export const barVertical = decorateChart(_vertical);
+//export const barVertical = decorateChart(_vertical);
+export const barVertical = _vertical;

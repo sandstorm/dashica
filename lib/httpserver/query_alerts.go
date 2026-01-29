@@ -3,10 +3,11 @@ package httpserver
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/server/alerting"
-	"net/http"
 )
 
 type queryAlertsHandler struct {
@@ -66,7 +67,7 @@ func (qa queryAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) e
 		}
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
+		resolvedTimeRange, err := filters.ResolveTimeRange()
 		if err != nil {
 			return fmt.Errorf("resolving time range: %w", err)
 		}

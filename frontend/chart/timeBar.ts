@@ -71,7 +71,7 @@ interface ChartProps {
     extraMarks: Markish[];
 }
 
-async function _bars(data: QueryResult, props: ChartProps) {
+function _bars(data: QueryResult, props: ChartProps) {
     const schema = new SchemaAnalyzer(data);
 
     const x = schema.requiredColumn(props.x, 'x');

@@ -40,8 +40,14 @@ func (w *LegacyMarkdown) BuildComponents(renderingContext rendering.DashboardCon
 
 	var buf bytes.Buffer
 
+	replacements := map[string]string{
+		"logVolumeSystemlog":   `<div class="chart" id="log-volume-systemlog">Log Volume Chart</div>`,
+		"logVolumeWithoutInfo": `<div class="chart" id="log-volume-without-info">Log Volume Without Info</div>`,
+		"eventDatasetCounts":   `<div class="chart" id="event-dataset-counts">Event Dataset Counts</div>`,
+	}
+
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithExtensions(extension.GFM, legacy_markdown.NewPlaceholderExtension(replacements)),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),

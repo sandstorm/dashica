@@ -66,7 +66,7 @@ func (r *ScriptWrapperRenderer) wrapScript(w io.Writer, scriptContent []byte) {
 		w.Write([]byte("<script>\n"))
 
 		w.Write([]byte("/* This script was wrapped by the Markdown renderer */\n"))
-		w.Write([]byte(fmt.Sprintf("window.LegacyScriptWrapper(%s, async function({chart, visibility, clickhouse, filters}) {\n", util2.JsonEncode(r.renderingContext.CurrentHandlerUrl))))
+		w.Write([]byte(fmt.Sprintf("window.LegacyScriptWrapper(%s, async function({chart, visibility, clickhouse, filters, viewOptions, invalidation, exports}) {\n", util2.JsonEncode(r.renderingContext.CurrentHandlerUrl))))
 		w.Write(scriptContent)
 		w.Write([]byte("});\n"))
 

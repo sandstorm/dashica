@@ -1,64 +1,68 @@
 import Alpine from '@alpinejs/csp';
 
+function debounce(func, timeout = 300){
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { func.apply(this, args); }, timeout);
+    };
+}
+
 // Shared store for URL state management
 Alpine.store('urlState', {
     // State
     sqlFilter: '',
-    timeRange: 'last24h',
+    timeRange: '3h',
     customDateRange: '',
     autoRefresh: false,
     refreshInterval: 30,
 
-    // Initialize from URL
     init() {
-        this.loadFromUrl();
-        window.addEventListener('popstate', () => this.loadFromUrl());
-        this.setupWatchers();
-    },
+        this._loadFromUrl();
+        window.addEventListener('popstate', () => this._loadFromUrl());
 
-    // Setup reactive watchers for automatic URL updates
-    setupWatchers() {
-        // Watch sqlFilter changes
+        const debouncedUpdateUrlAndTriggerRefresh = debounce(() => {
+            this._updateUrl();
+        }, 200);
+
         Alpine.effect(() => {
-            const filter = this.sqlFilter;
-            this.updateUrl();
+            // reading these values sets up listeners, see https://alpinejs.dev/advanced/reactivity#alpine-effect
+            this.sqlFilter;
+            this.timeRange;
+            this.customDateRange;
+            this.autoRefresh;
+            debouncedUpdateUrlAndTriggerRefresh();
         });
 
-        // Watch timeRange changes
+        // Handle refreshing
+        let refreshTimer = null;
         Alpine.effect(() => {
-            const range = this.timeRange;
-            this.updateUrl();
-        });
-
-        // Watch customDateRange changes
-        Alpine.effect(() => {
-            const customRange = this.customDateRange;
-            if (this.timeRange === 'custom') {
-                this.updateUrl();
-            }
-        });
-
-        // Watch autoRefresh changes
-        Alpine.effect(() => {
-            const refresh = this.autoRefresh;
-            this.updateUrl();
-        });
-
-        // Watch refreshInterval changes
-        Alpine.effect(() => {
-            const interval = this.refreshInterval;
+            if (refreshTimer) clearInterval(refreshTimer);
+            // reading these values sets up listeners, see https://alpinejs.dev/advanced/reactivity#alpine-effect
             if (this.autoRefresh) {
-                this.updateUrl();
+                window.setInterval(() => this._triggerRefresh(), this.refreshInterval * 1000);
             }
         });
     },
 
-    // Update URL with current state
-    updateUrl() {
+    getCombinedFilter() {
+        return {
+            timeRange: this.timeRange,
+            customTimeRange: this.customTimeRange,
+            sqlFilter: this.sqlFilter,
+        }
+    },
+
+    setSqlFilter(value) {
+        this.sqlFilter = value;
+    },
+
+
+    _updateUrl() {
         const params = new URLSearchParams();
 
         if (this.sqlFilter) params.set('sql', this.sqlFilter);
-        if (this.timeRange !== 'last24h') params.set('time', this.timeRange);
+        if (this.timeRange !== '3h') params.set('time', this.timeRange);
         if (this.timeRange === 'custom' && this.customDateRange) {
             params.set('range', this.customDateRange);
         }
@@ -68,19 +72,11 @@ Alpine.store('urlState', {
         window.history.pushState({}, '', newUrl);
     },
 
-    // Load state from URL
-    loadFromUrl() {
+    _loadFromUrl() {
         const params = new URLSearchParams(window.location.search);
 
-        // Temporarily disable watchers during bulk update
-        const oldSqlFilter = this.sqlFilter;
-        const oldTimeRange = this.timeRange;
-        const oldCustomRange = this.customDateRange;
-        const oldAutoRefresh = this.autoRefresh;
-        const oldInterval = this.refreshInterval;
-
         this.sqlFilter = params.get('sql') || '';
-        this.timeRange = params.get('time') || 'last24h';
+        this.timeRange = params.get('time') || '3h';
         this.customDateRange = params.get('range') || '';
 
         const refresh = params.get('refresh');
@@ -93,7 +89,7 @@ Alpine.store('urlState', {
     },
 
     // Helper to dispatch refresh event
-    triggerRefresh() {
+    _triggerRefresh() {
         window.dispatchEvent(new CustomEvent('dashboard-refresh', {
             detail: {
                 sqlFilter: this.sqlFilter,
@@ -103,28 +99,28 @@ Alpine.store('urlState', {
         }));
     },
 
+    toggleAutoRefresh() {
+        this.autoRefresh = !this.autoRefresh;
+    },
+
     // Helper methods for common operations
     setTimePreset(presetValue) {
         this.timeRange = presetValue;
-        this.triggerRefresh();
     },
 
     setCustomDateRange(dateStr) {
         this.customDateRange = dateStr;
-        this.triggerRefresh();
     },
 
     clearSqlFilter() {
         this.sqlFilter = '';
-        this.triggerRefresh();
     },
 
     addFilter(queryPart) {
         if (this.sqlFilter) {
-            this.sqlFilter += ' ' + queryPart;
+            this.sqlFilter += ' \nAND ' + queryPart;
         } else {
             this.sqlFilter = queryPart;
         }
-        this.triggerRefresh();
     }
 });
