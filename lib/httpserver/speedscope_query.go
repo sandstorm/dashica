@@ -62,10 +62,14 @@ func (qh speedscopeQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		opts.Settings["additional_table_filters"] = formatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		opts.Parameters["__from"] = fmt.Sprintf("%d", filters.From().Unix())
-		opts.Parameters["__to"] = fmt.Sprintf("%d", filters.To().Unix())
+		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		if err != nil {
+			return fmt.Errorf("resolving time range: %w", err)
+		}
+		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
+		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 
-		resolvedTimeRangeJson, err := filters.ResolveTimeRange()
+		resolvedTimeRangeJson, err := json.Marshal(resolvedTimeRange)
 		if err != nil {
 			return fmt.Errorf("JSON marshalling: %w", err)
 		}

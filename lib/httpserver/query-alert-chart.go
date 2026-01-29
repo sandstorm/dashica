@@ -52,7 +52,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		opts.Settings["additional_table_filters"] = formatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		resolvedTimeRange, err := filters.ResolveTimeRange()
+		resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
 		if err != nil {
 			return fmt.Errorf("resolving time range: %w", err)
 		}

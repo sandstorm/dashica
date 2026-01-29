@@ -35,7 +35,7 @@ func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 
 		if err := da.batchEvaluator.EvaluateAlerts(
 			r.Context(),
-			filters.From(), filters.To(),
+			filters.FromNew(), filters.ToNew(),
 		); err != nil {
 			return err
 		}
