@@ -16,6 +16,7 @@ import {stats as statsChart} from './chart/stats'
 import {clickhouseFactory} from './legacy/clickhouse'
 import "./store"
 import "./components/chart";
+import "./components/debugDrawer";
 
 import {autoTable} from "./legacyComponents/autoTable";
 import * as Inputs from '@observablehq/inputs';

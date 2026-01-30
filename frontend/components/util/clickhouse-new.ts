@@ -29,7 +29,6 @@ export async function query(baseUrl: string, filters: any): Promise<QueryResult>
         throw new Error(errorContents);
     }
     const result: QueryResult = await Arrow.tableFromIPC(response);
-    console.log("RESULT", result);
     result.dashicaResolvedTimeRange = JSON.parse(response.headers.get("X-Dashica-Resolved-Time-Range") || "null");
     const xBucketSize = response.headers.get("X-Dashica-Bucket-Size")
     if (xBucketSize != null) {

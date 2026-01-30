@@ -18,35 +18,41 @@ const charts = {
 }
 
 Alpine.data('chart', () => ({
+
+    _queryResult: null,
+
     init() {
+
         const chartType = this.$el.dataset.chartType;
         const widgetBaseUrl = this.$el.dataset.widgetBaseUrl;
         const chartProps = JSON.parse(this.$el.dataset.chartProps);
 
-        const resultContainer = Alpine.reactive({});
-
         Alpine.effect(async () => {
             try {
-                resultContainer.result = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
+                this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
             } catch (e) {
-                this.$el.innerHTML = `<b>ERROR: ${e.message}</b>`;
+                this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message}</b>`;
                 throw e
             }
         });
         // we use a separate Alpine.effect here, to not reload the result if e.g. only width and height change
         Alpine.effect(async () => {
             try {
-                if (resultContainer.result) {
+                if (this._queryResult) {
                     const finalChartProps = {...chartProps, width: this._width};
-                    const chart = await charts[chartType](resultContainer.result, finalChartProps);
-                    this.$el.innerHTML = '';
-                    this.$el.appendChild(chart);
+                    const chart = await charts[chartType](this._queryResult, finalChartProps);
+                    this.$refs.chartContainer.innerHTML = '';
+                    this.$refs.chartContainer.appendChild(chart);
                 }
             } catch (e) {
-                this.$el.innerHTML = `<b>ERROR: ${e.message}</b>`;
+                this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message}</b>`;
                 throw e
             }
         })
+    },
+
+    toggleDebug() {
+        this.$dispatch('dashica-debugDrawer-toggle', {queryResult: this._queryResult})
     },
 
     handleResize(width: number, height: number) {

@@ -13,9 +13,19 @@ func gridTemplateAreas(template []string) string {
     return strings.Join(quoted, " ")
 }
 
+func getColumnCount(template []string) int {
+    if len(template) == 0 {
+        return 0
+    }
+    return len(strings.Fields(template[0]))
+}
+
+
 func gridStyle(template []string, gap string) templ.SafeCSS {
     areas := gridTemplateAreas(template)
-    css := fmt.Sprintf("display: grid; gap: %s; grid-template-areas: %s;", gap, areas)
+    colCount := getColumnCount(template)
+    cols := strings.Repeat("1fr ", colCount)
+    css := fmt.Sprintf("display: grid; gap: %s; grid-template-columns: %s; grid-template-areas: %s;", gap, strings.TrimSpace(cols), areas)
     return templ.SafeCSS(css)
 }
 

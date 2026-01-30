@@ -56,8 +56,8 @@ func (c *ColorScale) With(opts ...ColorScaleOption) *ColorScale {
 func (c *ColorScale) MarshalJSON() ([]byte, error) {
 	type Alias struct {
 		Legend  bool     `json:"legend"`
-		Domain  []string `json:"domain"`
-		Range   []string `json:"range"`
+		Domain  []string `json:"domain,omitempty"`
+		Range   []string `json:"range,omitempty"`
 		Unknown string   `json:"unknown"`
 	}
 	return json.Marshal(&Alias{
