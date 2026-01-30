@@ -8,6 +8,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -217,14 +218,16 @@ func (b *BarVertical) CollectHandlers(ctx *rendering.DashboardContext, registerH
 		)
 	}
 
-	err := registerHandler.Handle(b.id, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Execute SQL query and return data
-		println("BAR VERTICAL HANDLER CALLED for", b.id)
-
-		// This should execute the SQL query and return JSON data
-		// For now, just a placeholder
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("[]"))
+	qh := httpserver.QueryHandler{
+		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,
+		Logger:                  ctx.Deps.Logger,
+		FileSystem:              ctx.Deps.FileSystem,
+	}
+	err := registerHandler.Handle(b.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := qh.HandleQuery(query, w, r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	if err != nil {
 		return fmt.Errorf("barVertical: %w", err)

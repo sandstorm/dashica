@@ -8,20 +8,23 @@ import (
 func gridTemplateAreas(template []string) string {
     quoted := make([]string, len(template))
     for i, row := range template {
-        quoted[i] = fmt.Sprintf("'%s'", row)
+        quoted[i] = fmt.Sprintf(`&#34;%s&#34;`, row)
     }
     return strings.Join(quoted, " ")
 }
 
+func gridStyle(template []string, gap string) templ.SafeCSS {
+    areas := gridTemplateAreas(template)
+    css := fmt.Sprintf("display: grid; gap: %s; grid-template-areas: %s;", gap, areas)
+    return templ.SafeCSS(css)
+}
+
 templ Grid(template []string, gap string, areas map[string]templ.Component) {
-    <div
-        class={ fmt.Sprintf("grid gap-%s", gap) }
-        style={ fmt.Sprintf("grid-template-areas: %s", gridTemplateAreas(template)) }
-    >
+    @templ.Raw(`<div style="` + gridStyle(template, gap) + `">`)
         for name, component := range areas {
-            <div style={ fmt.Sprintf("grid-area: %s", name) }>
+            <div style={ templ.SafeCSS(fmt.Sprintf("grid-area: %s", name)) }>
                 @component
             </div>
         }
-    </div>
+    @templ.Raw(`</div>`)
 }

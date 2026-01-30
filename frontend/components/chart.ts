@@ -26,8 +26,16 @@ Alpine.data('chart', () => ({
         const chartProps = JSON.parse(this.$el.dataset.chartProps);
 
         Alpine.effect(async () => {
-            const result = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
-            this.$el.innerHTML = charts[chartType](result, chartProps);
+            try {
+                const result = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
+                const chart = await charts[chartType](result, chartProps);
+                console.log("Chart loaded", chartType, chartProps, chart);
+                this.$el.appendChild(chart);
+            } catch (e) {
+                this.$el.innerHTML = `<b>ERROR: ${e.message}</b>`;
+                throw e
+            }
+
         })
     }
 }))

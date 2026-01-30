@@ -98,6 +98,7 @@ function _bars(data: QueryResult, props: ChartProps) {
         domain = [data.dashicaResolvedTimeRange.from, data.dashicaResolvedTimeRange.to]
         numberOfUniqueXValues = Math.floor((data.dashicaResolvedTimeRange.to - data.dashicaResolvedTimeRange.from) / xBucketSize);
     }
+    console.log("PROPS", props);
 
     // @ts-ignore
     return Plot.plot({

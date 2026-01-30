@@ -80,7 +80,7 @@ func (b *SqlQuery) Build() string {
 			sb.WriteString("    ")
 			sb.WriteString(definition)
 
-			if alias != "" {
+			if alias != definition {
 				sb.WriteString(" AS ")
 				sb.WriteString(alias)
 			}

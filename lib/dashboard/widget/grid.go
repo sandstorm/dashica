@@ -18,7 +18,7 @@ type Grid struct {
 func NewGrid() *Grid {
 	return &Grid{
 		areas: make(map[string]WidgetDefinition),
-		gap:   "4",
+		gap:   "4px",
 	}
 }
 
