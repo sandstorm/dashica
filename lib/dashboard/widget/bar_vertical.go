@@ -34,7 +34,7 @@ type BarVertical struct {
 	color        *color.ColorScale
 }
 
-func NewBarVertical(sql *sql.SqlQuery) *BarVertical {
+func NewBarVertical(sql sql.SqlQueryable) *BarVertical {
 	return &BarVertical{
 		sql:    sql,
 		height: 200,
