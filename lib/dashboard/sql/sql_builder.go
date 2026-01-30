@@ -14,6 +14,7 @@ type SqlQuery struct {
 	from    string
 	where   []string
 	groupBy []SqlField
+	orderBy []SqlField
 }
 
 type SqlBuilderOption func(*SqlQuery)
@@ -45,6 +46,12 @@ func GroupBy(field SqlField) SqlBuilderOption {
 	}
 }
 
+func OrderBy(field SqlField) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.orderBy = append(b.orderBy, field)
+	}
+}
+
 func New(opts ...SqlBuilderOption) *SqlQuery {
 	b := &SqlQuery{}
 	for _, opt := range opts {
@@ -52,7 +59,7 @@ func New(opts ...SqlBuilderOption) *SqlQuery {
 	}
 	return b
 }
-func (b *SqlQuery) With(opts ...SqlBuilderOption) *SqlQuery {
+func (b *SqlQuery) With(opts ...SqlBuilderOption) SqlQueryable {
 	cloned := *b
 	for _, opt := range opts {
 		opt(&cloned)
@@ -117,6 +124,18 @@ func (b *SqlQuery) Build() string {
 			sb.WriteString(fmt.Sprintf("    %s", clause.Alias()))
 
 			if i < len(b.groupBy)-1 {
+				sb.WriteString(",")
+			}
+			sb.WriteString("\n")
+		}
+	}
+
+	if len(b.orderBy) > 0 {
+		sb.WriteString("ORDER BY\n")
+		for i, clause := range b.orderBy {
+			sb.WriteString(fmt.Sprintf("    %s", clause.Alias()))
+
+			if i < len(b.orderBy)-1 {
 				sb.WriteString(",")
 			}
 			sb.WriteString("\n")

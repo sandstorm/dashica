@@ -13,6 +13,21 @@ func Timestamp15Min() TimestampedField {
 	}
 }
 
+func NewFieldAlias(alias string) TimestampedField {
+	return &fieldImpl{
+		definition: alias,
+		alias:      alias,
+	}
+}
+
+func NewTimestampedFieldAlias(alias string, xBucketSizeMs int64) TimestampedField {
+	return &fieldImpl{
+		definition:              alias,
+		alias:                   alias,
+		timestamp_xBucketSizeMs: xBucketSizeMs,
+	}
+}
+
 func JsonExtractString(jsonStrField string, paths ...string) SqlField {
 	quotedPaths := make([]string, len(paths))
 	for i, path := range paths {
@@ -29,5 +44,12 @@ func Count() SqlField {
 	return &fieldImpl{
 		definition: "count(*)",
 		alias:      "cnt",
+	}
+}
+
+func Enum(field string) SqlField {
+	return &fieldImpl{
+		definition: fmt.Sprintf("%s::String", field),
+		alias:      field,
 	}
 }

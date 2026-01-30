@@ -3,6 +3,7 @@ import "./index.css";
 
 import Alpine from '@alpinejs/csp'
 import intersect from '@alpinejs/intersect'
+import resize from '@alpinejs/resize'
 
 import filterButton from './components/filterButton'
 import searchBar from './components/searchBar'
@@ -20,6 +21,7 @@ import {autoTable} from "./legacyComponents/autoTable";
 import * as Inputs from '@observablehq/inputs';
 
 Alpine.plugin(intersect);
+Alpine.plugin(resize);
 
 Alpine.data('filterButton', filterButton);
 Alpine.data('searchBar', searchBar);

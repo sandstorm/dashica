@@ -171,7 +171,7 @@ func intPtr(i int64) *int64 {
 	return &i
 }
 
-func (qh QueryHandler) HandleQuery(queryObj *sql.SqlQuery, w http.ResponseWriter, r *http.Request) error {
+func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
 	println("!!!!!!!!!!!!!!")
 	println(queryObj.Build())
 	// TODO: different server support per dashboard

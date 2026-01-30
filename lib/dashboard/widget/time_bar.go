@@ -7,6 +7,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
+	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -15,7 +16,7 @@ import (
 )
 
 type TimeBar struct {
-	sql          *sql.SqlQuery
+	sql          sql.SqlQueryable
 	x            sql.TimestampedField
 	y            sql.SqlField
 	fill         *sql.SqlField
@@ -23,13 +24,13 @@ type TimeBar struct {
 	fy           *sql.SqlField
 	title        string
 	id           string
-	height       *int
+	height       int
 	width        *int
 	marginLeft   *int
 	marginRight  *int
 	marginBottom *int
 	marginTop    *int
-	colorScheme  string
+	color        *color.ColorScale
 }
 
 func (b *TimeBar) X(xField sql.TimestampedField) *TimeBar {
@@ -76,7 +77,7 @@ func (b *TimeBar) Id(id string) *TimeBar {
 
 func (b *TimeBar) Height(height int) *TimeBar {
 	cloned := *b
-	cloned.height = &height
+	cloned.height = height
 	return &cloned
 }
 
@@ -110,9 +111,12 @@ func (b *TimeBar) MarginTop(margin int) *TimeBar {
 	return &cloned
 }
 
-func (b *TimeBar) ColorScheme(scheme string) *TimeBar {
+func (b *TimeBar) Color(opts ...color.ColorScaleOption) *TimeBar {
 	cloned := *b
-	cloned.colorScheme = scheme
+	if cloned.color == nil {
+		cloned.color = color.New()
+	}
+	cloned.color = cloned.color.With(opts...)
 	return &cloned
 }
 
@@ -122,9 +126,10 @@ func (b *TimeBar) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeBar {
 	return &cloned
 }
 
-func NewTimeBar(sql *sql.SqlQuery) *TimeBar {
+func NewTimeBar(sql sql.SqlQueryable) *TimeBar {
 	return &TimeBar{
-		sql: sql,
+		sql:    sql,
+		height: 200,
 	}
 }
 
@@ -146,6 +151,7 @@ func (b *TimeBar) buildChartProps() map[string]interface{} {
 	props := make(map[string]interface{})
 
 	// Required fields
+	props["height"] = b.height
 	props["x"] = b.x.Alias()
 	props["xBucketSize"] = b.x.XBucketSizeMs()
 	props["y"] = b.y.Alias()
@@ -153,9 +159,6 @@ func (b *TimeBar) buildChartProps() map[string]interface{} {
 	// Optional fields
 	if b.title != "" {
 		props["title"] = b.title
-	}
-	if b.height != nil {
-		props["height"] = *b.height
 	}
 	if b.width != nil {
 		props["width"] = *b.width
@@ -181,8 +184,8 @@ func (b *TimeBar) buildChartProps() map[string]interface{} {
 	if b.fy != nil {
 		props["fy"] = (*b.fy).Alias()
 	}
-	if b.colorScheme != "" {
-		props["color"] = map[string]string{"scheme": b.colorScheme}
+	if b.color != nil {
+		props["color"] = b.color
 	}
 
 	return props
@@ -198,12 +201,14 @@ func (b *TimeBar) CollectHandlers(ctx *rendering.DashboardContext, registerHandl
 		sql.PrependSelect(b.x),
 		sql.GroupBy(b.x),
 		sql.Select(b.y),
+		sql.OrderBy(b.x),
 	)
 
 	if b.fill != nil {
 		query = query.With(
 			sql.PrependSelect(*b.fill),
 			sql.GroupBy(*b.fill),
+			sql.OrderBy(*b.fill),
 		)
 	}
 	if b.fx != nil {

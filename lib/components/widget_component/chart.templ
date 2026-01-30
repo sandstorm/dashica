@@ -3,6 +3,9 @@ package widget_component
 templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string) {
     <div
         x-data="chart"
+        x-resize="handleResize($width, $height)"
+        class="not-prose"
+
         data-chart-type={chartType}
         data-chart-props={chartPropsJSON}
         data-widget-base-url={widgetBaseUrl}

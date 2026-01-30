@@ -19,23 +19,38 @@ const charts = {
 
 Alpine.data('chart', () => ({
     init() {
-        console.log("Chart loading", this.$el.dataset.chartType, this.$el.dataset.chartProps);
-        console.log("Chart loading", this.$el.dataset.chartType, this.$el.dataset.chartProps);
         const chartType = this.$el.dataset.chartType;
         const widgetBaseUrl = this.$el.dataset.widgetBaseUrl;
         const chartProps = JSON.parse(this.$el.dataset.chartProps);
 
+        const resultContainer = Alpine.reactive({});
+
         Alpine.effect(async () => {
             try {
-                const result = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
-                const chart = await charts[chartType](result, chartProps);
-                console.log("Chart loaded", chartType, chartProps, chart);
-                this.$el.appendChild(chart);
+                resultContainer.result = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
             } catch (e) {
                 this.$el.innerHTML = `<b>ERROR: ${e.message}</b>`;
                 throw e
             }
-
+        });
+        // we use a separate Alpine.effect here, to not reload the result if e.g. only width and height change
+        Alpine.effect(async () => {
+            try {
+                if (resultContainer.result) {
+                    const finalChartProps = {...chartProps, width: this._width};
+                    const chart = await charts[chartType](resultContainer.result, finalChartProps);
+                    this.$el.innerHTML = '';
+                    this.$el.appendChild(chart);
+                }
+            } catch (e) {
+                this.$el.innerHTML = `<b>ERROR: ${e.message}</b>`;
+                throw e
+            }
         })
+    },
+
+    handleResize(width: number, height: number) {
+        this._width = width;
+        this.$el.style.height = `100%`;
     }
 }))

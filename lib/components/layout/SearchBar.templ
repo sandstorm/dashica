@@ -129,7 +129,7 @@ templ SearchBar(filterButtons []rendering.FilterButton) {
                 <div class="flex items-center gap-2">
                     for _, filterButton := range filterButtons {
                         <button
-                                @click={ "addFilter(" + util.JsonEncode(filterButton.QueryPart) + ")" }
+                                @click={ "$store.urlState.addFilter(" + util.JsonEncode(filterButton.QueryPart) + ")" }
                                 class="btn btn-sm"
                         >{filterButton.Title}</button>
                     }

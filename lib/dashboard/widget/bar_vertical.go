@@ -7,6 +7,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
+	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -15,7 +16,7 @@ import (
 )
 
 type BarVertical struct {
-	sql          *sql.SqlQuery
+	sql          sql.SqlQueryable
 	x            sql.SqlField
 	y            sql.SqlField
 	fill         *sql.SqlField
@@ -23,18 +24,20 @@ type BarVertical struct {
 	fy           *sql.SqlField
 	title        string
 	id           string
-	height       *int
+	height       int
 	width        *int
 	marginLeft   *int
 	marginRight  *int
 	marginBottom *int
 	marginTop    *int
 	colorScheme  string
+	color        *color.ColorScale
 }
 
 func NewBarVertical(sql *sql.SqlQuery) *BarVertical {
 	return &BarVertical{
-		sql: sql,
+		sql:    sql,
+		height: 200,
 	}
 }
 
@@ -82,7 +85,7 @@ func (b *BarVertical) Id(id string) *BarVertical {
 
 func (b *BarVertical) Height(height int) *BarVertical {
 	cloned := *b
-	cloned.height = &height
+	cloned.height = height
 	return &cloned
 }
 
@@ -116,9 +119,12 @@ func (b *BarVertical) MarginTop(margin int) *BarVertical {
 	return &cloned
 }
 
-func (b *BarVertical) ColorScheme(scheme string) *BarVertical {
+func (b *BarVertical) Color(opts ...color.ColorScaleOption) *BarVertical {
 	cloned := *b
-	cloned.colorScheme = scheme
+	if cloned.color == nil {
+		cloned.color = color.New()
+	}
+	cloned.color = cloned.color.With(opts...)
 	return &cloned
 }
 
@@ -146,15 +152,13 @@ func (b *BarVertical) buildChartProps() map[string]interface{} {
 	props := make(map[string]interface{})
 
 	// Required fields
+	props["height"] = b.height
 	props["x"] = b.x.Alias()
 	props["y"] = b.y.Alias()
 
 	// Optional fields
 	if b.title != "" {
 		props["title"] = b.title
-	}
-	if b.height != nil {
-		props["height"] = *b.height
 	}
 	if b.width != nil {
 		props["width"] = *b.width
@@ -180,8 +184,8 @@ func (b *BarVertical) buildChartProps() map[string]interface{} {
 	if b.fy != nil {
 		props["fy"] = (*b.fy).Alias()
 	}
-	if b.colorScheme != "" {
-		props["color"] = map[string]string{"scheme": b.colorScheme}
+	if b.color != nil {
+		props["color"] = b.color
 	}
 
 	return props
