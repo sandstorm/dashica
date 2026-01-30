@@ -7,13 +7,26 @@ import (
 
 // SqlFile represents a SQL query loaded from a file
 type SqlFile struct {
-	path string
+	path              string
+	shouldSkipFilters bool
+}
+
+func (f *SqlFile) ShouldSkipFilters() bool {
+	return f.shouldSkipFilters
 }
 
 // FromFile creates a new SqlFile from the given path
 func FromFile(path string) *SqlFile {
 	return &SqlFile{
 		path: path,
+	}
+}
+
+// TODO: pragmatic workaround
+func FromFileWithoutFilters(path string) *SqlFile {
+	return &SqlFile{
+		path:              path,
+		shouldSkipFilters: true,
 	}
 }
 
@@ -37,6 +50,7 @@ func (b *SqlFile) With(opts ...SqlBuilderOption) SqlQueryable {
 type SqlQueryable interface {
 	Build() string
 	With(opts ...SqlBuilderOption) SqlQueryable
+	ShouldSkipFilters() bool
 }
 
 var _ SqlQueryable = (*SqlQuery)(nil)

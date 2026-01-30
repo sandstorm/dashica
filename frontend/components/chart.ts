@@ -19,6 +19,7 @@ const charts = {
 
 Alpine.data('chart', () => ({
 
+    _visible: false,
     _queryResult: null,
 
     init() {
@@ -28,6 +29,7 @@ Alpine.data('chart', () => ({
         const chartProps = JSON.parse(this.$el.dataset.chartProps);
 
         Alpine.effect(async () => {
+            if (!this._visible) return;
             try {
                 this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
             } catch (e) {
@@ -49,6 +51,10 @@ Alpine.data('chart', () => ({
                 throw e
             }
         })
+    },
+
+    handleEnteredViewport() {
+        this._visible = true;
     },
 
     toggleDebug() {

@@ -10,11 +10,12 @@ type SqlBuildCtx interface {
 }
 
 type SqlQuery struct {
-	selectF []SqlField
-	from    string
-	where   []string
-	groupBy []SqlField
-	orderBy []SqlField
+	selectF           []SqlField
+	from              string
+	where             []string
+	groupBy           []SqlField
+	orderBy           []SqlField
+	shouldSkipFilters bool
 }
 
 type SqlBuilderOption func(*SqlQuery)
@@ -27,6 +28,12 @@ func Select(field SqlField) SqlBuilderOption {
 func PrependSelect(field SqlField) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.selectF = append([]SqlField{field}, b.selectF...)
+	}
+}
+
+func SkipFilters() SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.shouldSkipFilters = true
 	}
 }
 
@@ -65,6 +72,10 @@ func (b *SqlQuery) With(opts ...SqlBuilderOption) SqlQueryable {
 		opt(&cloned)
 	}
 	return &cloned
+}
+
+func (b *SqlQuery) ShouldSkipFilters() bool {
+	return b.shouldSkipFilters
 }
 
 func (b *SqlQuery) Build() string {

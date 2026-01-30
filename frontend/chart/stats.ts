@@ -5,7 +5,7 @@ import {SchemaAnalyzer} from "../util/schema.js";
 
 import './stats.css';
 
-interface ChartProps {
+interface StatsProps {
     title?: string;
     fill?: string;
 }
@@ -16,7 +16,7 @@ export interface Stat {
 }
 
 // TODO: fixed colors for different levels??
-async function _stats(data: QueryResult, props: ChartProps): Promise<HTMLElement> {
+async function _stats(data: QueryResult, props: StatsProps): Promise<HTMLElement> {
     const schema = new SchemaAnalyzer(data);
 
     if (!props.title) {
@@ -34,7 +34,7 @@ async function _stats(data: QueryResult, props: ChartProps): Promise<HTMLElement
 }
 export const stats = _stats;
 
-const renderStat = (props: ChartProps) => (stat: Stat): HTMLElement => {
+const renderStat = (props: StatsProps) => (stat: Stat): HTMLElement => {
     const color = stat.color ?? props.fill ?? 'oklch(0.21 0.034 264.665)';
     return html`<div class="stats__stat">
         <dt>${stat.label ?? props.title}</dt>

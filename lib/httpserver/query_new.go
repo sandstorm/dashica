@@ -196,7 +196,7 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 
 	query := queryObj.Build()
 	rawFilters := r.URL.Query().Get("filters")
-	if rawFilters != "" {
+	if rawFilters != "" && !queryObj.ShouldSkipFilters() {
 		var filters DashboardFilters
 		err = json.Unmarshal([]byte(rawFilters), &filters)
 		if err != nil {

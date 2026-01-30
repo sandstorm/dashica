@@ -1,14 +1,9 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
-@plugin "daisyui";
-
-@plugin "daisyui/theme" {
-    name: "light";
-    default: true;
-    /*--color-primary: blue;
-    --color-secondary: teal;
-     */
+@plugin "daisyui" {
+    themes: winter --default, night --prefersdark;
 }
+
 
 @import "./components/application.css";
 @import "./components/legacyMarkdown.css";

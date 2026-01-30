@@ -3,6 +3,7 @@ package widget_component
 templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string) {
     <div
         x-data="chart"
+        x-intersect.once="handleEnteredViewport()"
         x-resize="handleResize($width, $height)"
         class="not-prose relative group"
 
