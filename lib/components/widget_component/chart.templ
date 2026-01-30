@@ -12,7 +12,7 @@ templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string) {
         data-widget-base-url={widgetBaseUrl}
     >
         <!-- Button Bar - shows on hover -->
-        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-1">
             <div class="join">
                 <button
                     @click="toggleDebug()"

@@ -29,6 +29,9 @@ interface ChartProps {
     xBucketSize: number,
     y: ChannelValueSpec,
     yBucketSize: number,
+
+    // filled from components/chart.ts
+    colorSchemeDark: boolean,
 }
 
 
@@ -41,11 +44,7 @@ async function _heatmap(data: QueryResult, props: ChartProps) {
     }
 
     const y = schema.requiredColumn(props.y, 'y');
-    //const dark = await Generators.dark().next();
 
-    // TODO SEE ME
-    const dark = false;
-    //console.log("D", dark.value);
     // @ts-ignore
     return Plot.plot({
         title: props.title,
@@ -64,7 +63,7 @@ async function _heatmap(data: QueryResult, props: ChartProps) {
             axis: true,
         },
         color: {
-            scheme: dark ? 'inferno' : 'blues',
+            scheme: props.colorSchemeDark ? 'inferno' : 'blues',
             legend: true,
         },
         marks: [

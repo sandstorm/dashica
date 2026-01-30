@@ -21,12 +21,19 @@ Alpine.data('chart', () => ({
 
     _visible: false,
     _queryResult: null,
+    _colorSchemeDark: false,
 
     init() {
 
         const chartType = this.$el.dataset.chartType;
         const widgetBaseUrl = this.$el.dataset.widgetBaseUrl;
         const chartProps = JSON.parse(this.$el.dataset.chartProps);
+
+        this._colorSchemeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            this._colorSchemeDark = event.matches ? "dark" : "light";
+        });
+
 
         Alpine.effect(async () => {
             if (!this._visible) return;
@@ -41,7 +48,7 @@ Alpine.data('chart', () => ({
         Alpine.effect(async () => {
             try {
                 if (this._queryResult) {
-                    const finalChartProps = {...chartProps, width: this._width};
+                    const finalChartProps = {...chartProps, width: this._width, colorSchemeDark: this._colorSchemeDark};
                     const chart = await charts[chartType](this._queryResult, finalChartProps);
                     this.$refs.chartContainer.innerHTML = '';
                     this.$refs.chartContainer.appendChild(chart);

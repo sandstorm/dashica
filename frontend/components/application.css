@@ -10,11 +10,11 @@
 .application__sidebar {
     grid-area: sidebar;
     padding: 2rem 1rem;
+    overflow-y: auto;
 }
 
 .application__main {
     grid-area: main;
-
     overflow-y: auto;
 }
 
