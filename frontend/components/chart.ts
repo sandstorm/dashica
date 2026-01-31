@@ -22,6 +22,7 @@ Alpine.data('chart', () => ({
     _visible: false,
     _queryResult: null,
     _colorSchemeDark: false,
+    _width: 0,
 
     init() {
 
@@ -33,7 +34,6 @@ Alpine.data('chart', () => ({
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
             this._colorSchemeDark = event.matches ? "dark" : "light";
         });
-
 
         Alpine.effect(async () => {
             if (!this._visible) return;

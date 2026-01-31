@@ -28,6 +28,9 @@ interface ChartProps {
     xBucketSize: number,
     y: ChannelValueSpec,
     yBucketSize: number,
+
+    // filled from components/chart.ts
+    colorSchemeDark: boolean,
 }
 
 
@@ -59,7 +62,7 @@ async function _heatmapOrdinal(data: QueryResult, props: ChartProps) {
             axis: true,
         },
         color: {
-            scheme: 'blues',
+            scheme: props.colorSchemeDark ? 'inferno' : 'blues',
             legend: true,
         },
         marks: [
