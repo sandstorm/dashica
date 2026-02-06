@@ -22,7 +22,9 @@ func main() {
 	d.RegisterDashboardGroup("📚 Documentation").
 		RegisterDashboard("/", docs.Introduction()).
 		RegisterDashboard("/docs/intro", docs.Introduction()).
+		RegisterDashboard("/docs/installation", docs.Installation()).
 		RegisterDashboard("/docs/quickstart", docs.QuickStart()).
+		RegisterDashboard("/docs/queries", docs.Queries()).
 		RegisterDashboard("/docs/widgets-overview", docs.WidgetsOverview())
 
 	// Widget Examples section (to be implemented)
