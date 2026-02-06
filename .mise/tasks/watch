@@ -4,11 +4,9 @@
 #MISE tools={watchexec="latest"}
 
 mise watch \
-  --watch dashica-src/frontend/ \
-  --watch dashica-src/lib/ \
-  --watch dashica-src/dashica.go \
-  --watch src/ \
-  --watch main.go \
+  --watch frontend/ \
+  --watch lib/ \
+  --watch docs/dev-server/**/*.go \
   --on-busy-update restart \
   --stop-signal kill \
   build

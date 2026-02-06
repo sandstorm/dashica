@@ -9,6 +9,7 @@
 # Tools
 
 - To run Golang compiler/interpreter etc, do `mise exec go -- go ...`
+- To START THE APPLICATION, run `mise r watch` (with reload)
 
 # Golang Best Practices
 

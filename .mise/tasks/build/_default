@@ -2,10 +2,10 @@
 
 set -e
 
-cd dashica-src
 node frontendBuild.mjs
 go generate ./...
-cd ..
 
+pushd docs/dev-server
 go build main.go
 ./main
+popd

@@ -9,3 +9,4 @@ dev-server
 
 # Logs
 *.log
+/main
