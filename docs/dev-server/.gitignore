@@ -1,0 +1,11 @@
+# Configuration files (contain sensitive data)
+dashica_config.yaml
+dashica_config.*.yaml
+!dashica_config.example.yaml
+
+# Built binaries
+dev-server
+*.exe
+
+# Logs
+*.log
