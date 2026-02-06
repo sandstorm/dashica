@@ -8,12 +8,16 @@ The fastest way to explore Dashica's Go API and widget examples:
 # 1. Start ClickHouse with sample data
 docker-compose -f docker-compose.dev.yml up -d
 
-# 2. Set up and run the dev server
+# 2. Build frontend assets
+npm install  # Only needed once
+npm run build
+
+# 3. Set up and run the dev server
 cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
 go run main.go
 
-# 3. Open http://127.0.0.1:8080/docs/intro
+# 4. Open http://127.0.0.1:8080/docs/intro
 ```
 
 The dev server includes:
