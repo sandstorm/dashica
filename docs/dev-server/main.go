@@ -27,11 +27,11 @@ func main() {
 		RegisterDashboard("/docs/queries", docs.Queries()).
 		RegisterDashboard("/docs/widgets-overview", docs.WidgetsOverview())
 
-	// Widget Examples section (to be implemented)
-	// d.RegisterDashboardGroup("🎨 Widget Examples").
-	//     RegisterDashboard("/examples/widgets/time-bar", widgets.TimeBarExample()).
-	//     RegisterDashboard("/examples/widgets/bar-vertical", widgets.BarVerticalExample()).
-	//     ... more examples
+	// Widget Documentation with Live Examples
+	d.RegisterDashboardGroup("🎨 Widget Reference").
+		RegisterDashboard("/docs/widgets/time-bar", docs.TimeBar()).
+		RegisterDashboard("/docs/widgets/bar-vertical", docs.BarVertical()).
+		RegisterDashboard("/docs/widgets/stats", docs.Stats())
 
 	// Advanced Examples section (to be implemented)
 	// d.RegisterDashboardGroup("🚀 Advanced Examples").

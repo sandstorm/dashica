@@ -17,75 +17,61 @@ Dashica provides a rich set of widgets for building interactive dashboards.
 
 ## Chart Widgets
 
-### TimeBar
+### [TimeBar](/docs/widgets/time-bar)
 
 Display time-series data as vertical bars.
 
 ` + "```go" + `
-widget.NewTimeBar().
+widget.NewTimeBar(
+    sql.New(sql.From("http_logs")),
+).
     Title("Requests per Hour").
-    Query(sql.New()...).
-    X("timestamp").
-    Y("count").
-    Height(200)
+    X(sql.Timestamp15Min()).
+    Y(sql.Count()).
+    Height(300)
 ` + "```" + `
 
 **Use cases**: Request counts, event tracking, metrics over time
 
+[→ Full TimeBar documentation with live examples](/docs/widgets/time-bar)
+
 ---
 
-### BarVertical
+### [BarVertical](/docs/widgets/bar-vertical)
 
 Vertical bar chart for categorical data.
 
 ` + "```go" + `
-widget.NewBarVertical().
-    Title("Top Pages").
-    Query(sql.New()...).
-    X("page").
-    Y("views").
-    Height(200)
+widget.NewBarVertical(
+    sql.New(sql.From("http_logs")),
+).
+    Title("Requests by Status").
+    X(sql.Enum("statusGroup")).
+    Y(sql.Count()).
+    Height(300)
 ` + "```" + `
 
 **Use cases**: Rankings, comparisons, categorical data
 
----
-
-### BarHorizontal
-
-Horizontal bar chart, ideal for longer labels.
-
-` + "```go" + `
-widget.NewBarHorizontal().
-    Title("Error Types").
-    Query(sql.New()...).
-    X("count").
-    Y("error_type").
-    Height(300)
-` + "```" + `
-
-**Use cases**: Long category names, space-constrained layouts
+[→ Full BarVertical documentation with live examples](/docs/widgets/bar-vertical)
 
 ---
 
-### Stats
+### [Stats](/docs/widgets/stats)
 
 Display key metrics as large numbers.
 
 ` + "```go" + `
 widget.NewStats(
-    sql.New().
-        From("metrics").
-        Select(
-            sql.Field("metric_name"),
-            sql.Count("value"),
-        ),
+    sql.New(sql.From("http_logs")),
 ).
-TitleField(sql.Field("metric_name")).
-FillField(sql.Field("value"))
+    TitleField(sql.Enum("statusGroup")).
+    FillField(sql.Count())
 ` + "```" + `
 
 **Use cases**: KPIs, summary metrics, totals
+
+[→ Full Stats documentation with live examples](/docs/widgets/stats)
 
 ---
 
@@ -94,15 +80,15 @@ FillField(sql.Field("value"))
 Heatmap for time-series data with color encoding.
 
 ` + "```go" + `
-widget.NewTimeHeatmap().
-    Title("Activity by Hour").
-    Query(sql.New()...).
-    X("hour").
-    Y("day_of_week").
-    Fill("activity_count")
+widget.NewTimeHeatmap(
+    sql.New(sql.From("logs")),
+)
+// TODO: Document API
 ` + "```" + `
 
 **Use cases**: Temporal patterns, activity heatmaps, density visualization
+
+**Status**: ❌ Not yet documented - API to be confirmed
 
 ---
 
@@ -111,15 +97,28 @@ widget.NewTimeHeatmap().
 Heatmap with categorical/ordinal data.
 
 ` + "```go" + `
-widget.NewTimeHeatmapOrdinal().
-    Title("Status by Service").
-    Query(sql.New()...).
-    X("service").
-    Y("timestamp").
-    Fill("status")
+widget.NewTimeHeatmapOrdinal(
+    sql.New(sql.From("logs")),
+)
+// TODO: Document API
 ` + "```" + `
 
 **Use cases**: Status tracking, categorical time series, ordinal data
+
+**Status**: ❌ Not yet documented - API to be confirmed
+
+---
+
+## Missing Widgets (TODO)
+
+These widgets are not yet implemented in the Go version:
+
+- ❌ **BarHorizontal** - Horizontal bar charts
+- ❌ **AutoTable** - Interactive data tables
+- ❌ **Line** - Line charts
+- ❌ **Area** - Area charts
+- ❌ **Scatter** - Scatter plots
+- ❌ **Pie/Donut** - Pie and donut charts
 
 ---
 
@@ -192,42 +191,40 @@ widget.NewLegacyMarkdown().
 
 ## Common Features
 
-All chart widgets support these common features:
+Chart widgets support these common features:
 
 ### Stacking with Fill
 
 ` + "```go" + `
-.Fill("category")  // Stack by category
-` + "```" + `
-
-### Faceting (Small Multiples)
-
-` + "```go" + `
-.Fx("region")  // Facet horizontally
-.Fy("service") // Facet vertically
-` + "```" + `
-
-### Custom Colors
-
-` + "```go" + `
-.Color(widget.ColorMapping{
-    Domain: []string{"success", "error"},
-    Range:  []string{"#22c55e", "#ef4444"},
-})
+.Fill(sql.Enum("category"))  // Stack by category
 ` + "```" + `
 
 ### Size Control
 
 ` + "```go" + `
-.Height(300)
-.Width(600)
+.Height(300)  // Set height in pixels
 ` + "```" + `
+
+### Missing Features (TODO)
+
+These common features from the Observable Framework version are not yet available:
+
+- ❌ **Faceting** (fx/fy) - Small multiples for comparing across dimensions
+- ❌ **Custom Colors** - Color domain/range mapping
+- ❌ **Color Legend Control** - Show/hide legend, position
+- ❌ **Tooltips** - Custom tooltip configuration
+- ❌ **Width Control** - All charts use 100% width currently
+- ❌ **Margins** - Custom margin control (marginLeft, marginTop, etc.)
+- ❌ **Extra Marks** - Additional Plot marks like threshold lines
 
 ---
 
 ## Next Steps
 
-Explore detailed examples for each widget type in the **Widget Examples** section (coming soon).
+- [TimeBar](/docs/widgets/time-bar) - Time series visualization with live examples
+- [BarVertical](/docs/widgets/bar-vertical) - Vertical bar charts with live examples
+- [Stats](/docs/widgets/stats) - KPI display with live examples
+- [Queries](/docs/queries) - Learn SQL query patterns
 `),
 		)
 }
