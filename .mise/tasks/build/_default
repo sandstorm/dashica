@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+cd dashica-src
+node frontendBuild.mjs
+go generate ./...
+cd ..
+
+go build main.go
+./main

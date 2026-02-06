@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Extra wrapper for golang scripting which passes the current WorkingDir to the script
+#MISE tools={watchexec="latest"}
+
+mise watch \
+  --watch dashica-src/frontend/ \
+  --watch dashica-src/lib/ \
+  --watch dashica-src/dashica.go \
+  --watch src/ \
+  --watch main.go \
+  --on-busy-update restart \
+  --stop-signal kill \
+  build

@@ -3,6 +3,7 @@ package docs
 import (
 	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
@@ -109,28 +110,154 @@ widget.NewTimeBar(
 		).
 		Widget(
 			widget.NewMarkdown().
+				Title("Custom Color Mappings").
+				Content(`
+## Example 3: Custom Color Mappings
+
+Use ` + "`.Color()`" + ` to define custom colors for each category in your data. This is especially useful for semantic coloring (success = green, error = red, etc.).
+
+**Code:**
+
+` + "```go" + `
+import "github.com/sandstorm/dashica/lib/dashboard/color"
+
+widget.NewTimeBar(
+    sql.New(sql.From("http_logs")),
+).
+    Title("HTTP Requests with Status Colors").
+    X(sql.Timestamp15Min()).
+    Y(sql.Count()).
+    Fill(sql.Enum("statusGroup")).
+    Color(
+        color.ColorLegend(true),              // Show legend
+        color.ColorMapping("2xx", "#4CAF50"),  // Green for success
+        color.ColorMapping("3xx", "#2196F3"),  // Blue for redirects
+        color.ColorMapping("4xx", "#FF9800"),  // Orange for client errors
+        color.ColorMapping("5xx", "#F44336"),  // Red for server errors
+    ).
+    Height(300)
+` + "```" + `
+
+**Available color options:**
+- ` + "`color.ColorLegend(bool)`" + ` - Show/hide the legend
+- ` + "`color.ColorMapping(value, color)`" + ` - Map specific values to hex colors
+- ` + "`color.ColorUnknown(color)`" + ` - Color for unmapped values (default: #8E44AD)
+`),
+		).
+		Widget(
+			widget.NewTimeBar(
+				sql.New(sql.From("http_logs")),
+			).
+				Title("HTTP Requests with Status Colors").
+				X(sql.Timestamp15Min()).
+				Y(sql.Count()).
+				Fill(sql.Enum("statusGroup")).
+				Color(
+					color.ColorLegend(true),
+					color.ColorMapping("2xx", "#4CAF50"),
+					color.ColorMapping("3xx", "#2196F3"),
+					color.ColorMapping("4xx", "#FF9800"),
+					color.ColorMapping("5xx", "#F44336"),
+				).
+				Height(300),
+		).
+		Widget(
+			widget.NewMarkdown().
+				Title("SQL from File").
+				Content(`
+## Example 4: Loading SQL from File
+
+For complex queries, you can load SQL from external files using ` + "`sql.FromFile()`" + `. This helps keep your code clean and allows you to manage queries separately.
+
+**Code:**
+
+` + "```go" + `
+widget.NewTimeBar(sql.FromFile("data/queries/http_requests_by_status.sql")).
+    Title("Requests from SQL File").
+    X(sql.NewFieldAlias("time")).       // Use field from query
+    Y(sql.NewFieldAlias("requests")).   // Use field from query
+    Fill(sql.NewFieldAlias("statusGroup")).
+    Height(300)
+` + "```" + `
+
+**SQL file example** (` + "`data/queries/http_requests_by_status.sql`" + `):
+
+` + "```sql" + `
+SELECT
+    toStartOfInterval(timestamp, INTERVAL 15 MINUTE) AS time,
+    statusGroup,
+    count() AS requests
+FROM http_logs
+GROUP BY time, statusGroup
+ORDER BY time
+` + "```" + `
+
+**Important notes:**
+- The SQL file path is relative to where your Go application runs
+- Use ` + "`sql.NewFieldAlias()`" + ` to reference columns from your query
+- You have full control over the SQL query (joins, subqueries, CTEs, etc.)
+- File-based queries can be combined with ` + "`.Color()`" + ` for custom coloring
+`),
+		).
+		Widget(
+			widget.NewTimeBar(sql.FromFile("data/queries/http_requests_by_status.sql")).
+				Title("Requests from SQL File").
+				X(sql.NewFieldAlias("time")).
+				Y(sql.NewFieldAlias("requests")).
+				Fill(sql.NewFieldAlias("statusGroup")).
+				Color(
+					color.ColorLegend(true),
+					color.ColorMapping("2xx", "#4CAF50"),
+					color.ColorMapping("3xx", "#2196F3"),
+					color.ColorMapping("4xx", "#FF9800"),
+					color.ColorMapping("5xx", "#F44336"),
+				).
+				Height(300),
+		).
+		Widget(
+			widget.NewMarkdown().
 				Title("Time Bucketing Functions").
 				Content(`
 ## Time Bucketing
 
-Dashica provides several time bucketing functions:
+**Built-in function:**
 
 ` + "```go" + `
 sql.Timestamp15Min()  // 15-minute buckets, alias: "time"
-sql.Timestamp1Hour()  // 1-hour buckets
-sql.Timestamp1Day()   // Daily buckets
-
-// Custom bucket with alias
-sql.NewTimestampedFieldAlias("my_time", 15*60*1000)
 ` + "```" + `
 
-Common bucket sizes in milliseconds:
+**Custom time buckets:**
+
+For other bucket sizes, use ` + "`sql.NewTimestampedFieldAlias()`" + ` with the bucket size in milliseconds:
+
+` + "```go" + `
+// 1-hour buckets
+X(sql.NewTimestampedFieldAlias("time", 60*60*1000))
+
+// Daily buckets
+X(sql.NewTimestampedFieldAlias("time", 24*60*60*1000))
+
+// 5-minute buckets
+X(sql.NewTimestampedFieldAlias("time", 5*60*1000))
+` + "```" + `
+
+**Common bucket sizes in milliseconds:**
 - 1 second: ` + "`1000`" + `
 - 1 minute: ` + "`60*1000`" + `
 - 5 minutes: ` + "`5*60*1000`" + `
 - 15 minutes: ` + "`15*60*1000`" + `
 - 1 hour: ` + "`60*60*1000`" + `
 - 1 day: ` + "`24*60*60*1000`" + `
+
+**Note:** When using custom buckets, your SQL query must provide a field that matches the time bucket. For example:
+
+` + "```sql" + `
+SELECT
+    toStartOfHour(timestamp) AS time,
+    count() AS cnt
+FROM http_logs
+GROUP BY time
+` + "```" + `
 
 ## Adding Filters
 
