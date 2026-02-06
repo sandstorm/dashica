@@ -1,8 +1,7 @@
 {
   "name": "dashica",
   "scripts": {
-    "build": "node build.js",
-    "build:watch": "node build.js --watch"
+    "build": "node frontendBuild.mjs"
   },
   "dependencies": {
     "@alpinejs/csp": "^3.15.5",
