@@ -85,16 +85,14 @@ import (
 
 // Create a time-series chart
 widget.NewTimeBar(
-    sql.New(
-        sql.From("http_logs"),
-        sql.Select(sql.Timestamp15Min()),
-        sql.Select(sql.Count()),
-    ),
+	sql.New(
+		sql.From("http_logs"),
+	),
 ).
-    Title("HTTP Requests Over Time").
-    X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
-    Y(sql.NewFieldAlias("cnt")).
-    Height(300)
+	Title("HTTP Requests Over Time (Live Data)").
+	X(sql.Timestamp15Min()).
+	Y(sql.Count()).
+	Height(300),
 ` + "```" + `
 
 ### Live Example
@@ -106,13 +104,11 @@ Here's the same chart with actual data from the dev server's ClickHouse:
 			widget.NewTimeBar(
 				sql.New(
 					sql.From("http_logs"),
-					sql.Select(sql.Timestamp15Min()),
-					sql.Select(sql.Count()),
 				),
 			).
 				Title("HTTP Requests Over Time (Live Data)").
-				X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
-				Y(sql.NewFieldAlias("cnt")).
+				X(sql.Timestamp15Min()).
+				Y(sql.Count()).
 				Height(300),
 		).
 		Widget(
@@ -127,15 +123,12 @@ You can also group data by status codes:
 widget.NewTimeBar(
     sql.New(
         sql.From("http_logs"),
-        sql.Select(sql.Timestamp15Min()),
-        sql.Select(sql.Count()),
-        sql.Select(sql.Enum("statusGroup")),
     ),
 ).
     Title("Requests by Status").
-    X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
-    Y(sql.NewFieldAlias("cnt")).
-    Fill(sql.NewFieldAlias("statusGroup")).
+    X(sql.Timestamp15Min()).
+    Y(sql.Count()).
+    Fill(sql.Enum("statusGroup")).
     Height(300)
 ` + "```" + `
 
@@ -146,15 +139,12 @@ widget.NewTimeBar(
 			widget.NewTimeBar(
 				sql.New(
 					sql.From("http_logs"),
-					sql.Select(sql.Timestamp15Min()),
-					sql.Select(sql.Count()),
-					sql.Select(sql.Enum("statusGroup")),
 				),
 			).
 				Title("Requests by Status (Live Data)").
-				X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
-				Y(sql.NewFieldAlias("cnt")).
-				Fill(sql.NewFieldAlias("statusGroup")).
+				X(sql.Timestamp15Min()).
+				Y(sql.Count()).
+				Fill(sql.Enum("statusGroup")).
 				Height(300),
 		).
 		Widget(
