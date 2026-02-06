@@ -12,6 +12,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	highlighting "github.com/yuin/goldmark-highlighting/v2"
 )
 
 // Markdown is a simple widget for rendering markdown content without any legacy features.
@@ -69,7 +70,13 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 	var buf bytes.Buffer
 
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithExtensions(
+			extension.GFM,
+			highlighting.NewHighlighting(
+				highlighting.WithStyle("dracula"),
+				highlighting.WithFormatOptions(),
+			),
+		),
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),

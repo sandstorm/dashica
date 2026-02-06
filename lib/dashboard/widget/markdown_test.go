@@ -52,12 +52,12 @@ func TestMarkdown_Content(t *testing.T) {
 			},
 		},
 		{
-			name: "Code blocks",
+			name: "Code blocks with syntax highlighting",
 			content: "```go\nfunc main() {}\n```",
 			expected: []string{
-				"<pre>",
+				"<pre",
 				"<code",
-				"func main",
+				"main", // The word "main" will be in the output even if styled
 			},
 		},
 	}
@@ -232,6 +232,66 @@ func TestMarkdown_HTMLUnsafe(t *testing.T) {
 
 	if !strings.Contains(output, "<strong>bold</strong>") {
 		t.Error("Expected raw HTML to be rendered, but it was escaped or removed")
+	}
+}
+
+func TestMarkdown_SyntaxHighlighting(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		language string
+	}{
+		{
+			name:     "Go code",
+			content:  "```go\npackage main\n\nfunc test() {}\n```",
+			language: "go",
+		},
+		{
+			name:     "SQL code",
+			content:  "```sql\nSELECT * FROM users WHERE id = 1;\n```",
+			language: "sql",
+		},
+		{
+			name:     "JavaScript code",
+			content:  "```javascript\nconst x = 42;\nconsole.log(x);\n```",
+			language: "javascript",
+		},
+		{
+			name:     "Bash code",
+			content:  "```bash\necho \"Hello World\"\n```",
+			language: "bash",
+		},
+	}
+
+	ctx := createTestContext()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			widget := NewMarkdown().Content(tt.content)
+
+			component, err := widget.BuildComponents(ctx)
+			if err != nil {
+				t.Fatalf("BuildComponents failed: %v", err)
+			}
+
+			var buf strings.Builder
+			err = component.Render(context.Background(), &buf)
+			if err != nil {
+				t.Fatalf("Render failed: %v", err)
+			}
+
+			output := buf.String()
+
+			// Verify that syntax highlighting is applied by checking for style attributes
+			if !strings.Contains(output, "style=") {
+				t.Errorf("Expected syntax highlighting (style attributes) in output for %s code", tt.language)
+			}
+
+			// Verify pre and code tags are present
+			if !strings.Contains(output, "<pre") || !strings.Contains(output, "<code") {
+				t.Error("Expected <pre> and <code> tags in output")
+			}
+		})
 	}
 }
 

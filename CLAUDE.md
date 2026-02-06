@@ -7,3 +7,7 @@
 # Tools
 
 - To run Golang compiler/interpreter etc, do `mise exec go -- go ...`
+
+# Golang Best Practices
+
+- Write Tests! according to Golang best practices
