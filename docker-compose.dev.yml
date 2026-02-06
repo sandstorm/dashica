@@ -1,0 +1,28 @@
+# Docker Compose for Dashica Dev Server
+# Provides a ready-to-use ClickHouse instance with sample data for widget examples
+
+services:
+  clickhouse:
+    image: "clickhouse/clickhouse-server:25.3.2"
+    container_name: dashica-dev-clickhouse
+    ulimits:
+      nofile: 262144
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_DB: default
+    ports:
+      - "8123:8123"  # HTTP interface (for web UI)
+      - "9000:9000"  # Native protocol (for Go client)
+    volumes:
+      - './docs/dev-server/data/init-scripts:/docker-entrypoint-initdb.d/'
+      - 'clickhouse-dev-data:/var/lib/clickhouse'
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  clickhouse-dev-data:
+    name: dashica-dev-clickhouse-data

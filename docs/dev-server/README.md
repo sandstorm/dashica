@@ -4,14 +4,44 @@ This is the self-hosted documentation and development environment for Dashica. I
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Using Docker Compose (Recommended)
 
-You'll need:
-1. Go 1.24 or later
-2. ClickHouse server running (for data examples)
-3. Configuration file
+The easiest way to get started with a ready-to-use ClickHouse instance:
 
-### Setup
+1. **Start ClickHouse with sample data**:
+
+```bash
+# From project root
+docker-compose -f docker-compose.dev.yml up -d
+
+# Wait for ClickHouse to be ready (about 10-30 seconds)
+docker-compose -f docker-compose.dev.yml logs -f clickhouse
+# Look for "Ready for connections"
+```
+
+2. **Create configuration file**:
+
+```bash
+cd docs/dev-server
+cp dashica_config.example.yaml dashica_config.yaml
+# No need to edit - default settings work with Docker setup!
+```
+
+3. **Run the dev server**:
+
+```bash
+go run main.go
+```
+
+4. **Open your browser**: http://127.0.0.1:8080/docs/intro
+
+That's it! ClickHouse is now running with sample data at:
+- HTTP Interface: http://localhost:8123/play
+- Native protocol: localhost:9000
+
+### Option 2: Using Your Own ClickHouse
+
+If you have an existing ClickHouse instance:
 
 1. **Create configuration file**:
 
@@ -20,9 +50,16 @@ cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
 ```
 
-Edit `dashica_config.yaml` with your ClickHouse connection details.
+2. **Edit `dashica_config.yaml`** with your ClickHouse connection details.
 
-2. **Run the dev server**:
+3. **Load sample data** (optional):
+
+```bash
+clickhouse-client < data/init-scripts/01_create_tables.sql
+clickhouse-client < data/init-scripts/02_populate_sample_data.sql
+```
+
+4. **Run the dev server**:
 
 ```bash
 go run main.go
@@ -33,8 +70,6 @@ Or with custom port:
 ```bash
 PORT=3000 go run main.go
 ```
-
-Then open your browser to: http://127.0.0.1:8080
 
 ### Running without ClickHouse
 
@@ -231,21 +266,96 @@ After modifying widgets or documentation:
 2. Or restart manually: `Ctrl+C` then `go run main.go`
 3. Refresh your browser
 
-## Troubleshooting
+## Managing Docker Setup
 
-### Port Already in Use
+### Stop ClickHouse
 
 ```bash
-# Use a different port
+docker-compose -f docker-compose.dev.yml stop
+```
+
+### Restart ClickHouse
+
+```bash
+docker-compose -f docker-compose.dev.yml restart
+```
+
+### Reset Database (Clear All Data)
+
+```bash
+# Stop and remove containers and volumes
+docker-compose -f docker-compose.dev.yml down -v
+
+# Start fresh (will re-run initialization scripts)
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+### View ClickHouse Logs
+
+```bash
+docker-compose -f docker-compose.dev.yml logs -f clickhouse
+```
+
+### Query the Database
+
+```bash
+# Using clickhouse-client in the container
+docker exec -it dashica-dev-clickhouse clickhouse-client
+
+# Example queries
+SELECT count() FROM http_logs;
+SELECT statusGroup, count() FROM http_logs GROUP BY statusGroup;
+```
+
+Or open the web UI: http://localhost:8123/play
+
+## Troubleshooting
+
+### Port Already in Use (Dev Server)
+
+```bash
+# Use a different port for the dev server
 PORT=3000 go run main.go
 ```
+
+### Port Already in Use (Docker)
+
+If ports 8123 or 9000 are already in use, edit `docker-compose.dev.yml`:
+
+```yaml
+ports:
+  - "18123:8123"  # Change to different port
+  - "19000:9000"  # Change to different port
+```
+
+Then update your `dashica_config.yaml` to match.
 
 ### ClickHouse Connection Errors
 
 Check that ClickHouse is running:
 
 ```bash
-clickhouse-client --host localhost --port 9000
+# Check container status
+docker-compose -f docker-compose.dev.yml ps
+
+# Check logs
+docker-compose -f docker-compose.dev.yml logs clickhouse
+
+# Test connection
+docker exec -it dashica-dev-clickhouse clickhouse-client --query "SELECT 1"
+```
+
+### Sample Data Not Loading
+
+If you don't see any data in the tables:
+
+```bash
+# Check if tables exist
+docker exec -it dashica-dev-clickhouse clickhouse-client --query "SHOW TABLES"
+
+# Reset and reload
+docker-compose -f docker-compose.dev.yml down -v
+docker-compose -f docker-compose.dev.yml up -d
 ```
 
 ### Module Not Found Errors

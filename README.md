@@ -1,5 +1,30 @@
 # Dashicy
 
+## 🚀 Quick Start: Dev Server
+
+The fastest way to explore Dashica's Go API and widget examples:
+
+```bash
+# 1. Start ClickHouse with sample data
+docker-compose -f docker-compose.dev.yml up -d
+
+# 2. Set up and run the dev server
+cd docs/dev-server
+cp dashica_config.example.yaml dashica_config.yaml
+go run main.go
+
+# 3. Open http://127.0.0.1:8080/docs/intro
+```
+
+The dev server includes:
+- 📚 Complete documentation and API reference
+- 🎨 Interactive widget examples (coming soon)
+- 🗄️ Pre-loaded sample data in ClickHouse
+- 🔄 Ready-to-use development environment
+
+See [docs/dev-server/README.md](docs/dev-server/README.md) for details.
+
+---
 
 # Development
 
