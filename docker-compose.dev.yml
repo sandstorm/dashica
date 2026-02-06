@@ -9,7 +9,7 @@ services:
       nofile: 262144
     environment:
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ""
+      CLICKHOUSE_PASSWORD: password
       CLICKHOUSE_DB: default
     ports:
       - "8123:8123"  # HTTP interface (for web UI)
