@@ -3,12 +3,13 @@ package docs
 import (
 	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
 func QuickStart() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DefaultPage).
+		WithLayout(layout.DocsPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("Quick Start Guide").
@@ -83,21 +84,82 @@ import (
 )
 
 // Create a time-series chart
-widget.NewTimeBar().
-    Title("Page Views").
-    Query(
-        sql.New().
-            From("analytics.page_views").
-            Select(
-                sql.Timestamp1Hour("timestamp", "hour"),
-                sql.Count("views"),
-            ).
-            Where("timestamp >= now() - INTERVAL 24 HOUR"),
-    ).
-    X("hour").
-    Y("views").
+widget.NewTimeBar(
+    sql.New(
+        sql.From("http_logs"),
+        sql.Select(sql.Timestamp15Min()),
+        sql.Select(sql.Count()),
+    ),
+).
+    Title("HTTP Requests Over Time").
+    X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
+    Y(sql.NewFieldAlias("cnt")).
     Height(300)
 ` + "```" + `
+
+### Live Example
+
+Here's the same chart with actual data from the dev server's ClickHouse:
+`),
+		).
+		Widget(
+			widget.NewTimeBar(
+				sql.New(
+					sql.From("http_logs"),
+					sql.Select(sql.Timestamp15Min()),
+					sql.Select(sql.Count()),
+				),
+			).
+				Title("HTTP Requests Over Time (Live Data)").
+				X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
+				Y(sql.NewFieldAlias("cnt")).
+				Height(300),
+		).
+		Widget(
+			widget.NewMarkdown().
+				Content(`
+
+## More Examples
+
+You can also group data by status codes:
+
+` + "```go" + `
+widget.NewTimeBar(
+    sql.New(
+        sql.From("http_logs"),
+        sql.Select(sql.Timestamp15Min()),
+        sql.Select(sql.Count()),
+        sql.Select(sql.Enum("statusGroup")),
+    ),
+).
+    Title("Requests by Status").
+    X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
+    Y(sql.NewFieldAlias("cnt")).
+    Fill(sql.NewFieldAlias("statusGroup")).
+    Height(300)
+` + "```" + `
+
+### Live Example
+`),
+		).
+		Widget(
+			widget.NewTimeBar(
+				sql.New(
+					sql.From("http_logs"),
+					sql.Select(sql.Timestamp15Min()),
+					sql.Select(sql.Count()),
+					sql.Select(sql.Enum("statusGroup")),
+				),
+			).
+				Title("Requests by Status (Live Data)").
+				X(sql.NewTimestampedFieldAlias("time", 15*60*1000)).
+				Y(sql.NewFieldAlias("cnt")).
+				Fill(sql.NewFieldAlias("statusGroup")).
+				Height(300),
+		).
+		Widget(
+			widget.NewMarkdown().
+				Content(`
 
 ## Configuration
 

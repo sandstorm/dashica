@@ -8,7 +8,7 @@ import (
 
 func WidgetsOverview() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DefaultPage).
+		WithLayout(layout.DocsPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("Widgets Overview").

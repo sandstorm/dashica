@@ -8,7 +8,7 @@ import (
 
 func Introduction() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DefaultPage).
+		WithLayout(layout.DocsPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("Welcome to Dashica").

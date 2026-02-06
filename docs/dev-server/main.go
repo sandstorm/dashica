@@ -20,6 +20,7 @@ func main() {
 
 	// Documentation section
 	d.RegisterDashboardGroup("📚 Documentation").
+		RegisterDashboard("/", docs.Introduction()).
 		RegisterDashboard("/docs/intro", docs.Introduction()).
 		RegisterDashboard("/docs/quickstart", docs.QuickStart()).
 		RegisterDashboard("/docs/widgets-overview", docs.WidgetsOverview())
