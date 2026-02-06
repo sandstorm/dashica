@@ -1,12 +1,14 @@
 package docs
 
 import (
+	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
 func QuickStart() dashboard.Dashboard {
 	return dashboard.New().
+		WithLayout(layout.DefaultPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("Quick Start Guide").

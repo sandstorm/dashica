@@ -13,27 +13,35 @@ The easiest way to get started with a ready-to-use ClickHouse instance:
 ```bash
 # From project root
 docker-compose -f docker-compose.dev.yml up -d
-
-# Wait for ClickHouse to be ready (about 10-30 seconds)
-docker-compose -f docker-compose.dev.yml logs -f clickhouse
-# Look for "Ready for connections"
 ```
 
-2. **Create configuration file**:
+2. **Build frontend assets**:
 
 ```bash
+# From project root
+npm install  # Only needed once
+npm run build
+```
+
+3. **Create configuration file**:
+
+```bash
+# From project root
 cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
 # No need to edit - default settings work with Docker setup!
 ```
 
-3. **Run the dev server**:
+4. **Run the dev server**:
 
 ```bash
+# From docs/dev-server directory
+mise exec go -- go run main.go
+# Or if you have Go installed:
 go run main.go
 ```
 
-4. **Open your browser**: http://127.0.0.1:8080/docs/intro
+5. **Open your browser**: http://127.0.0.1:8080/docs/intro
 
 That's it! ClickHouse is now running with sample data at:
 - HTTP Interface: http://localhost:8123/play

@@ -1,5 +1,9 @@
 {
   "name": "dashica",
+  "scripts": {
+    "build": "node build.js",
+    "build:watch": "node build.js --watch"
+  },
   "dependencies": {
     "@alpinejs/csp": "^3.15.5",
     "@alpinejs/intersect": "^3.15.5",
@@ -7,6 +11,7 @@
     "@observablehq/inputs": "^0.12.0",
     "@observablehq/plot": "^0.6.17",
     "@types/alpinejs": "^3.13.11",
+    "apache-arrow": "^21.1.0",
     "esbuild": "^0.27.2",
     "esbuild-plugin-tailwindcss": "^2.1.0",
     "flatpickr": "^4.6.13",

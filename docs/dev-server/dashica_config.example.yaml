@@ -5,21 +5,17 @@
 clickhouse:
   # Main ClickHouse connection for data queries
   default:
-    host: localhost
-    port: 9000
-    database: default
-    username: default
+    url: clickhouse://localhost:9000
+    user: default
     password: ""
-    tls: false
+    database: default
 
   # Storage for alert results (required even if not using alerts)
   alert_storage:
-    host: localhost
-    port: 9000
-    database: default
-    username: default
+    url: clickhouse://localhost:9000
+    user: default
     password: ""
-    tls: false
+    database: default
 
 # If using a remote or custom ClickHouse instance, update the settings above
 
@@ -28,8 +24,7 @@ log:
   file_name: /tmp/dashica-dev.log
   to_stdout: true  # Set to true for console output during development
 
-# Alert configuration (optional for dev server)
-alerts:
-  enabled: false
-  check_interval: 60s
-  base_url: http://127.0.0.1:8080
+# Alerting configuration (optional for dev server)
+alerting:
+  helvetikit_alerting_url: ""
+  helvetikit_id_group: ""
