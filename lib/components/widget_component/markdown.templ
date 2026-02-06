@@ -1,0 +1,12 @@
+package widget_component
+
+templ Markdown(title string, html string) {
+	<div class="markdown-widget">
+		if title != "" {
+			<h2 class="text-2xl font-bold mb-4">{ title }</h2>
+		}
+		<div class="prose prose-slate dark:prose-invert max-w-none">
+			@templ.Raw(html)
+		</div>
+	</div>
+}
