@@ -11,6 +11,118 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
+// Test constants
+const (
+	testTableName = "events"
+	testWhereClause = "timestamp > now() - INTERVAL 1 DAY"
+	sqlHeaderComment = `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten`
+)
+
+// Test helpers
+func newTestBaseQuery() *sql.SqlQuery {
+	return sql.New(
+		sql.From(testTableName),
+		sql.Where(testWhereClause),
+	)
+}
+
+func assertPropsEqual(t *testing.T, expected, actual map[string]interface{}) {
+	t.Helper()
+
+	// Check that all expected fields are present
+	for key, expectedValue := range expected {
+		actualValue, exists := actual[key]
+		if !exists {
+			t.Errorf("Expected key %q to be present in props", key)
+			continue
+		}
+
+		// Deep comparison for nested maps (color)
+		if expectedMap, ok := expectedValue.(map[string]interface{}); ok {
+			actualMap, ok := actualValue.(map[string]interface{})
+			if !ok {
+				t.Errorf("Expected %q to be a map, got %T", key, actualValue)
+				continue
+			}
+			assertNestedMapEqual(t, key, expectedMap, actualMap)
+		} else if actualValue != expectedValue {
+			t.Errorf("For %q: expected %v, got %v", key, expectedValue, actualValue)
+		}
+	}
+
+	// Check that no unexpected fields are present
+	for key := range actual {
+		if _, expected := expected[key]; !expected {
+			t.Errorf("Unexpected key %q in props with value %v", key, actual[key])
+		}
+	}
+}
+
+func assertNestedMapEqual(t *testing.T, parentKey string, expected, actual map[string]interface{}) {
+	t.Helper()
+
+	for subKey, subExpected := range expected {
+		actualSubValue := actual[subKey]
+
+		// Compare arrays
+		if expectedArray, ok := subExpected.([]interface{}); ok {
+			actualArray, ok := actualSubValue.([]interface{})
+			if !ok {
+				t.Errorf("For %q.%q: expected array, got %T", parentKey, subKey, actualSubValue)
+				continue
+			}
+			if len(actualArray) != len(expectedArray) {
+				t.Errorf("For %q.%q: expected array length %d, got %d", parentKey, subKey, len(expectedArray), len(actualArray))
+				continue
+			}
+			for i, expItem := range expectedArray {
+				if actualArray[i] != expItem {
+					t.Errorf("For %q.%q[%d]: expected %v, got %v", parentKey, subKey, i, expItem, actualArray[i])
+				}
+			}
+		} else if actualSubValue != subExpected {
+			t.Errorf("For %q.%q: expected %v, got %v", parentKey, subKey, subExpected, actualSubValue)
+		}
+	}
+}
+
+func diffStrings(expected, actual string) string {
+	expLines := strings.Split(expected, "\n")
+	actLines := strings.Split(actual, "\n")
+
+	var diff strings.Builder
+	maxLines := len(expLines)
+	if len(actLines) > maxLines {
+		maxLines = len(actLines)
+	}
+
+	for i := 0; i < maxLines; i++ {
+		var expLine, actLine string
+		if i < len(expLines) {
+			expLine = expLines[i]
+		}
+		if i < len(actLines) {
+			actLine = actLines[i]
+		}
+
+		if expLine != actLine {
+			diff.WriteString(fmt.Sprintf("Line %d:\n", i+1))
+			diff.WriteString(fmt.Sprintf("  - %s\n", expLine))
+			diff.WriteString(fmt.Sprintf("  + %s\n", actLine))
+		}
+	}
+
+	if diff.Len() == 0 {
+		return "(strings are equal)"
+	}
+	return diff.String()
+}
+
+func buildExpectedSQL(body string) string {
+	return sqlHeaderComment + "\n" + body
+}
+
 func TestBarVertical_BuildChartProps(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -191,55 +303,7 @@ func TestBarVertical_BuildChartProps(t *testing.T) {
 				t.Fatalf("Failed to unmarshal props: %v", err)
 			}
 
-			// Check that all expected fields are present
-			for key, expectedValue := range tt.expected {
-				actualValue, exists := actualProps[key]
-				if !exists {
-					t.Errorf("Expected key %q to be present in props", key)
-					continue
-				}
-
-				// Deep comparison for nested maps (color)
-				if expectedMap, ok := expectedValue.(map[string]interface{}); ok {
-					actualMap, ok := actualValue.(map[string]interface{})
-					if !ok {
-						t.Errorf("Expected %q to be a map, got %T", key, actualValue)
-						continue
-					}
-					for subKey, subExpected := range expectedMap {
-						actualSubValue := actualMap[subKey]
-
-						// Compare arrays
-						if expectedArray, ok := subExpected.([]interface{}); ok {
-							actualArray, ok := actualSubValue.([]interface{})
-							if !ok {
-								t.Errorf("For %q.%q: expected array, got %T", key, subKey, actualSubValue)
-								continue
-							}
-							if len(actualArray) != len(expectedArray) {
-								t.Errorf("For %q.%q: expected array length %d, got %d", key, subKey, len(expectedArray), len(actualArray))
-								continue
-							}
-							for i, expItem := range expectedArray {
-								if actualArray[i] != expItem {
-									t.Errorf("For %q.%q[%d]: expected %v, got %v", key, subKey, i, expItem, actualArray[i])
-								}
-							}
-						} else if actualSubValue != subExpected {
-							t.Errorf("For %q.%q: expected %v, got %v", key, subKey, subExpected, actualSubValue)
-						}
-					}
-				} else if actualValue != expectedValue {
-					t.Errorf("For %q: expected %v, got %v", key, expectedValue, actualValue)
-				}
-			}
-
-			// Check that no unexpected fields are present (except color which can have defaults)
-			for key := range actualProps {
-				if _, expected := tt.expected[key]; !expected {
-					t.Errorf("Unexpected key %q in props with value %v", key, actualProps[key])
-				}
-			}
+			assertPropsEqual(t, tt.expected, actualProps)
 		})
 	}
 }
@@ -256,9 +320,7 @@ func TestBarVertical_SQLGeneration(t *testing.T) {
 				return b.X(sql.Field("category")).
 					Y(sql.Count())
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     category,
     count(*) AS cnt
 FROM
@@ -266,7 +328,7 @@ FROM
 WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
-    category;`,
+    category;`),
 		},
 		{
 			name: "With fill field",
@@ -275,9 +337,7 @@ GROUP BY
 					Y(sql.Count()).
 					Fill(sql.Field("status"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     status,
     date,
     count(*) AS cnt
@@ -287,7 +347,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     date,
-    status;`,
+    status;`),
 		},
 		{
 			name: "With fx field",
@@ -296,9 +356,7 @@ GROUP BY
 					Y(sql.Count()).
 					Fx(sql.Field("region"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     region,
     hour,
     count(*) AS cnt
@@ -308,7 +366,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     hour,
-    region;`,
+    region;`),
 		},
 		{
 			name: "With fy field",
@@ -317,9 +375,7 @@ GROUP BY
 					Y(sql.Count()).
 					Fy(sql.Field("category"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     category,
     day,
     count(*) AS cnt
@@ -329,7 +385,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     day,
-    category;`,
+    category;`),
 		},
 		{
 			name: "With fill and fx",
@@ -339,9 +395,7 @@ GROUP BY
 					Fill(sql.Field("product")).
 					Fx(sql.Field("region"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     region,
     product,
     month,
@@ -353,7 +407,7 @@ WHERE
 GROUP BY
     month,
     product,
-    region;`,
+    region;`),
 		},
 		{
 			name: "With fill and fy",
@@ -363,9 +417,7 @@ GROUP BY
 					Fill(sql.Field("status")).
 					Fy(sql.Field("team"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     team,
     status,
     week,
@@ -377,7 +429,7 @@ WHERE
 GROUP BY
     week,
     status,
-    team;`,
+    team;`),
 		},
 		{
 			name: "With fx and fy",
@@ -387,9 +439,7 @@ GROUP BY
 					Fx(sql.Field("region")).
 					Fy(sql.Field("category"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     category,
     region,
     day,
@@ -401,7 +451,7 @@ WHERE
 GROUP BY
     day,
     region,
-    category;`,
+    category;`),
 		},
 		{
 			name: "With all optional fields (fill, fx, fy)",
@@ -412,9 +462,7 @@ GROUP BY
 					Fx(sql.Field("region")).
 					Fy(sql.Field("year"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     year,
     region,
     product,
@@ -428,7 +476,7 @@ GROUP BY
     month,
     product,
     region,
-    year;`,
+    year;`),
 		},
 		{
 			name: "With custom field definitions and aliases",
@@ -436,9 +484,7 @@ GROUP BY
 				return b.X(sql.Field("toStartOfDay(timestamp)").WithAlias("day")).
 					Y(sql.Field("sum(revenue)").WithAlias("total_revenue"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     toStartOfDay(timestamp) AS day,
     sum(revenue) AS total_revenue
 FROM
@@ -446,7 +492,7 @@ FROM
 WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
-    day;`,
+    day;`),
 		},
 		{
 			name: "Complex aggregation with fill and custom fields",
@@ -455,9 +501,7 @@ GROUP BY
 					Y(sql.Field("avg(duration)").WithAlias("avg_duration")).
 					Fill(sql.Enum("status"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     status::String AS status,
     toStartOfHour(timestamp) AS hour,
     avg(duration) AS avg_duration
@@ -467,20 +511,15 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     hour,
-    status;`,
+    status;`),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			baseQuery := sql.New(
-				sql.From("events"),
-				sql.Where("timestamp > now() - INTERVAL 1 DAY"),
-			)
-			widget := NewBarVertical(baseQuery)
+			widget := NewBarVertical(newTestBaseQuery())
 			widget = tt.setup(widget)
 
-			// Build the query using the actual implementation
 			query := widget.buildQuery()
 			actualSQL := query.Build()
 
@@ -492,39 +531,6 @@ GROUP BY
 			}
 		})
 	}
-}
-
-// diffStrings provides a simple line-by-line diff for better error messages
-func diffStrings(expected, actual string) string {
-	expLines := strings.Split(expected, "\n")
-	actLines := strings.Split(actual, "\n")
-
-	var diff strings.Builder
-	maxLines := len(expLines)
-	if len(actLines) > maxLines {
-		maxLines = len(actLines)
-	}
-
-	for i := 0; i < maxLines; i++ {
-		var expLine, actLine string
-		if i < len(expLines) {
-			expLine = expLines[i]
-		}
-		if i < len(actLines) {
-			actLine = actLines[i]
-		}
-
-		if expLine != actLine {
-			diff.WriteString(fmt.Sprintf("Line %d:\n", i+1))
-			diff.WriteString(fmt.Sprintf("  - %s\n", expLine))
-			diff.WriteString(fmt.Sprintf("  + %s\n", actLine))
-		}
-	}
-
-	if diff.Len() == 0 {
-		return "(strings are equal)"
-	}
-	return diff.String()
 }
 
 func TestBarVertical_SQLGeneration_WithAdjustQuery(t *testing.T) {
@@ -540,9 +546,7 @@ func TestBarVertical_SQLGeneration_WithAdjustQuery(t *testing.T) {
 					Y(sql.Count()).
 					AdjustQuery(sql.Where("status = 'active'"))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     category,
     count(*) AS cnt
 FROM
@@ -551,7 +555,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
     AND status = 'active'
 GROUP BY
-    category;`,
+    category;`),
 		},
 		{
 			name: "AdjustQuery adds multiple WHERE clauses",
@@ -563,9 +567,7 @@ GROUP BY
 						sql.Where("priority > 5"),
 					)
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     day,
     count(*) AS cnt
 FROM
@@ -575,7 +577,7 @@ WHERE
     AND status = 'completed'
     AND priority > 5
 GROUP BY
-    day;`,
+    day;`),
 		},
 		{
 			name: "AdjustQuery adds ORDER BY",
@@ -584,9 +586,7 @@ GROUP BY
 					Y(sql.Count()).
 					AdjustQuery(sql.OrderBy(sql.Count()))
 			},
-			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten
-SELECT
+			expectedSQL: buildExpectedSQL(`SELECT
     product,
     count(*) AS cnt
 FROM
@@ -596,20 +596,15 @@ WHERE
 GROUP BY
     product
 ORDER BY
-    cnt;`,
+    cnt;`),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			baseQuery := sql.New(
-				sql.From("events"),
-				sql.Where("timestamp > now() - INTERVAL 1 DAY"),
-			)
-			widget := NewBarVertical(baseQuery)
+			widget := NewBarVertical(newTestBaseQuery())
 			widget = tt.setup(widget)
 
-			// Build the query using the actual implementation
 			query := widget.buildQuery()
 			actualSQL := query.Build()
 
@@ -662,7 +657,7 @@ func TestBarVertical_Immutability(t *testing.T) {
 }
 
 func TestBarVertical_BuildComponents(t *testing.T) {
-	baseQuery := sql.New(sql.From("events"))
+	baseQuery := sql.New(sql.From(testTableName))
 	widget := NewBarVertical(baseQuery).
 		X(sql.Field("category")).
 		Y(sql.Count()).
@@ -684,7 +679,7 @@ func TestBarVertical_BuildComponents(t *testing.T) {
 }
 
 func TestBarVertical_BuildComponents_AutoGeneratesId(t *testing.T) {
-	baseQuery := sql.New(sql.From("events"))
+	baseQuery := sql.New(sql.From(testTableName))
 	widget := NewBarVertical(baseQuery).
 		X(sql.Field("category")).
 		Y(sql.Count())
@@ -708,4 +703,3 @@ func TestBarVertical_BuildComponents_AutoGeneratesId(t *testing.T) {
 		t.Error("Expected widget.id to be auto-generated, but it was empty")
 	}
 }
-
