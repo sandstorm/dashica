@@ -151,6 +151,59 @@ widget.NewTimeBar(
 			widget.NewMarkdown().
 				Content(`
 
+## Displaying Data in Tables
+
+For exploring raw data, use the AutoTable widget with interactive features:
+
+` + "```go" + `
+widget.NewAutoTable(
+    sql.New(
+        sql.From("http_logs"),
+        sql.Limit(100),
+    ),
+).
+    Title("Recent HTTP Requests").
+    Height(400)
+` + "```" + `
+
+The AutoTable widget provides:
+- **Fulltext search** across all columns
+- **Right-click context menu** for filtering (equals, not equals, contains)
+- **Timestamp filtering** with time-range options (±5 min, ±1 hour, ±24 hours)
+- **Row selection** with detailed view panel
+- **Column reordering** and auto-sizing
+- **Multi-record comparison** in side-by-side cards
+
+### Live Example
+`),
+		).
+		Widget(
+			widget.NewAutoTable(
+				sql.New(
+					sql.From("http_logs"),
+					sql.Limit(100),
+				),
+			).
+				Title("Recent HTTP Requests").
+				Height(400),
+		).
+		Widget(
+			widget.NewMarkdown().
+				Content(`
+
+Try these interactive features:
+1. **Search**: Type in the search box to filter across all columns
+2. **Context menu**: Right-click any cell to add filters (e.g., filter by specific hostname or status)
+3. **Timestamp filters**: Right-click a timestamp to filter by time range
+4. **Row details**: Click row checkboxes to view detailed record information in the bottom panel
+5. **Column management**: Right-click column headers to auto-size columns or reorder by dragging
+
+`),
+		).
+		Widget(
+			widget.NewMarkdown().
+				Content(`
+
 ## Configuration
 
 Configure ClickHouse connection via environment variables:
