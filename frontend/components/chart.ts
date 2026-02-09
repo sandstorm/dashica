@@ -6,6 +6,7 @@ import {barHorizontal} from '../chart/barHorizontal'
 import {timeHeatmap} from '../chart/timeHeatmap'
 import {timeHeatmapOrdinal} from '../chart/timeHeatmapOrdinal'
 import {stats} from '../chart/stats'
+import {table} from '../chart/table'
 import {query} from "./util/clickhouse-new";
 
 const charts = {
@@ -14,7 +15,8 @@ const charts = {
     barHorizontal,
     timeHeatmap,
     timeHeatmapOrdinal,
-    stats
+    stats,
+    table,
 }
 
 Alpine.data('chart', () => ({
@@ -40,7 +42,7 @@ Alpine.data('chart', () => ({
             try {
                 this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
             } catch (e) {
-                this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message}</b>`;
+                this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message} (chart type: ${chartType})</b>`;
                 throw e
             }
         });
@@ -54,7 +56,7 @@ Alpine.data('chart', () => ({
                     this.$refs.chartContainer.appendChild(chart);
                 }
             } catch (e) {
-                this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message}</b>`;
+                this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message} (chart type: ${chartType})</b>`;
                 throw e
             }
         })
