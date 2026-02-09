@@ -136,11 +136,7 @@ func (h *TimeHeatmap) buildChartProps() map[string]interface{} {
 	return props
 }
 
-func (h *TimeHeatmap) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(h.id) == 0 {
-		h.id = ctx.NextWidgetId()
-	}
-
+func (h *TimeHeatmap) buildQuery() sql.SqlQueryable {
 	// Build the SQL query
 	query := h.sql.With(
 		sql.PrependSelect(h.x),
@@ -156,6 +152,16 @@ func (h *TimeHeatmap) CollectHandlers(ctx *rendering.DashboardContext, registerH
 			sql.Select(*h.fill),
 		)
 	}
+
+	return query
+}
+
+func (h *TimeHeatmap) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+	if len(h.id) == 0 {
+		h.id = ctx.NextWidgetId()
+	}
+
+	query := h.buildQuery()
 
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,
