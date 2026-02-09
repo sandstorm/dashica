@@ -15,3 +15,4 @@
 # Golang Best Practices
 
 - Write Tests! according to Golang best practices
+    - NEVER copy production logic into tests; to ensure the tests stay representative to the real world.
