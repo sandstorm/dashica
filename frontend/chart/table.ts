@@ -98,7 +98,8 @@ export function table(queryResult: any, extProps: any) {
     const state = Alpine.reactive({
         searchTerm: '',
         selectedRecords: [] as Record<string, any>[],
-        detailsHtml: ''
+        detailsHtml: '',
+        panelFullscreen: false
     });
 
     // Auto-update details HTML when selection changes
@@ -189,13 +190,18 @@ export function table(queryResult: any, extProps: any) {
     // Build columns with timestamp formatting
     const columns: ColumnDefinition[] = [];
     queryResult?.schema?.fields?.forEach((field: any) => {
-        if (DataType.isTimestamp(field)) {
+        const isTimestamp = DataType.isTimestamp(field) || field.name === 'timestamp';
+
+        if (isTimestamp) {
             columns.push({
                 title: field.name,
                 field: field.name,
                 formatter: (cell: CellComponent) => {
                     const value = cell.getValue();
-                    const dt = new Date(value);
+                    // ClickHouse DateTime is in seconds, JS Date expects milliseconds
+                    // If value is a small number (< 10 billion), it's likely in seconds
+                    const timestamp = value < 10000000000 ? value * 1000 : value;
+                    const dt = new Date(timestamp);
                     const time = dt.toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -274,9 +280,12 @@ export function table(queryResult: any, extProps: any) {
             resizable: false,
             frozen: true,
             headerHozAlign: "center",
-            hozAlign: "center"
+            hozAlign: "center",
+            headerFilter: false // No filter in the checkbox column
         },
         columnDefaults: {
+            headerFilter: "input", // Add filter input to all column headers
+            headerFilterPlaceholder: "Filter...",
             tooltip: function(e, cell, onRendered) {
                 if (!cell.getValue()) {
                     return "";
@@ -309,23 +318,80 @@ export function table(queryResult: any, extProps: any) {
         state.selectedRecords = data;
     });
 
-    // Create record details panel
+    // Create record details panel with header
     const detailsPanel = document.createElement('div');
     detailsPanel.classList.add('record-details-panel');
-    detailsPanel.style.display = 'none';
+
+    // Panel header with controls
+    const panelHeader = document.createElement('div');
+    panelHeader.classList.add('record-details-header');
+    panelHeader.innerHTML = `
+        <div class="flex items-center justify-between p-2 border-b border-base-300 bg-base-200">
+            <span class="font-semibold text-sm"><span class="selected-count">0</span> record(s) selected</span>
+            <div class="flex gap-2">
+                <button class="btn btn-xs btn-ghost fullscreen-btn" title="Toggle fullscreen">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                    </svg>
+                </button>
+                <button class="btn btn-xs btn-ghost close-btn" title="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
 
     const detailsContainer = document.createElement('div');
     detailsContainer.classList.add('recordDetails');
 
+    detailsPanel.appendChild(panelHeader);
     detailsPanel.appendChild(detailsContainer);
 
-    // Auto-update panel visibility and content
+    // Setup button handlers
+    const fullscreenBtn = panelHeader.querySelector('.fullscreen-btn') as HTMLButtonElement;
+    const closeBtn = panelHeader.querySelector('.close-btn') as HTMLButtonElement;
+    const selectedCountSpan = panelHeader.querySelector('.selected-count') as HTMLSpanElement;
+
+    fullscreenBtn.addEventListener('click', () => {
+        state.panelFullscreen = !state.panelFullscreen;
+    });
+
+    closeBtn.addEventListener('click', () => {
+        // Deselect all rows
+        tabulatorTable.deselectRow();
+    });
+
+    // Auto-update panel visibility, content, and fullscreen state
     Alpine.effect(() => {
-        if (state.selectedRecords.length > 0) {
-            detailsPanel.style.display = 'block';
+        const hasSelection = state.selectedRecords.length > 0;
+
+        // Update selected count
+        selectedCountSpan.textContent = state.selectedRecords.length.toString();
+
+        // Toggle panel visibility with animation
+        if (hasSelection) {
+            detailsPanel.classList.remove('hidden');
+            // Force reflow to enable CSS transition
+            void detailsPanel.offsetHeight;
+            detailsPanel.classList.add('open');
             detailsContainer.innerHTML = state.detailsHtml;
         } else {
-            detailsPanel.style.display = 'none';
+            detailsPanel.classList.remove('open');
+            // Wait for animation before hiding
+            setTimeout(() => {
+                if (state.selectedRecords.length === 0) {
+                    detailsPanel.classList.add('hidden');
+                }
+            }, 300);
+        }
+
+        // Toggle fullscreen class
+        if (state.panelFullscreen) {
+            detailsPanel.classList.add('fullscreen');
+        } else {
+            detailsPanel.classList.remove('fullscreen');
         }
     });
 

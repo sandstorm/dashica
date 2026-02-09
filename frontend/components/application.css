@@ -45,8 +45,29 @@
     background: white;
     border-top: 1px solid #ddd;
     box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-    padding: 1rem;
     z-index: 10;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out;
+}
+
+.record-details-panel.hidden {
+    display: none;
+}
+
+.record-details-panel.open {
+    transform: translateY(0);
+}
+
+.record-details-panel.fullscreen {
+    max-height: calc(100vh - 60px); /* Leave space for header */
+    top: 60px;
+    bottom: 0;
+}
+
+.record-details-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 
 @media (prefers-color-scheme: dark) {
