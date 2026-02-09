@@ -191,11 +191,7 @@ func (b *TimeBar) buildChartProps() map[string]interface{} {
 	return props
 }
 
-func (b *TimeBar) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
+func (b *TimeBar) buildQuery() sql.SqlQueryable {
 	// Build the SQL query
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
@@ -223,6 +219,16 @@ func (b *TimeBar) CollectHandlers(ctx *rendering.DashboardContext, registerHandl
 			sql.GroupBy(*b.fy),
 		)
 	}
+
+	return query
+}
+
+func (b *TimeBar) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+	if len(b.id) == 0 {
+		b.id = ctx.NextWidgetId()
+	}
+
+	query := b.buildQuery()
 
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,
