@@ -153,20 +153,19 @@ widget.NewTimeBar(
 
 ## Displaying Data in Tables
 
-For exploring raw data, use the AutoTable widget with interactive features:
+For exploring raw data, use the Table widget with interactive features:
 
 ` + "```go" + `
-widget.NewAutoTable(
+widget.NewTable(
     sql.New(
         sql.From("http_logs"),
-        sql.Limit(100),
     ),
 ).
     Title("Recent HTTP Requests").
     Height(400)
 ` + "```" + `
 
-The AutoTable widget provides:
+The Table widget provides:
 - **Fulltext search** across all columns
 - **Right-click context menu** for filtering (equals, not equals, contains)
 - **Timestamp filtering** with time-range options (±5 min, ±1 hour, ±24 hours)
@@ -178,10 +177,9 @@ The AutoTable widget provides:
 `),
 		).
 		Widget(
-			widget.NewAutoTable(
+			widget.NewTable(
 				sql.New(
 					sql.From("http_logs"),
-					sql.Limit(100),
 				),
 			).
 				Title("Recent HTTP Requests").
