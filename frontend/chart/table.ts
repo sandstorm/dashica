@@ -85,11 +85,14 @@ function renderRecordDetails(records: Record<string, any>[]): string {
     }).join('');
 }
 
-export function table(origDataForSchema: any, data: any, extProps: any) {
-    console.log("AUTOTABLE2");
+export function table(queryResult: any, extProps: any) {
+    console.log("AUTOTABLE2", {queryResult, extProps});
     const props = Object.assign({}, extProps);
     props.format = props.format || {};
     props.width = props.width || {};
+
+    // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
+    const data = queryResult.toArray().map((row: any) => row.toJSON());
 
     // Create reactive state for search and selection
     const state = Alpine.reactive({
@@ -185,7 +188,7 @@ export function table(origDataForSchema: any, data: any, extProps: any) {
 
     // Build columns with timestamp formatting
     const columns: ColumnDefinition[] = [];
-    origDataForSchema?.schema?.fields?.forEach((field: any) => {
+    queryResult?.schema?.fields?.forEach((field: any) => {
         if (DataType.isTimestamp(field)) {
             columns.push({
                 title: field.name,
