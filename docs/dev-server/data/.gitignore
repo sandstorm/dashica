@@ -1,0 +1,14 @@
+# Ignore custom data files
+*.csv
+*.tsv
+*.parquet
+*.json
+*.xml
+
+# Keep the init-scripts directory
+!init-scripts/
+!init-scripts/*.sql
+
+# Keep documentation
+!README.md
+!.gitignore

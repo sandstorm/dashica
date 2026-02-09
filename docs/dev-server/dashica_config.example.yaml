@@ -1,0 +1,30 @@
+# Example Dashica Configuration for Dev Server
+# Copy this to dashica_config.yaml and adjust values for your environment
+
+# For Docker Compose setup (docker-compose.dev.yml), use these settings:
+clickhouse:
+  # Main ClickHouse connection for data queries
+  default:
+    url: http://localhost:8123
+    user: default
+    password: password
+    database: default
+
+  # Storage for alert results (required even if not using alerts)
+  alert_storage:
+    url: http://localhost:8123
+    user: default
+    password: password
+    database: default
+
+# If using a remote or custom ClickHouse instance, update the settings above
+
+# Logging configuration
+log:
+  file_name: /tmp/dashica-dev.log
+  to_stdout: true  # Set to true for console output during development
+
+# Alerting configuration (optional for dev server)
+alerting:
+  helvetikit_alerting_url: ""
+  helvetikit_id_group: ""

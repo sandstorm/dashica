@@ -1,0 +1,39 @@
+package layout
+
+import (
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+)
+
+// DocsApplication renders the application without the search/filter bar for documentation pages
+templ DocsApplication(renderingContext rendering.DashboardContext, content templ.Component) {
+    <div class="application">
+        <aside class="application__sidebar">
+            @PageMenu(renderingContext)
+        </aside>
+        <main class="application__main">
+            <div class="application__content prose max-w-none">
+                @content
+            </div>
+        </main>
+    </div>
+}
+
+// DocsPage is a layout for documentation pages without search/filter functionality
+templ DocsPage(renderingContext rendering.DashboardContext, filterButtons []rendering.FilterButton, content templ.Component) {
+	<html>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Dashica</title>
+			<link rel="stylesheet" href="/public/dist/index.css"/>
+			<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon/apple-touch-icon.png"/>
+			<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon/favicon-32x32.png"/>
+			<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon/favicon-16x16.png"/>
+			<script src="/public/dist/index.js"></script>
+		</head>
+		<body class="bg-base-200">
+			@DocsApplication(renderingContext, content)
+			<script>window.Alpine.start();</script>
+		</body>
+	</html>
+}

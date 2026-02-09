@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Extra wrapper for golang scripting which passes the current WorkingDir to the script
+#MISE tools={watchexec="latest"}
+
+mise watch \
+  --watch frontend/ \
+  --watch lib/ \
+  --watch docs/dev-server/**/*.go \
+  --on-busy-update restart \
+  --stop-signal kill \
+  build

@@ -6,3 +6,7 @@ node_modules
 /server/npm
 /lib/components/**/*_templ.go
 /public/dist/
+/dashica-src/public/dist/index.css
+/docs/dev-server/dashica-src/public/dist/index.css
+/dashica-src/public/dist/index.js
+/docs/dev-server/dashica-src/public/dist/index.js

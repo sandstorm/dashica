@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+node frontendBuild.mjs
+go generate ./...
+
+pushd docs/dev-server
+go build main.go
+./main
+popd
