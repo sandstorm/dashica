@@ -11,10 +11,8 @@ import (
 
 // Test constants
 const (
-	timeBarTestTableName    = "events"
-	timeBarTestWhereClause  = "timestamp > now() - INTERVAL 1 DAY"
-	timeBarSQLHeaderComment = `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten`
+	timeBarTestTableName   = "events"
+	timeBarTestWhereClause = "timestamp > now() - INTERVAL 1 DAY"
 )
 
 // Test helpers
@@ -23,10 +21,6 @@ func newTimeBarTestBaseQuery() *sql.SqlQuery {
 		sql.From(timeBarTestTableName),
 		sql.Where(timeBarTestWhereClause),
 	)
-}
-
-func buildTimeBarExpectedSQL(body string) string {
-	return timeBarSQLHeaderComment + "\n" + body
 }
 
 func TestTimeBar_BuildChartProps(t *testing.T) {
@@ -234,7 +228,9 @@ func TestTimeBar_SQLGeneration(t *testing.T) {
 				return b.X(sql.Timestamp15Min()).
 					Y(sql.Count())
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     count(*) AS cnt
 FROM
@@ -244,7 +240,7 @@ WHERE
 GROUP BY
     time
 ORDER BY
-    time;`),
+    time;`,
 		},
 		{
 			name: "With fill field",
@@ -253,7 +249,9 @@ ORDER BY
 					Y(sql.Count()).
 					Fill(sql.Field("status"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     status,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     count(*) AS cnt
@@ -266,7 +264,7 @@ GROUP BY
     status
 ORDER BY
     time,
-    status;`),
+    status;`,
 		},
 		{
 			name: "With fx field",
@@ -275,7 +273,9 @@ ORDER BY
 					Y(sql.Count()).
 					Fx(sql.Field("region"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     region,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     count(*) AS cnt
@@ -287,7 +287,7 @@ GROUP BY
     time,
     region
 ORDER BY
-    time;`),
+    time;`,
 		},
 		{
 			name: "With fy field",
@@ -296,7 +296,9 @@ ORDER BY
 					Y(sql.Count()).
 					Fy(sql.Field("category"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     category,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     count(*) AS cnt
@@ -308,7 +310,7 @@ GROUP BY
     time,
     category
 ORDER BY
-    time;`),
+    time;`,
 		},
 		{
 			name: "With fill and fx",
@@ -318,7 +320,9 @@ ORDER BY
 					Fill(sql.Field("product")).
 					Fx(sql.Field("region"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     region,
     product,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
@@ -333,7 +337,7 @@ GROUP BY
     region
 ORDER BY
     time,
-    product;`),
+    product;`,
 		},
 		{
 			name: "With fill and fy",
@@ -343,7 +347,9 @@ ORDER BY
 					Fill(sql.Field("status")).
 					Fy(sql.Field("team"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     team,
     status,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
@@ -358,7 +364,7 @@ GROUP BY
     team
 ORDER BY
     time,
-    status;`),
+    status;`,
 		},
 		{
 			name: "With fx and fy",
@@ -368,7 +374,9 @@ ORDER BY
 					Fx(sql.Field("region")).
 					Fy(sql.Field("category"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     category,
     region,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
@@ -382,7 +390,7 @@ GROUP BY
     region,
     category
 ORDER BY
-    time;`),
+    time;`,
 		},
 		{
 			name: "With all optional fields (fill, fx, fy)",
@@ -393,7 +401,9 @@ ORDER BY
 					Fx(sql.Field("region")).
 					Fy(sql.Field("year"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     year,
     region,
     product,
@@ -410,7 +420,7 @@ GROUP BY
     year
 ORDER BY
     time,
-    product;`),
+    product;`,
 		},
 		{
 			name: "With custom timestamped field",
@@ -418,7 +428,9 @@ ORDER BY
 				return b.X(sql.NewTimestampedFieldAlias("hour_bucket", 3600000)).
 					Y(sql.Field("sum(revenue)").WithAlias("total_revenue"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     hour_bucket,
     sum(revenue) AS total_revenue
 FROM
@@ -428,7 +440,7 @@ WHERE
 GROUP BY
     hour_bucket
 ORDER BY
-    hour_bucket;`),
+    hour_bucket;`,
 		},
 		{
 			name: "Complex aggregation with fill and custom fields",
@@ -437,7 +449,9 @@ ORDER BY
 					Y(sql.Field("avg(duration)").WithAlias("avg_duration")).
 					Fill(sql.Enum("status"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     status::String AS status,
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     avg(duration) AS avg_duration
@@ -450,7 +464,7 @@ GROUP BY
     status
 ORDER BY
     time,
-    status;`),
+    status;`,
 		},
 	}
 
@@ -485,7 +499,9 @@ func TestTimeBar_SQLGeneration_WithAdjustQuery(t *testing.T) {
 					Y(sql.Count()).
 					AdjustQuery(sql.Where("status = 'active'"))
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     count(*) AS cnt
 FROM
@@ -496,7 +512,7 @@ WHERE
 GROUP BY
     time
 ORDER BY
-    time;`),
+    time;`,
 		},
 		{
 			name: "AdjustQuery adds multiple WHERE clauses",
@@ -508,7 +524,9 @@ ORDER BY
 						sql.Where("priority > 5"),
 					)
 			},
-			expectedSQL: buildTimeBarExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     toStartOfFifteenMinutes(timestamp)::DateTime64 AS time,
     count(*) AS cnt
 FROM
@@ -520,7 +538,7 @@ WHERE
 GROUP BY
     time
 ORDER BY
-    time;`),
+    time;`,
 		},
 	}
 

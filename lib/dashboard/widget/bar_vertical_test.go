@@ -13,10 +13,8 @@ import (
 
 // Test constants
 const (
-	testTableName = "events"
+	testTableName   = "events"
 	testWhereClause = "timestamp > now() - INTERVAL 1 DAY"
-	sqlHeaderComment = `-- WARNING: This is an auto-generated query file, generated from TODO.
--- DO NOT MODIFY MANUALLY; as changes will be overwritten`
 )
 
 // Test helpers
@@ -117,10 +115,6 @@ func diffStrings(expected, actual string) string {
 		return "(strings are equal)"
 	}
 	return diff.String()
-}
-
-func buildExpectedSQL(body string) string {
-	return sqlHeaderComment + "\n" + body
 }
 
 func TestBarVertical_BuildChartProps(t *testing.T) {
@@ -320,7 +314,9 @@ func TestBarVertical_SQLGeneration(t *testing.T) {
 				return b.X(sql.Field("category")).
 					Y(sql.Count())
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     category,
     count(*) AS cnt
 FROM
@@ -328,7 +324,7 @@ FROM
 WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
-    category;`),
+    category;`,
 		},
 		{
 			name: "With fill field",
@@ -337,7 +333,9 @@ GROUP BY
 					Y(sql.Count()).
 					Fill(sql.Field("status"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     status,
     date,
     count(*) AS cnt
@@ -347,7 +345,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     date,
-    status;`),
+    status;`,
 		},
 		{
 			name: "With fx field",
@@ -356,7 +354,9 @@ GROUP BY
 					Y(sql.Count()).
 					Fx(sql.Field("region"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     region,
     hour,
     count(*) AS cnt
@@ -366,7 +366,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     hour,
-    region;`),
+    region;`,
 		},
 		{
 			name: "With fy field",
@@ -375,7 +375,9 @@ GROUP BY
 					Y(sql.Count()).
 					Fy(sql.Field("category"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     category,
     day,
     count(*) AS cnt
@@ -385,7 +387,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     day,
-    category;`),
+    category;`,
 		},
 		{
 			name: "With fill and fx",
@@ -395,7 +397,9 @@ GROUP BY
 					Fill(sql.Field("product")).
 					Fx(sql.Field("region"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     region,
     product,
     month,
@@ -407,7 +411,7 @@ WHERE
 GROUP BY
     month,
     product,
-    region;`),
+    region;`,
 		},
 		{
 			name: "With fill and fy",
@@ -417,7 +421,9 @@ GROUP BY
 					Fill(sql.Field("status")).
 					Fy(sql.Field("team"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     team,
     status,
     week,
@@ -429,7 +435,7 @@ WHERE
 GROUP BY
     week,
     status,
-    team;`),
+    team;`,
 		},
 		{
 			name: "With fx and fy",
@@ -439,7 +445,9 @@ GROUP BY
 					Fx(sql.Field("region")).
 					Fy(sql.Field("category"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     category,
     region,
     day,
@@ -451,7 +459,7 @@ WHERE
 GROUP BY
     day,
     region,
-    category;`),
+    category;`,
 		},
 		{
 			name: "With all optional fields (fill, fx, fy)",
@@ -462,7 +470,9 @@ GROUP BY
 					Fx(sql.Field("region")).
 					Fy(sql.Field("year"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     year,
     region,
     product,
@@ -476,7 +486,7 @@ GROUP BY
     month,
     product,
     region,
-    year;`),
+    year;`,
 		},
 		{
 			name: "With custom field definitions and aliases",
@@ -484,7 +494,9 @@ GROUP BY
 				return b.X(sql.Field("toStartOfDay(timestamp)").WithAlias("day")).
 					Y(sql.Field("sum(revenue)").WithAlias("total_revenue"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     toStartOfDay(timestamp) AS day,
     sum(revenue) AS total_revenue
 FROM
@@ -492,7 +504,7 @@ FROM
 WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
-    day;`),
+    day;`,
 		},
 		{
 			name: "Complex aggregation with fill and custom fields",
@@ -501,7 +513,9 @@ GROUP BY
 					Y(sql.Field("avg(duration)").WithAlias("avg_duration")).
 					Fill(sql.Enum("status"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     status::String AS status,
     toStartOfHour(timestamp) AS hour,
     avg(duration) AS avg_duration
@@ -511,7 +525,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
 GROUP BY
     hour,
-    status;`),
+    status;`,
 		},
 	}
 
@@ -546,7 +560,9 @@ func TestBarVertical_SQLGeneration_WithAdjustQuery(t *testing.T) {
 					Y(sql.Count()).
 					AdjustQuery(sql.Where("status = 'active'"))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     category,
     count(*) AS cnt
 FROM
@@ -555,7 +571,7 @@ WHERE
     timestamp > now() - INTERVAL 1 DAY
     AND status = 'active'
 GROUP BY
-    category;`),
+    category;`,
 		},
 		{
 			name: "AdjustQuery adds multiple WHERE clauses",
@@ -567,7 +583,9 @@ GROUP BY
 						sql.Where("priority > 5"),
 					)
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     day,
     count(*) AS cnt
 FROM
@@ -577,7 +595,7 @@ WHERE
     AND status = 'completed'
     AND priority > 5
 GROUP BY
-    day;`),
+    day;`,
 		},
 		{
 			name: "AdjustQuery adds ORDER BY",
@@ -586,7 +604,9 @@ GROUP BY
 					Y(sql.Count()).
 					AdjustQuery(sql.OrderBy(sql.Count()))
 			},
-			expectedSQL: buildExpectedSQL(`SELECT
+			expectedSQL: `-- WARNING: This is an auto-generated query file, generated from TODO.
+-- DO NOT MODIFY MANUALLY; as changes will be overwritten
+SELECT
     product,
     count(*) AS cnt
 FROM
@@ -596,7 +616,7 @@ WHERE
 GROUP BY
     product
 ORDER BY
-    cnt;`),
+    cnt;`,
 		},
 	}
 
