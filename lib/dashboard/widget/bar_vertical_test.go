@@ -480,32 +480,8 @@ GROUP BY
 			widget := NewBarVertical(baseQuery)
 			widget = tt.setup(widget)
 
-			// Build the query by simulating what CollectHandlers does
-			query := widget.sql.With(
-				sql.PrependSelect(widget.x),
-				sql.GroupBy(widget.x),
-				sql.Select(widget.y),
-			)
-
-			if widget.fill != nil {
-				query = query.With(
-					sql.PrependSelect(*widget.fill),
-					sql.GroupBy(*widget.fill),
-				)
-			}
-			if widget.fx != nil {
-				query = query.With(
-					sql.PrependSelect(*widget.fx),
-					sql.GroupBy(*widget.fx),
-				)
-			}
-			if widget.fy != nil {
-				query = query.With(
-					sql.PrependSelect(*widget.fy),
-					sql.GroupBy(*widget.fy),
-				)
-			}
-
+			// Build the query using the actual implementation
+			query := widget.buildQuery()
 			actualSQL := query.Build()
 
 			if actualSQL != tt.expectedSQL {
@@ -633,13 +609,8 @@ ORDER BY
 			widget := NewBarVertical(baseQuery)
 			widget = tt.setup(widget)
 
-			// Build the query by simulating what CollectHandlers does
-			query := widget.sql.With(
-				sql.PrependSelect(widget.x),
-				sql.GroupBy(widget.x),
-				sql.Select(widget.y),
-			)
-
+			// Build the query using the actual implementation
+			query := widget.buildQuery()
 			actualSQL := query.Build()
 
 			if actualSQL != tt.expectedSQL {
