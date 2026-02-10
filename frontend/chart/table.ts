@@ -324,43 +324,27 @@ export function table(queryResult: any, extProps: any) {
     detailsPanel.classList.add('record-details-panel');
 
     // Panel header with controls
-    const panelHeader = document.createElement('div');
-    panelHeader.classList.add('record-details-header');
-
-    const headerContainer = document.createElement('div');
-    headerContainer.classList.add('flex', 'items-center', 'justify-between', 'p-2', 'border-b', 'border-base-300', 'bg-base-200');
-
-    const selectionText = document.createElement('span');
-    selectionText.classList.add('font-semibold', 'text-sm');
-    const selectedCountSpan = document.createElement('span');
-    selectedCountSpan.classList.add('selected-count');
-    selectedCountSpan.textContent = '0';
-    selectionText.appendChild(selectedCountSpan);
-    selectionText.appendChild(document.createTextNode(' record(s) selected'));
-
-    const buttonContainer = document.createElement('div');
-    buttonContainer.classList.add('flex', 'gap-2');
-
-    const fullscreenBtn = document.createElement('button');
-    fullscreenBtn.classList.add('btn', 'btn-xs', 'btn-ghost', 'fullscreen-btn');
-    fullscreenBtn.title = 'Toggle fullscreen';
     const fullscreenIcon = Maximize2.createElement();
     fullscreenIcon.classList.add('w-4', 'h-4');
-    fullscreenBtn.appendChild(fullscreenIcon);
 
-    const closeBtn = document.createElement('button');
-    closeBtn.classList.add('btn', 'btn-xs', 'btn-ghost', 'close-btn');
-    closeBtn.title = 'Close';
     const closeIcon = X.createElement();
     closeIcon.classList.add('w-4', 'h-4');
-    closeBtn.appendChild(closeIcon);
 
-    buttonContainer.appendChild(fullscreenBtn);
-    buttonContainer.appendChild(closeBtn);
-
-    headerContainer.appendChild(selectionText);
-    headerContainer.appendChild(buttonContainer);
-    panelHeader.appendChild(headerContainer);
+    const panelHeader = html`<div class="record-details-header">
+        <div class="flex items-center justify-between p-2 border-b border-base-300 bg-base-200">
+            <span class="font-semibold text-sm">
+                <span class="selected-count">0</span> record(s) selected
+            </span>
+            <div class="flex gap-2">
+                <button class="btn btn-xs btn-ghost fullscreen-btn" title="Toggle fullscreen">
+                    ${fullscreenIcon}
+                </button>
+                <button class="btn btn-xs btn-ghost close-btn" title="Close">
+                    ${closeIcon}
+                </button>
+            </div>
+        </div>
+    </div>`;
 
     const detailsContainer = document.createElement('div');
     detailsContainer.classList.add('recordDetails');
@@ -369,6 +353,10 @@ export function table(queryResult: any, extProps: any) {
     detailsPanel.appendChild(detailsContainer);
 
     // Setup button handlers
+    const fullscreenBtn = panelHeader.querySelector('.fullscreen-btn') as HTMLButtonElement;
+    const closeBtn = panelHeader.querySelector('.close-btn') as HTMLButtonElement;
+    const selectedCountSpan = panelHeader.querySelector('.selected-count') as HTMLSpanElement;
+
     fullscreenBtn.addEventListener('click', () => {
         state.panelFullscreen = !state.panelFullscreen;
     });
