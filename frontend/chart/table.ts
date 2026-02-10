@@ -3,6 +3,7 @@ import {DataType, Field} from "apache-arrow";
 import {TabulatorFull as Tabulator} from 'tabulator-tables';
 import type {ColumnDefinition, RowComponent, CellComponent} from 'tabulator-tables';
 import Alpine from '@alpinejs/csp';
+import {Maximize2, X} from 'lucide';
 
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
@@ -325,23 +326,41 @@ export function table(queryResult: any, extProps: any) {
     // Panel header with controls
     const panelHeader = document.createElement('div');
     panelHeader.classList.add('record-details-header');
-    panelHeader.innerHTML = `
-        <div class="flex items-center justify-between p-2 border-b border-base-300 bg-base-200">
-            <span class="font-semibold text-sm"><span class="selected-count">0</span> record(s) selected</span>
-            <div class="flex gap-2">
-                <button class="btn btn-xs btn-ghost fullscreen-btn" title="Toggle fullscreen">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                    </svg>
-                </button>
-                <button class="btn btn-xs btn-ghost close-btn" title="Close">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    `;
+
+    const headerContainer = document.createElement('div');
+    headerContainer.classList.add('flex', 'items-center', 'justify-between', 'p-2', 'border-b', 'border-base-300', 'bg-base-200');
+
+    const selectionText = document.createElement('span');
+    selectionText.classList.add('font-semibold', 'text-sm');
+    const selectedCountSpan = document.createElement('span');
+    selectedCountSpan.classList.add('selected-count');
+    selectedCountSpan.textContent = '0';
+    selectionText.appendChild(selectedCountSpan);
+    selectionText.appendChild(document.createTextNode(' record(s) selected'));
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.classList.add('flex', 'gap-2');
+
+    const fullscreenBtn = document.createElement('button');
+    fullscreenBtn.classList.add('btn', 'btn-xs', 'btn-ghost', 'fullscreen-btn');
+    fullscreenBtn.title = 'Toggle fullscreen';
+    const fullscreenIcon = Maximize2.createElement();
+    fullscreenIcon.classList.add('w-4', 'h-4');
+    fullscreenBtn.appendChild(fullscreenIcon);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.classList.add('btn', 'btn-xs', 'btn-ghost', 'close-btn');
+    closeBtn.title = 'Close';
+    const closeIcon = X.createElement();
+    closeIcon.classList.add('w-4', 'h-4');
+    closeBtn.appendChild(closeIcon);
+
+    buttonContainer.appendChild(fullscreenBtn);
+    buttonContainer.appendChild(closeBtn);
+
+    headerContainer.appendChild(selectionText);
+    headerContainer.appendChild(buttonContainer);
+    panelHeader.appendChild(headerContainer);
 
     const detailsContainer = document.createElement('div');
     detailsContainer.classList.add('recordDetails');
@@ -350,10 +369,6 @@ export function table(queryResult: any, extProps: any) {
     detailsPanel.appendChild(detailsContainer);
 
     // Setup button handlers
-    const fullscreenBtn = panelHeader.querySelector('.fullscreen-btn') as HTMLButtonElement;
-    const closeBtn = panelHeader.querySelector('.close-btn') as HTMLButtonElement;
-    const selectedCountSpan = panelHeader.querySelector('.selected-count') as HTMLSpanElement;
-
     fullscreenBtn.addEventListener('click', () => {
         state.panelFullscreen = !state.panelFullscreen;
     });
