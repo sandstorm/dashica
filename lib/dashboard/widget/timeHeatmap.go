@@ -3,12 +3,10 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -162,22 +160,7 @@ func (h *TimeHeatmap) CollectHandlers(ctx *rendering.DashboardContext, registerH
 	}
 
 	query := h.buildQuery()
-
-	qh := httpserver.QueryHandler{
-		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,
-		Logger:                  ctx.Deps.Logger,
-		FileSystem:              ctx.Deps.FileSystem,
-	}
-	err := registerHandler.Handle(h.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := qh.HandleQuery(query, w, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	}))
-	if err != nil {
-		return fmt.Errorf("timeHeatmap: %w", err)
-	}
-	return nil
+	return RegisterQueryHandlers(h.id, "timeHeatmap", query, ctx, registerHandler)
 }
 
 var _ InteractiveWidget = (*TimeHeatmap)(nil)

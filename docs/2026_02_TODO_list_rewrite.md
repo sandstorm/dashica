@@ -9,3 +9,4 @@
 - [ ] Table -> needs default limit of 10k? records
   - also test with MANY records and see how it behaves
 - [ ] table: entweder quickanzeige von Histogrammen ODER von "quick filter" wie in IDEA DB browser
+- [ ] fix implementation of alerting

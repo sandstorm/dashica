@@ -254,3 +254,95 @@ func formatClickhouseMap(input map[string]string) string {
 func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
+
+type DebugInfo struct {
+	Query   string                 `json:"query"`
+	Explain []map[string]string    `json:"explain"`
+	Stats   map[string]interface{} `json:"stats"`
+}
+
+// HandleDebug returns debug information about the query including the SQL string and EXPLAIN output
+func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
+	// TODO: different server support per dashboard
+	client, err := qh.ClickhouseClientManager.GetClient("default")
+	if err != nil {
+		return fmt.Errorf("get clickhouse client: %w", err)
+	}
+
+	opts := clickhouse.DefaultQueryOptions()
+	opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates
+
+	paramsStr := r.URL.Query().Get("params")
+	if paramsStr != "" {
+		var params map[string]string
+		err = json.Unmarshal([]byte(paramsStr), &params)
+		if err != nil {
+			return fmt.Errorf("unmarshalling params: %w", err)
+		}
+		opts.Parameters = params
+	}
+
+	query := queryObj.Build()
+	rawFilters := r.URL.Query().Get("filters")
+
+	debugInfo := DebugInfo{
+		Stats: make(map[string]interface{}),
+	}
+
+	if rawFilters != "" && !queryObj.ShouldSkipFilters() {
+		var filters DashboardFilters
+		err = json.Unmarshal([]byte(rawFilters), &filters)
+		if err != nil {
+			return fmt.Errorf("unmarshalling filters: %w", err)
+		}
+		filters.calculateLegacyFilters()
+		schema, err := client.IntrospectSchema(r.Context())
+		if err != nil {
+			return fmt.Errorf("introspecting schema: %w", err)
+		}
+		opts.Settings["additional_table_filters"] = formatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
+
+		// add resolved time range
+		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		if err != nil {
+			return fmt.Errorf("resolving time range: %w", err)
+		}
+		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
+		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
+
+		debugInfo.Stats["resolvedTimeRange"] = resolvedTimeRange
+		debugInfo.Stats["additionalTableFilters"] = filters.SqlStringForAllTables(schema.Tables)
+
+		// adjust bucketing in query
+		q, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
+		query = q
+		if bucketSizeMs != nil {
+			debugInfo.Stats["bucketSizeMs"] = *bucketSizeMs
+		}
+	}
+
+	debugInfo.Query = query
+
+	// Execute EXPLAIN query
+	explainQuery := "EXPLAIN " + query
+	explainOpts := clickhouse.DefaultQueryOptions()
+	explainOpts.Format = "JSON"
+	// Copy parameters from the original query
+	explainOpts.Parameters = opts.Parameters
+	explainOpts.Settings = opts.Settings
+
+	explainResult, err := clickhouse.QueryJSON[map[string]string](r.Context(), client, explainQuery, explainOpts)
+	if err != nil {
+		// If EXPLAIN fails, we still want to return the query info
+		qh.Logger.Warn().Err(err).Msg("EXPLAIN query failed")
+		debugInfo.Explain = []map[string]string{
+			{"error": fmt.Sprintf("EXPLAIN failed: %v", err)},
+		}
+	} else {
+		debugInfo.Explain = explainResult.Data
+	}
+
+	// Return as JSON
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(debugInfo)
+}

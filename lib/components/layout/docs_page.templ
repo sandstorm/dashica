@@ -32,7 +32,9 @@ templ DocsPage(renderingContext rendering.DashboardContext, filterButtons []rend
 			<script src="/public/dist/index.js"></script>
 		</head>
 		<body class="bg-base-200">
-			@DocsApplication(renderingContext, content)
+			@DebugDrawer() {
+				@DocsApplication(renderingContext, content)
+			}
 			<script>window.Alpine.start();</script>
 		</body>
 	</html>

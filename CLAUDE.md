@@ -2,7 +2,7 @@
 
 **General**
 
-- do SMALL GIT COMMITS which are easy to review. DO NOT PUSH THEM YET.
+- STOP when finished with a task - DO NOT create git commits. The user will create commits themselves.
 - consolidate all developer information into the README.md, OR into separate concepts in the docs/ folder.
 - TRY implemented features E2E - maybe via a Chrome or Firefox Browser via Playwright or MCP or ...?
 - DO NOT GUESS but investigate the root cause of problems! LET ME KNOW IF YOU DO NOT KNOW.

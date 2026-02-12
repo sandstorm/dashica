@@ -1,0 +1,59 @@
+package layout
+
+// DebugDrawer is a reusable component that provides debug functionality for all pages
+templ DebugDrawer() {
+	<div x-data="debugDrawer" class="drawer">
+		<input id="debug-drawer" type="checkbox" class="drawer-toggle" x-model="visible"/>
+		<div class="drawer-content">
+			{ children... }
+		</div>
+		<div class="drawer-side z-50">
+			<label for="debug-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+			<div class="bg-base-200 min-h-full w-[90vw] max-w-7xl p-4 overflow-y-auto">
+				<h2 class="text-2xl font-bold mb-4">Debug Information</h2>
+				<div class="space-y-6">
+					<!-- Query Section -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox" checked/>
+						<div class="collapse-title text-xl font-medium">SQL Query</div>
+						<div class="collapse-content">
+							<pre class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="queryText"></pre>
+						</div>
+					</div>
+					<!-- EXPLAIN Section -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox"/>
+						<div class="collapse-title text-xl font-medium">EXPLAIN Output</div>
+						<div class="collapse-content">
+							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="explainText"></pre>
+						</div>
+					</div>
+					<!-- Stats Section -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox"/>
+						<div class="collapse-title text-xl font-medium">Query Stats</div>
+						<div class="collapse-content">
+							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="statsText"></pre>
+						</div>
+					</div>
+					<!-- Results Table Section -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox" checked/>
+						<div class="collapse-title text-xl font-medium">Query Results</div>
+						<div class="collapse-content">
+							<div x-ref="resultsTableContainer" class="mt-2"></div>
+						</div>
+					</div>
+					<!-- Legacy Clickhouse Summary -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox"/>
+						<div class="collapse-title text-xl font-medium">Clickhouse Summary (Legacy)</div>
+						<div class="collapse-content">
+							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="clickhouseSummary"></pre>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}

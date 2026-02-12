@@ -23,14 +23,21 @@ Alpine.data('chart', () => ({
 
     _visible: false,
     _queryResult: null,
+    _debugInfo: null,
     _colorSchemeDark: false,
     _width: 0,
+    _widgetBaseUrl: '',
+    _chartType: '',
 
     init() {
 
         const chartType = this.$el.dataset.chartType;
         const widgetBaseUrl = this.$el.dataset.widgetBaseUrl;
         const chartProps = JSON.parse(this.$el.dataset.chartProps);
+
+        // Store for later use
+        this._widgetBaseUrl = widgetBaseUrl;
+        this._chartType = chartType;
 
         this._colorSchemeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
@@ -66,8 +73,23 @@ Alpine.data('chart', () => ({
         this._visible = true;
     },
 
-    toggleDebug() {
-        this.$dispatch('dashica-debugDrawer-toggle', {queryResult: this._queryResult})
+    async toggleDebug() {
+        try {
+            const response = await fetch(this._widgetBaseUrl + "/debug?" + new URLSearchParams({
+                filters: JSON.stringify(this.$store.urlState.getCombinedFilter())
+            }));
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            this._debugInfo = await response.json();
+        } catch (e) {
+            console.error("Failed to fetch debug info:", e);
+            this._debugInfo = {error: e.message};
+        }
+        this.$dispatch('dashica-debugDrawer-toggle', {
+            queryResult: this._queryResult,
+            debugInfo: this._debugInfo
+        })
     },
 
     handleResize(width: number, height: number) {
