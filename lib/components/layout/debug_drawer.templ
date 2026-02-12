@@ -20,12 +20,35 @@ templ DebugDrawer() {
 							<pre class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="queryText"></pre>
 						</div>
 					</div>
-					<!-- EXPLAIN Section -->
+					<!-- EXPLAIN PLAN Section -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox" checked/>
+						<div class="collapse-title text-xl font-medium">EXPLAIN PLAN (with indexes & actions)</div>
+						<div class="collapse-content">
+							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainPlanText"></pre>
+						</div>
+					</div>
+					<!-- EXPLAIN PIPELINE Section -->
 					<div class="collapse collapse-arrow bg-base-100">
 						<input type="checkbox"/>
-						<div class="collapse-title text-xl font-medium">EXPLAIN Output</div>
+						<div class="collapse-title text-xl font-medium">EXPLAIN PIPELINE (execution pipeline)</div>
+						<div class="collapse-content space-y-4">
+							<div>
+								<h3 class="font-semibold mb-2">Visual Graph:</h3>
+								<div class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="explainPipelineContainer"></div>
+							</div>
+							<div>
+								<h3 class="font-semibold mb-2">Detailed Steps:</h3>
+								<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainPipelineDetailText"></pre>
+							</div>
+						</div>
+					</div>
+					<!-- EXPLAIN SYNTAX Section -->
+					<div class="collapse collapse-arrow bg-base-100">
+						<input type="checkbox"/>
+						<div class="collapse-title text-xl font-medium">EXPLAIN SYNTAX (optimized query)</div>
 						<div class="collapse-content">
-							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="explainText"></pre>
+							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainSyntaxText"></pre>
 						</div>
 					</div>
 					<!-- Stats Section -->

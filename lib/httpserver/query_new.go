@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -256,9 +257,12 @@ func escapeString(s string) string {
 }
 
 type DebugInfo struct {
-	Query   string                 `json:"query"`
-	Explain []map[string]string    `json:"explain"`
-	Stats   map[string]interface{} `json:"stats"`
+	Query               string                 `json:"query"`
+	ExplainPlan         string                 `json:"explainPlan"`
+	ExplainPipeline     string                 `json:"explainPipeline"`
+	ExplainPipelineText string                 `json:"explainPipelineText"`
+	ExplainSyntax       string                 `json:"explainSyntax"`
+	Stats               map[string]interface{} `json:"stats"`
 }
 
 // HandleDebug returns debug information about the query including the SQL string and EXPLAIN output
@@ -323,24 +327,43 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 
 	debugInfo.Query = query
 
-	// Execute EXPLAIN query
-	explainQuery := "EXPLAIN " + query
-	explainOpts := clickhouse.DefaultQueryOptions()
-	explainOpts.Format = "JSON"
-	// Copy parameters from the original query
-	explainOpts.Parameters = opts.Parameters
-	explainOpts.Settings = opts.Settings
-
-	explainResult, err := clickhouse.QueryJSON[map[string]string](r.Context(), client, explainQuery, explainOpts)
-	if err != nil {
-		// If EXPLAIN fails, we still want to return the query info
-		qh.Logger.Warn().Err(err).Msg("EXPLAIN query failed")
-		debugInfo.Explain = []map[string]string{
-			{"error": fmt.Sprintf("EXPLAIN failed: %v", err)},
+	// Helper function to execute EXPLAIN variants
+	executeExplain := func(explainQuery string) string {
+		explainOpts := clickhouse.DefaultQueryOptions()
+		explainOpts.Format = "TSVRaw" // Plain text format
+		explainOpts.Parameters = opts.Parameters
+		// Copy settings from original query
+		for k, v := range opts.Settings {
+			explainOpts.Settings[k] = v
 		}
-	} else {
-		debugInfo.Explain = explainResult.Data
+
+		resp, err := client.Query(r.Context(), explainQuery, explainOpts)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Sprintf("Error reading response: %v", err)
+		}
+		return string(body)
 	}
+
+	// Execute different EXPLAIN variants for comprehensive debugging
+
+	// 1. EXPLAIN PLAN - shows the query execution plan with details
+	// Options: header=1 (show header), actions=1 (show actions), indexes=1 (show indexes)
+	debugInfo.ExplainPlan = executeExplain("EXPLAIN header = 1, actions = 1, indexes = 1 " + query)
+
+	// 2. EXPLAIN PIPELINE - shows the execution pipeline (similar to EXPLAIN ANALYZE)
+	// Graph version for visualization
+	debugInfo.ExplainPipeline = executeExplain("EXPLAIN PIPELINE graph = 1 " + query)
+	// Text version with details about each step
+	debugInfo.ExplainPipelineText = executeExplain("EXPLAIN PIPELINE compact = 0 " + query)
+
+	// 3. EXPLAIN SYNTAX - shows the optimized query after all transformations
+	debugInfo.ExplainSyntax = executeExplain("EXPLAIN SYNTAX " + query)
 
 	// Return as JSON
 	w.Header().Set("Content-Type", "application/json")

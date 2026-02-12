@@ -10,6 +10,7 @@
     "@observablehq/inputs": "^0.12.0",
     "@observablehq/plot": "^0.6.17",
     "@types/alpinejs": "^3.13.11",
+    "@viz-js/viz": "^3.24.0",
     "apache-arrow": "^21.1.0",
     "esbuild": "^0.27.2",
     "esbuild-plugin-tailwindcss": "^2.1.0",
