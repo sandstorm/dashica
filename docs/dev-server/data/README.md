@@ -5,25 +5,43 @@ This directory contains SQL scripts that initialize ClickHouse with sample data 
 ## Tables Created
 
 ### http_logs
-Web server access logs with:
-- 50,000 records over the last 7 days
+Web server access logs with **realistic day/night traffic patterns**:
+- **~5.5 million records** over 37 days (~150,000 requests/day)
+- **Day/night variation**:
+  - Night (23:00-06:00): 1-3 requests/minute
+  - Morning (07-09:00): 5-8 requests/minute
+  - **Peak hours (10-11:00, 14-15:00)**: 10-15 requests/minute
+  - Midday (12-13:00): 7-10 requests/minute
+  - Evening (16-22:00): 6-9 requests/minute
 - Multiple hostnames, HTTP methods, paths
 - Status codes distributed across 2xx, 3xx, 4xx, 5xx
 - Response times and byte sizes
 - Used in: TimeBar, BarVertical, BarHorizontal examples
 
 ### metrics
-System metrics with:
-- 10,000 records over the last 24 hours
+System metrics with **load-based patterns**:
+- **~115,000 records** over 8 days (10 servers, 5 metrics each, per minute)
+- **Time-based patterns**:
+  - CPU usage: 10-30% at night, 50-90% during business hours
+  - Memory usage: 50-70% baseline, 60-80% during peak
+  - Disk usage: gradually increases over time
+  - Requests per minute: follows traffic patterns
+  - Error rate: typically low (<3%), occasional spikes
 - CPU, memory, disk usage metrics
 - Requests per minute and error rates
 - Tagged with host and environment
 - Used in: Stats, TimeBar examples
 
 ### events
-User and system events with:
-- 100,000 records over the last 30 days
+User and system events with **realistic user activity patterns**:
+- **~7.4 million records** over 37 days (~200,000 events/day)
+- **Day/night user activity**:
+  - Night (00-06:00): 2-5 events/minute
+  - Morning (07-09:00): 10-15 events/minute
+  - **Peak hours (10-16:00)**: 15-25 events/minute
+  - Evening (17-23:00): 8-12 events/minute
 - User actions, system events, errors, purchases
+- 5,000 unique users (increased from 1,000)
 - User IDs and session data
 - Used in: TimeBar, heatmap examples
 

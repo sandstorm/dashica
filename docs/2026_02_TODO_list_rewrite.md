@@ -1,4 +1,4 @@
-- [ ] DEBUG TOOLING -> Query anzeigen
+- [x] DEBUG TOOLING -> Query anzeigen
   - show in debugDrawer which already exists
   - similar to the `err := registerHandler.Handle(b.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {`
     create a new handler which returns the QUERY SQL STRING which will be executed, and the answer of EXPLAIN (or whatever gives most infos in Clickhouse)
