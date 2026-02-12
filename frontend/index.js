@@ -1,21 +1,6 @@
 
 import "./index.css";
-
-// Import tabulator CSS (esbuild will handle bundling)
-// Import light theme - will be applied when prefers-color-scheme: light
-if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    import('tabulator-tables/dist/css/tabulator_midnight.css');
-} else {
-    import('tabulator-tables/dist/css/tabulator.css');
-}
-
-// Listen for theme changes
-if (window.matchMedia) {
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        // Reload page when theme changes to apply correct CSS
-        window.location.reload();
-    });
-}
+import "./tabulator-theme.css";
 
 import Alpine from '@alpinejs/csp'
 import intersect from '@alpinejs/intersect'

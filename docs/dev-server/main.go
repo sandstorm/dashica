@@ -31,7 +31,8 @@ func main() {
 	d.RegisterDashboardGroup("🎨 Widget Reference").
 		RegisterDashboard("/docs/widgets/time-bar", docs.TimeBar()).
 		RegisterDashboard("/docs/widgets/bar-vertical", docs.BarVertical()).
-		RegisterDashboard("/docs/widgets/stats", docs.Stats())
+		RegisterDashboard("/docs/widgets/stats", docs.Stats()).
+		RegisterDashboard("/docs/widgets/table", docs.Table())
 
 	// Advanced Examples section (to be implemented)
 	// d.RegisterDashboardGroup("🚀 Advanced Examples").

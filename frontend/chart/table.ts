@@ -3,7 +3,7 @@ import {DataType, Field} from "apache-arrow";
 import {TabulatorFull as Tabulator} from 'tabulator-tables';
 import type {ColumnDefinition, RowComponent, CellComponent} from 'tabulator-tables';
 import Alpine from '@alpinejs/csp';
-import {Maximize2, X} from 'lucide';
+import {Maximize2, X, createElement} from 'lucide';
 
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
@@ -324,10 +324,10 @@ export function table(queryResult: any, extProps: any) {
     detailsPanel.classList.add('record-details-panel');
 
     // Panel header with controls
-    const fullscreenIcon = Maximize2.createElement();
+    const fullscreenIcon = createElement(Maximize2);
     fullscreenIcon.classList.add('w-4', 'h-4');
 
-    const closeIcon = X.createElement();
+    const closeIcon = createElement(X);
     closeIcon.classList.add('w-4', 'h-4');
 
     const panelHeader = html`<div class="record-details-header">

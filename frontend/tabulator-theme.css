@@ -1,0 +1,5 @@
+/* Load light theme by default and for light mode */
+@import "tabulator-tables/dist/css/tabulator.min.css" (prefers-color-scheme: light);
+
+/* Load dark theme for dark mode */
+@import "tabulator-tables/dist/css/tabulator_midnight.min.css" (prefers-color-scheme: dark);
