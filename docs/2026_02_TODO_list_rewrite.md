@@ -5,8 +5,9 @@
   - build the code so that it can easily be integrated into ALL widgets
   - ALSO display the query RESULTS in the sidebar, using the existing table component.
 - [ ] Docs weiter bauen, bestehende migrieren; vervollständigen (alle API endpoints etc)
-  - [ ] better test data, with less requests at night and more at day.
+  - [x] better test data, with less requests at night and more at day.
 - [ ] Table -> needs default limit of 10k? records
   - also test with MANY records and see how it behaves
 - [ ] table: entweder quickanzeige von Histogrammen ODER von "quick filter" wie in IDEA DB browser
 - [ ] fix implementation of alerting
+- interactive example

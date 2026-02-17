@@ -9,7 +9,7 @@ import (
 
 func BarVertical() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DocsPage).
+		WithLayout(layout.DefaultPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("BarVertical Widget").

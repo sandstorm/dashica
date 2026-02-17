@@ -9,7 +9,7 @@ import (
 
 func Table() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DocsPage).
+		WithLayout(layout.DefaultPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("Table Widget").

@@ -10,7 +10,7 @@ import (
 
 func TimeBar() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DocsPage).
+		WithLayout(layout.DefaultPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("TimeBar Widget").

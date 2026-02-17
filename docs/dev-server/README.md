@@ -117,27 +117,27 @@ The `APP_ENV` variable controls which config file is loaded:
 ### 📚 Documentation
 
 - **Introduction** (`/docs/intro`) - Overview of Dashica and its architecture
+- **Installation** (`/docs/installation`) - Installation and setup guide
 - **Quick Start** (`/docs/quickstart`) - Getting started guide
+- **Queries** (`/docs/queries`) - SQL query building and best practices
 - **Widgets Overview** (`/docs/widgets-overview`) - Complete widget reference
 
-### 🎨 Widget Examples (Coming Soon)
+### Widget Reference (With Live Examples)
 
-Each widget will have dedicated example pages showing:
-- Basic usage
-- Advanced configurations
-- Color schemes
-- Faceting and stacking
-- Real data examples
+Complete widget documentation with interactive examples:
 
-Planned examples:
-- TimeBar
-- BarVertical
-- BarHorizontal
-- Stats
-- TimeHeatmap
-- TimeHeatmapOrdinal
-- Grid
-- CollapsibleGroup
+- **TimeBar** (`/docs/widgets/time-bar`) - Time series visualization
+- **BarVertical** (`/docs/widgets/bar-vertical`) - Vertical bar charts
+- **Stats** (`/docs/widgets/stats`) - KPI and statistics display
+- **Table** (`/docs/widgets/table`) - Interactive data tables
+
+### Coming Soon
+
+- Additional widget types (TimeHeatmap, TimeHeatmapOrdinal, Grid, CollapsibleGroup)
+- Advanced dashboard examples
+- Deployment guides
+- Alerting documentation
+- Customization guides
 
 ### 🚀 Advanced Examples (Coming Soon)
 

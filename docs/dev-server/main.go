@@ -24,8 +24,12 @@ func main() {
 		RegisterDashboard("/docs/intro", docs.Introduction()).
 		RegisterDashboard("/docs/installation", docs.Installation()).
 		RegisterDashboard("/docs/quickstart", docs.QuickStart()).
+		RegisterDashboard("/docs/usage-philosophy", docs.UsagePhilosophy()).
 		RegisterDashboard("/docs/queries", docs.Queries()).
-		RegisterDashboard("/docs/widgets-overview", docs.WidgetsOverview())
+		RegisterDashboard("/docs/charting-basics", docs.ChartingBasics()).
+		RegisterDashboard("/docs/widgets-overview", docs.WidgetsOverview()).
+		RegisterDashboard("/docs/alerting", docs.Alerting()).
+		RegisterDashboard("/docs/deployment", docs.Deployment())
 
 	// Widget Documentation with Live Examples
 	d.RegisterDashboardGroup("🎨 Widget Reference").
