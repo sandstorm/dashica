@@ -15,6 +15,7 @@ type SqlQuery struct {
 	where             []string
 	groupBy           []SqlField
 	orderBy           []SqlField
+	limit             int
 	shouldSkipFilters bool
 }
 
@@ -56,6 +57,12 @@ func GroupBy(field SqlField) SqlBuilderOption {
 func OrderBy(field SqlField) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.orderBy = append(b.orderBy, field)
+	}
+}
+
+func Limit(limit int) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.limit = limit
 	}
 }
 
@@ -151,6 +158,10 @@ func (b *SqlQuery) Build() string {
 			}
 			sb.WriteString("\n")
 		}
+	}
+
+	if b.limit > 0 {
+		sb.WriteString(fmt.Sprintf("LIMIT %d\n", b.limit))
 	}
 
 	// Remove trailing newline and add semicolon

@@ -17,12 +17,14 @@ type Table struct {
 	title  string
 	id     string
 	height int
+	limit  int
 }
 
 func NewTable(sql sql.SqlQueryable) *Table {
 	return &Table{
 		sql:    sql,
 		height: 200,
+		limit:  10000,
 	}
 }
 
@@ -41,6 +43,12 @@ func (b *Table) Id(id string) *Table {
 func (b *Table) Height(height int) *Table {
 	cloned := *b
 	cloned.height = height
+	return &cloned
+}
+
+func (b *Table) Limit(limit int) *Table {
+	cloned := *b
+	cloned.limit = limit
 	return &cloned
 }
 
@@ -85,6 +93,7 @@ func (b *Table) CollectHandlers(ctx *rendering.DashboardContext, registerHandler
 
 	// Build the SQL query
 	query := b.sql.With(
+		sql.Limit(b.limit),
 	/*sql.PrependSelect(b.x),
 	sql.GroupBy(b.x),
 	sql.Select(b.y),*/
