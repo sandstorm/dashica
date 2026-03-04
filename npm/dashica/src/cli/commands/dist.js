@@ -44,7 +44,7 @@ export default async function dist({ flags, args, packageRoot }) {
     await observableBuild({ config: config });
 
     console.log('Copying all *.sql files from src/ to dist/');
-    await copyFiles('src', 'dist/src', (entry) => entry.name.endsWith('.sql'));
+    await copyFiles('src', 'dist/src', (entry) => entry.name.endsWith('.sql') || entry.name.endsWith('.yaml'));
 
     if (!flags['skip-server-build']) {
         console.log('Copying dashica_config.yaml to dist/');
