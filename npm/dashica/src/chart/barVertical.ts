@@ -2,6 +2,9 @@ import * as Plot from "@observablehq/plot";
 import {decorateChart} from "../component/decorateChart.js";
 import type {ChannelValue, ChannelValueSpec, QueryResult, ViewOptions} from "../types";
 import type {ScaleOptions} from "@observablehq/plot/src/scales";
+import type {TipOptions} from "@observablehq/plot/src/marks/tip";
+import type {PointerOptions} from "@observablehq/plot/src/interactions/pointer";
+import type {TipPointer} from "@observablehq/plot/src/mark";
 
 /**
  * BarVertical: Bars go from bottom to top.
@@ -57,6 +60,8 @@ interface ChartProps {
      * *fy* scale.
      */
     fy?: ChannelValue,
+
+    tip?: boolean | TipPointer | (TipOptions & PointerOptions & {pointer?: TipPointer}),
 }
 
 async function _vertical(data: QueryResult, props: ChartProps) {
@@ -89,7 +94,7 @@ async function _vertical(data: QueryResult, props: ChartProps) {
                 y: props.y,
                 fx: props.fx,
                 fy: props.fy,
-                tip: true,
+                tip: props.tip !== undefined ? props.tip : true,
                 fill: props.fill || (props.fx ? props.x : '#A8C1D1'),
             })
         ]
