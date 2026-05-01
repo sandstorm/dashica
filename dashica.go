@@ -90,6 +90,14 @@ func New() Dashica {
 	alertEvaluator := alerting2.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
 	alertManager := alerting2.NewAlertManager(cfg, logger, fileSystem, alertEvaluator, alertResultStore)
 
+	err = alertManager.DiscoverAlertDefinitions()
+	if err != nil {
+		logger.Warn().
+			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+			Err(err).
+			Msg("Failed to discover alert definitions")
+	}
+
 	deps := rendering.Dependencies{
 		clickhouseClientManager,
 		logger,
@@ -160,6 +168,10 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		Url:   url,
 	})
 	return d
+}
+
+func (d *DashicaImpl) isPathRegistered(urlPath string) bool {
+	return d.handlerCollector.IsRegistered(urlPath)
 }
 
 var _ Dashica = (*DashicaImpl)(nil)

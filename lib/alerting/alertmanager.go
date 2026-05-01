@@ -42,7 +42,7 @@ func NewAlertManager(config *config.Config, logger zerolog.Logger, fileSystem fs
 		fileSystem:             fileSystem,
 		alertEvaluator:         alertEvaluator,
 		alertResultStore:       alertResultStore,
-		alertDefinitionPattern: "client/content/*/alerts.yaml",
+		alertDefinitionPattern: "src/*/alerts.yaml",
 	}
 }
 

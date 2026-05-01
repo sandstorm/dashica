@@ -142,7 +142,10 @@ function _bars(data: QueryResult, props: ChartProps) {
             _brushMark,
             Plot.ruleY([0]),
             ...(props.extraMarks || []),
-        ]
+            // Alert threshold lines from X-Dashica-Alert-If header
+            data.dashicaAlertIf?.value_gt ? Plot.ruleY([data.dashicaAlertIf.value_gt], {stroke: "red", strokeWidth: 2}) : undefined,
+            data.dashicaAlertIf?.value_lt ? Plot.ruleY([data.dashicaAlertIf.value_lt], {stroke: "red", strokeWidth: 2}) : undefined,
+        ].filter(Boolean)
     })
 }
 

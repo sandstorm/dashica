@@ -77,6 +77,11 @@ func (d *DashicaImpl) ScanAndRegisterMarkdownDashboards(baseDir string, pathPref
 			urlPath = strings.TrimSuffix(urlPath, ".md")
 			urlPath = pathPrefix + "/" + urlPath
 
+			// Skip if this path is already registered (e.g. by a Go dashboard)
+			if d.isPathRegistered(urlPath) {
+				return nil
+			}
+
 			// Register the dashboard
 			d.RegisterDashboard(urlPath, dashboard.New().
 				WithLayout(layout.DefaultPage).

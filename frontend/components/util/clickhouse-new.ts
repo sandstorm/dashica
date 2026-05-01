@@ -35,6 +35,7 @@ export async function query(baseUrl: string, filters: any): Promise<QueryResult>
         result.dashicaBucketSize = parseInt(xBucketSize);
     }
     result.clickhouseSummary = JSON.parse(response.headers.get("X-Clickhouse-Summary") || "null");
+    result.dashicaAlertIf = JSON.parse(response.headers.get("X-Dashica-Alert-If") || "null");
     return result;
 
     // Add metadata

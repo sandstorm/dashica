@@ -3,8 +3,8 @@ import tailwindPlugin from "esbuild-plugin-tailwindcss";
 import fs from "fs";
 import path from "path";
 
-const outDir = "dashica-src/public/dist";
-const devServerOutDir = "docs/dev-server/dashica-src/public/dist";
+const outDir = "public/dist";
+const devServerOutDir = "docs/dev-server/public/dist";
 
 // Ensure output directories exist
 fs.mkdirSync(outDir, { recursive: true });

@@ -12,6 +12,7 @@ type HandlerCollector interface {
 	Handle(id string, handler http.Handler) error
 	HandleRoot(handler http.Handler) error
 	Nested(prefix string) HandlerCollector
+	IsRegistered(path string) bool
 }
 
 func NewValidatingCollector(mux *http.ServeMux, logger zerolog.Logger) HandlerCollector {
@@ -65,6 +66,10 @@ func (c validatingCollectorImpl) HandleRoot(handler http.Handler) error {
 	(*c.seen)[c.prefix] = true
 	c.mux.Handle(c.prefix, handler)
 	return nil
+}
+
+func (c validatingCollectorImpl) IsRegistered(path string) bool {
+	return (*c.seen)[path]
 }
 
 func (c validatingCollectorImpl) Nested(prefix string) HandlerCollector {

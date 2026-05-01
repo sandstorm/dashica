@@ -27,7 +27,7 @@ async function _stats(data: QueryResult, props: StatsProps): Promise<HTMLElement
     const dataArr = data.toArray() as Stat[];
 
     return Promise.resolve(
-        html`<dl class="stats">
+        html`<dl class="dashica-stats">
             ${dataArr.map(renderStat(props))}
         </dl>`
     );
@@ -36,7 +36,7 @@ export const stats = _stats;
 
 const renderStat = (props: StatsProps) => (stat: Stat): HTMLElement => {
     const color = stat.color ?? props.fill ?? 'oklch(0.21 0.034 264.665)';
-    return html`<div class="stats__stat">
+    return html`<div class="dashica-stats__stat">
         <dt>${stat.label ?? props.title}</dt>
         <dd style=${{color}}>${Math.round(stat.value * 100) / 100}</dd>
     </div>`;

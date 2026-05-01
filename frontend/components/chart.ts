@@ -7,6 +7,7 @@ import {timeHeatmap} from '../chart/timeHeatmap'
 import {timeHeatmapOrdinal} from '../chart/timeHeatmapOrdinal'
 import {stats} from '../chart/stats'
 import {table} from '../chart/table'
+import {alertOverview} from '../chart/alertOverview'
 import {query} from "./util/clickhouse-new";
 
 const charts = {
@@ -17,6 +18,7 @@ const charts = {
     timeHeatmapOrdinal,
     stats,
     table,
+    alertOverview,
 }
 
 Alpine.data('chart', () => ({
@@ -57,7 +59,8 @@ Alpine.data('chart', () => ({
         Alpine.effect(async () => {
             try {
                 if (this._queryResult) {
-                    const finalChartProps = {...chartProps, width: this._width, colorSchemeDark: this._colorSchemeDark};
+                    const viewOptions = this.$store.urlState.logScale ? ['VIEW_LOGARITHMIC'] : [];
+                    const finalChartProps = {...chartProps, width: this._width, colorSchemeDark: this._colorSchemeDark, viewOptions};
                     const chart = await charts[chartType](this._queryResult, finalChartProps);
                     this.$refs.chartContainer.innerHTML = '';
                     this.$refs.chartContainer.appendChild(chart);

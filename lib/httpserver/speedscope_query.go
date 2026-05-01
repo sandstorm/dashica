@@ -59,7 +59,7 @@ func (qh speedscopeQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return fmt.Errorf("introspecting schema: %w", err)
 		}
-		opts.Settings["additional_table_filters"] = formatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
+		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
 		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)

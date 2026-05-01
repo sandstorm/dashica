@@ -12,10 +12,11 @@ function debounce(func, timeout = 300){
 Alpine.store('urlState', {
     // State
     sqlFilter: '',
-    timeRange: '3h',
+    timeRange: '24h',
     customDateRange: '',
     autoRefresh: false,
     refreshInterval: 30,
+    logScale: false,
 
     init() {
         this._loadFromUrl();
@@ -62,11 +63,12 @@ Alpine.store('urlState', {
         const params = new URLSearchParams();
 
         if (this.sqlFilter) params.set('sql', this.sqlFilter);
-        if (this.timeRange !== '3h') params.set('time', this.timeRange);
+        if (this.timeRange !== '24h') params.set('time', this.timeRange);
         if (this.timeRange === 'custom' && this.customDateRange) {
             params.set('range', this.customDateRange);
         }
         if (this.autoRefresh) params.set('refresh', this.refreshInterval.toString());
+        if (this.logScale) params.set('log', '1');
 
         const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
         window.history.pushState({}, '', newUrl);
@@ -76,8 +78,10 @@ Alpine.store('urlState', {
         const params = new URLSearchParams(window.location.search);
 
         this.sqlFilter = params.get('sql') || '';
-        this.timeRange = params.get('time') || '3h';
+        this.timeRange = params.get('time') || '24h';
         this.customDateRange = params.get('range') || '';
+
+        this.logScale = params.get('log') === '1';
 
         const refresh = params.get('refresh');
         if (refresh) {
@@ -114,6 +118,10 @@ Alpine.store('urlState', {
 
     clearSqlFilter() {
         this.sqlFilter = '';
+    },
+
+    toggleLogScale() {
+        this.logScale = !this.logScale;
     },
 
     addFilter(queryPart) {

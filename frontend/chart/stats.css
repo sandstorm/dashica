@@ -1,4 +1,4 @@
-.stats {
+.dashica-stats {
     margin-left: auto;
     margin-right: auto;
     display: grid;
@@ -7,18 +7,18 @@
 }
 
 @media (min-width: 640px) {
-    .stats {
+    .dashica-stats {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (min-width: 1024px) {
-    .stats {
+    .dashica-stats {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
 
-.stats__stat {
+.dashica-stats__stat {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -26,7 +26,7 @@
     column-gap: 1rem;
     row-gap: 0.5rem;
 }
-.stats__stat dt {
+.dashica-stats__stat dt {
     font-size: 0.875rem; /* 14px */
     line-height: 1rem; /* 24px */
     font-weight: 500;
@@ -34,7 +34,7 @@
 
 }
 
-.stats__stat dd {
+.dashica-stats__stat dd {
     width: 100%;
     flex: none;
     font-size: 3rem; /* text-5xl = 3rem (48px) */

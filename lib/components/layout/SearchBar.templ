@@ -87,6 +87,19 @@ templ SearchBar(filterButtons []rendering.FilterButton) {
                     >
                 </div>
 
+                <!-- Log Scale Toggle -->
+                <div class="form-control">
+                    <label class="label cursor-pointer gap-2">
+                        <span class="label-text font-medium">Log scale</span>
+                        <input
+                                type="checkbox"
+                                :checked="$store.urlState.logScale"
+                                @change="$store.urlState.toggleLogScale()"
+                                class="toggle toggle-sm"
+                        />
+                    </label>
+                </div>
+
                 <!-- Divider -->
                 <div class="divider divider-horizontal m-0"></div>
 

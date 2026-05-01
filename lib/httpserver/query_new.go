@@ -208,7 +208,7 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 		if err != nil {
 			return fmt.Errorf("introspecting schema: %w", err)
 		}
-		opts.Settings["additional_table_filters"] = formatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
+		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
 		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
@@ -240,8 +240,8 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 	return nil
 }
 
-// formatClickhouseMap handles the special case of additional_table_filters
-func formatClickhouseMap(input map[string]string) string {
+// FormatClickhouseMap handles the special case of additional_table_filters
+func FormatClickhouseMap(input map[string]string) string {
 	var outputParts []string
 	for k, v := range input {
 		outputParts = append(outputParts, fmt.Sprintf("'%s': '%s'",
@@ -304,7 +304,7 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		if err != nil {
 			return fmt.Errorf("introspecting schema: %w", err)
 		}
-		opts.Settings["additional_table_filters"] = formatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
+		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range
 		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
