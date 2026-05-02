@@ -13,10 +13,13 @@ export type ClickhouseSchema = {
 }
 
 
-export async function query(baseUrl: string, filters: any): Promise<QueryResult> {
+export async function query(baseUrl: string, filters: any, widgetParams?: Record<string, string>): Promise<QueryResult> {
     const params = new URLSearchParams();
     if (filters) {
         params.append("filters", JSON.stringify(filters));
+    }
+    if (widgetParams && Object.keys(widgetParams).length > 0) {
+        params.append("params", JSON.stringify(widgetParams));
     }
 
     let abortController = new AbortController();

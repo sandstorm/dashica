@@ -49,7 +49,7 @@ Alpine.data('chart', () => ({
         Alpine.effect(async () => {
             if (!this._visible) return;
             try {
-                this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter())
+                this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter(), this.$store.urlState.widgetParams)
             } catch (e) {
                 this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message} (chart type: ${chartType})</b>`;
                 throw e

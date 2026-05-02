@@ -13,6 +13,14 @@ func Timestamp15Min() TimestampedField {
 	}
 }
 
+func Timestamp5Min() TimestampedField {
+	return &fieldImpl{
+		definition:              "toStartOfInterval(timestamp, INTERVAL 5 MINUTE)::DateTime64",
+		alias:                   "time",
+		timestamp_xBucketSizeMs: 5 * 60 * 1000,
+	}
+}
+
 func NewFieldAlias(alias string) TimestampedField {
 	return &fieldImpl{
 		definition: alias,

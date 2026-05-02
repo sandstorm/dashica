@@ -17,6 +17,7 @@ Alpine.store('urlState', {
     autoRefresh: false,
     refreshInterval: 30,
     logScale: false,
+    widgetParams: {} as Record<string, string>,
 
     init() {
         this._loadFromUrl();
@@ -39,6 +40,8 @@ Alpine.store('urlState', {
             this.timeRange;
             this.customDateRange;
             this.autoRefresh;
+            // deep-read widgetParams so we re-fire when individual entries change
+            JSON.stringify(this.widgetParams);
             debouncedUpdateUrlAndTriggerRefresh();
         });
 
@@ -73,6 +76,16 @@ Alpine.store('urlState', {
         this.sqlFilter = value;
     },
 
+    setWidgetParam(name: string, value: string) {
+        // Replace the whole map so Alpine sees a reference change for nested-key reactivity.
+        this.widgetParams = { ...this.widgetParams, [name]: value };
+    },
+
+    getWidgetParam(name: string, fallback = ''): string {
+        const v = this.widgetParams[name];
+        return v === undefined ? fallback : v;
+    },
+
 
     _updateUrl() {
         const params = new URLSearchParams();
@@ -84,6 +97,9 @@ Alpine.store('urlState', {
         }
         if (this.autoRefresh) params.set('refresh', this.refreshInterval.toString());
         if (this.logScale) params.set('log', '1');
+        if (Object.keys(this.widgetParams).length > 0) {
+            params.set('wp', JSON.stringify(this.widgetParams));
+        }
 
         const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
         window.history.pushState({}, '', newUrl);
@@ -97,6 +113,17 @@ Alpine.store('urlState', {
         this.customDateRange = params.get('range') || '';
 
         this.logScale = params.get('log') === '1';
+
+        const wp = params.get('wp');
+        if (wp) {
+            try {
+                this.widgetParams = JSON.parse(wp);
+            } catch {
+                this.widgetParams = {};
+            }
+        } else {
+            this.widgetParams = {};
+        }
 
         const refresh = params.get('refresh');
         if (refresh) {
