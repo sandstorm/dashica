@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
 type speedscopeQueryHandler struct {
@@ -48,6 +50,8 @@ func (qh speedscopeQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		opts.Parameters = params
 	}
 
+	query := string(fileContent)
+	filterClause := "1=1"
 	rawFilters := r.URL.Query().Get("filters")
 	if rawFilters != "" {
 		var filters DashboardFilters
@@ -55,11 +59,9 @@ func (qh speedscopeQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		schema, err := client.IntrospectSchema(r.Context())
-		if err != nil {
-			return fmt.Errorf("introspecting schema: %w", err)
+		if c := filters.SqlClause(); c != "" {
+			filterClause = "(" + c + ")"
 		}
-		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
 		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
@@ -76,8 +78,9 @@ func (qh speedscopeQueryHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		w.Header().Add("X-Dashica-Resolved-Time-Range", string(resolvedTimeRangeJson))
 
 	}
+	query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 
-	err = client.QueryToHandler(r.Context(), string(fileContent), opts, w)
+	err = client.QueryToHandler(r.Context(), query, opts, w)
 	if err != nil {
 		return fmt.Errorf("clickhouse query: %w", err)
 	}

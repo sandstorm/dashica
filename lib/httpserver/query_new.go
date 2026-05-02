@@ -32,32 +32,43 @@ type DashboardFilters struct {
 	To   interface{}
 }
 
+// SqlStringForAllTables is the legacy per-table filter map used by the deprecated query
+// handler (which relies on ClickHouse's `additional_table_filters` setting). New code paths
+// should use SqlClause() instead and inline the filter into the query body explicitly.
 func (f *DashboardFilters) SqlStringForAllTables(tables []string) map[string]string {
 	result := make(map[string]string)
+	clause := f.SqlClause()
+	for _, table := range tables {
+		result[table] = clause
+	}
+	return result
+}
+
+// SqlClause returns the AND-joined dashboard filter expression (time range + user SQL filter)
+// as a single SQL fragment, or empty string if no filters are configured. This fragment is
+// safe to inline directly into a query's WHERE clause and references the `timestamp` column
+// directly, so it assumes the surrounding query selects from a single base table that has
+// such a column.
+func (f *DashboardFilters) SqlClause() string {
 	f.calculateLegacyFilters()
 
-	for _, table := range tables {
-		queryParts := make([]string, 0, 3)
-
-		if fromStr, ok := f.From.(string); ok && fromStr != "" {
-			queryParts = append(queryParts, "timestamp >= ("+fromStr+")")
-		}
-		if fromFloat, ok := f.From.(float64); ok && fromFloat != 0 {
-			queryParts = append(queryParts, fmt.Sprintf("timestamp >= %d", int64(fromFloat)))
-		}
-		if toStr, ok := f.To.(string); ok && toStr != "" {
-			queryParts = append(queryParts, "timestamp <= ("+toStr+")")
-		}
-		if toFloat, ok := f.To.(float64); ok && toFloat != 0 {
-			queryParts = append(queryParts, fmt.Sprintf("timestamp <= %d", int64(toFloat)))
-		}
-		if f.SqlFilter != "" {
-			queryParts = append(queryParts, "("+f.SqlFilter+")")
-		}
-		result[table] = strings.Join(queryParts, " AND ")
+	queryParts := make([]string, 0, 3)
+	if fromStr, ok := f.From.(string); ok && fromStr != "" {
+		queryParts = append(queryParts, "timestamp >= ("+fromStr+")")
 	}
-
-	return result
+	if fromFloat, ok := f.From.(float64); ok && fromFloat != 0 {
+		queryParts = append(queryParts, fmt.Sprintf("timestamp >= %d", int64(fromFloat)))
+	}
+	if toStr, ok := f.To.(string); ok && toStr != "" {
+		queryParts = append(queryParts, "timestamp <= ("+toStr+")")
+	}
+	if toFloat, ok := f.To.(float64); ok && toFloat != 0 {
+		queryParts = append(queryParts, fmt.Sprintf("timestamp <= %d", int64(toFloat)))
+	}
+	if f.SqlFilter != "" {
+		queryParts = append(queryParts, "("+f.SqlFilter+")")
+	}
+	return strings.Join(queryParts, " AND ")
 }
 
 // Unix Timestamp with microsecond precision
@@ -173,8 +184,6 @@ func intPtr(i int64) *int64 {
 }
 
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
-	println("!!!!!!!!!!!!!!")
-	println(queryObj.Build())
 	// TODO: different server support per dashboard
 	client, err := qh.ClickhouseClientManager.GetClient("default")
 	if err != nil {
@@ -195,23 +204,21 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 		opts.Parameters = params
 	}
 
-	query := queryObj.Build()
 	rawFilters := r.URL.Query().Get("filters")
+	q := queryObj
+	var resolvedTimeRange *querying2.TimeRange
 	if rawFilters != "" && !queryObj.ShouldSkipFilters() {
 		var filters DashboardFilters
 		err = json.Unmarshal([]byte(rawFilters), &filters)
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		filters.calculateLegacyFilters()
-		schema, err := client.IntrospectSchema(r.Context())
-		if err != nil {
-			return fmt.Errorf("introspecting schema: %w", err)
+		if clause := filters.SqlClause(); clause != "" {
+			q = queryObj.With(sql.Where(clause))
 		}
-		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		resolvedTimeRange, err = filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
 		if err != nil {
 			return fmt.Errorf("resolving time range: %w", err)
 		}
@@ -223,10 +230,13 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 			return fmt.Errorf("JSON marshalling: %w", err)
 		}
 		w.Header().Add("X-Dashica-Resolved-Time-Range", string(resolvedTimeRangeJson))
+	}
 
+	query := q.Build()
+	if resolvedTimeRange != nil {
 		// adjust bucketing in query
-		q, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
-		query = q
+		adjusted, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
+		query = adjusted
 		if bucketSizeMs != nil {
 			w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *bucketSizeMs))
 		}
@@ -240,18 +250,18 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 	return nil
 }
 
-// FormatClickhouseMap handles the special case of additional_table_filters
+// FormatClickhouseMap formats a per-table filter map for ClickHouse's `additional_table_filters`
+// setting. Only used by the legacy file-based query handler (query_deprecated.go); new code paths
+// inline filters explicitly via the SqlBuilder Where() option or the DASHICA_FILTERS placeholder.
 func FormatClickhouseMap(input map[string]string) string {
 	var outputParts []string
 	for k, v := range input {
 		outputParts = append(outputParts, fmt.Sprintf("'%s': '%s'",
 			escapeString(k), escapeString(v)))
 	}
-
 	return fmt.Sprintf("{%s}", strings.Join(outputParts, ", "))
 }
 
-// escapeString escapes single quotes in strings
 func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
@@ -286,8 +296,9 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		opts.Parameters = params
 	}
 
-	query := queryObj.Build()
 	rawFilters := r.URL.Query().Get("filters")
+	q := queryObj
+	var resolvedTimeRange *querying2.TimeRange
 
 	debugInfo := DebugInfo{
 		Stats: make(map[string]interface{}),
@@ -299,15 +310,13 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		filters.calculateLegacyFilters()
-		schema, err := client.IntrospectSchema(r.Context())
-		if err != nil {
-			return fmt.Errorf("introspecting schema: %w", err)
+		filterClause := filters.SqlClause()
+		if filterClause != "" {
+			q = queryObj.With(sql.Where(filterClause))
 		}
-		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range
-		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		resolvedTimeRange, err = filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
 		if err != nil {
 			return fmt.Errorf("resolving time range: %w", err)
 		}
@@ -315,11 +324,14 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 
 		debugInfo.Stats["resolvedTimeRange"] = resolvedTimeRange
-		debugInfo.Stats["additionalTableFilters"] = filters.SqlStringForAllTables(schema.Tables)
+		debugInfo.Stats["filterClause"] = filterClause
+	}
 
+	query := q.Build()
+	if resolvedTimeRange != nil {
 		// adjust bucketing in query
-		q, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
-		query = q
+		adjusted, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
+		query = adjusted
 		if bucketSizeMs != nil {
 			debugInfo.Stats["bucketSizeMs"] = *bucketSizeMs
 		}

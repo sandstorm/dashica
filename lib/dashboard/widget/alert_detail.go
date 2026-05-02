@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
@@ -78,6 +80,8 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 		opts.Settings["date_time_input_format"] = "best_effort"
 		opts.Parameters = alertDef.Params
 
+		query := alertDef.Query
+		filterClause := "1=1"
 		rawFilters := r.URL.Query().Get("filters")
 		if rawFilters != "" {
 			var filters httpserver.DashboardFilters
@@ -86,12 +90,9 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 				http.Error(w, "unmarshalling filters: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			schema, err := client.IntrospectSchema(r.Context())
-			if err != nil {
-				http.Error(w, "introspecting schema: "+err.Error(), http.StatusInternalServerError)
-				return
+			if c := filters.SqlClause(); c != "" {
+				filterClause = "(" + c + ")"
 			}
-			opts.Settings["additional_table_filters"] = httpserver.FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 			resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
 			if err != nil {
@@ -100,6 +101,7 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 			}
 			w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
 		}
+		query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 
 		// Add threshold info so frontend can draw threshold lines
 		resolvedAlertIf, err := json.Marshal(alertDef.AlertIf)
@@ -109,7 +111,7 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 		}
 		w.Header().Add("X-Dashica-Alert-If", string(resolvedAlertIf))
 
-		err = client.QueryToHandler(r.Context(), alertDef.Query, opts, w)
+		err = client.QueryToHandler(r.Context(), query, opts, w)
 		if err != nil {
 			http.Error(w, "clickhouse query: "+err.Error(), http.StatusInternalServerError)
 			return

@@ -23,7 +23,6 @@ type Dashica interface {
 	Log() zerolog.Logger
 	RegisterDashboardGroup(title string) Dashica
 	RegisterDashboard(url string, dashboard dashboard.Dashboard) Dashica
-	ScanAndRegisterMarkdownDashboards(baseDir string, pathPrefix string) Dashica
 }
 
 func New() Dashica {

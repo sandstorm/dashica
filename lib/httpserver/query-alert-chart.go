@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog"
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
 type queryAlertChartHandler struct {
@@ -38,6 +40,8 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	opts.Parameters = alertDefinition.Params
 
+	query := alertDefinition.Query
+	filterClause := "1=1"
 	rawFilters := r.URL.Query().Get("filters")
 	if rawFilters != "" {
 		var filters DashboardFilters
@@ -45,11 +49,9 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		schema, err := client.IntrospectSchema(r.Context())
-		if err != nil {
-			return fmt.Errorf("introspecting schema: %w", err)
+		if c := filters.SqlClause(); c != "" {
+			filterClause = "(" + c + ")"
 		}
-		opts.Settings["additional_table_filters"] = FormatClickhouseMap(filters.SqlStringForAllTables(schema.Tables))
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
 		resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
@@ -58,6 +60,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		}
 		w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
 	}
+	query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 
 	resolvedAlertIf, err := json.Marshal(alertDefinition.AlertIf)
 	if err != nil {
@@ -65,7 +68,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Add("X-Dashica-Alert-If", string(resolvedAlertIf))
 
-	err = client.QueryToHandler(r.Context(), alertDefinition.Query, opts, w)
+	err = client.QueryToHandler(r.Context(), query, opts, w)
 	if err != nil {
 		return fmt.Errorf("clickhouse query: %w", err)
 	}
