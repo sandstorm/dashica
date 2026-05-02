@@ -124,10 +124,10 @@ export function table(queryResult: any, extProps: any) {
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
                 const dt = new Date(value);
-                const start = new Date(dt.getTime() - 5 * 60 * 1000);
-                const end = new Date(dt.getTime() + 5 * 60 * 1000);
+                const startSec = (dt.getTime() - 5 * 60 * 1000) / 1000;
+                const endSec = (dt.getTime() + 5 * 60 * 1000) / 1000;
                 window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} BETWEEN '${start.toISOString()}' AND '${end.toISOString()}'`
+                    detail: `${fieldName} BETWEEN ${startSec} AND ${endSec}`
                 }));
             }
         },
@@ -136,10 +136,10 @@ export function table(queryResult: any, extProps: any) {
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
                 const dt = new Date(value);
-                const start = new Date(dt.getTime() - 60 * 60 * 1000);
-                const end = new Date(dt.getTime() + 60 * 60 * 1000);
+                const startSec = (dt.getTime() - 60 * 60 * 1000) / 1000;
+                const endSec = (dt.getTime() + 60 * 60 * 1000) / 1000;
                 window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} BETWEEN '${start.toISOString()}' AND '${end.toISOString()}'`
+                    detail: `${fieldName} BETWEEN ${startSec} AND ${endSec}`
                 }));
             }
         },
@@ -148,10 +148,10 @@ export function table(queryResult: any, extProps: any) {
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
                 const dt = new Date(value);
-                const start = new Date(dt.getTime() - 24 * 60 * 60 * 1000);
-                const end = new Date(dt.getTime() + 24 * 60 * 60 * 1000);
+                const startSec = (dt.getTime() - 24 * 60 * 60 * 1000) / 1000;
+                const endSec = (dt.getTime() + 24 * 60 * 60 * 1000) / 1000;
                 window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} BETWEEN '${start.toISOString()}' AND '${end.toISOString()}'`
+                    detail: `${fieldName} BETWEEN ${startSec} AND ${endSec}`
                 }));
             }
         }
