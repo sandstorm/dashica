@@ -144,7 +144,17 @@ func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, cli
 
 func (f *DashboardFilters) calculateLegacyFilters() {
 	if f.TimeRange == "custom" {
-		// TODO: IMPL ME FOR LEGACY SUPPORT
+		// Format from frontend (flatpickr / brush): "YYYY-MM-DD HH:MM to YYYY-MM-DD HH:MM",
+		// interpreted in the local time zone of the server.
+		parts := strings.Split(f.CustomTimeRange, " to ")
+		if len(parts) == 2 {
+			from, errFrom := time.ParseInLocation("2006-01-02 15:04", parts[0], time.Local)
+			to, errTo := time.ParseInLocation("2006-01-02 15:04", parts[1], time.Local)
+			if errFrom == nil && errTo == nil {
+				f.From = float64(from.Unix())
+				f.To = float64(to.Unix())
+			}
+		}
 	} else if f.TimeRange == "5m" {
 		f.From = "now() - INTERVAL 5 MINUTE"
 		f.To = "now()"

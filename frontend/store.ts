@@ -24,6 +24,10 @@ Alpine.store('urlState', {
         window.addEventListener('dashica-add-filter', (e) => {
             this.addFilter(e.detail);
         });
+        window.addEventListener('dashica-set-time', (e: any) => {
+            const {from, to} = e.detail;
+            this.setCustomTime(from, to);
+        });
 
         const debouncedUpdateUrlAndTriggerRefresh = debounce(() => {
             this._updateUrl();
@@ -52,9 +56,17 @@ Alpine.store('urlState', {
     getCombinedFilter() {
         return {
             timeRange: this.timeRange,
-            customTimeRange: this.customTimeRange,
+            customTimeRange: this.customDateRange,
             sqlFilter: this.sqlFilter,
         }
+    },
+
+    setCustomTime(from: Date, to: Date) {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const fmt = (d: Date) =>
+            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        this.timeRange = 'custom';
+        this.customDateRange = `${fmt(from)} to ${fmt(to)}`;
     },
 
     setSqlFilter(value) {
