@@ -161,9 +161,13 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 			Msg("Failed to register dashboard")
 	}
 
-	// add to the last dashboard group
+	// add to the last dashboard group; fall back to URL if no title was set on the dashboard
+	title := dashb.Title()
+	if title == "" {
+		title = url
+	}
 	d.dashboardGroups[len(d.dashboardGroups)-1].Entries = append(d.dashboardGroups[len(d.dashboardGroups)-1].Entries, rendering.MenuGroupEntry{
-		Title: url,
+		Title: title,
 		Url:   url,
 	})
 	return d

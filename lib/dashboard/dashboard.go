@@ -13,6 +13,8 @@ import (
 type Dashboard interface {
 	Widget(w widget.WidgetDefinition) Dashboard
 	WithLayout(layout rendering.LayoutFunc) Dashboard
+	WithTitle(title string) Dashboard
+	Title() string
 	FilterButton(title string, queryPart string) Dashboard
 	CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error
 }
@@ -24,7 +26,18 @@ func New() Dashboard {
 type dashboardImpl struct {
 	widgets       widget.Widgets
 	layout        rendering.LayoutFunc
+	title         string
 	filterButtons []rendering.FilterButton
+}
+
+func (d *dashboardImpl) WithTitle(title string) Dashboard {
+	cloned := *d
+	cloned.title = title
+	return &cloned
+}
+
+func (d *dashboardImpl) Title() string {
+	return d.title
 }
 
 func (d *dashboardImpl) Widget(w widget.WidgetDefinition) Dashboard {
