@@ -21,6 +21,9 @@ Alpine.store('urlState', {
     init() {
         this._loadFromUrl();
         window.addEventListener('popstate', () => this._loadFromUrl());
+        window.addEventListener('dashica-add-filter', (e) => {
+            this.addFilter(e.detail);
+        });
 
         const debouncedUpdateUrlAndTriggerRefresh = debounce(() => {
             this._updateUrl();
