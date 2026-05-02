@@ -97,6 +97,5 @@ Alpine.data('chart', () => ({
 
     handleResize(width: number, height: number) {
         this._width = width;
-        this.$el.style.height = `100%`;
     }
 }))

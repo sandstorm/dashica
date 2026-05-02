@@ -23,7 +23,7 @@ type Table struct {
 func NewTable(sql sql.SqlQueryable) *Table {
 	return &Table{
 		sql:    sql,
-		height: 200,
+		height: 500,
 		limit:  10000,
 	}
 }
@@ -94,9 +94,6 @@ func (b *Table) CollectHandlers(ctx *rendering.DashboardContext, registerHandler
 	// Build the SQL query
 	query := b.sql.With(
 		sql.Limit(b.limit),
-	/*sql.PrependSelect(b.x),
-	sql.GroupBy(b.x),
-	sql.Select(b.y),*/
 	)
 
 	return RegisterQueryHandlers(b.id, "table", query, ctx, registerHandler)
