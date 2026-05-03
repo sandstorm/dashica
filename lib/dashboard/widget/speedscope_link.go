@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"io/fs"
 	"net/http"
 
 	"github.com/a-h/templ"
@@ -14,6 +15,7 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
+	"github.com/sandstorm/dashica/speedscope_viewer"
 )
 
 // SpeedscopeLink renders an "Open Speedscope" link that, when clicked, opens the bundled
@@ -75,11 +77,21 @@ func (s *SpeedscopeLink) CollectHandlers(ctx *rendering.DashboardContext, regist
 
 	deps := ctx.Deps
 	query := s.sqlQuery
-	return registerHandler.Handle(s.id+"/speedscope-query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if err := registerHandler.Handle(s.id+"/speedscope-query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := serveSpeedscope(query, deps, w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	}))
+	})); err != nil {
+		return err
+	}
+
+	viewerFS, err := fs.Sub(speedscope_viewer.FS, "dist")
+	if err != nil {
+		return fmt.Errorf("subbing speedscope viewer FS: %w", err)
+	}
+	viewerPrefix := ctx.CurrentHandlerUrl + "/api/" + s.id + "/viewer"
+	return registerHandler.Handle(s.id+"/viewer/",
+		http.StripPrefix(viewerPrefix, http.FileServerFS(viewerFS)))
 }
 
 // serveSpeedscope runs the query and streams the result as space-delimited CSV — the format

@@ -56,6 +56,22 @@ func TestSpeedscopeLink_RegistersHandler(t *testing.T) {
 	}
 }
 
+func TestSpeedscopeLink_RegistersViewerHandler(t *testing.T) {
+	w := NewSpeedscopeLink(sql.New(sql.From("t"))).Id("widget-7")
+	rec := newRecordingCollector()
+	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
+	if err := w.CollectHandlers(ctx, rec); err != nil {
+		t.Fatalf("CollectHandlers: %v", err)
+	}
+	if _, ok := rec.handlers["widget-7/viewer/"]; !ok {
+		var keys []string
+		for k := range rec.handlers {
+			keys = append(keys, k)
+		}
+		t.Errorf("expected widget-7/viewer/ handler, got: %v", keys)
+	}
+}
+
 func TestSpeedscopeLink_Immutability(t *testing.T) {
 	original := NewSpeedscopeLink(sql.New(sql.From("t")))
 	_ = original.Title("hi")

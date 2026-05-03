@@ -14,6 +14,6 @@ export default () => ({
             u.set('params', JSON.stringify(wp));
         }
         const target = window.location.origin + this.widgetBaseUrl + '/speedscope-query?' + u.toString();
-        return window.location.origin + '/speedscope/#profileURL=' + encodeURIComponent(target);
+        return window.location.origin + this.widgetBaseUrl + '/viewer/#profileURL=' + encodeURIComponent(target);
     },
 });
