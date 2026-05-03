@@ -25,7 +25,6 @@
 .table-with-details {
     display: flex;
     flex-direction: column;
-    height: 100%;
 }
 
 /* Timestamp formatting */

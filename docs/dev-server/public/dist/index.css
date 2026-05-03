@@ -4151,7 +4151,6 @@
 .table-with-details {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 .autoTable__timestampDate {
   opacity: 0.6;
