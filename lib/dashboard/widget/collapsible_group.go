@@ -13,6 +13,7 @@ import (
 type CollapsibleGroup struct {
 	title   string
 	widgets Widgets
+	open    bool
 }
 
 func NewCollapsibleGroup() *CollapsibleGroup {
@@ -22,6 +23,12 @@ func NewCollapsibleGroup() *CollapsibleGroup {
 func (w *CollapsibleGroup) Title(title string) *CollapsibleGroup {
 	cloned := *w
 	cloned.title = title
+	return &cloned
+}
+
+func (w *CollapsibleGroup) Open() *CollapsibleGroup {
+	cloned := *w
+	cloned.open = true
 	return &cloned
 }
 
@@ -37,7 +44,7 @@ func (w *CollapsibleGroup) BuildComponents(ctx *rendering.DashboardContext) (tem
 		return nil, fmt.Errorf("collapsibleGroup: rendering widgets: %w", err)
 	}
 
-	return widget_component.CollapsibleGroup(w.title, templ.Join(components...)), nil
+	return widget_component.CollapsibleGroup(w.title, templ.Join(components...), w.open), nil
 }
 
 func (w *CollapsibleGroup) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {

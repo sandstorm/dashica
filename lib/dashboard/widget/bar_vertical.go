@@ -30,6 +30,8 @@ type BarVertical struct {
 	marginTop    *int
 	colorScheme  string
 	color        *color.ColorScale
+	sortReverse  *bool
+	tipChannels  map[string]string
 }
 
 func NewBarVertical(sql sql.SqlQueryable) *BarVertical {
@@ -126,6 +128,21 @@ func (b *BarVertical) Color(opts ...color.ColorScaleOption) *BarVertical {
 	return &cloned
 }
 
+// SortByY sorts the X axis by Y values. Pass reverse=true for descending order.
+func (b *BarVertical) SortByY(reverse bool) *BarVertical {
+	cloned := *b
+	cloned.sortReverse = &reverse
+	return &cloned
+}
+
+// TipChannels adds extra channels to the tooltip with custom labels.
+// channels maps display label → data field name, e.g. {"Instanz": "instance"}.
+func (b *BarVertical) TipChannels(channels map[string]string) *BarVertical {
+	cloned := *b
+	cloned.tipChannels = channels
+	return &cloned
+}
+
 func (b *BarVertical) AdjustQuery(opts ...sql.SqlBuilderOption) *BarVertical {
 	cloned := *b
 	cloned.sql = cloned.sql.With(opts...)
@@ -184,6 +201,12 @@ func (b *BarVertical) buildChartProps() map[string]interface{} {
 	}
 	if b.color != nil {
 		props["color"] = b.color
+	}
+	if b.sortReverse != nil {
+		props["sort"] = map[string]interface{}{"x": "y", "reverse": *b.sortReverse}
+	}
+	if len(b.tipChannels) > 0 {
+		props["tip"] = map[string]interface{}{"channels": b.tipChannels}
 	}
 
 	return props

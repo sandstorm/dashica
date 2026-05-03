@@ -29,6 +29,7 @@ type TimeBar struct {
 	marginBottom *int
 	marginTop    *int
 	color        *color.ColorScale
+	tipChannels  map[string]string
 }
 
 func (b *TimeBar) X(xField sql.TimestampedField) *TimeBar {
@@ -118,6 +119,13 @@ func (b *TimeBar) Color(opts ...color.ColorScaleOption) *TimeBar {
 	return &cloned
 }
 
+// TipChannels adds extra channels to the tooltip with custom labels.
+func (b *TimeBar) TipChannels(channels map[string]string) *TimeBar {
+	cloned := *b
+	cloned.tipChannels = channels
+	return &cloned
+}
+
 func (b *TimeBar) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeBar {
 	cloned := *b
 	cloned.sql = cloned.sql.With(opts...)
@@ -184,6 +192,9 @@ func (b *TimeBar) buildChartProps() map[string]interface{} {
 	}
 	if b.color != nil {
 		props["color"] = b.color
+	}
+	if len(b.tipChannels) > 0 {
+		props["tip"] = map[string]interface{}{"channels": b.tipChannels}
 	}
 
 	return props

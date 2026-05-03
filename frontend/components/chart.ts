@@ -1,6 +1,7 @@
 import Alpine from '@alpinejs/csp';
 
 import {timeBar} from '../chart/timeBar'
+import {timeLine} from '../chart/timeLine'
 import {barVertical} from '../chart/barVertical'
 import {barHorizontal} from '../chart/barHorizontal'
 import {timeHeatmap} from '../chart/timeHeatmap'
@@ -12,6 +13,7 @@ import {query} from "./util/clickhouse-new";
 
 const charts = {
     timeBar,
+    timeLine,
     barVertical,
     barHorizontal,
     timeHeatmap,

@@ -1,10 +1,19 @@
 package widget_component
 
-templ CollapsibleGroup(title string, content templ.Component) {
-    <details class="collapse collapse-arrow border-base-300 border">
-      <summary class="collapse-title font-semibold">{title}</summary>
-      <div class="collapse-content text-sm">
-        @content
-      </div>
-    </details>
+templ CollapsibleGroup(title string, content templ.Component, open bool) {
+    if open {
+        <details class="collapse collapse-arrow border-base-300 border" open>
+          <summary class="collapse-title font-semibold">{title}</summary>
+          <div class="collapse-content text-sm">
+            @content
+          </div>
+        </details>
+    } else {
+        <details class="collapse collapse-arrow border-base-300 border">
+          <summary class="collapse-title font-semibold">{title}</summary>
+          <div class="collapse-content text-sm">
+            @content
+          </div>
+        </details>
+    }
 }

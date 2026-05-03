@@ -57,6 +57,18 @@ interface ChartProps {
      * *fy* scale.
      */
     fy?: ChannelValue,
+
+    /**
+     * Sort the X domain by a channel value. E.g. {x: "y", reverse: true} sorts
+     * categories by their Y value descending.
+     */
+    sort?: {x: string, reverse?: boolean} | null,
+
+    /**
+     * Tooltip options. Pass {channels: {"Label": "field"}} for custom channel labels,
+     * or true/false to enable/disable.
+     */
+    tip?: boolean | {channels?: Record<string, string>},
 }
 
 async function _vertical(data: QueryResult, props: ChartProps) {
@@ -89,7 +101,8 @@ async function _vertical(data: QueryResult, props: ChartProps) {
                 y: props.y,
                 fx: props.fx,
                 fy: props.fy,
-                tip: true,
+                sort: props.sort,
+                tip: props.tip !== undefined ? props.tip : true,
                 fill: props.fill || (props.fx ? props.x : '#A8C1D1'),
             })
         ]
