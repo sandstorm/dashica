@@ -245,14 +245,13 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 		w.Header().Add("X-Dashica-Resolved-Time-Range", string(resolvedTimeRangeJson))
 	}
 
-	query := q.Build()
+	var bucketSizeMs *int64
 	if resolvedTimeRange != nil {
-		// adjust bucketing in query
-		adjusted, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
-		query = adjusted
-		if bucketSizeMs != nil {
-			w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *bucketSizeMs))
-		}
+		q, bucketSizeMs = q.AdjustBuckets(resolvedTimeRange.WidthS())
+	}
+	query := q.Build()
+	if bucketSizeMs != nil {
+		w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *bucketSizeMs))
 	}
 
 	err = client.QueryToHandler(r.Context(), query, opts, w)
@@ -343,14 +342,13 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		debugInfo.Stats["filterClause"] = filterClause
 	}
 
-	query := q.Build()
+	var bucketSizeMs *int64
 	if resolvedTimeRange != nil {
-		// adjust bucketing in query
-		adjusted, bucketSizeMs := querying2.Bucketing.AdjustBucketSizeInQuery(query, resolvedTimeRange)
-		query = adjusted
-		if bucketSizeMs != nil {
-			debugInfo.Stats["bucketSizeMs"] = *bucketSizeMs
-		}
+		q, bucketSizeMs = q.AdjustBuckets(resolvedTimeRange.WidthS())
+	}
+	query := q.Build()
+	if bucketSizeMs != nil {
+		debugInfo.Stats["bucketSizeMs"] = *bucketSizeMs
 	}
 
 	debugInfo.Query = query

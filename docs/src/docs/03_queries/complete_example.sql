@@ -1,8 +1,7 @@
 -- Enable automatic bucketing based on time range
--- BUCKET: toStartOfFifteenMinutes(timestamp)::DateTime64
+-- (opt in from Go via .With(sql.AutoBucketPlaceholder()))
 SELECT
-    -- Time bucket with proper casting
-    toStartOfFifteenMinutes(timestamp)::DateTime64 as timestamp,
+    {{DASHICA_BUCKET}}(timestamp)::DateTime64 as timestamp,
     concat(substring(toString(status), 1, 1), 'xx') as statusGroup,
     count(*) as request_count
 FROM mv_caddy_accesslog

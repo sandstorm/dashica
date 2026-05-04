@@ -40,3 +40,12 @@ func (f *fieldImpl) Alias() string {
 }
 
 var _ SqlField = (*fieldImpl)(nil)
+
+// autoBucketField is implemented by fields produced by AutoBucket / AutoBucketAs.
+// The interface is unexported so only fields built via those constructors can
+// participate in auto-granularity adjustment.
+type autoBucketField interface {
+	TimestampedField
+	column() string
+	withRounding(roundingFn string, sizeMs int64) autoBucketField
+}

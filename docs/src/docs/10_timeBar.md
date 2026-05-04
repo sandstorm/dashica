@@ -28,7 +28,7 @@ Your SQL query should return the following column types:
 
 ## Automatic Bucketing
 
-timeBar supports automatic time bucketing, where Dashica adjusts the granularity based on the selected time range. Add a `-- BUCKET:` comment to your SQL query:
+timeBar supports automatic time bucketing, where Dashica adjusts the granularity based on the selected time range. Use the `{{DASHICA_BUCKET}}` placeholder in your SQL file and opt in from Go with `sql.AutoBucketPlaceholder()` (or `sql.AutoBucket("timestamp")` in builder queries):
 
 ```js
 const n = document.createElement('pre');
@@ -36,7 +36,13 @@ n.innerHTML = hljs.highlight(await FileAttachment("03_queries/complete_example.s
 display(n);
 ```
 
-The `-- BUCKET:` comment must contain the *exact SQL expression* used in the `SELECT` clause. Dashica will automatically replace it with an appropriate granularity (1 second, 1 minute, 5 minutes, 15 minutes, 1 hour, 1 day, 1 week) based on your time range.
+```go
+widget.NewTimeBar(
+    sql.FromFile("…/timeline.sql").With(sql.AutoBucketPlaceholder()),
+)
+```
+
+The chosen granularity (1 second, 1 minute, 5 minutes, 15 minutes, 1 hour, 1 day, 1 week) follows the resolved time range.
 
 When auto-bucketing is active, the y-axis values are normalized to "per second" (e.g., "requests / s") for easier comparison across different bucket sizes.
 
@@ -65,7 +71,7 @@ display(chart.timeBar(
 
 ## Manual xBucketSize
 
-If you don't use auto-bucketing with `-- BUCKET:`, you must specify the `xBucketSize` parameter in milliseconds:
+If you don't use auto-bucketing (no `{{DASHICA_BUCKET}}` placeholder / `AutoBucket` field), you must specify the `xBucketSize` parameter in milliseconds:
 
 ```js echo
 display(chart.timeBar(
@@ -365,7 +371,7 @@ For complete documentation on available marks and their options, see the [Observ
 
 - `x`: temporal data channel - i.e. column name containing timestamps (required)
 - `y`: numerical data channel - i.e. column name to use for the y axis (required)
-- `xBucketSize`: time bucket size in milliseconds (required unless using auto-bucketing with `-- BUCKET:`)
+- `xBucketSize`: time bucket size in milliseconds (required unless using auto-bucketing via `{{DASHICA_BUCKET}}` / `AutoBucket`)
 - `fill`: optional color stacking channel (categorical)
 - `fx`: optional faceting/grouping channel for the X Axis
 - `fy`: optional faceting/grouping channel for the Y Axis

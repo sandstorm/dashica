@@ -110,9 +110,21 @@ For time-bucketed queries with automatic granularity adjustment, see the next se
 
 ## Automatic Time Bucketing
 
-Dashica can automatically adjust the granularity of time buckets based on the selected time range to optimize query performance and visualization. This is enabled if dashica finds a `-- BUCKET:` comment in the query.
+Dashica can automatically adjust the granularity of time buckets based on the selected time range. Auto-granularity is opt-in per query and works two ways depending on whether you build the query in Go or load it from a `.sql` file.
 
-When you add a special `-- BUCKET:` comment to your query, Dashica will automatically replace the bucketing function with an appropriate granularity based on the current timespan:
+**Go builder queries** opt in by selecting an `sql.AutoBucket("timestamp")` field:
+
+```go
+sql.New(
+    sql.Select(sql.AutoBucket("timestamp")), // chosen rounding fn follows the time range
+    sql.Select(sql.Count()),
+    sql.From("mv_caddy_accesslog"),
+    sql.GroupBy(sql.AutoBucket("timestamp")),
+)
+```
+
+**SQL-file queries** opt in by writing the `{{DASHICA_BUCKET}}` placeholder in
+the SQL and attaching `sql.AutoBucketPlaceholder()` at the Go callsite:
 
 ```js
 const n = document.createElement('pre');
@@ -120,19 +132,22 @@ n.innerHTML = hljs.highlight(await FileAttachment("03_queries/bucketing_example.
 display(n);
 ```
 
-The key points:
-- The `-- BUCKET:` comment must contain the *exact SQL expression* which is used in the `SELECT` clause, because it is changed via string replacement.
-- Always cast to `::DateTime64` for proper time handling
-- Group by the bucket column (typically named `timestamp` or `time`)
+```go
+widget.NewTimeBar(
+    sql.FromFile("…/timeline.sql").With(sql.AutoBucketPlaceholder()),
+)
+```
+
+Without the explicit opt-in, queries are sent to ClickHouse unchanged. A literal `{{DASHICA_BUCKET}}` left in a file without `AutoBucketPlaceholder()` will fail to parse — failing loud is preferable to silent skip.
 
 ### Available Bucket Sizes
 
-Based on your time range width, Dashica will choose from these granularities (always using the smallest bucket that stays within ~720 buckets):
+Based on your time range width, Dashica picks from these granularities (always using the smallest bucket that stays within ~720 buckets):
 
 - **1 second** - `toStartOfSecond(timestamp)`
 - **1 minute** - `toStartOfMinute(timestamp)`
 - **5 minutes** - `toStartOfFiveMinutes(timestamp)`
-- **15 minutes** - `toStartOfFifteenMinutes(timestamp)` (default in `-- BUCKET:` comment)
+- **15 minutes** - `toStartOfFifteenMinutes(timestamp)`
 - **1 hour** - `toStartOfHour(timestamp)`
 - **1 day** - `toStartOfDay(timestamp)`
 - **1 week** - `toStartOfWeek(timestamp)`
@@ -336,7 +351,7 @@ display(chart.timeBar(data, {
 ```
 
 This example demonstrates:
-- ✅ Automatic bucketing with `-- BUCKET:` comment
+- ✅ Automatic bucketing via the `{{DASHICA_BUCKET}}` placeholder + `sql.AutoBucketPlaceholder()`
 - ✅ Proper `::DateTime64` casting for timestamps
 - ✅ Using query parameters for reusability
 - ✅ Grouping by aliased columns

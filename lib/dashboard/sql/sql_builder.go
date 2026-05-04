@@ -10,14 +10,15 @@ type SqlBuildCtx interface {
 }
 
 type SqlQuery struct {
-	selectF           []SqlField
-	from              string
-	where             []string
-	groupBy           []SqlField
-	orderBy           []SqlField
-	limit             int
-	shouldSkipFilters bool
-	database          string
+	selectF               []SqlField
+	from                  string
+	where                 []string
+	groupBy               []SqlField
+	orderBy               []SqlField
+	limit                 int
+	shouldSkipFilters     bool
+	database              string
+	autoBucketPlaceholder bool // routed to *SqlFile via With(); ignored on *SqlQuery itself
 }
 
 type SqlBuilderOption func(*SqlQuery)
@@ -36,6 +37,15 @@ func PrependSelect(field SqlField) SqlBuilderOption {
 func SkipFilters() SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.shouldSkipFilters = true
+	}
+}
+
+// AutoBucketPlaceholder marks an SqlFile as participating in auto-granularity
+// via the {{DASHICA_BUCKET}} placeholder. Has no effect on *SqlQuery (which
+// opts in via the AutoBucket field instead).
+func AutoBucketPlaceholder() SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.autoBucketPlaceholder = true
 	}
 }
 
@@ -93,6 +103,47 @@ func (b *SqlQuery) With(opts ...SqlBuilderOption) SqlQueryable {
 
 func (b *SqlQuery) ShouldSkipFilters() bool {
 	return b.shouldSkipFilters
+}
+
+// AdjustBuckets returns a clone with every AutoBucket field rebaked at the
+// rounding function chosen for the given time-range width, plus the chosen
+// bucket size in milliseconds. Returns the receiver and nil if the query has
+// no AutoBucket fields (i.e. did not opt in to auto-granularity).
+func (b *SqlQuery) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
+	if !hasAutoBucket(b.selectF) && !hasAutoBucket(b.groupBy) && !hasAutoBucket(b.orderBy) {
+		return b, nil
+	}
+	roundingFn, sizeS := bucketSelector(widthS)
+	cloned := *b
+	cloned.selectF = rebakeAutoBuckets(b.selectF, roundingFn, sizeS*1000)
+	cloned.groupBy = rebakeAutoBuckets(b.groupBy, roundingFn, sizeS*1000)
+	cloned.orderBy = rebakeAutoBuckets(b.orderBy, roundingFn, sizeS*1000)
+	sizeMs := sizeS * 1000
+	return &cloned, &sizeMs
+}
+
+func hasAutoBucket(fields []SqlField) bool {
+	for _, f := range fields {
+		if _, ok := f.(autoBucketField); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func rebakeAutoBuckets(fields []SqlField, roundingFn string, sizeMs int64) []SqlField {
+	if len(fields) == 0 {
+		return fields
+	}
+	out := make([]SqlField, len(fields))
+	for i, f := range fields {
+		if ab, ok := f.(autoBucketField); ok {
+			out[i] = ab.withRounding(roundingFn, sizeMs)
+		} else {
+			out[i] = f
+		}
+	}
+	return out
 }
 
 func (b *SqlQuery) Database() string {

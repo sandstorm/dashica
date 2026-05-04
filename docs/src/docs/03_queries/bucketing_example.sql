@@ -1,14 +1,13 @@
 -- Enable automatic bucketing based on time range:
--- the system will replace the SQL query part via search/replace depending on the chosen time range.
--- BUCKET: toStartOfFifteenMinutes(timestamp)::DateTime64
+-- The {{DASHICA_BUCKET}} placeholder is replaced with a ClickHouse rounding
+-- function (toStartOfMinute, toStartOfHour, ...) chosen for the resolved time
+-- range. Opt in from Go via .With(sql.AutoBucketPlaceholder()).
 SELECT
-    -- this toStartOfFifteenMinutes() function will be replaced by the system
-    -- depending on the chosen time range
-    toStartOfFifteenMinutes(timestamp)::DateTime64 as timestamp,
+    {{DASHICA_BUCKET}}(timestamp)::DateTime64 as timestamp,
     count(*) as request_count
 FROM mv_caddy_accesslog
 -- Remember: Global filters on 'timestamp' are applied automatically
 GROUP BY
     timestamp
-ORDER BY 
+ORDER BY
     timestamp ASC
