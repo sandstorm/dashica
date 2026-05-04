@@ -2,12 +2,10 @@ package clickhouse
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/config"
-
-	"strings"
-	"sync"
 )
 
 // Manager manages multiple Clickhouse clients
@@ -58,16 +56,4 @@ func (cm *Manager) GetClient(serverId string) (*Client, error) {
 	client = NewClient(&serverConfig, serverId, cm.logger)
 	cm.clients[serverId] = client
 	return client, nil
-}
-
-func (cm *Manager) GetClientForSqlFile(sqlFile string) (*Client, error) {
-	for serverId, config := range cm.config.ClickHouse {
-		for _, pattern := range config.QueryFilePatterns {
-			if strings.Contains(sqlFile, pattern) {
-				return cm.GetClient(serverId)
-			}
-		}
-	}
-
-	return cm.GetClient("default")
 }

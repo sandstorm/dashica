@@ -17,10 +17,15 @@ type SqlFile struct {
 	path              string
 	shouldSkipFilters bool
 	where             []string
+	database          string
 }
 
 func (f *SqlFile) ShouldSkipFilters() bool {
 	return f.shouldSkipFilters
+}
+
+func (f *SqlFile) Database() string {
+	return f.database
 }
 
 // FromFile creates a new SqlFile from the given path
@@ -60,19 +65,21 @@ func (f *SqlFile) Build() string {
 	return strings.ReplaceAll(string(content), DashicaFiltersPlaceholder, clause)
 }
 
-// With applies SqlBuilderOptions. Only Where() clauses are meaningful for SqlFile —
-// they get substituted into DASHICA_FILTERS placeholders by Build(). Other options
+// With applies SqlBuilderOptions. Only Where() and OnDatabase() are meaningful for
+// SqlFile — Where() clauses get substituted into DASHICA_FILTERS placeholders by
+// Build(); OnDatabase() routes the query to a non-default ClickHouse. Other options
 // (Select, From, GroupBy, ...) are ignored because the file's SQL is already complete.
 func (b *SqlFile) With(opts ...SqlBuilderOption) SqlQueryable {
 	cloned := *b
 	cloned.where = append([]string(nil), b.where...)
 	// Run the options against a throwaway SqlQuery so the *same* option functions
-	// can target both query types — this captures Where() additions into proxy.where.
-	proxy := &SqlQuery{where: cloned.where}
+	// can target both query types — this captures Where() and OnDatabase() additions.
+	proxy := &SqlQuery{where: cloned.where, database: cloned.database}
 	for _, opt := range opts {
 		opt(proxy)
 	}
 	cloned.where = proxy.where
+	cloned.database = proxy.database
 	return &cloned
 }
 
@@ -82,6 +89,9 @@ type SqlQueryable interface {
 	Build() string
 	With(opts ...SqlBuilderOption) SqlQueryable
 	ShouldSkipFilters() bool
+	// Database returns the ClickHouse server alias this query should run against,
+	// or "" when it should use the "default" server.
+	Database() string
 }
 
 var _ SqlQueryable = (*SqlQuery)(nil)

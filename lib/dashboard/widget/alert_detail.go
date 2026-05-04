@@ -69,7 +69,7 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 			return
 		}
 
-		client, err := ctx.Deps.ClickhouseClientManager.GetClientForSqlFile(alertDef.QueryPath)
+		client, err := ctx.Deps.ClickhouseClientManager.GetClient("default")
 		if err != nil {
 			http.Error(w, "get clickhouse client: "+err.Error(), http.StatusInternalServerError)
 			return

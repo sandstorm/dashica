@@ -21,6 +21,15 @@ func Timestamp5Min() TimestampedField {
 	}
 }
 
+// TimestampField builds a custom time-bucket field. Use the predefined Timestamp* helpers when possible.
+func TimestampField(definition, alias string, xBucketSizeMs int64) TimestampedField {
+	return &fieldImpl{
+		definition:              definition,
+		alias:                   alias,
+		timestamp_xBucketSizeMs: xBucketSizeMs,
+	}
+}
+
 func NewFieldAlias(alias string) TimestampedField {
 	return &fieldImpl{
 		definition: alias,

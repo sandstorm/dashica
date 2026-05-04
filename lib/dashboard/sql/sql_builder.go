@@ -17,6 +17,7 @@ type SqlQuery struct {
 	orderBy           []SqlField
 	limit             int
 	shouldSkipFilters bool
+	database          string
 }
 
 type SqlBuilderOption func(*SqlQuery)
@@ -66,6 +67,15 @@ func Limit(limit int) SqlBuilderOption {
 	}
 }
 
+// OnDatabase routes the query to a non-default ClickHouse server, by name
+// (the key in dashica_config.yaml's `clickhouse:` map). When unset, queries go
+// to the "default" server.
+func OnDatabase(name string) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.database = name
+	}
+}
+
 func New(opts ...SqlBuilderOption) *SqlQuery {
 	b := &SqlQuery{}
 	for _, opt := range opts {
@@ -83,6 +93,10 @@ func (b *SqlQuery) With(opts ...SqlBuilderOption) SqlQueryable {
 
 func (b *SqlQuery) ShouldSkipFilters() bool {
 	return b.shouldSkipFilters
+}
+
+func (b *SqlQuery) Database() string {
+	return b.database
 }
 
 func (b *SqlQuery) Build() string {

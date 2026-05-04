@@ -40,11 +40,10 @@ type LogConfig struct {
 
 // ClickHouseConfig holds configuration for a single ClickHouse server
 type ClickHouseConfig struct {
-	URL               string   `koanf:"url"`
-	User              string   `koanf:"user"`
-	Password          string   `koanf:"password"`
-	Database          string   `koanf:"database"`
-	QueryFilePatterns []string `koanf:"query_file_patterns"`
+	URL      string `koanf:"url"`
+	User     string `koanf:"user"`
+	Password string `koanf:"password"`
+	Database string `koanf:"database"`
 }
 
 // TODO: currently not supported
@@ -192,7 +191,6 @@ func PrintConfig(config *Config) {
 		fmt.Printf("    user: %s\n", ch.User)
 		fmt.Printf("    password: %s\n", maskSecret(ch.Password))
 		fmt.Printf("    database: %s\n", ch.Database)
-		fmt.Printf("    query_file_patterns: %s\n", ch.QueryFilePatterns)
 	}
 
 	fmt.Println("log:")

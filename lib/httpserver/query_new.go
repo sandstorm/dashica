@@ -194,8 +194,11 @@ func intPtr(i int64) *int64 {
 }
 
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
-	// TODO: different server support per dashboard
-	client, err := qh.ClickhouseClientManager.GetClient("default")
+	serverId := queryObj.Database()
+	if serverId == "" {
+		serverId = "default"
+	}
+	client, err := qh.ClickhouseClientManager.GetClient(serverId)
 	if err != nil {
 		return fmt.Errorf("get clickhouse client: %w", err)
 	}
@@ -287,8 +290,11 @@ type DebugInfo struct {
 
 // HandleDebug returns debug information about the query including the SQL string and EXPLAIN output
 func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
-	// TODO: different server support per dashboard
-	client, err := qh.ClickhouseClientManager.GetClient("default")
+	serverId := queryObj.Database()
+	if serverId == "" {
+		serverId = "default"
+	}
+	client, err := qh.ClickhouseClientManager.GetClient(serverId)
 	if err != nil {
 		return fmt.Errorf("get clickhouse client: %w", err)
 	}

@@ -197,7 +197,7 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 		return nil
 	}
 
-	clickhouseClient, err := b.alertEvaluator.clickhouseManager.GetClientForSqlFile(alertDefinition.QueryPath)
+	clickhouseClient, err := b.alertEvaluator.clickhouseManager.GetClient("default")
 	if err != nil {
 		return fmt.Errorf("loading clickhouse client for %s: %w", alertDefinition.QueryPath, err)
 	}

@@ -29,7 +29,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return fmt.Errorf("alert definition %s not found", alertId)
 	}
 
-	client, err := qh.clickhouseClientManager.GetClientForSqlFile(alertDefinition.QueryPath)
+	client, err := qh.clickhouseClientManager.GetClient("default")
 	if err != nil {
 		return fmt.Errorf("get clickhouse client for %s: %w", alertDefinition.QueryPath, err)
 	}

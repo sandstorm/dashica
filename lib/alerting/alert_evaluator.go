@@ -75,7 +75,7 @@ func (ar alertResultRows) MarshalZerologArray(a *zerolog.Array) {
 }
 
 func (e AlertEvaluator) EvaluateAlert(definition AlertDefinition) (*AlertResult, error) {
-	clickhouseClient, err := e.clickhouseManager.GetClientForSqlFile(definition.QueryPath)
+	clickhouseClient, err := e.clickhouseManager.GetClient("default")
 	if err != nil {
 		return nil, fmt.Errorf("loading clickhouse client for %s: %w", definition.QueryPath, err)
 	}
