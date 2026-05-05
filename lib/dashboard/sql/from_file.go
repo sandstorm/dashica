@@ -2,6 +2,7 @@ package sql
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 )
@@ -46,23 +47,9 @@ func (f *SqlFile) Database() string {
 // are applied — otherwise queries silently scan the full table. Files that
 // genuinely should not be filtered (system tables, alerts that own their own
 // WHERE, week-over-week comparisons, ...) must use FromFileWithoutFilters
-// instead. This panics at construction time when the placeholder is missing,
-// which surfaces the misconfiguration loudly at server startup.
+// instead. Placeholder validation happens when the query is built with the
+// project filesystem so embedded files can be used at runtime.
 func FromFile(path string) *SqlFile {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		panic(fmt.Sprintf("failed to read SQL file %s: %v", path, err))
-	}
-	if !strings.Contains(string(content), DashicaFiltersPlaceholder) {
-		panic(fmt.Sprintf(
-			"SQL file %s does not contain the %s placeholder. "+
-				"Add `WHERE %s` (or `AND %s` if a WHERE already exists) so the "+
-				"dashboard's time range and user filters get applied. If this query "+
-				"intentionally must not be filtered (system tables, alerts that own "+
-				"their WHERE, week-over-week comparisons, ...), use sql.FromFileWithoutFilters instead.",
-			path, DashicaFiltersPlaceholder, DashicaFiltersPlaceholder, DashicaFiltersPlaceholder,
-		))
-	}
 	return &SqlFile{
 		path: path,
 	}
@@ -88,7 +75,28 @@ func (f *SqlFile) Build() string {
 	if err != nil {
 		panic(fmt.Sprintf("failed to read SQL file %s: %v", f.path, err))
 	}
+	return f.buildFromContent(string(content))
+}
 
+func (f *SqlFile) BuildWithFS(fileSystem fs.ReadFileFS) (string, error) {
+	content, err := fs.ReadFile(fileSystem, f.path)
+	if err != nil {
+		return "", fmt.Errorf("reading SQL file %s: %w", f.path, err)
+	}
+	if !f.shouldSkipFilters && !strings.Contains(string(content), DashicaFiltersPlaceholder) {
+		return "", fmt.Errorf(
+			"SQL file %s does not contain the %s placeholder. "+
+				"Add `WHERE %s` (or `AND %s` if a WHERE already exists) so the "+
+				"dashboard's time range and user filters get applied. If this query "+
+				"intentionally must not be filtered (system tables, alerts that own "+
+				"their WHERE, week-over-week comparisons, ...), use sql.FromFileWithoutFilters instead",
+			f.path, DashicaFiltersPlaceholder, DashicaFiltersPlaceholder, DashicaFiltersPlaceholder,
+		)
+	}
+	return f.buildFromContent(string(content)), nil
+}
+
+func (f *SqlFile) buildFromContent(content string) string {
 	var clause string
 	if len(f.where) == 0 {
 		clause = "1=1"
@@ -99,7 +107,7 @@ func (f *SqlFile) Build() string {
 		}
 		clause = strings.Join(parts, " AND ")
 	}
-	out := strings.ReplaceAll(string(content), DashicaFiltersPlaceholder, clause)
+	out := strings.ReplaceAll(content, DashicaFiltersPlaceholder, clause)
 
 	// Substitute the bucket placeholder only when AutoBucketPlaceholder() was attached
 	// AND AdjustBuckets has chosen a rounding function. If the file uses the placeholder
@@ -109,6 +117,13 @@ func (f *SqlFile) Build() string {
 		out = strings.ReplaceAll(out, DashicaBucketPlaceholder, f.bucketRounding)
 	}
 	return out
+}
+
+func BuildWithFS(query SqlQueryable, fileSystem fs.ReadFileFS) (string, error) {
+	if fileQuery, ok := query.(*SqlFile); ok {
+		return fileQuery.BuildWithFS(fileSystem)
+	}
+	return query.Build(), nil
 }
 
 // AdjustBuckets is a no-op when the SqlFile was not built with

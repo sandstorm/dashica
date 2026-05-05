@@ -1,6 +1,7 @@
 package dashica
 
 import (
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -11,9 +12,9 @@ import (
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/embedfs"
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
+	"github.com/sandstorm/dashica/public"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -25,7 +26,7 @@ type Dashica interface {
 	RegisterDashboard(url string, dashboard dashboard.Dashboard) Dashica
 }
 
-func New() Dashica {
+func New(projectFS fs.ReadFileFS) Dashica {
 	cfg, err := config.LoadConfig(os.Getenv("APP_ENV"), false)
 	if err != nil {
 		println("Failed to load config: ", err.Error())
@@ -65,20 +66,11 @@ func New() Dashica {
 		Msg("Logging initialized. Starting to boot Dashica...")
 
 	mux := http.NewServeMux()
-	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("dashica-src/public/"))))
+	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.FS(public.FS))))
 
 	timeProvider := config.NewRealTimeProvider()
 	clickhouseClientManager := clickhouse.NewManager(cfg, logger)
 
-	workingDir, err := os.Getwd()
-	if err != nil {
-		logger.Fatal().
-			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
-			Err(err).
-			Msg("could not find working directory")
-	}
-
-	fileSystem := embedfs.GetFileSystem(workingDir)
 	alertTargetClickhouseClient, err := clickhouseClientManager.GetClient("alert_storage")
 	if err != nil {
 		logger.Fatal().
@@ -87,7 +79,7 @@ func New() Dashica {
 	}
 	alertResultStore := alerting2.NewAlertResultStore(logger, alertTargetClickhouseClient)
 	alertEvaluator := alerting2.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
-	alertManager := alerting2.NewAlertManager(cfg, logger, fileSystem, alertEvaluator, alertResultStore)
+	alertManager := alerting2.NewAlertManager(cfg, logger, projectFS, alertEvaluator, alertResultStore)
 
 	err = alertManager.DiscoverAlertDefinitions()
 	if err != nil {
@@ -101,7 +93,7 @@ func New() Dashica {
 		clickhouseClientManager,
 		logger,
 		timeProvider,
-		fileSystem,
+		projectFS,
 		alertResultStore,
 		alertEvaluator,
 		alertManager,

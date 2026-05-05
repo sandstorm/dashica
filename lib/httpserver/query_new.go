@@ -249,7 +249,10 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 	if resolvedTimeRange != nil {
 		q, bucketSizeMs = q.AdjustBuckets(resolvedTimeRange.WidthS())
 	}
-	query := q.Build()
+	query, err := sql.BuildWithFS(q, qh.FileSystem)
+	if err != nil {
+		return fmt.Errorf("building SQL query: %w", err)
+	}
 	if bucketSizeMs != nil {
 		w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *bucketSizeMs))
 	}
@@ -346,7 +349,10 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 	if resolvedTimeRange != nil {
 		q, bucketSizeMs = q.AdjustBuckets(resolvedTimeRange.WidthS())
 	}
-	query := q.Build()
+	query, err := sql.BuildWithFS(q, qh.FileSystem)
+	if err != nil {
+		return fmt.Errorf("building SQL query: %w", err)
+	}
 	if bucketSizeMs != nil {
 		debugInfo.Stats["bucketSizeMs"] = *bucketSizeMs
 	}

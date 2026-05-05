@@ -132,7 +132,11 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 	}
 
-	if err := client.QueryToHandler(r.Context(), q.Build(), opts, w); err != nil {
+	queryString, err := sql.BuildWithFS(q, deps.FileSystem)
+	if err != nil {
+		return fmt.Errorf("building SQL query: %w", err)
+	}
+	if err := client.QueryToHandler(r.Context(), queryString, opts, w); err != nil {
 		return fmt.Errorf("clickhouse query: %w", err)
 	}
 	return nil

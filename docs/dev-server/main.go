@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -16,7 +17,7 @@ func main() {
 		port = "8080"
 	}
 
-	d := dashica.New()
+	d := dashica.New(os.DirFS(".").(fs.ReadFileFS))
 
 	// Documentation section
 	d.RegisterDashboardGroup("📚 Documentation").
