@@ -6,6 +6,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
+	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
@@ -17,6 +18,9 @@ type TimeLine struct {
 	x            sql.TimestampedField
 	y            sql.SqlField
 	stroke       string
+	strokeField  *sql.SqlField
+	fx           *sql.SqlField
+	fy           *sql.SqlField
 	title        string
 	id           string
 	height       int
@@ -25,6 +29,8 @@ type TimeLine struct {
 	marginRight  *int
 	marginBottom *int
 	marginTop    *int
+	color        *color.ColorScale
+	tipChannels  map[string]string
 }
 
 func NewTimeLine(sql sql.SqlQueryable) *TimeLine {
@@ -49,6 +55,24 @@ func (b *TimeLine) Y(yField sql.SqlField) *TimeLine {
 func (b *TimeLine) Stroke(stroke string) *TimeLine {
 	cloned := *b
 	cloned.stroke = stroke
+	return &cloned
+}
+
+func (b *TimeLine) StrokeField(strokeField sql.SqlField) *TimeLine {
+	cloned := *b
+	cloned.strokeField = &strokeField
+	return &cloned
+}
+
+func (b *TimeLine) Fx(fxField sql.SqlField) *TimeLine {
+	cloned := *b
+	cloned.fx = &fxField
+	return &cloned
+}
+
+func (b *TimeLine) Fy(fyField sql.SqlField) *TimeLine {
+	cloned := *b
+	cloned.fy = &fyField
 	return &cloned
 }
 
@@ -100,6 +124,22 @@ func (b *TimeLine) MarginTop(margin int) *TimeLine {
 	return &cloned
 }
 
+func (b *TimeLine) Color(opts ...color.ColorScaleOption) *TimeLine {
+	cloned := *b
+	if cloned.color == nil {
+		cloned.color = color.New()
+	}
+	cloned.color = cloned.color.With(opts...)
+	return &cloned
+}
+
+// TipChannels adds extra channels to the tooltip with custom labels.
+func (b *TimeLine) TipChannels(channels map[string]string) *TimeLine {
+	cloned := *b
+	cloned.tipChannels = channels
+	return &cloned
+}
+
 func (b *TimeLine) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeLine {
 	cloned := *b
 	cloned.sql = cloned.sql.With(opts...)
@@ -146,20 +186,56 @@ func (b *TimeLine) buildChartProps() map[string]interface{} {
 	if b.marginTop != nil {
 		props["marginTop"] = *b.marginTop
 	}
-	if b.stroke != "" {
+	if b.strokeField != nil {
+		props["stroke"] = (*b.strokeField).Alias()
+	} else if b.stroke != "" {
 		props["stroke"] = b.stroke
+	}
+	if b.fx != nil {
+		props["fx"] = (*b.fx).Alias()
+	}
+	if b.fy != nil {
+		props["fy"] = (*b.fy).Alias()
+	}
+	if b.color != nil {
+		props["color"] = b.color
+	}
+	if len(b.tipChannels) > 0 {
+		props["tip"] = map[string]interface{}{"channels": b.tipChannels}
 	}
 
 	return props
 }
 
 func (b *TimeLine) buildQuery() sql.SqlQueryable {
-	return b.sql.With(
+	query := b.sql.With(
 		sql.PrependSelect(b.x),
 		sql.GroupBy(b.x),
 		sql.Select(b.y),
 		sql.OrderBy(b.x),
 	)
+
+	if b.strokeField != nil {
+		query = query.With(
+			sql.PrependSelect(*b.strokeField),
+			sql.GroupBy(*b.strokeField),
+			sql.OrderBy(*b.strokeField),
+		)
+	}
+	if b.fx != nil {
+		query = query.With(
+			sql.PrependSelect(*b.fx),
+			sql.GroupBy(*b.fx),
+		)
+	}
+	if b.fy != nil {
+		query = query.With(
+			sql.PrependSelect(*b.fy),
+			sql.GroupBy(*b.fy),
+		)
+	}
+
+	return query
 }
 
 func (b *TimeLine) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
