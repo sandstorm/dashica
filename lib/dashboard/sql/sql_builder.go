@@ -194,9 +194,9 @@ func (b *SqlQuery) Build() string {
 		sb.WriteString("WHERE\n")
 		for i, clause := range b.where {
 			if i == 0 {
-				sb.WriteString(fmt.Sprintf("    %s\n", clause))
+				sb.WriteString(fmt.Sprintf("    (%s)\n", clause))
 			} else {
-				sb.WriteString(fmt.Sprintf("    AND %s\n", clause))
+				sb.WriteString(fmt.Sprintf("    AND (%s)\n", clause))
 			}
 		}
 	}
