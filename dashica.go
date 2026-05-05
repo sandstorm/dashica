@@ -1,6 +1,7 @@
 package dashica
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ type Dashica interface {
 	http.Handler
 	Config() config.Config
 	Log() zerolog.Logger
+	ListenAndServe() error
 	RegisterDashboardGroup(title string) Dashica
 	RegisterDashboard(url string, dashboard dashboard.Dashboard) Dashica
 }
@@ -127,6 +129,21 @@ func (d *DashicaImpl) Config() config.Config {
 
 func (d *DashicaImpl) Log() zerolog.Logger {
 	return d.log
+}
+
+func (d *DashicaImpl) ListenAndServe() error {
+	addr := fmt.Sprintf(":%d", d.cfg.Server.Port)
+	d.log.Info().
+		Int("port", d.cfg.Server.Port).
+		Msg("Starting Dashica HTTP server")
+
+	return http.ListenAndServe(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/home", http.StatusFound)
+			return
+		}
+		d.ServeHTTP(w, r)
+	}))
 }
 
 func (d *DashicaImpl) RegisterDashboardGroup(title string) Dashica {
