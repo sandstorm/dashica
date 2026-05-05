@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/sandstorm/dashica/server/util"
+	"github.com/sandstorm/dashica/lib/util"
 )
 
 // AlertConfiguration corresponds to a full alerts.yaml file.

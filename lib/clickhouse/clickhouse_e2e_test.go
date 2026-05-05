@@ -2,8 +2,8 @@ package clickhouse
 
 import (
 	"context"
-	"github.com/sandstorm/dashica/server/test-utils/assertions"
-	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
+	"github.com/sandstorm/dashica/lib/testutil/assertions"
+	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"os"
 	"testing"
 	"time"

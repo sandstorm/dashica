@@ -6,6 +6,8 @@
 
 
 @import "./components/application.css";
+@import "./components/chart.css";
+@import "./components/markdown.css";
 @import "./components/legacyMarkdown.css";
 @import "./components/searchBar.css";
 @import "flatpickr/dist/flatpickr.min.css";

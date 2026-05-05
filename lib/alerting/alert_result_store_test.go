@@ -7,19 +7,19 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
-	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
+	"github.com/sandstorm/dashica/lib/config"
+	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"github.com/stretchr/testify/require"
 )
 
 // TestAlertResultStore tests with a real Clickhouse database
 func TestAlertResultStore(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
-	config, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(config, logger)
+	cfg, _ := testServer.LoadTestingConfig(t)
+	clickhouseManager := clickhouse.NewManager(cfg, logger)
 	clickhouseClient, err := clickhouseManager.GetClient("alert_storage")
 	require.NoError(t, err)
-	currentTime := core.NewVirtualTimeProvider()
+	currentTime := config.NewVirtualTimeProvider()
 	alertResultStore := NewAlertResultStore(logger, clickhouseClient)
 
 	t.Run("PersistResultAndNotifyIfChanged - updates in-memory state and database", func(t *testing.T) {

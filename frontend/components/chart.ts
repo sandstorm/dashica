@@ -33,6 +33,7 @@ Alpine.data('chart', () => ({
     _widgetBaseUrl: '',
     _chartType: '',
     _isLoading: false,
+    _initialLoad: true,
 
     init() {
 
@@ -70,6 +71,7 @@ Alpine.data('chart', () => ({
                     const chart = await charts[chartType](this._queryResult, finalChartProps);
                     this.$refs.chartContainer.innerHTML = '';
                     this.$refs.chartContainer.appendChild(chart);
+                    this._initialLoad = false;
                 }
             } catch (e) {
                 this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message} (chart type: ${chartType})</b>`;

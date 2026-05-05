@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
+	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -168,8 +168,8 @@ func TestBatchEvaluator_BucketCalculation(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	// Create minimal dependencies to initialize BatchEvaluator
-	config, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(config, logger)
+	cfg, _ := testServer.LoadTestingConfig(t)
+	clickhouseManager := clickhouse.NewManager(cfg, logger)
 	clickhouseClient, err := clickhouseManager.GetClient("alert_storage")
 	require.NoError(t, err)
 	alertResultStore := NewAlertResultStore(logger, clickhouseClient)

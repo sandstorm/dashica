@@ -1,7 +1,11 @@
 package logging
 
 const (
-	EventModule = "event_module"
+	EventModule     = "event_module"
+	CustomerTenant  = "customer_tenant"
+	CustomerProject = "customer_project"
+	HostGroup       = "host_group"
+	HostName        = "host_name"
 )
 
 // event datasets

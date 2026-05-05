@@ -11,9 +11,9 @@ import (
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/embedfs"
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
-	app "github.com/sandstorm/dashica/server"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -78,7 +78,7 @@ func New() Dashica {
 			Msg("could not find working directory")
 	}
 
-	fileSystem := app.GetFileSystem(workingDir)
+	fileSystem := embedfs.GetFileSystem(workingDir)
 	alertTargetClickhouseClient, err := clickhouseClientManager.GetClient("alert_storage")
 	if err != nil {
 		logger.Fatal().

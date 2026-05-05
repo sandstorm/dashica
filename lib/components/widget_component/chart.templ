@@ -33,11 +33,18 @@ templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string, heigh
                 </button>
             </div>
         </div>
-        if height > 0 {
-            <div x-ref="chartContainer" style={ fmt.Sprintf("min-height: %dpx", height) }></div>
-        } else {
-            <div x-ref="chartContainer"></div>
-        }
+        <div class="relative">
+            <div
+                x-show="_initialLoad"
+                x-transition.opacity.duration.300ms
+                class="chart-shimmer absolute inset-0 rounded pointer-events-none"
+            ></div>
+            if height > 0 {
+                <div x-ref="chartContainer" style={ fmt.Sprintf("min-height: %dpx", height) }></div>
+            } else {
+                <div x-ref="chartContainer"></div>
+            }
+        </div>
     </div>
 }
 

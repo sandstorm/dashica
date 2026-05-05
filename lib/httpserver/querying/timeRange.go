@@ -3,7 +3,7 @@ package querying
 import (
 	"time"
 
-	"github.com/sandstorm/dashica/server/util"
+	"github.com/sandstorm/dashica/lib/util"
 )
 
 type TimeRange struct {

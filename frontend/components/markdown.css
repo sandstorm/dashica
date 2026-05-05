@@ -1,0 +1,39 @@
+/* Section-style headings for markdown widgets — balanced with chart titles,
+   not as heavy as Tailwind Typography defaults */
+.markdown-widget .prose h1 {
+    font-weight: 500;
+    font-size: 1.5rem;
+    line-height: 2rem;
+    letter-spacing: -0.01em;
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0;
+}
+
+.markdown-widget .prose h2 {
+    font-weight: 500;
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.markdown-widget .prose h3 {
+    font-weight: 500;
+    font-size: 1.1rem;
+    line-height: 1.5rem;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+/* When the markdown widget is the first child in a grid cell, drop the extra
+   top margin so it lines up with neighbouring widgets */
+.markdown-widget > .prose > :first-child {
+    margin-top: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .markdown-widget .prose h1 {
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+}

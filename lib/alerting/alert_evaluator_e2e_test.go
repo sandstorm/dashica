@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
-	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
+	"github.com/sandstorm/dashica/lib/config"
+	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"github.com/stretchr/testify/require"
 
 	"github.com/rs/zerolog"
@@ -17,12 +17,12 @@ func TestAlertEvaluatorE2E(t *testing.T) {
 	testServer.SetGoModuleAsWorkingDir(t)
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
-	config, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(config, logger)
-	timeProvider := core.NewVirtualTimeProvider()
+	cfg, _ := testServer.LoadTestingConfig(t)
+	clickhouseManager := clickhouse.NewManager(cfg, logger)
+	timeProvider := config.NewVirtualTimeProvider()
 	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, timeProvider)
 
-	alertManager := NewAlertManager(config, logger, os.DirFS("."), alertEvaluator, nil)
+	alertManager := NewAlertManager(cfg, logger, os.DirFS("."), alertEvaluator, nil)
 	alertManager.alertDefinitionPattern = "alerting/test_fixtures/alert_evaluator_e2e_alerts.yaml"
 	err := alertManager.DiscoverAlertDefinitions()
 	if err != nil {

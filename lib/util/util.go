@@ -29,3 +29,15 @@ func MapHandleError[T any, R any](items []T, fx func(T) (R, error)) ([]R, error)
 	}
 	return result, nil
 }
+
+func ValuesToArray[K comparable, T any](in map[K]*T) []T {
+	result := make([]T, 0, len(in))
+	for _, v := range in {
+		result = append(result, *v)
+	}
+	return result
+}
+
+func Int64P(i int64) *int64 {
+	return &i
+}

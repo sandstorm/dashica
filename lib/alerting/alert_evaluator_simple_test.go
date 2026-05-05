@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/server/core"
-	testServer "github.com/sandstorm/dashica/server/test-utils/test-server"
+	"github.com/sandstorm/dashica/lib/config"
+	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"github.com/stretchr/testify/require"
 
 	"github.com/rs/zerolog"
@@ -15,9 +15,9 @@ import (
 // TestAlertEvaluator tests with a real Clickhouse database
 func TestAlertEvaluatorSimple(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
-	config, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(config, logger)
-	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, core.NewVirtualTimeProvider())
+	cfg, _ := testServer.LoadTestingConfig(t)
+	clickhouseManager := clickhouse.NewManager(cfg, logger)
+	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, config.NewVirtualTimeProvider())
 
 	testCases := []struct {
 		name            string
