@@ -176,19 +176,6 @@ widget.NewMarkdown().
 
 ---
 
-### LegacyMarkdown
-
-Backward compatibility for Observable-based dashboards with placeholder support.
-
-` + "```go" + `
-widget.NewLegacyMarkdown().
-    File("legacy_dashboard.md")
-` + "```" + `
-
-**Note**: Use the new ` + "`Markdown`" + ` widget for new projects.
-
----
-
 ## Common Features
 
 Chart widgets support these common features:

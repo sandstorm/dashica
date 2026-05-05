@@ -45,12 +45,6 @@ The table `mv_caddy_accesslog` contains excerpts from Web Server (Caddy) access 
 - `request__method` (GET/POST/...)
 - `status` (200, 404, ...)
 
-<details>
-<summary>Click to show full table structure</summary>
-<pre>${clickhouse.showTableStructure('mv_caddy_accesslog')}</pre>
-</details>
-
-
 ## Place your first SQL file
 
 Create a .sql file in `src/` - we usually create a subfolder for each dashboard, and place the SQL file there;
