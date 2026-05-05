@@ -34,7 +34,7 @@ func (a *AlertOverview) BuildComponents(ctx *rendering.DashboardContext) (templ.
 		return nil, fmt.Errorf("alertOverview: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+a.id, "alertOverview", string(chartPropsJSON)), nil
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+a.id, "alertOverview", string(chartPropsJSON), 0), nil
 }
 
 const alertOverviewQuery = `

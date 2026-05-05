@@ -1,6 +1,8 @@
 package widget_component
 
-templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string) {
+import "fmt"
+
+templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string, height int) {
     <div
         x-data="chart"
         x-intersect.once="handleEnteredViewport()"
@@ -11,8 +13,16 @@ templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string) {
         data-chart-props={chartPropsJSON}
         data-widget-base-url={widgetBaseUrl}
     >
-        <!-- Button Bar - shows on hover -->
-        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-1">
+        <div
+            x-show="_isLoading"
+            x-transition.opacity.duration.150ms
+            class="absolute top-2 right-2 z-1 pointer-events-none flex items-center justify-center w-6 h-6 rounded-full bg-base-100/70 backdrop-blur-sm"
+            title="Refreshing…"
+        >
+            <span class="loading loading-spinner loading-xs opacity-70"></span>
+        </div>
+        <!-- Button Bar - shows on hover (shifted left so the refresh indicator can occupy the corner) -->
+        <div class="absolute top-2 right-10 opacity-0 group-hover:opacity-100 transition-opacity z-1">
             <div class="join">
                 <button
                     @click="toggleDebug()"
@@ -23,9 +33,11 @@ templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string) {
                 </button>
             </div>
         </div>
-        <div x-ref="chartContainer">
-            <div class="loading loading-spinner loading-lg"></div>
-        </div>
+        if height > 0 {
+            <div x-ref="chartContainer" style={ fmt.Sprintf("min-height: %dpx", height) }></div>
+        } else {
+            <div x-ref="chartContainer"></div>
+        }
     </div>
 }
 

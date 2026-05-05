@@ -52,7 +52,7 @@ func (a *AlertDetail) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		return nil, fmt.Errorf("alertDetail: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+a.id, "timeBar", string(chartPropsJSON)), nil
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+a.id, "timeBar", string(chartPropsJSON), 200), nil
 }
 
 func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {

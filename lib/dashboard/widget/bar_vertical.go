@@ -160,7 +160,7 @@ func (b *BarVertical) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		return nil, fmt.Errorf("barVertical: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "barVertical", string(chartPropsJSON)), nil
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "barVertical", string(chartPropsJSON), b.height), nil
 }
 
 func (b *BarVertical) buildChartProps() map[string]interface{} {

@@ -32,6 +32,7 @@ Alpine.data('chart', () => ({
     _width: 0,
     _widgetBaseUrl: '',
     _chartType: '',
+    _isLoading: false,
 
     init() {
 
@@ -50,11 +51,14 @@ Alpine.data('chart', () => ({
 
         Alpine.effect(async () => {
             if (!this._visible) return;
+            this._isLoading = true;
             try {
                 this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter(), this.$store.urlState.widgetParams)
             } catch (e) {
                 this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message} (chart type: ${chartType})</b>`;
                 throw e
+            } finally {
+                this._isLoading = false;
             }
         });
         // we use a separate Alpine.effect here, to not reload the result if e.g. only width and height change

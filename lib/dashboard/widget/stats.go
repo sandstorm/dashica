@@ -60,7 +60,7 @@ func (s *Stats) BuildComponents(ctx *rendering.DashboardContext) (templ.Componen
 		return nil, fmt.Errorf("stats: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+s.id, "stats", string(chartPropsJSON)), nil
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+s.id, "stats", string(chartPropsJSON), 0), nil
 }
 
 func (s *Stats) buildChartProps() map[string]interface{} {

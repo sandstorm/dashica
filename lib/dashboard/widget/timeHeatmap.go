@@ -106,7 +106,11 @@ func (h *TimeHeatmap) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		return nil, fmt.Errorf("timeHeatmap: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+h.id, "timeHeatmap", string(chartPropsJSON)), nil
+	heightVal := 0
+	if h.height != nil {
+		heightVal = *h.height
+	}
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+h.id, "timeHeatmap", string(chartPropsJSON), heightVal), nil
 }
 
 func (h *TimeHeatmap) buildChartProps() map[string]interface{} {

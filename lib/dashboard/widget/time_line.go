@@ -117,7 +117,7 @@ func (b *TimeLine) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 		return nil, fmt.Errorf("timeLine: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "timeLine", string(chartPropsJSON)), nil
+	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "timeLine", string(chartPropsJSON), b.height), nil
 }
 
 func (b *TimeLine) buildChartProps() map[string]interface{} {
