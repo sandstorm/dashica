@@ -96,6 +96,10 @@ func (h *TimeHeatmap) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		h.id = ctx.NextWidgetId()
 	}
 
+	if h.yBucketSize <= 0 {
+		return nil, fmt.Errorf("timeHeatmap: YBucketSize must be set to a positive value (was %d)", h.yBucketSize)
+	}
+
 	chartProps := h.buildChartProps()
 	chartPropsJSON, err := json.Marshal(chartProps)
 	if err != nil {

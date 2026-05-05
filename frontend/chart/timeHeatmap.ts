@@ -72,11 +72,10 @@ async function _heatmap(data: QueryResult, props: ChartProps) {
                 // @ts-ignore
                 x2: (d: any) => d[x] + props.xBucketSize,
 
-                y2: y,
-                // @ts-ignore
-                y1: (d: any) => d[y] - props.yBucketSize,
+                y2: (d: any) => Number(d[y]),
+                y1: (d: any) => Number(d[y]) - props.yBucketSize,
                 tip: true,
-                fill: props.fill,
+                fill: props.fill ? (d: any) => Number(d[props.fill as string]) : undefined,
             }),
             _brushMark,
             Plot.ruleY([0])
