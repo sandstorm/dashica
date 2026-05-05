@@ -45,6 +45,21 @@ Alpine.data('chart', () => ({
         this._widgetBaseUrl = widgetBaseUrl;
         this._chartType = chartType;
 
+        // Render the title immediately as a placeholder so loading dashboards
+        // are not a wall of anonymous boxes. Observable Plot renders its own
+        // <h2> title; the innerHTML='' below (when the chart is appended)
+        // replaces this placeholder seamlessly.
+        if (typeof chartProps.title === 'string' && chartProps.title.length > 0) {
+            const placeholder = document.createElement('h2');
+            placeholder.textContent = chartProps.title;
+            placeholder.style.font = 'bold 11pt sans-serif';
+            placeholder.style.margin = '0 0 0.5em 0';
+            placeholder.style.position = 'absolute';
+            placeholder.style.top = '0';
+            placeholder.style.left = '0';
+            this.$refs.chartContainer.appendChild(placeholder);
+        }
+
         this._colorSchemeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
             this._colorSchemeDark = event.matches ? "dark" : "light";

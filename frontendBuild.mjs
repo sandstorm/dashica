@@ -5,13 +5,11 @@ import fs from "fs";
 import path from "path";
 
 const outDir = "public/dist";
-const devServerOutDir = "docs/dev-server/public/dist";
 const speedscopeSrcDir = path.resolve("../app/speedscope");
 const speedscopeOutDir = path.resolve("speedscope_viewer/dist");
 
 // Ensure output directories exist
 fs.mkdirSync(outDir, { recursive: true });
-fs.mkdirSync(devServerOutDir, { recursive: true });
 
 await esbuild.build({
     entryPoints: ["frontend/index.js"],
@@ -19,9 +17,6 @@ await esbuild.build({
     bundle: true,
     plugins: [tailwindPlugin()],
 });
-
-// Copy to dev-server location
-fs.cpSync(outDir, devServerOutDir, { recursive: true });
 
 // Build the embedded Speedscope viewer (served per-widget by SpeedscopeLink).
 // The build output is consumed by speedscope_viewer/embed.go via //go:embed.
@@ -47,5 +42,4 @@ execSync(
 
 console.log("✅ Frontend built successfully!");
 console.log(`   Main:        ${outDir}`);
-console.log(`   Dev:         ${devServerOutDir}`);
 console.log(`   Speedscope:  ${speedscopeOutDir}`);
