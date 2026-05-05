@@ -21,6 +21,7 @@ type Config struct {
 	// Map of ClickHouse configurations indexed by server alias
 	ClickHouse map[string]ClickHouseConfig `koanf:"clickhouse"`
 	Log        LogConfig                   `koanf:"log"`
+	Server     ServerConfig                `koanf:"server"`
 
 	LetsEncrypt LetsEncryptConfig `koanf:"letsencrypt"`
 	// DevMode:
@@ -31,6 +32,11 @@ type Config struct {
 	Auth     AuthConfig     `koanf:"auth"`
 	Alerting AlertingConfig `koanf:"alerting"`
 }
+
+type ServerConfig struct {
+	Port int `koanf:"port"`
+}
+
 type LogConfig struct {
 	ToStdout  bool   `koanf:"to_stdout"`
 	FileName  string `koanf:"filename"`
@@ -114,6 +120,7 @@ func LoadConfig(appEnv string, forTesting bool) (*Config, error) {
 func loadDefaultConfig(k *koanf.Koanf) error {
 	// Setup default values
 	defaultConfig := map[string]interface{}{
+		"server.port":                         8081,
 		"log.to_stdout":                       true,
 		"letsencrypt.enabled":                 false,
 		"letsencrypt.dev_http_port":           80,
