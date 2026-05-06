@@ -14,6 +14,7 @@ import speedscopeLink from './components/speedscopeLink'
 import "./store"
 import "./components/chart";
 import "./components/debugDrawer";
+import "./components/sidebar";
 
 Alpine.plugin(intersect);
 Alpine.plugin(resize);
