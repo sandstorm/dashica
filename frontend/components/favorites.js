@@ -54,35 +54,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateButtons() {
-        document.querySelectorAll('.star-btn').forEach(btn => {
+        document.querySelectorAll('.star-btn[data-url]').forEach(btn => {
             const fav = isFav(btn.dataset.url);
             btn.textContent = fav ? '★' : '☆';
             btn.classList.toggle('star-btn--active', fav);
             btn.title = fav ? 'Remove from favorites' : 'Add to favorites';
-        });
-    }
-
-    function addButtons() {
-        document.querySelectorAll(
-            '.application__sidebar ul.menu > li:not(#favorites-group) ul li'
-        ).forEach(li => {
-            if (li.querySelector('.star-btn')) { return; }
-            const a = li.querySelector('a[href]');
-            if (!a) { return; }
-
-            const url = a.getAttribute('href');
-            const title = a.textContent.trim();
-            const btn = document.createElement('button');
-            btn.className = 'star-btn' + (isFav(url) ? ' star-btn--active' : '');
-            btn.dataset.url = url;
-            btn.textContent = isFav(url) ? '★' : '☆';
-            btn.title = isFav(url) ? 'Remove from favorites' : 'Add to favorites';
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                toggle(url, title);
-            });
-            li.appendChild(btn);
         });
     }
 
@@ -91,6 +67,14 @@ document.addEventListener('DOMContentLoaded', function () {
         updateButtons();
     }
 
-    addButtons();
+    document.querySelectorAll('.star-btn[data-url]').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggle(btn.dataset.url, btn.dataset.title);
+        });
+    });
+
+    updateButtons();
     renderGroup();
 });

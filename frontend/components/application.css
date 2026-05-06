@@ -46,6 +46,11 @@
     opacity: 1;
 }
 
+a.menu-active + .star-btn {
+    color: white;
+    opacity: 1;
+}
+
 .application__content {
     margin-top: 1.5rem;
 }
