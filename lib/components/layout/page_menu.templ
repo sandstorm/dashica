@@ -5,19 +5,38 @@ import (
 )
 
 templ PageMenu(renderingContext rendering.DashboardContext) {
-    <ul class="menu">
-    for _, group := range *renderingContext.MainMenu {
-        <li>
-            <h2 class="menu-title">{group.Title}</h2>
-            <ul>
-            for _, entry := range group.Entries {
+    <div x-data="favorites">
+        <ul class="menu">
+            <li x-show="items.length > 0" style="display:none">
+                <h2 class="menu-title">Favorites</h2>
+                <ul>
+                    <template x-for="fav in items" :key="fav.url">
+                        <li>
+                            <a :href="fav.url" :class="fav.url === currentUrl ? 'menu-active' : ''" x-text="fav.title"></a>
+                        </li>
+                    </template>
+                </ul>
+            </li>
+            for _, group := range *renderingContext.MainMenu {
                 <li>
-                    <a href={entry.Url} class={templ.KV("menu-active", entry.Url == renderingContext.CurrentHandlerUrl)}>{entry.Title}</a>
-                    <button class="star-btn" data-url={string(entry.Url)} data-title={entry.Title}>☆</button>
+                    <h2 class="menu-title">{group.Title}</h2>
+                    <ul>
+                    for _, entry := range group.Entries {
+                        <li>
+                            <a href={entry.Url} class={templ.KV("menu-active", entry.Url == renderingContext.CurrentHandlerUrl)}>{entry.Title}</a>
+                            <button
+                                class="star-btn"
+                                @click="toggle($el.dataset.url, $el.dataset.title)"
+                                :class="isFav($el.dataset.url) ? 'star-btn--active' : ''"
+                                x-text="isFav($el.dataset.url) ? '★' : '☆'"
+                                data-url={string(entry.Url)}
+                                data-title={entry.Title}>
+                            </button>
+                        </li>
+                    }
+                    </ul>
                 </li>
             }
-            </ul>
-        </li>
-      }
-    </ul>
+        </ul>
+    </div>
 }

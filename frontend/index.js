@@ -15,7 +15,7 @@ import "./store"
 import "./components/chart";
 import "./components/debugDrawer";
 import "./components/sidebar";
-import "./components/favorites";
+import favorites from './components/favorites';
 
 Alpine.plugin(intersect);
 Alpine.plugin(resize);
@@ -25,6 +25,7 @@ Alpine.data('searchBar', searchBar);
 Alpine.data('textInput', textInput);
 Alpine.data('checkboxGroup', checkboxGroup);
 Alpine.data('speedscopeLink', speedscopeLink);
+Alpine.data('favorites', favorites);
 
 
 window.Alpine = Alpine
