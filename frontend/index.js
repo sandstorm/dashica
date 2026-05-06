@@ -15,6 +15,7 @@ import "./store"
 import "./components/chart";
 import "./components/debugDrawer";
 import "./components/sidebar";
+import "./components/favorites";
 
 Alpine.plugin(intersect);
 Alpine.plugin(resize);
