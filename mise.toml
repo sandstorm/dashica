@@ -18,7 +18,7 @@
 # mise up --bump "to upgrade all software to the latest version and update mise.toml"
 
 [tools]
-node = "20.18.1"
+node = "24.15.0"
 go = "1.24.0"
 watchexec = "latest"
 
