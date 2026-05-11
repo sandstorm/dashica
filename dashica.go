@@ -91,6 +91,15 @@ func New(projectFS fs.ReadFileFS) Dashica {
 			Msg("Failed to discover alert definitions")
 	}
 
+	go func() {
+		if err := alertManager.RunAlertScheduler(); err != nil {
+			logger.Error().
+				Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+				Err(err).
+				Msg("Alert scheduler failed")
+		}
+	}()
+
 	deps := rendering.Dependencies{
 		clickhouseClientManager,
 		logger,
