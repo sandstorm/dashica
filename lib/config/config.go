@@ -60,8 +60,10 @@ type AuthConfig struct {
 }
 
 type AlertingConfig struct {
-	HelvetikitAlertingUrl string `koanf:"helvetikit_alerting_url"`
-	HelvetikitIdGroup     string `koanf:"helvetikit_id_group"`
+	HelvetikitAlertingUrl    string `koanf:"helvetikit_alerting_url"`
+	HelvetikitIdGroup        string `koanf:"helvetikit_id_group"`
+	AlertCronMonitorSchedule string `koanf:"alert_cron_monitor_schedule"`
+	AlertCronMonitorUrl      string `koanf:"alert_cron_monitor_url"`
 }
 
 // TODO: currently not supported
