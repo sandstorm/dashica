@@ -114,13 +114,14 @@ func (a *AlertManager) RunAlertScheduler() error {
 		{
 			alertResult, err := a.alertEvaluator.EvaluateAlert(alertDefinition)
 			if err != nil {
-				return fmt.Errorf("evaluating alert %s: %w", alertDefinition.Id.String(), err)
-			}
-			err = a.alertResultStore.PersistResultAndNotifyIfChanged(alertDefinition.Id, alertResult, func() error {
-				return a.notifyAlertChange(alertDefinition, alertResult)
-			})
-			if err != nil {
-				return fmt.Errorf("persisting alert result %s: %w", alertDefinition.Id.String(), err)
+				a.logger.Error().Err(err).Str("alertId", alertDefinition.Id.String()).Msg("startup evaluation failed, will retry on next schedule")
+			} else {
+				err = a.alertResultStore.PersistResultAndNotifyIfChanged(alertDefinition.Id, alertResult, func() error {
+					return a.notifyAlertChange(alertDefinition, alertResult)
+				})
+				if err != nil {
+					a.logger.Error().Err(err).Str("alertId", alertDefinition.Id.String()).Msg("persisting startup alert result failed, will retry on next schedule")
+				}
 			}
 		}
 
