@@ -140,6 +140,20 @@ func (a *AlertManager) RunAlertScheduler() error {
 		})
 	}
 
+	// the cronjob to test alerts is running
+	if a.config.Alerting.AlertCronMonitorSchedule != "" && a.config.Alerting.AlertCronMonitorUrl != "" {
+		a.logger.Debug().
+			Str("schedule", a.config.Alerting.AlertCronMonitorSchedule).
+			Msg("alerting cron monitor is defined, scheduling '%w'")
+		taskr.Task(a.config.Alerting.AlertCronMonitorSchedule, func(ctx context.Context) (int, error) {
+			err := a.sendCronHeartBeat(a.config.Alerting.AlertCronMonitorUrl)
+			a.logger.Info().Msg("notified cron monitor")
+			return 0, err
+		})
+	} else {
+		a.logger.Info().Msg("no alerting cron monitor defined!")
+	}
+
 	taskr.Run()
 	return nil
 }
@@ -188,6 +202,26 @@ func (a *AlertManager) notifyAlertChange(alertDefinition AlertDefinition, alertR
 
 	return nil
 
+}
+
+func (a *AlertManager) sendCronHeartBeat(cronMonitorUrl string) error {
+	resp, err := http.Get(cronMonitorUrl)
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to sent cron heartbeat: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("request failed with status %d and error reading body: %w",
+				resp.StatusCode, readErr)
+		}
+		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 func noNotification() error {
