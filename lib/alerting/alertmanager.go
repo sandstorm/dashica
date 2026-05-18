@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"net/http"
 	"net/url"
@@ -20,80 +19,38 @@ import (
 type AlertManager struct {
 	config           *config.Config
 	logger           zerolog.Logger
-	fileSystem       fs.FS
 	alertEvaluator   *AlertEvaluator
 	alertResultStore *AlertResultStore
-	// alertDefinitionPattern is not configurable from userland, but helpful for overriding during tests.
-	alertDefinitionPattern string
 
-	// mutex protecting loadedAlertDefinitions and preRegisteredDefinitions
-	mu                       sync.RWMutex
-	loadedAlertDefinitions   []AlertDefinition
-	preRegisteredDefinitions []AlertDefinition
+	mu               sync.RWMutex
+	alertDefinitions []AlertDefinition
 }
 
-func NewAlertManager(config *config.Config, logger zerolog.Logger, fileSystem fs.FS, alertEvaluator *AlertEvaluator, alertResultStore *AlertResultStore) *AlertManager {
+func NewAlertManager(config *config.Config, logger zerolog.Logger, alertEvaluator *AlertEvaluator, alertResultStore *AlertResultStore) *AlertManager {
 	logger = logger.With().
 		Str(logging.EventDataset, logging.EventDataset_Dashica_Alerting_Manager).
 		Logger()
 
 	return &AlertManager{
-		config:                 config,
-		logger:                 logger,
-		fileSystem:             fileSystem,
-		alertEvaluator:         alertEvaluator,
-		alertResultStore:       alertResultStore,
-		alertDefinitionPattern: "src/*/alerts.yaml",
+		config:           config,
+		logger:           logger,
+		alertEvaluator:   alertEvaluator,
+		alertResultStore: alertResultStore,
 	}
 }
 
 // RegisterAlerts registers Go-code-configured alerts before the scheduler starts.
-// These are kept separately from YAML-discovered definitions and are never cleared by DiscoverAlertDefinitions.
 func (a *AlertManager) RegisterAlerts(group string, alerts ...*Alert) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, alert := range alerts {
-		a.preRegisteredDefinitions = append(a.preRegisteredDefinitions, alert.ToDefinition(group))
+		a.alertDefinitions = append(a.alertDefinitions, alert.ToDefinition(group))
 	}
 }
 
-// allDefinitions returns the combined set of Go-registered and YAML-discovered alert definitions.
+// allDefinitions returns all registered alert definitions. Must be called with mu held.
 func (a *AlertManager) allDefinitions() []AlertDefinition {
-	result := make([]AlertDefinition, 0, len(a.preRegisteredDefinitions)+len(a.loadedAlertDefinitions))
-	result = append(result, a.preRegisteredDefinitions...)
-	result = append(result, a.loadedAlertDefinitions...)
-	return result
-}
-
-func (a *AlertManager) DiscoverAlertDefinitions() error {
-	alertYamlFiles, err := fs.Glob(a.fileSystem, a.alertDefinitionPattern)
-	if err != nil {
-		return fmt.Errorf("scanning for alert configuration files: %w", err)
-	}
-
-	a.logger.Debug().
-		Strs("alertYamlFiles", alertYamlFiles).
-		Msg("Discovered Alert SQL files. Parsing...")
-
-	fullAlertDefinitions := make([]AlertDefinition, 0, 50)
-	for _, filePath := range alertYamlFiles {
-		alertDefinitions, err := ParseAlertConfiguration(a.fileSystem, filePath)
-		if err != nil {
-			return fmt.Errorf("processing %s: %w", filePath, err)
-		}
-		fullAlertDefinitions = append(fullAlertDefinitions, alertDefinitions...)
-	}
-
-	a.logger.Debug().
-		Dict("alertDefinitions", zerolog.Dict().
-			Fields(fullAlertDefinitions)).
-		Msg("loaded alert definitions")
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.loadedAlertDefinitions = fullAlertDefinitions
-
-	return nil
+	return a.alertDefinitions
 }
 
 func (a *AlertManager) GetAlertDefinition(id AlertId) *AlertDefinition {
@@ -185,8 +142,6 @@ func (a *AlertManager) notifyAlertChange(alertDefinition AlertDefinition, alertR
 	if alertDefinition.SlackChannel != "" {
 		formBody.Add("slack_channel", alertDefinition.SlackChannel)
 	}
-
-	// TODO: deduplication_mode=NO for alerting on individual log lines
 
 	resp, err := http.Post(a.config.Alerting.HelvetikitAlertingUrl, "application/x-www-form-urlencoded", strings.NewReader(formBody.Encode()))
 	if err != nil {

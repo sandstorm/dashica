@@ -86,15 +86,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	}
 	alertResultStore := alerting.NewAlertResultStore(logger, alertTargetClickhouseClient)
 	alertEvaluator := alerting.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
-	alertManager := alerting.NewAlertManager(cfg, logger, projectFS, alertEvaluator, alertResultStore)
-
-	err = alertManager.DiscoverAlertDefinitions()
-	if err != nil {
-		logger.Warn().
-			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
-			Err(err).
-			Msg("Failed to discover alert definitions")
-	}
+	alertManager := alerting.NewAlertManager(cfg, logger, alertEvaluator, alertResultStore)
 
 	deps := rendering.Dependencies{
 		clickhouseClientManager,

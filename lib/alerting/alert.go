@@ -14,10 +14,13 @@ type Alert struct {
 	// It limits the query to the current time bucket so the evaluator gets exactly 1 row.
 	// Example: "toStartOfHour(timestamp) = toStartOfHour(now())"
 	evaluationFilter string
-	alertIf          AlertCondition
-	message          string
-	checkEvery       string
-	slackChannel     string
+	// batchBucketExpression is used by the BatchEvaluator for back-fill.
+	// Uses --NOW-- placeholder, e.g. "toStartOfHour(--NOW--)".
+	batchBucketExpression string
+	alertIf               AlertCondition
+	message               string
+	checkEvery            string
+	slackChannel          string
 }
 
 func NewAlert(key string) *Alert {
@@ -68,6 +71,14 @@ func (a *Alert) SlackChannel(channel string) *Alert {
 	return &cloned
 }
 
+// BatchBucket sets the bucket expression for the BatchEvaluator back-fill.
+// expr uses --NOW-- as a placeholder for the evaluation time, e.g. "toStartOfHour(--NOW--)".
+func (a *Alert) BatchBucket(expr string) *Alert {
+	cloned := *a
+	cloned.batchBucketExpression = expr
+	return &cloned
+}
+
 func (a *Alert) Key() string {
 	return a.key
 }
@@ -84,12 +95,13 @@ func (a *Alert) GetAlertIf() AlertCondition {
 // group is the logical group identifier (e.g. "src/p_oekokiste").
 func (a *Alert) ToDefinition(group string) AlertDefinition {
 	return AlertDefinition{
-		Id:               AlertId{Group: group, Key: a.key},
-		QueryBuilder:     a.query,
-		EvaluationFilter: a.evaluationFilter,
-		AlertIf:          a.alertIf,
-		Message:          a.message,
-		CheckEvery:       a.checkEvery,
-		SlackChannel:     a.slackChannel,
+		Id:                    AlertId{Group: group, Key: a.key},
+		QueryBuilder:          a.query,
+		EvaluationFilter:      a.evaluationFilter,
+		BatchBucketExpression: a.batchBucketExpression,
+		AlertIf:               a.alertIf,
+		Message:               a.message,
+		CheckEvery:            a.checkEvery,
+		SlackChannel:          a.slackChannel,
 	}
 }

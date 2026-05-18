@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
@@ -78,22 +77,16 @@ func (ar alertResultRows) MarshalZerologArray(a *zerolog.Array) {
 func (e AlertEvaluator) EvaluateAlert(definition AlertDefinition) (*AlertResult, error) {
 	clickhouseClient, err := e.clickhouseManager.GetClient("default")
 	if err != nil {
-		return nil, fmt.Errorf("loading clickhouse client for %s: %w", definition.QueryPath, err)
+		return nil, fmt.Errorf("loading clickhouse client for alert %s: %w", definition.Id.String(), err)
 	}
 
 	queryOpts := clickhouse.DefaultQueryOptions()
 
-	var alertSql string
-	if definition.QueryBuilder != nil {
-		evalQuery := definition.QueryBuilder
-		if definition.EvaluationFilter != "" {
-			evalQuery = evalQuery.With(sql.Where(definition.EvaluationFilter))
-		}
-		alertSql = evalQuery.Build()
-	} else {
-		alertSql = preprocessSql(definition, e.timeProvider)
-		queryOpts.Parameters = definition.Params
+	evalQuery := definition.QueryBuilder
+	if definition.EvaluationFilter != "" {
+		evalQuery = evalQuery.With(sql.Where(definition.EvaluationFilter))
 	}
+	alertSql := evalQuery.Build()
 
 	resultset, err := clickhouse.QueryJSON[alertResultRow](context.Background(), clickhouseClient, alertSql, queryOpts)
 	if err != nil {
@@ -111,8 +104,6 @@ func (e AlertEvaluator) evaluateThreshold(definition AlertDefinition, data []ale
 
 	e.logger.Debug().
 		Str("alertDefinition", definition.Id.String()).
-		Str("sqlPath", definition.QueryPath).
-		//Str("clickhouseClientId", clickhouseClient.Id).
 		Str("currentTime", e.timeProvider.NowSqlString()).
 		Array("results", results).
 		Msg("received result set")
@@ -186,14 +177,4 @@ func (e AlertEvaluator) WithTimeProvider(timeProvider config.TimeProvider) *Aler
 		clickhouseManager: e.clickhouseManager,
 		timeProvider:      timeProvider,
 	}
-}
-
-func preprocessSql(alertDefinition AlertDefinition, timeProvider config.TimeProvider) string {
-	bucket := strings.ReplaceAll(alertDefinition.QueryBucketExpression, "--NOW--", timeProvider.NowSqlString())
-
-	sql := alertDefinition.Query
-	sql = strings.ReplaceAll(sql, "--HAVING--", "HAVING")
-	sql = strings.ReplaceAll(sql, "--BUCKET--", bucket)
-
-	return sql
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/alerting"
@@ -162,22 +161,18 @@ func (a *AlertDetail) collectHandlersYamlAlert(ctx *rendering.DashboardContext, 
 		opts := clickhouse.DefaultQueryOptions()
 		opts.Settings["output_format_arrow_compression_method"] = "none"
 		opts.Settings["date_time_input_format"] = "best_effort"
-		opts.Parameters = alertDef.Params
 
-		query := alertDef.Query
-		filterClause := "1=1"
+		resolvedQuery := alertDef.QueryBuilder
 		rawFilters := r.URL.Query().Get("filters")
 		if rawFilters != "" {
 			var filters httpserver.DashboardFilters
-			err = json.Unmarshal([]byte(rawFilters), &filters)
-			if err != nil {
+			if err = json.Unmarshal([]byte(rawFilters), &filters); err != nil {
 				http.Error(w, "unmarshalling filters: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if c := filters.SqlClause(); c != "" {
-				filterClause = "(" + c + ")"
+			if c := filters.SqlClause(); c != "" && !resolvedQuery.ShouldSkipFilters() {
+				resolvedQuery = resolvedQuery.With(sql.Where(c))
 			}
-
 			resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
 			if err != nil {
 				http.Error(w, "resolving time range: "+err.Error(), http.StatusInternalServerError)
@@ -185,7 +180,6 @@ func (a *AlertDetail) collectHandlersYamlAlert(ctx *rendering.DashboardContext, 
 			}
 			w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
 		}
-		query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 
 		resolvedAlertIf, err := json.Marshal(alertDef.AlertIf)
 		if err != nil {
@@ -194,7 +188,7 @@ func (a *AlertDetail) collectHandlersYamlAlert(ctx *rendering.DashboardContext, 
 		}
 		w.Header().Add("X-Dashica-Alert-If", string(resolvedAlertIf))
 
-		err = client.QueryToHandler(r.Context(), query, opts, w)
+		err = client.QueryToHandler(r.Context(), resolvedQuery.Build(), opts, w)
 		if err != nil {
 			http.Error(w, "clickhouse query: "+err.Error(), http.StatusInternalServerError)
 			return
