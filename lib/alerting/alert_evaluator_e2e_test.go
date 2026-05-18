@@ -6,6 +6,7 @@ import (
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"github.com/stretchr/testify/require"
 
@@ -22,24 +23,32 @@ func TestAlertEvaluatorE2E(t *testing.T) {
 	timeProvider := config.NewVirtualTimeProvider()
 	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, timeProvider)
 
-	alertManager := NewAlertManager(cfg, logger, os.DirFS("."), alertEvaluator, nil)
-	alertManager.alertDefinitionPattern = "alerting/test_fixtures/alert_evaluator_e2e_alerts.yaml"
-	err := alertManager.DiscoverAlertDefinitions()
-	if err != nil {
-		t.Fatalf("DiscoverAlertDefinitions: %s", err)
-	}
+	alertManager := NewAlertManager(cfg, logger, alertEvaluator, nil)
+	alertManager.RegisterAlerts("test", NewAlert("shopOrderFailures1").
+		Query(sql.New(
+			sql.From("full_logs"),
+			sql.Select(sql.Field("toStartOfFifteenMinutes(timestamp)::DateTime64").WithAlias("time")),
+			sql.Select(sql.Field("toUnixTimestamp(time)").WithAlias("time_ts")),
+			sql.Select(sql.Count().WithAlias("value")),
+			sql.Where("event_dataset = 'shop_order_failures'"),
+			sql.GroupBy(sql.Field("time")),
+			sql.OrderBy(sql.Field("time ASC")),
+		)).
+		EvaluationFilter("toStartOfFifteenMinutes(timestamp) = toStartOfFifteenMinutes(toDateTime('2025-04-02 00:55:12'))").
+		AlertWhenAbove(1000).
+		Message("ERROR - too many failures").
+		CheckEvery("@15minutes"),
+	)
 
 	testCases := []struct {
-		name            string
-		now             string
-		alertDefinition AlertDefinition
-		expectedResult  AlertResult
-		expectedError   bool
+		name           string
+		alertKey       string
+		expectedResult AlertResult
+		expectedError  bool
 	}{
 		{
-			name:            "event_dataset=shop_order_failures 2025-04-02 - LOTS of errors between 00:00 and 04:00 UTC",
-			now:             "2025-04-02 00:55:12",
-			alertDefinition: findAlertDefinition(t, "shopOrderFailures1", alertManager.loadedAlertDefinitions),
+			name:     "event_dataset=shop_order_failures 2025-04-02 - LOTS of errors between 00:00 and 04:00 UTC",
+			alertKey: "shopOrderFailures1",
 			expectedResult: AlertResult{
 				State:   AlertStateError,
 				Message: "ERROR - too many failures",
@@ -50,8 +59,10 @@ func TestAlertEvaluatorE2E(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			require.NoError(t, timeProvider.SetTime(tc.now))
-			alertResult, err := alertEvaluator.EvaluateAlert(tc.alertDefinition)
+			def := alertManager.GetAlertDefinition(AlertId{Group: "test", Key: tc.alertKey})
+			require.NotNil(t, def, "alert definition not found: %s", tc.alertKey)
+
+			alertResult, err := alertEvaluator.EvaluateAlert(*def)
 
 			if tc.expectedError {
 				require.Error(t, err)
@@ -62,15 +73,4 @@ func TestAlertEvaluatorE2E(t *testing.T) {
 			}
 		})
 	}
-}
-
-func findAlertDefinition(t *testing.T, key string, definitions []AlertDefinition) AlertDefinition {
-	for _, definition := range definitions {
-		if definition.Id.Key == key {
-			return definition
-		}
-	}
-
-	t.Fatalf("did not find definition '%s'", key)
-	return AlertDefinition{}
 }

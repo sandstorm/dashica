@@ -6,6 +6,7 @@ import (
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +29,7 @@ func TestAlertEvaluatorSimple(t *testing.T) {
 		{
 			name: "SIMPLE - Query with error",
 			alertDefinition: AlertDefinition{
-				Query: `SELECT invalid_syntax`,
+				QueryBuilder: sql.RawString(`SELECT invalid_syntax`),
 			},
 			expectedResult: AlertResult{
 				State: AlertStateError,
@@ -38,7 +39,7 @@ func TestAlertEvaluatorSimple(t *testing.T) {
 		{
 			name: "SIMPLE - ValueGt alert - above threshold",
 			alertDefinition: AlertDefinition{
-				Query: `SELECT 15 as value`,
+				QueryBuilder: sql.RawString(`SELECT 15 as value`),
 				AlertIf: AlertCondition{
 					ValueGt: f64Ptr(10),
 				},
@@ -53,7 +54,7 @@ func TestAlertEvaluatorSimple(t *testing.T) {
 		{
 			name: "SIMPLE - ValueGt alert - below threshold",
 			alertDefinition: AlertDefinition{
-				Query: `SELECT 5 as value`,
+				QueryBuilder: sql.RawString(`SELECT 5 as value`),
 				AlertIf: AlertCondition{
 					ValueGt: f64Ptr(10),
 				},

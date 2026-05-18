@@ -136,6 +136,10 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 	}
 
 	queryOpts := clickhouse.DefaultQueryOptions()
+	// Force synchronous insert so the row is immediately visible to the next SELECT.
+	// ClickHouse 24.12+ enables async_insert by default; without this the test
+	// (and the in-memory reload on startup) would read stale data.
+	queryOpts.Settings["async_insert"] = "0"
 	queryOpts.Parameters["alert_id_group"] = id.Group
 	queryOpts.Parameters["alert_id_key"] = id.Key
 	queryOpts.Parameters["timestamp"] = result.Timestamp.ToDbStr()

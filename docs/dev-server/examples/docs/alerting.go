@@ -15,173 +15,118 @@ func Alerting() dashboard.Dashboard {
 				Content(`
 # Alerting
 
-The alerting system allows you to:
+Alerts are defined in Go code — no YAML or SQL files needed. Each alert is a fluent ` + "`*alerting.Alert`" + ` value that carries its own SQL query and threshold condition.
 
-- Define custom alerts using SQL queries
-- Set threshold conditions for triggering alerts
-- Configure alert check frequencies
-- Customize alert messages
+## Example
 
-## Alert Configuration
+` + "```go" + `
+// src/p_myproject/alerts.go
+package p_myproject
 
-Alerts are defined in YAML files named ` + "`alerts.yaml`" + ` inside ` + "`client/content/`" + ` with the following structure:
+import (
+    "github.com/sandstorm/dashica/lib/alerting"
+    "github.com/sandstorm/dashica/lib/dashboard/sql"
+)
 
-` + "```yaml" + `
-alerts:
-  "alertName": # different alert names here
-    query_path: ./alerts/my_query.sql
-    # optional, if query contains placeholders
-    params:
-      param1: value1
-      param2: value2
-
-    # the condition to alert on
-    alert_if:
-      value_gt: 1000
-    message: ERROR - Alert description
-
-    # the check interval
-    check_every: '@15minutes'
+var MyProjectAlerts = []*alerting.Alert{
+    alerting.NewAlert("http500ErrorsOverLimit").
+        Query(sql.New(
+            sql.From("mv_caddy_accesslog"),
+            sql.Select(sql.Field("toStartOfHour(timestamp)::DateTime64").WithAlias("time")),
+            sql.Select(sql.Field("toUnixTimestamp(time)").WithAlias("time_ts")),
+            sql.Select(sql.Count().WithAlias("value")),
+            sql.Where("customer_tenant = 'myproject'"),
+            sql.Where("status >= 500"),
+            sql.GroupBy(sql.Field("time")),
+            sql.OrderBy(sql.Field("time ASC")),
+        )).
+        EvaluationFilter("toStartOfHour(timestamp) = toStartOfHour(now())").
+        AlertWhenAbove(500).
+        Message("Too many 5xx errors").
+        SlackChannel("my-project-alerts").
+        CheckEvery("@5minutes"),
+}
 ` + "```" + `
 
-## Configuration Fields
+## Required query columns
 
-| Field | Description |
-|-------|-------------|
-| ` + "`query_path`" + ` | Path to the SQL query file that generates metrics |
-| ` + "`params`" + ` | Parameters to inject into the SQL query |
-| ` + "`alert_if`" + ` | Condition that triggers the alert (e.g., ` + "`value_gt`" + `, ` + "`value_lt`" + `) |
-| ` + "`message`" + ` | Message to display when the alert triggers |
-| ` + "`check_every`" + ` | Frequency for checking the alert (cron-like expression) |
+| Column    | Type       | Description                                   |
+|-----------|------------|-----------------------------------------------|
+| ` + "`time`" + `    | DateTime64 | Bucket start time                             |
+| ` + "`time_ts`" + ` | UInt64     | ` + "`toUnixTimestamp(time)`" + ` — used by batch evaluator |
+| ` + "`value`" + `   | Float64    | Metric value compared against the threshold   |
 
-## SQL Query Format
+## EvaluationFilter
 
-Alert queries must follow a specific format:
+` + "`EvaluationFilter`" + ` is a plain SQL ` + "`WHERE`" + ` clause appended **only during scheduled evaluation**. It narrows the query to exactly one row (the current time bucket) so the evaluator gets a single ` + "`value`" + ` to compare.
 
-` + "```sql" + `
---BUCKET: toStartOfFifteenMinutes(--NOW--)
-SELECT
-    toUnixTimestamp(toStartOfFifteenMinutes(timestamp)) as time,
-    count(*)                                            as value
-FROM
-    your_table
-WHERE
-    your_conditions
-GROUP BY
-    time
-    --HAVING-- time=--BUCKET--
-ORDER BY
-    time ASC;
+` + "```go" + `
+EvaluationFilter("toStartOfHour(timestamp) = toStartOfHour(now())")
 ` + "```" + `
 
-## Important Query Elements
+For non-monotonic metrics (e.g. averages), use the *previous* complete bucket to avoid false positives on partial data:
 
-### 1. BUCKET Definition
-
-The ` + "`--BUCKET:`" + ` comment is required and defines the time bucketing for alert evaluation.
-
-**For Monotonically Increasing Metrics** (e.g., counters), alert on **the current time bucket**:
-
-` + "```sql" + `
--- ! use this for counters etc.
---BUCKET: toStartOfFifteenMinutes(--NOW--)
+` + "```go" + `
+EvaluationFilter("toStartOfHour(timestamp) = toStartOfHour(now() - INTERVAL 1 HOUR)")
 ` + "```" + `
 
-**For Non-Monotonic Metrics** (e.g., averages), use the **previous complete time bucket**. Otherwise an alert might be thrown at the beginning of the interval based on little data, but not anymore after more values came in; leading to a false positive:
+The filter is **not** applied when the query is rendered as a chart — the full result set is shown there.
 
-` + "```sql" + `
--- ! use this for averages etc.
---BUCKET: toStartOfFifteenMinutes(--NOW-- - INTERVAL 15 MINUTE)
+## Threshold conditions
+
+| Method                | Triggers when |
+|-----------------------|---------------|
+| ` + "`AlertWhenAbove(n)`" + ` | ` + "`value > n`" + `      |
+| ` + "`AlertWhenBelow(n)`" + ` | ` + "`value < n`" + `      |
+
+## Check interval
+
+Accepts standard cron expressions or ` + "`gronx`" + ` shortcuts:
+
+` + "```go" + `
+CheckEvery("@5minutes")
+CheckEvery("@15minutes")
+CheckEvery("@hourly")
+CheckEvery("0 6 * * *")  // 06:00 UTC daily
 ` + "```" + `
 
-### 2. Required Columns
+## Wiring up
 
-The result set needs:
+In your ` + "`register_*.go`" + ` entrypoint:
 
-- ` + "`time_ts`" + `: Timestamp for the data point, in Unix timestamp format
-  - Usually: ` + "`toUnixTimestamp(toStartOfFifteenMinutes(timestamp)) as time_ts`" + `
-- ` + "`value`" + `: The metric value to check against alert conditions
-
-### 3. HAVING Marker
-
-Include ` + "`--HAVING--`" + ` marker, referencing the current time bucket, so the system can evaluate the current value only.
-
-### 4. Parameterization (Optional)
-
-Use curly braces to define parameters that can be injected:
-
-` + "```sql" + `
-WHERE event_dataset = {event_dataset:String}
+` + "```go" + `
+d.
+    RegisterAlerts("src/p_myproject", p_myproject.MyProjectAlerts...).
+    RegisterDashboard("/p_myproject/alerts", p_myproject.AlertsDashboard().WithTitle("Alerts"))
 ` + "```" + `
 
-## Alert Conditions
+` + "`RegisterAlerts`" + ` must be called before ` + "`ListenAndServe`" + `.
 
-Currently supported alert conditions:
+## Alerts dashboard
 
-| Condition | Description |
-|-----------|-------------|
-| ` + "`value_gt`" + ` | Triggers when the value exceeds the specified threshold |
-| ` + "`value_lt`" + ` | Triggers when the value falls below the specified threshold |
-
-## Example: HTTP Error Alert
-
-**Alert configuration:**
-
-` + "```yaml" + `
-alerts:
-  http500ErrorsOverLimit:
-    query_path: ./alerts/http_errors_per_hour.sql
-    params:
-      customer_tenant: oekokiste
-      min_status: 500
-      max_status: 599
-      skip_status: 0
-    alert_if:
-      value_gt: 500
-    message: ERROR - too many failures
-    check_every: '@5minutes'
+` + "```go" + `
+func AlertsDashboard() dashboard.Dashboard {
+    d := dashboard.New().
+        WithLayout(layout.DefaultPage).
+        Widget(widget.NewAlertOverview("%myproject%"))
+    for _, alert := range MyProjectAlerts {
+        d = d.Widget(
+            widget.NewAlertDetailFromAlert(alert).Title("myproject / " + alert.Key()),
+        )
+    }
+    return d
+}
 ` + "```" + `
 
-**Corresponding SQL query:**
+` + "`NewAlertOverview`" + ` accepts a SQL ` + "`LIKE`" + ` pattern matched against the alert group path.
 
-` + "```sql" + `
---BUCKET: toStartOfHour(--NOW--)
-SELECT
-    toStartOfHour(timestamp)::DateTime64 as time,
-    toUnixTimestamp(time) as time_ts,
-    count(*) as value
-FROM
-    mv_caddy_accesslog
-WHERE
-      mv_caddy_accesslog.customer_tenant = {customer_tenant:String}
-  AND mv_caddy_accesslog.status >= {min_status:Int}
-  AND mv_caddy_accesslog.status <= {max_status:Int}
-  AND mv_caddy_accesslog.status != {skip_status:Int}
-GROUP BY
-    time
-ORDER BY
-    time ASC
-` + "```" + `
+## Development workflow
 
-## Development vs. Production
-
-- **Production**: Alerts are evaluated incrementally as scheduled by ` + "`check_every`" + `
-- **Development**: The ` + "`BatchEvaluator`" + ` can evaluate alerts for multiple time points at once, useful for testing and retrospective analysis. This can be triggered by pressing the ` + "`Calculate alerts for current time range`" + ` Button on the alerts screen
-
-## Creating a New Alert
-
-1. Run the system locally by running ` + "`dev setup; dev up`" + `
-2. **Create a SQL query file** following the format above
-3. **Add an alert definition** to your alerts YAML file
-4. **Test your alert** using the BatchEvaluator in development, by opening an ` + "`Alerts`" + ` screen, and pressing batch evaluation
-5. **Deploy** to production
-
-## Best Practices
-
-1. **Choose appropriate bucketing**: Match your ` + "`--BUCKET`" + ` definition to your ` + "`check_every`" + ` interval
-2. **Set reasonable thresholds**: Start with conservative thresholds and adjust based on observed patterns
-3. **Use parameters**: Parameterize queries to make them reusable across different contexts
-4. **Include context in messages**: Make alert messages descriptive enough to understand the issue
+1. Define alerts in ` + "`src/p_<project>/alerts.go`" + `
+2. Run ` + "`mise r watch`" + ` — alerts are evaluated once on startup
+3. Open the alerts dashboard to see current states
+4. Use the **"Calculate alerts for current time range"** button to back-fill via ` + "`BatchEvaluator`" + `
+5. Adjust thresholds / queries and restart
 
 ## Next Steps
 

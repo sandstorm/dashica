@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/rs/zerolog"
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
@@ -31,17 +30,14 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	client, err := qh.clickhouseClientManager.GetClient("default")
 	if err != nil {
-		return fmt.Errorf("get clickhouse client for %s: %w", alertDefinition.QueryPath, err)
+		return fmt.Errorf("get clickhouse client for %s: %w", alertDefinition.Id.String(), err)
 	}
 
 	opts := clickhouse.DefaultQueryOptions()
 	opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
 	opts.Settings["date_time_input_format"] = "best_effort"          // support ISO 8601 dates (which is used in date picker by browser)
 
-	opts.Parameters = alertDefinition.Params
-
-	query := alertDefinition.Query
-	filterClause := "1=1"
+	queryBuilder := alertDefinition.QueryBuilder
 	rawFilters := r.URL.Query().Get("filters")
 	if rawFilters != "" {
 		var filters DashboardFilters
@@ -49,8 +45,8 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		if c := filters.SqlClause(); c != "" {
-			filterClause = "(" + c + ")"
+		if c := filters.SqlClause(); c != "" && !queryBuilder.ShouldSkipFilters() {
+			queryBuilder = queryBuilder.With(sql.Where(c))
 		}
 
 		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
@@ -60,7 +56,6 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		}
 		w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
 	}
-	query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 
 	resolvedAlertIf, err := json.Marshal(alertDefinition.AlertIf)
 	if err != nil {
@@ -68,7 +63,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Add("X-Dashica-Alert-If", string(resolvedAlertIf))
 
-	err = client.QueryToHandler(r.Context(), query, opts, w)
+	err = client.QueryToHandler(r.Context(), queryBuilder.Build(), opts, w)
 	if err != nil {
 		return fmt.Errorf("clickhouse query: %w", err)
 	}
