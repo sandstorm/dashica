@@ -26,9 +26,10 @@ type AlertManager struct {
 	// alertDefinitionPattern is not configurable from userland, but helpful for overriding during tests.
 	alertDefinitionPattern string
 
-	// mutex protecting LoadedAlertsDefinition
-	mu                     sync.RWMutex
-	loadedAlertDefinitions []AlertDefinition
+	// mutex protecting loadedAlertDefinitions and preRegisteredDefinitions
+	mu                       sync.RWMutex
+	loadedAlertDefinitions   []AlertDefinition
+	preRegisteredDefinitions []AlertDefinition
 }
 
 func NewAlertManager(config *config.Config, logger zerolog.Logger, fileSystem fs.FS, alertEvaluator *AlertEvaluator, alertResultStore *AlertResultStore) *AlertManager {
@@ -44,6 +45,24 @@ func NewAlertManager(config *config.Config, logger zerolog.Logger, fileSystem fs
 		alertResultStore:       alertResultStore,
 		alertDefinitionPattern: "src/*/alerts.yaml",
 	}
+}
+
+// RegisterAlerts registers Go-code-configured alerts before the scheduler starts.
+// These are kept separately from YAML-discovered definitions and are never cleared by DiscoverAlertDefinitions.
+func (a *AlertManager) RegisterAlerts(group string, alerts ...*Alert) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, alert := range alerts {
+		a.preRegisteredDefinitions = append(a.preRegisteredDefinitions, alert.ToDefinition(group))
+	}
+}
+
+// allDefinitions returns the combined set of Go-registered and YAML-discovered alert definitions.
+func (a *AlertManager) allDefinitions() []AlertDefinition {
+	result := make([]AlertDefinition, 0, len(a.preRegisteredDefinitions)+len(a.loadedAlertDefinitions))
+	result = append(result, a.preRegisteredDefinitions...)
+	result = append(result, a.loadedAlertDefinitions...)
+	return result
 }
 
 func (a *AlertManager) DiscoverAlertDefinitions() error {
@@ -79,9 +98,9 @@ func (a *AlertManager) DiscoverAlertDefinitions() error {
 
 func (a *AlertManager) GetAlertDefinition(id AlertId) *AlertDefinition {
 	a.mu.RLock()
-	loadedAlertDefinitions := a.loadedAlertDefinitions[:]
+	all := a.allDefinitions()
 	a.mu.RUnlock()
-	for _, alertDefinition := range loadedAlertDefinitions {
+	for _, alertDefinition := range all {
 		if alertDefinition.Id == id {
 			return &alertDefinition
 		}
@@ -91,7 +110,7 @@ func (a *AlertManager) GetAlertDefinition(id AlertId) *AlertDefinition {
 
 func (a *AlertManager) RunAlertScheduler() error {
 	a.mu.RLock()
-	loadedAlertDefinitions := a.loadedAlertDefinitions[:]
+	loadedAlertDefinitions := a.allDefinitions()
 	a.mu.RUnlock()
 
 	taskr := tasker.New(tasker.Option{

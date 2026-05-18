@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/util"
 )
 
@@ -20,9 +21,9 @@ type AlertConfiguration struct {
 type AlertDefinition struct {
 	Id        AlertId
 	QueryPath string `json:"query_path"`
-	// Query contains the SQL file contents after ParseAlertConfiguration
+	// Query contains the SQL file contents after ParseAlertConfiguration (YAML-based only)
 	Query string
-	// QueryBucketExpression contains the part after "--BUCKET:" in the SQL file (needed for batch alert evaluation)
+	// QueryBucketExpression contains the part after "--BUCKET:" in the SQL file (YAML-based only)
 	QueryBucketExpression string
 	Params                map[string]string `json:"params"`
 	AlertIf               AlertCondition    `json:"alert_if"`
@@ -31,6 +32,12 @@ type AlertDefinition struct {
 	CheckEvery string `json:"check_every"`
 	// Slack channel to alert to
 	SlackChannel string `json:"slack_channel"`
+
+	// QueryBuilder is set for Go-code-configured alerts (nil for YAML-based).
+	QueryBuilder sql.SqlQueryable
+	// EvaluationFilter is an extra WHERE clause appended only during scheduled evaluation.
+	// It narrows the query to the current time bucket so the evaluator sees exactly 1 row.
+	EvaluationFilter string
 }
 
 // AlertId identifies an alert definition uniquely.

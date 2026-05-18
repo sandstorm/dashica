@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/logging"
 )
 
@@ -80,9 +81,19 @@ func (e AlertEvaluator) EvaluateAlert(definition AlertDefinition) (*AlertResult,
 		return nil, fmt.Errorf("loading clickhouse client for %s: %w", definition.QueryPath, err)
 	}
 
-	alertSql := preprocessSql(definition, e.timeProvider)
 	queryOpts := clickhouse.DefaultQueryOptions()
-	queryOpts.Parameters = definition.Params
+
+	var alertSql string
+	if definition.QueryBuilder != nil {
+		evalQuery := definition.QueryBuilder
+		if definition.EvaluationFilter != "" {
+			evalQuery = evalQuery.With(sql.Where(definition.EvaluationFilter))
+		}
+		alertSql = evalQuery.Build()
+	} else {
+		alertSql = preprocessSql(definition, e.timeProvider)
+		queryOpts.Parameters = definition.Params
+	}
 
 	resultset, err := clickhouse.QueryJSON[alertResultRow](context.Background(), clickhouseClient, alertSql, queryOpts)
 	if err != nil {
