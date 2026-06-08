@@ -15,19 +15,22 @@ type Dashboard interface {
 	WithLayout(layout rendering.LayoutFunc) Dashboard
 	WithTitle(title string) Dashboard
 	Title() string
+	HasSearchBar(value bool) Dashboard
 	FilterButton(title string, queryPart string) Dashboard
 	CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error
 }
 
 func New() Dashboard {
-	return &dashboardImpl{}
+	d := &dashboardImpl{}
+	d.searchBar.IsVisible = true
+	return d
 }
 
 type dashboardImpl struct {
-	widgets       widget.Widgets
-	layout        rendering.LayoutFunc
-	title         string
-	filterButtons []rendering.FilterButton
+	widgets   widget.Widgets
+	layout    rendering.LayoutFunc
+	title     string
+	searchBar rendering.SearchBarOption
 }
 
 func (d *dashboardImpl) WithTitle(title string) Dashboard {
@@ -52,9 +55,15 @@ func (d *dashboardImpl) WithLayout(layout rendering.LayoutFunc) Dashboard {
 	return &cloned
 }
 
+func (d *dashboardImpl) HasSearchBar(value bool) Dashboard {
+	cloned := *d
+	cloned.searchBar.IsVisible = value
+	return &cloned
+}
+
 func (d *dashboardImpl) FilterButton(title string, queryPart string) Dashboard {
 	cloned := *d
-	cloned.filterButtons = append(cloned.filterButtons, rendering.FilterButton{
+	cloned.searchBar.FilterButtons = append(cloned.searchBar.FilterButtons, rendering.FilterButton{
 		Title:     title,
 		QueryPart: queryPart,
 	})
@@ -67,7 +76,7 @@ func (d *dashboardImpl) CollectHandlers(ctx *rendering.DashboardContext, handler
 		return fmt.Errorf("building components: %w", err)
 	}
 
-	err = handlerCollector.HandleRoot(templ.Handler(d.layout(*ctx, d.filterButtons, templ.Join(components...))))
+	err = handlerCollector.HandleRoot(templ.Handler(d.layout(*ctx, d.searchBar, templ.Join(components...))))
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}

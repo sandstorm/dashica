@@ -19,7 +19,7 @@ templ DocsApplication(renderingContext rendering.DashboardContext, content templ
 }
 
 // DocsPage is a layout for documentation pages without search/filter functionality
-templ DocsPage(renderingContext rendering.DashboardContext, filterButtons []rendering.FilterButton, content templ.Component) {
+templ DocsPage(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>

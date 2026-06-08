@@ -5,7 +5,7 @@ import (
     "github.com/sandstorm/dashica/lib/util"
 )
 
-templ SearchBar(filterButtons []rendering.FilterButton) {
+templ SearchBar(searchBar rendering.SearchBarOption) {
 
     <div x-data="searchBar" x-init="init()" class="bg-base-100 border-b border-base-300 shadow-lg sticky top-0 z-2">
         <div class="mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -140,7 +140,7 @@ templ SearchBar(filterButtons []rendering.FilterButton) {
             <div class="flex flex-nowrap items-center gap-3">
                 <!-- Time Range Presets with Join -->
                 <div class="flex items-center gap-2">
-                    for _, filterButton := range filterButtons {
+                    for _, filterButton := range searchBar.FilterButtons {
                         <button
                                 @click={ "$store.urlState.addFilter(" + util.JsonEncode(filterButton.QueryPart) + ")" }
                                 class="btn btn-sm"
