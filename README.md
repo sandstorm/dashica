@@ -1,4 +1,4 @@
-# Dashicy
+# Dashica
 
 ## 🚀 Quick Start: Dev Server
 
@@ -6,7 +6,7 @@ The fastest way to explore Dashica's Go API and widget examples:
 
 ```bash
 # 1. Start ClickHouse with sample data
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml up -d
 
 # 2. Build frontend assets
 npm install  # Only needed once
@@ -31,23 +31,23 @@ See [docs/dev-server/README.md](docs/dev-server/README.md) for details.
 ---
 
 # Development
-
+  
 ## Development Setup
 
 Prerequisites:
 
 - Docker Compose
+- [mise-en-place](https://mise.jdx.dev/)
 
 Get started:
 
 ```bash
 # at root of repo:
-dev setup
-
-# follow instructions
+mise trust
+mise run setup
 ```
 
-## Running Tests
+## Running Tests (chapter is outdated)
 
 ```bash
 

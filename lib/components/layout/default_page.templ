@@ -5,13 +5,15 @@ import (
 )
 
 
-templ MainApplication(renderingContext rendering.DashboardContext, filterButtons []rendering.FilterButton, content templ.Component) {
+templ MainApplication(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
     <div class="application">
         <aside class="application__sidebar">
             @PageMenu(renderingContext)
         </aside>
         <main class="application__main">
-            @SearchBar(filterButtons)
+            if searchBar.IsVisible {
+                @SearchBar(searchBar)
+            }
 
             <div class="application__content prose max-w-none">
                 @content
@@ -20,7 +22,7 @@ templ MainApplication(renderingContext rendering.DashboardContext, filterButtons
     </div>
 }
 
-templ DefaultPage(renderingContext rendering.DashboardContext, filterButtons []rendering.FilterButton, content templ.Component) {
+templ DefaultPage(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
 	<html>
 		<head>
 			<meta charset="UTF-8"/>
@@ -34,7 +36,7 @@ templ DefaultPage(renderingContext rendering.DashboardContext, filterButtons []r
 		</head>
 		<body class="bg-base-200">
 			@DebugDrawer() {
-				@MainApplication(renderingContext, filterButtons, content)
+				@MainApplication(renderingContext, searchBar, content)
 			}
 			<script>window.Alpine.start();</script>
 		</body>

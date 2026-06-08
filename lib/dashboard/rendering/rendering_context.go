@@ -53,4 +53,9 @@ type FilterButton struct {
 	QueryPart string
 }
 
-type LayoutFunc func(renderingContext DashboardContext, filterButtons []FilterButton, content templ.Component) templ.Component
+type SearchBarOption struct {
+	IsVisible     bool
+	FilterButtons []FilterButton
+}
+
+type LayoutFunc func(renderingContext DashboardContext, searchBar SearchBarOption, content templ.Component) templ.Component
