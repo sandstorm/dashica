@@ -41,6 +41,10 @@ export default () => ({
         });
     },
 
+    refreshData() {
+        this.$store.urlState._triggerRefresh();
+    },
+
     openCustomDatePicker() {
         this.$store.urlState.timeRange = 'custom';
 

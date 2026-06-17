@@ -17,6 +17,7 @@ Alpine.store('urlState', {
     autoRefresh: false,
     refreshInterval: 30,
     logScale: false,
+    _refreshNonce: 0,
     widgetParams: {} as Record<string, string>,
 
     init() {
@@ -51,12 +52,13 @@ Alpine.store('urlState', {
             if (refreshTimer) clearInterval(refreshTimer);
             // reading these values sets up listeners, see https://alpinejs.dev/advanced/reactivity#alpine-effect
             if (this.autoRefresh) {
-                window.setInterval(() => this._triggerRefresh(), this.refreshInterval * 1000);
+                refreshTimer = window.setInterval(() => this._triggerRefresh(), this.refreshInterval * 1000);
             }
         });
     },
 
     getCombinedFilter() {
+        this._refreshNonce; // track for Alpine reactivity — re-runs effect on manual/auto refresh
         return {
             timeRange: this.timeRange,
             customTimeRange: this.customDateRange,
@@ -136,6 +138,7 @@ Alpine.store('urlState', {
 
     // Helper to dispatch refresh event
     _triggerRefresh() {
+        this._refreshNonce++;
         window.dispatchEvent(new CustomEvent('dashboard-refresh', {
             detail: {
                 sqlFilter: this.sqlFilter,
