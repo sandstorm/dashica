@@ -214,6 +214,9 @@ func (b *TimeLine) buildChartProps() map[string]interface{} {
 	} else if b.stroke != "" {
 		props["stroke"] = b.stroke
 	}
+	if b.zField != nil {
+		props["z"] = (*b.zField).Alias()
+	}
 	if b.fx != nil {
 		props["fx"] = (*b.fx).Alias()
 	}
@@ -237,8 +240,13 @@ func (b *TimeLine) buildQuery() sql.SqlQueryable {
 		sql.Select(b.y),
 	)
 
-	// Partition columns (stroke) must be ordered BEFORE the time column so that
-	// WITH FILL fills each series independently. The time column is ordered last.
+	// Without WITH FILL, keep the historical ORDER BY: time first, then stroke.
+	// With WITH FILL, partition columns (stroke, z) must come BEFORE the time
+	// column so ClickHouse fills each series independently and the time column
+	// is last (WITH FILL attaches to the last ORDER BY column).
+	if b.fillStep == "" {
+		query = query.With(sql.OrderBy(b.x))
+	}
 	if b.strokeField != nil {
 		query = query.With(
 			sql.PrependSelect(*b.strokeField),
@@ -246,9 +254,15 @@ func (b *TimeLine) buildQuery() sql.SqlQueryable {
 			sql.OrderBy(*b.strokeField),
 		)
 	}
-	query = query.With(sql.OrderBy(b.x))
+	if b.zField != nil {
+		query = query.With(
+			sql.PrependSelect(*b.zField),
+			sql.GroupBy(*b.zField),
+			sql.OrderBy(*b.zField),
+		)
+	}
 	if b.fillStep != "" {
-		query = query.With(sql.WithFill(b.fillStep))
+		query = query.With(sql.OrderBy(b.x), sql.WithFill(b.fillStep))
 	}
 
 	if b.fx != nil {

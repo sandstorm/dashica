@@ -7,9 +7,9 @@ import (
 
 func TestLimit(t *testing.T) {
 	tests := []struct {
-		name     string
-		limit    int
-		wantSQL  string
+		name    string
+		limit   int
+		wantSQL string
 	}{
 		{
 			name:    "with limit",
@@ -106,5 +106,38 @@ func TestLimitZeroRemovesLimit(t *testing.T) {
 
 	if strings.Contains(sql, "LIMIT") {
 		t.Errorf("Expected no LIMIT clause when set to 0, got:\n%s", sql)
+	}
+}
+
+func TestWithFill(t *testing.T) {
+	query := New(
+		From("metrics"),
+		Select(Field("user")),
+		Select(Field("max(pct)").WithAlias("pct")),
+		GroupBy(Field("user")),
+		OrderBy(Field("user")),
+		OrderBy(Field("time")),
+		WithFill("toIntervalHour(1)"),
+	)
+
+	sql := query.Build()
+
+	// WITH FILL must attach to the LAST ORDER BY column (time), not the first.
+	want := "time WITH FILL STEP toIntervalHour(1)"
+	if !strings.Contains(sql, want) {
+		t.Errorf("Expected SQL to contain %q, got:\n%s", want, sql)
+	}
+	if strings.Contains(sql, "user WITH FILL") {
+		t.Errorf("WITH FILL must not attach to partition column 'user', got:\n%s", sql)
+	}
+}
+
+func TestWithoutFill(t *testing.T) {
+	query := New(
+		From("metrics"),
+		OrderBy(Field("time")),
+	)
+	if strings.Contains(query.Build(), "WITH FILL") {
+		t.Errorf("Expected no WITH FILL when WithFill not set, got:\n%s", query.Build())
 	}
 }

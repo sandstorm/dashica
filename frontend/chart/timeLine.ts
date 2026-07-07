@@ -24,6 +24,7 @@ interface ChartProps {
 
     color?: ScaleOptions;
     stroke?: ChannelValueSpec;
+    z?: ChannelValue;
     fx?: ChannelValue;
     fy?: ChannelValue;
     tip?: boolean | TipPointer | (TipOptions & PointerOptions & {pointer?: TipPointer});
@@ -80,6 +81,7 @@ export function timeLine(data: QueryResult, props: ChartProps) {
             Plot.line(data, {
                 x: x,
                 y: y,
+                z: props.z,
                 fx: props.fx,
                 fy: props.fy,
                 marginRight: 150,
