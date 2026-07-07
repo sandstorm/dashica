@@ -16,6 +16,7 @@ type SqlQuery struct {
 	groupBy               []SqlField
 	orderBy               []SqlField
 	limit                 int
+	fillStep              string
 	shouldSkipFilters     bool
 	database              string
 	autoBucketPlaceholder bool // routed to *SqlFile via With(); ignored on *SqlQuery itself
@@ -68,6 +69,17 @@ func GroupBy(field SqlField) SqlBuilderOption {
 func OrderBy(field SqlField) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.orderBy = append(b.orderBy, field)
+	}
+}
+
+// WithFill emits `WITH FILL STEP <step>` on the LAST ORDER BY column, so empty
+// steps are synthesized instead of the chart interpolating across them (numeric
+// columns default to 0). `step` is a raw ClickHouse interval expression, e.g.
+// "toIntervalHour(1)". Any earlier ORDER BY columns act as partition keys —
+// filling happens independently within each group.
+func WithFill(step string) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.fillStep = step
 	}
 }
 
@@ -220,6 +232,11 @@ func (b *SqlQuery) Build() string {
 
 			if i < len(b.orderBy)-1 {
 				sb.WriteString(",")
+			} else if b.fillStep != "" {
+				// WITH FILL attaches to the last ORDER BY column; earlier
+				// columns act as partition keys.
+				sb.WriteString(" WITH FILL STEP ")
+				sb.WriteString(b.fillStep)
 			}
 			sb.WriteString("\n")
 		}

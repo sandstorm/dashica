@@ -19,6 +19,7 @@ type TimeLine struct {
 	y            sql.SqlField
 	stroke       string
 	strokeField  *sql.SqlField
+	zField       *sql.SqlField
 	fx           *sql.SqlField
 	fy           *sql.SqlField
 	title        string
@@ -31,6 +32,7 @@ type TimeLine struct {
 	marginTop    *int
 	color        *color.ColorScale
 	tipChannels  map[string]string
+	fillStep     string
 }
 
 func NewTimeLine(sql sql.SqlQueryable) *TimeLine {
@@ -61,6 +63,16 @@ func (b *TimeLine) Stroke(stroke string) *TimeLine {
 func (b *TimeLine) StrokeField(strokeField sql.SqlField) *TimeLine {
 	cloned := *b
 	cloned.strokeField = &strokeField
+	return &cloned
+}
+
+// Z groups points into separate lines by this field WITHOUT changing color.
+// Use it together with StrokeField to draw one line per Z value (e.g. per
+// session) all colored by the stroke value (e.g. per user), so overlapping
+// series stay visually distinct but share a color.
+func (b *TimeLine) Z(zField sql.SqlField) *TimeLine {
+	cloned := *b
+	cloned.zField = &zField
 	return &cloned
 }
 
@@ -140,6 +152,17 @@ func (b *TimeLine) TipChannels(channels map[string]string) *TimeLine {
 	return &cloned
 }
 
+// WithFillStep makes the X (time) axis use ClickHouse `WITH FILL STEP <step>`,
+// so empty time buckets are synthesized instead of the line interpolating
+// across them. `step` is a raw interval expression, e.g. "toIntervalHour(1)".
+// Any StrokeField is used as the fill partition key (filled independently per
+// series). Filled numeric Y values default to 0.
+func (b *TimeLine) WithFillStep(step string) *TimeLine {
+	cloned := *b
+	cloned.fillStep = step
+	return &cloned
+}
+
 func (b *TimeLine) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeLine {
 	cloned := *b
 	cloned.sql = cloned.sql.With(opts...)
@@ -212,9 +235,10 @@ func (b *TimeLine) buildQuery() sql.SqlQueryable {
 		sql.PrependSelect(b.x),
 		sql.GroupBy(b.x),
 		sql.Select(b.y),
-		sql.OrderBy(b.x),
 	)
 
+	// Partition columns (stroke) must be ordered BEFORE the time column so that
+	// WITH FILL fills each series independently. The time column is ordered last.
 	if b.strokeField != nil {
 		query = query.With(
 			sql.PrependSelect(*b.strokeField),
@@ -222,6 +246,11 @@ func (b *TimeLine) buildQuery() sql.SqlQueryable {
 			sql.OrderBy(*b.strokeField),
 		)
 	}
+	query = query.With(sql.OrderBy(b.x))
+	if b.fillStep != "" {
+		query = query.With(sql.WithFill(b.fillStep))
+	}
+
 	if b.fx != nil {
 		query = query.With(
 			sql.PrependSelect(*b.fx),
