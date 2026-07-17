@@ -233,6 +233,16 @@ export function table(queryResult: any, extProps: any) {
     const container = document.createElement('div');
     container.classList.add('table-with-details');
 
+    // Render the title, styled like the <h2> Observable Plot generates for
+    // the other chart types (and like the loading placeholder in chart.ts).
+    if (typeof props.title === 'string' && props.title.length > 0) {
+        const title = document.createElement('h2');
+        title.textContent = props.title;
+        title.style.font = 'bold 14pt sans-serif';
+        title.style.margin = '1.5em 0 1em 0';
+        container.appendChild(title);
+    }
+
     // Create search input
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
