@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	alerting2 "github.com/sandstorm/dashica/lib/alerting"
+	"github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
@@ -23,9 +23,13 @@ type Dashica interface {
 	http.Handler
 	Config() config.Config
 	Log() zerolog.Logger
+	// TODO: Rename to "Run()"
 	ListenAndServe() error
 	RegisterDashboardGroup(title string) Dashica
 	RegisterDashboard(url string, dashboard dashboard.Dashboard) Dashica
+	// RegisterAlerts registers Go-code-configured alerts under a logical group name.
+	// Must be called before ListenAndServe so the scheduler picks them up.
+	RegisterAlerts(group string, alerts ...*alerting.Alert) Dashica
 }
 
 func New(projectFS fs.ReadFileFS) Dashica {
@@ -70,6 +74,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	mux := http.NewServeMux()
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.FS(public.FS))))
 
+	// AB HIER -> ListenAndServe
 	timeProvider := config.NewRealTimeProvider()
 	clickhouseClientManager := clickhouse.NewManager(cfg, logger)
 
@@ -79,26 +84,9 @@ func New(projectFS fs.ReadFileFS) Dashica {
 			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
 			Msg("did NOT find clickhouse 'alert_target' (needed for alert result storage) in dashica_config.yaml.")
 	}
-	alertResultStore := alerting2.NewAlertResultStore(logger, alertTargetClickhouseClient)
-	alertEvaluator := alerting2.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
-	alertManager := alerting2.NewAlertManager(cfg, logger, projectFS, alertEvaluator, alertResultStore)
-
-	err = alertManager.DiscoverAlertDefinitions()
-	if err != nil {
-		logger.Warn().
-			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
-			Err(err).
-			Msg("Failed to discover alert definitions")
-	}
-
-	go func() {
-		if err := alertManager.RunAlertScheduler(); err != nil {
-			logger.Error().
-				Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
-				Err(err).
-				Msg("Alert scheduler failed")
-		}
-	}()
+	alertResultStore := alerting.NewAlertResultStore(logger, alertTargetClickhouseClient)
+	alertEvaluator := alerting.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
+	alertManager := alerting.NewAlertManager(cfg, logger, alertEvaluator, alertResultStore)
 
 	deps := rendering.Dependencies{
 		clickhouseClientManager,
@@ -116,6 +104,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		handler:          mux,
 		handlerCollector: handler_collector.NewValidatingCollector(mux, logger),
 		deps:             deps,
+		alertManager:     alertManager,
 	}
 }
 
@@ -126,6 +115,7 @@ type DashicaImpl struct {
 	dashboardGroups  []rendering.MenuGroup
 	handlerCollector handler_collector.HandlerCollector
 	deps             rendering.Dependencies
+	alertManager     *alerting.AlertManager
 }
 
 func (d *DashicaImpl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +130,21 @@ func (d *DashicaImpl) Log() zerolog.Logger {
 	return d.log
 }
 
+func (d *DashicaImpl) RegisterAlerts(group string, alerts ...*alerting.Alert) Dashica {
+	d.alertManager.RegisterAlerts(group, alerts...)
+	return d
+}
+
 func (d *DashicaImpl) ListenAndServe() error {
+	go func() {
+		if err := d.alertManager.RunAlertScheduler(); err != nil {
+			d.log.Error().
+				Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+				Err(err).
+				Msg("Alert scheduler failed")
+		}
+	}()
+
 	addr := fmt.Sprintf(":%d", d.cfg.Server.Port)
 	d.log.Info().
 		Int("port", d.cfg.Server.Port).

@@ -13,7 +13,6 @@ import (
 type queryAlertsHandler struct {
 	clickhouseClientManager *clickhouse.Manager
 	logger                  zerolog.Logger
-	alertManager            *alerting2.AlertManager
 	alertResultStore        *alerting2.AlertResultStore
 	devMode                 bool
 }
@@ -41,13 +40,6 @@ ORDER BY
 `
 
 func (qa queryAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
-	if qa.devMode {
-		// rescan on every alert
-		err := qa.alertManager.DiscoverAlertDefinitions()
-		if err != nil {
-			return err
-		}
-	}
 
 	client, err := qa.clickhouseClientManager.GetClient("alert_storage")
 	if err != nil {

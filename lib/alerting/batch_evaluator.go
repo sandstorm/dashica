@@ -22,16 +22,15 @@ import (
 // It works as follows:
 //
 // ASSUMPTION: the alert query somehow *buckets* timestamps together (e.g. toStartOfHour() etc), and then
-// does evaluation in these buckets. This is controlled in the alert.sql file via the header comment, containing
-// f.e.:
+// does evaluation in these buckets. This is controlled via BatchBucketExpression on AlertDefinition, e.g.:
 //
 //   - for monotonically increasing aggregations such as count(*), we can alert on the CURRENT bucket:
-//     => "--BUCKET: toStartOfFifteenMinutes(--NOW--)"
+//     => "toStartOfFifteenMinutes(--NOW--)"
 //
 //   - for aggregations which do NOT increase monotonically, f.e. average(), we cannot look at the current bucket,
 //     because in an intermediate state it might fire, where with the full data it will not. Thus, we need to
 //     look at the LAST FULL BUCKET (whose values won't change anymore):
-//     => "--BUCKET: toStartOfFifteenMinutes(--NOW-- - INTERVAL 15 MINUTE)"
+//     => "toStartOfFifteenMinutes(--NOW-- - INTERVAL 15 MINUTE)"
 //
 //     1. we calculate the Execution Timestamps between start and end via the Cron Library
 //     2. for each execution timestamp, we calculate the corresponding Bucket based on the --BUCKET expression.
@@ -67,13 +66,8 @@ type ExecutionTimePoint struct {
 }
 
 func (e *BatchEvaluator) EvaluateAlerts(ctx context.Context, start time.Time, end time.Time) error {
-	err := e.alertManager.DiscoverAlertDefinitions()
-	if err != nil {
-		return fmt.Errorf("discovering alert definitions: %w", err)
-	}
-
 	e.alertManager.mu.RLock()
-	loadedAlertDefinitions := e.alertManager.loadedAlertDefinitions[:]
+	loadedAlertDefinitions := e.alertManager.allDefinitions()
 	e.alertManager.mu.RUnlock()
 
 	for _, alertDefinition := range loadedAlertDefinitions {
@@ -93,7 +87,7 @@ func (e *BatchEvaluator) EvaluateSingleAlert(ctx context.Context, start, end tim
 		Times("executionTimes", executionTimes).
 		Msg("times where alert should be evaluated")
 
-	buckets, err := e.calculateBuckets(context.Background(), executionTimes, alertDefinition.QueryBucketExpression)
+	buckets, err := e.calculateBuckets(context.Background(), executionTimes, alertDefinition.BatchBucketExpression)
 	if err != nil {
 		return err
 	}
@@ -140,7 +134,7 @@ SELECT
     -- first convert the input numbers (=unix timestamps) to native DateTime objects.
     input,
     toDateTime(input, 'UTC') as input_datetime,
-    -- second, for each input_datetime, calculate the target bucket. 
+    -- second, for each input_datetime, calculate the target bucket.
     toUnixTimestamp(%s) AS target_bucket
 FROM
     -- here, in the placeholder, the Unix Timestamps will be printed.
@@ -199,16 +193,15 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 
 	clickhouseClient, err := b.alertEvaluator.clickhouseManager.GetClient("default")
 	if err != nil {
-		return fmt.Errorf("loading clickhouse client for %s: %w", alertDefinition.QueryPath, err)
+		return fmt.Errorf("loading clickhouse client for alert %s: %w", alertDefinition.Id.String(), err)
 	}
 
 	queryOpts := clickhouse.DefaultQueryOptions()
-	queryOpts.Parameters = alertDefinition.Params
 
 	// DIFFERENCE to regular AlertEvaluator: There, we execute the query in a way that only ONE row is returned;
 	// here, we return the full result set as we want to execute a batch query.
 	// TODO: coarse timestamp selection.
-	resultset, err := clickhouse.QueryJSON[alertResultRow](context.Background(), clickhouseClient, alertDefinition.Query, queryOpts)
+	resultset, err := clickhouse.QueryJSON[alertResultRow](context.Background(), clickhouseClient, alertDefinition.QueryBuilder.Build(), queryOpts)
 	if err != nil {
 		return fmt.Errorf("running batch alert SQL query: %w", err)
 	}
