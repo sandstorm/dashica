@@ -30,7 +30,59 @@ type TimeBar struct {
 	marginTop    *int
 	color        *color.ColorScale
 	tipChannels  map[string]string
+	stack        StackOptions
 }
+
+// StackOptions groups the Observable Plot stack transform options for the fill
+// series (offset, order, reverse). Its zero value is Plot's default stacking.
+// Docs: https://observablehq.com/plot/transforms/stack#stack-options
+type StackOptions struct {
+	// Order is the order in which the series are layered. Zero value = input
+	// order (Plot default).
+	Order StackOrder
+	// Offset is the baseline method (e.g. OffsetExpand for a 0–1 share chart).
+	// Zero value = a zero baseline (Plot default).
+	Offset StackOffset
+	// Reverse flips the chosen Order.
+	Reverse bool
+}
+
+// StackOrder is the stacking order of the fill series. It wraps an unexported
+// string so that only the package-defined Order* values compile — a bare
+// literal like StackOrder{"banana"} is rejected (unkeyed field is unexported),
+// giving enum-like safety without Go enums. Zero value = input order.
+//
+// Only orders valid for a vertical (stackY) bar chart are exposed; Plot's
+// stackX-only "x" alias is intentionally omitted.
+// Docs: https://observablehq.com/plot/transforms/stack#stack-options
+type StackOrder struct{ v string }
+
+var (
+	// OrderValue stacks by ascending value (descending with StackOptions.Reverse).
+	OrderValue = StackOrder{"value"}
+	// OrderSum orders series by their total value — smallest total at the
+	// bottom, which keeps a symlog y-axis readable.
+	OrderSum = StackOrder{"sum"}
+	// OrderAppearance orders series by the position of their maximum value.
+	OrderAppearance = StackOrder{"appearance"}
+	// OrderInsideOut puts the earliest-appearing series on the inside.
+	OrderInsideOut = StackOrder{"inside-out"}
+)
+
+// StackOffset is the stack baseline method. Same enum-safety trick as
+// StackOrder. Zero value = a zero baseline (Plot default).
+// Docs: https://observablehq.com/plot/transforms/stack#stack-options
+type StackOffset struct{ v string }
+
+var (
+	// OffsetExpand normalizes each stack to the 0–1 range (share of total).
+	OffsetExpand = StackOffset{"expand"}
+	// OffsetCenter centers each stack around a shared baseline (streamgraph).
+	OffsetCenter = StackOffset{"center"}
+	// OffsetWiggle minimizes apparent movement (streamgraph); implies
+	// OrderInsideOut unless another order is set.
+	OffsetWiggle = StackOffset{"wiggle"}
+)
 
 func (b *TimeBar) X(xField sql.TimestampedField) *TimeBar {
 	cloned := *b
@@ -119,6 +171,16 @@ func (b *TimeBar) Color(opts ...color.ColorScaleOption) *TimeBar {
 	return &cloned
 }
 
+// StackOptions sets the stacking options (order, offset, reverse) for the fill
+// series. E.g. StackOptions(widget.StackOptions{Order: widget.OrderSum}) stacks the
+// series with the smallest total at the bottom, keeping a symlog y-axis
+// readable.
+func (b *TimeBar) StackOptions(stack StackOptions) *TimeBar {
+	cloned := *b
+	cloned.stack = stack
+	return &cloned
+}
+
 // TipChannels adds extra channels to the tooltip with custom labels.
 func (b *TimeBar) TipChannels(channels map[string]string) *TimeBar {
 	cloned := *b
@@ -195,6 +257,15 @@ func (b *TimeBar) buildChartProps() map[string]interface{} {
 	}
 	if len(b.tipChannels) > 0 {
 		props["tip"] = map[string]interface{}{"channels": b.tipChannels}
+	}
+	if b.stack.Order.v != "" {
+		props["order"] = b.stack.Order.v
+	}
+	if b.stack.Offset.v != "" {
+		props["offset"] = b.stack.Offset.v
+	}
+	if b.stack.Reverse {
+		props["reverse"] = b.stack.Reverse
 	}
 
 	return props

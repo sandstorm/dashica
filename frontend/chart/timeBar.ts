@@ -69,6 +69,23 @@ interface ChartProps {
      * A list of extra marks to render
      */
     extraMarks: Markish[];
+
+    /**
+     * Stack order for the fill series (Observable Plot stack "order"). "sum"
+     * stacks the smallest-total series at the bottom, which keeps a symlog
+     * y-axis readable. Only stackY-valid orders are allowed (no stackX "x").
+     * https://observablehq.com/plot/transforms/stack#stack-options
+     */
+    order?: "value" | "sum" | "appearance" | "inside-out";
+
+    /**
+     * Stack baseline method (Observable Plot stack "offset").
+     * https://observablehq.com/plot/transforms/stack#stack-options
+     */
+    offset?: "expand" | "center" | "wiggle";
+
+    /** Reverse the stacking order chosen by {@link order}. */
+    reverse?: boolean;
 }
 
 function _bars(data: QueryResult, props: ChartProps) {
@@ -133,6 +150,9 @@ function _bars(data: QueryResult, props: ChartProps) {
                 y: schema.requiredColumn(props.y, 'y'),
                 fx: props.fx,
                 fy: props.fy,
+                order: props.order,
+                offset: props.offset,
+                reverse: props.reverse,
                 marginRight: 150,
                 tip: props.tip !== undefined ? props.tip : true,
                 fill: props.fill || '#A8C1D1',
