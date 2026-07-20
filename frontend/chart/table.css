@@ -1,0 +1,244 @@
+/* Styles for the table chart (frontend/chart/table.ts). */
+
+/* Table with details container */
+.table-with-details {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Timestamp formatting */
+.autoTable__timestampDate {
+    opacity: 0.6;
+    font-size: 0.9em;
+}
+
+/* Record details panel */
+.record-details-panel {
+    position: fixed;
+    bottom: 0;
+    left: 250px; /* Account for sidebar width */
+    right: 0;
+    max-height: 40vh;
+    overflow-y: auto;
+    background: white;
+    border-top: 1px solid #ddd;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    z-index: 10;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out;
+}
+
+.record-details-panel.hidden {
+    display: none;
+}
+
+.record-details-panel.open {
+    transform: translateY(0);
+}
+
+.record-details-panel.fullscreen {
+    max-height: calc(100vh - 60px); /* Leave space for header */
+    top: 60px;
+    bottom: 0;
+}
+
+.record-details-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+    .record-details-panel {
+        background: #1a1a1a;
+        border-top-color: #333;
+    }
+}
+
+/* Record details layout */
+.recordDetails {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: flex-start;
+}
+
+.recordDetails__record {
+    flex-grow: 0;
+    align-items: stretch;
+    flex-basis: 30%;
+    max-width: 30%;
+    padding: 10px;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    overflow: auto;
+    transition: box-shadow 300ms;
+}
+
+@media (prefers-color-scheme: dark) {
+    .recordDetails__record {
+        background-color: #2a2a2a;
+    }
+}
+
+.recordDetails__record p {
+    margin: 0;
+}
+
+.recordDetails__record:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Sticky, copyable, draggable cell tooltip */
+.stickyTooltip {
+    position: fixed;
+    z-index: 9999;
+    max-width: 640px;
+    max-height: 50vh;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    color: #1a1a1a;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    font-size: 12px;
+    overflow: hidden;
+    /* Manually resizable (drag bottom-right corner). */
+    resize: both;
+    min-width: 160px;
+    min-height: 60px;
+}
+
+.stickyTooltip--transient {
+    z-index: 10000; /* transient hover tooltip floats above pinned ones */
+    resize: none;   /* only pinned tooltips are resizable */
+}
+
+.stickyTooltip__header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border-bottom: 1px solid #eee;
+    background: #f6f6f6;
+    cursor: default;
+}
+
+.stickyTooltip--pinned .stickyTooltip__header {
+    cursor: move;
+}
+
+.stickyTooltip__spacer {
+    flex: 1;
+}
+
+/* Index badge shown in a pinned tooltip's header ([1], [2], …) */
+.stickyTooltip__index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-right: 4px;
+    border-radius: 9px;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Marker injected into a pinned source cell ([1], [2], …) */
+.stickyTooltip__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    margin-right: 5px;
+    border-radius: 8px;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+/* Pinned source row highlight (color set inline per pin) */
+.stickyTooltip__pinnedRow {
+    transition: background-color 150ms;
+}
+
+.stickyTooltip__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #555;
+    cursor: pointer;
+}
+
+.stickyTooltip__btn:hover {
+    background: #e2e2e2;
+    color: #000;
+}
+
+.stickyTooltip__btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.stickyTooltip__btn--ok {
+    color: #16a34a;
+}
+
+.stickyTooltip--pinned .stickyTooltip__pin {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.stickyTooltip__body {
+    margin: 0;
+    padding: 8px 10px;
+    flex: 1 1 auto;
+    min-height: 0; /* allow body to shrink + scroll inside a resized tooltip */
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    /* Text must be selectable so it can be copied out. */
+    user-select: text;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    line-height: 1.4;
+    tab-size: 2;
+}
+
+@media (prefers-color-scheme: dark) {
+    .stickyTooltip {
+        background: #1f1f1f;
+        color: #eaeaea;
+        border-color: #444;
+    }
+    .stickyTooltip__header {
+        background: #2a2a2a;
+        border-bottom-color: #3a3a3a;
+    }
+    .stickyTooltip__btn {
+        color: #bbb;
+    }
+    .stickyTooltip__btn:hover {
+        background: #3a3a3a;
+        color: #fff;
+    }
+    .stickyTooltip--pinned .stickyTooltip__pin {
+        background: #1e3a8a;
+        color: #bfdbfe;
+    }
+}

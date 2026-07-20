@@ -3,7 +3,8 @@ import {DataType, Field} from "apache-arrow";
 import {TabulatorFull as Tabulator} from 'tabulator-tables';
 import type {ColumnDefinition, RowComponent, CellComponent} from 'tabulator-tables';
 import Alpine from '@alpinejs/csp';
-import {Maximize2, X, createElement} from 'lucide';
+import {Maximize2, X, Pin, Copy, Braces, createElement} from 'lucide';
+import './table.css';
 
 const canvas = document.createElement('canvas');
 const ctx = canvas.getContext('2d');
@@ -48,19 +49,15 @@ function renderRecordDetails(records: Record<string, any>[]): string {
         const fields = Object.entries(record).map(([key, value]) => {
             const valueStr = String(value);
 
-            // Handle JSON objects
-            if (valueStr.trim().startsWith('{')) {
-                try {
-                    const formatted = JSON.stringify(JSON.parse(valueStr), null, "  ");
-                    return `
-                        <p class="font-mono">
-                            <span class="font-bold">${key}</span>:
-                            <span class="break-all"><pre>${formatted}</pre></span>
-                        </p>
-                    `;
-                } catch (e) {
-                    // If parsing fails, handle as regular value
-                }
+            // Handle JSON objects/arrays
+            const formatted = tryPrettyJson(valueStr);
+            if (formatted !== null) {
+                return `
+                    <p class="font-mono">
+                        <span class="font-bold">${key}</span>:
+                        <span class="break-all"><pre>${formatted}</pre></span>
+                    </p>
+                `;
             }
 
             // Handle multiline values
@@ -86,8 +83,352 @@ function renderRecordDetails(records: Record<string, any>[]): string {
     }).join('');
 }
 
+// Try to detect + pretty-print JSON. Returns null if the string is not JSON.
+function tryPrettyJson(raw: string): string | null {
+    const trimmed = raw.trim();
+    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
+        return null;
+    }
+    try {
+        return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch (e) {
+        return null;
+    }
+}
+
+// Colors cycled through for pinned tooltips + their source markers/rows.
+const PIN_COLORS = [
+    '#2563eb', '#dc2626', '#16a34a', '#d97706',
+    '#9333ea', '#0891b2', '#db2777', '#65a30d',
+];
+
+// Delays (ms). Show-delay avoids tooltips flashing while the pointer sweeps
+// across cells; hide-delay bridges the gap so the pointer can travel from the
+// cell onto the tooltip without it vanishing.
+const SHOW_DELAY = 400;
+const HIDE_DELAY = 300;
+
+// One tooltip DOM element (transient hover tooltip or a pinned one). Owns its
+// own value/JSON/drag state; pin + close behaviour is wired up by the manager.
+interface TooltipEl {
+    root: HTMLElement;
+    header: HTMLElement;
+    jsonBtn: HTMLButtonElement;
+    copyBtn: HTMLButtonElement;
+    pinBtn: HTMLButtonElement;
+    closeBtn: HTMLButtonElement;
+    indexLabel: HTMLElement;
+    setValue(raw: string): void;
+    currentText(): string;
+}
+
+function createTooltipEl(): TooltipEl {
+    // Build the static skeleton with htl (same pattern as `panelHeader` below);
+    // grab element refs afterwards. Behaviour (drag/position/pin) is wired
+    // imperatively — see the note in `table()` on why Alpine don't fit.
+    const root = html`<div class="stickyTooltip">
+        <div class="stickyTooltip__header">
+            <span class="stickyTooltip__index" style="display:none"></span>
+            <button class="stickyTooltip__btn stickyTooltip__json" title="Toggle JSON pretty-print">${createElement(Braces)}</button>
+            <button class="stickyTooltip__btn stickyTooltip__copy" title="Copy to clipboard">${createElement(Copy)}</button>
+            <span class="stickyTooltip__spacer"></span>
+            <button class="stickyTooltip__btn stickyTooltip__pin" title="Pin (keeps this open + marks the source; drag header to move)">${createElement(Pin)}</button>
+            <button class="stickyTooltip__btn stickyTooltip__close" title="Close">${createElement(X)}</button>
+        </div>
+        <pre class="stickyTooltip__body"><code></code></pre>
+    </div>` as HTMLElement;
+
+    const header = root.querySelector('.stickyTooltip__header') as HTMLElement;
+    const indexLabel = root.querySelector('.stickyTooltip__index') as HTMLElement;
+    const jsonBtn = root.querySelector('.stickyTooltip__json') as HTMLButtonElement;
+    const copyBtn = root.querySelector('.stickyTooltip__copy') as HTMLButtonElement;
+    const pinBtn = root.querySelector('.stickyTooltip__pin') as HTMLButtonElement;
+    const closeBtn = root.querySelector('.stickyTooltip__close') as HTMLButtonElement;
+    const code = root.querySelector('code') as HTMLElement;
+
+    let currentRaw = '';
+    let prettyJson: string | null = null;   // non-null => value is JSON
+    let showPretty = true;
+
+    function renderBody() {
+        code.textContent = (prettyJson !== null && showPretty) ? prettyJson : currentRaw;
+    }
+
+    function setValue(raw: string) {
+        currentRaw = raw;
+        prettyJson = tryPrettyJson(raw);
+        showPretty = true;
+        jsonBtn.style.display = prettyJson !== null ? '' : 'none';
+        renderBody();
+    }
+
+    function currentText(): string {
+        return (prettyJson !== null && showPretty) ? prettyJson : currentRaw;
+    }
+
+    jsonBtn.addEventListener('click', () => {
+        showPretty = !showPretty;
+        renderBody();
+    });
+
+    copyBtn.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(currentText());
+            copyBtn.classList.add('stickyTooltip__btn--ok');
+            window.setTimeout(() => copyBtn.classList.remove('stickyTooltip__btn--ok'), 800);
+        } catch (e) {
+            console.warn('Clipboard write failed', e);
+        }
+    });
+
+    // --- dragging via header (only when pinned/sticky) ---
+    let dragDX = 0;
+    let dragDY = 0;
+
+    function onDragMove(e: PointerEvent) {
+        root.style.left = (e.clientX - dragDX) + 'px';
+        root.style.top = (e.clientY - dragDY) + 'px';
+        root.style.right = 'auto';
+        root.style.bottom = 'auto';
+    }
+
+    function onDragEnd(e: PointerEvent) {
+        header.releasePointerCapture(e.pointerId);
+        header.removeEventListener('pointermove', onDragMove);
+        header.removeEventListener('pointerup', onDragEnd);
+    }
+
+    header.addEventListener('pointerdown', (e) => {
+        // Transient (unpinned) tooltip is not draggable.
+        if (!root.classList.contains('stickyTooltip--pinned')) {
+            return;
+        }
+        if ((e.target as HTMLElement).closest('.stickyTooltip__btn')) {
+            return; // don't start a drag from a button
+        }
+        const rect = root.getBoundingClientRect();
+        dragDX = e.clientX - rect.left;
+        dragDY = e.clientY - rect.top;
+        header.setPointerCapture(e.pointerId);
+        header.addEventListener('pointermove', onDragMove);
+        header.addEventListener('pointerup', onDragEnd);
+        e.preventDefault();
+    });
+
+    return {root, header, jsonBtn, copyBtn, pinBtn, closeBtn, indexLabel, setValue, currentText};
+}
+
+// Position a tooltip near the mouse pointer, clamped to the viewport. Anchoring
+// to the pointer (not the cell's left edge) keeps the tooltip next to the cursor
+// even in very wide columns, where the cell's left edge can be far away.
+function positionTooltip(root: HTMLElement, pointerX: number, pointerY: number, offset = 0) {
+    const ttRect = root.getBoundingClientRect();
+    let left = pointerX + 12 + offset;
+    let top = pointerY + 16 + offset;
+    // Flip left if it would overflow the right edge.
+    if (left + ttRect.width > window.innerWidth - 8) {
+        left = Math.max(8, pointerX - ttRect.width - 12);
+    }
+    left = Math.max(8, left);
+    // Flip above the pointer if it would overflow the bottom edge.
+    if (top + ttRect.height > window.innerHeight - 8) {
+        top = Math.max(8, pointerY - ttRect.height - 12);
+    }
+    top = Math.max(8, top);
+    root.style.left = left + 'px';
+    root.style.top = top + 'px';
+    root.style.right = 'auto';
+    root.style.bottom = 'auto';
+}
+
+interface Pin {
+    el: TooltipEl;
+    index: number;
+    color: string;
+    row: RowComponent;
+    field: string;
+}
+
+// Per-table tooltip manager: one transient hover tooltip plus any number of
+// pinned tooltips. Pinned tooltips mark their source cell ([1], [2], …) and
+// highlight the source row in a matching color. Re-decorates on every render
+// so markers survive scrolling/filtering (Tabulator recycles row DOM).
+function createTooltipManager(table: Tabulator) {
+    const transient = createTooltipEl();
+    transient.root.classList.add('stickyTooltip--transient');
+    transient.root.style.display = 'none';
+    document.body.appendChild(transient.root);
+
+    const pins: Pin[] = [];
+    let nextIndex = 1;
+
+    let showTimer: number | null = null;
+    let hideTimer: number | null = null;
+    let hoverCell: CellComponent | null = null;
+    let pointerX = 0;
+    let pointerY = 0;
+
+    function clearShowTimer() {
+        if (showTimer !== null) { window.clearTimeout(showTimer); showTimer = null; }
+    }
+    function cancelHide() {
+        if (hideTimer !== null) { window.clearTimeout(hideTimer); hideTimer = null; }
+    }
+    function hideTransient() {
+        transient.root.style.display = 'none';
+    }
+    function scheduleHide() {
+        cancelHide();
+        hideTimer = window.setTimeout(hideTransient, HIDE_DELAY);
+    }
+
+    function updateTransient(cell: CellComponent) {
+        transient.setValue(String(cell.getValue()));
+        transient.root.style.display = '';
+        // The transient element is shared across cells. Clear any inline size
+        // left over from a previous (wider) value so it re-shrinks to the new
+        // content before we measure — otherwise a stale-wide box gets clamped
+        // too far left when hovering cells near the right edge.
+        transient.root.style.width = '';
+        transient.root.style.height = '';
+        positionTooltip(transient.root, pointerX, pointerY);
+    }
+
+    // Re-apply source markers + row highlights for all pins. Runs on every
+    // render, so it first strips stale decoration then re-adds it for whichever
+    // pinned rows are currently rendered.
+    function decorate() {
+        const tableEl = (table as any).element as HTMLElement | undefined;
+        if (!tableEl) return;
+        tableEl.querySelectorAll('.stickyTooltip__badge').forEach(n => n.remove());
+        tableEl.querySelectorAll('.stickyTooltip__pinnedRow').forEach(n => {
+            const row = n as HTMLElement;
+            row.classList.remove('stickyTooltip__pinnedRow');
+            row.style.removeProperty('box-shadow');
+            row.style.removeProperty('background-color');
+        });
+
+        pins.forEach(pin => {
+            let rowEl: HTMLElement | null = null;
+            let cellEl: HTMLElement | null = null;
+            try {
+                rowEl = pin.row.getElement();
+                const cell = pin.row.getCell(pin.field);
+                cellEl = cell ? cell.getElement() : null;
+            } catch (e) {
+                return; // row no longer exists / not rendered
+            }
+            if (rowEl) {
+                rowEl.classList.add('stickyTooltip__pinnedRow');
+                rowEl.style.boxShadow = `inset 3px 0 0 0 ${pin.color}`;
+                rowEl.style.backgroundColor = pin.color + '14'; // ~8% alpha
+                // Frozen cells (checkbox column) keep their own opaque bg — no
+                // tint. Tinting them either bled the row color left or let the
+                // scrolled-under text show through.
+            }
+            if (cellEl && !cellEl.querySelector('.stickyTooltip__badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'stickyTooltip__badge';
+                badge.textContent = String(pin.index);
+                badge.style.backgroundColor = pin.color;
+                cellEl.insertBefore(badge, cellEl.firstChild);
+            }
+        });
+    }
+
+    function removePin(pin: Pin) {
+        const i = pins.indexOf(pin);
+        if (i >= 0) pins.splice(i, 1);
+        pin.el.root.remove();
+        decorate();
+    }
+
+    function pinCurrent() {
+        if (!hoverCell) return;
+        const cell = hoverCell;
+        const pinned = createTooltipEl();
+        pinned.root.classList.add('stickyTooltip--pinned');
+        pinned.pinBtn.style.display = 'none'; // already pinned
+
+        const index = nextIndex++;
+        const color = PIN_COLORS[(index - 1) % PIN_COLORS.length];
+        pinned.indexLabel.textContent = String(index);
+        pinned.indexLabel.style.display = '';
+        pinned.indexLabel.style.backgroundColor = color;
+        pinned.root.style.borderColor = color;
+
+        pinned.setValue(String(cell.getValue()));
+        document.body.appendChild(pinned.root);
+        // Cascade so stacked pins don't fully overlap.
+        positionTooltip(pinned.root, pointerX, pointerY, (index % 6) * 22);
+
+        const pin: Pin = {el: pinned, index, color, row: cell.getRow(), field: cell.getField()};
+        pins.push(pin);
+        pinned.closeBtn.addEventListener('click', () => removePin(pin));
+
+        hideTransient();
+        decorate();
+    }
+
+    // Keep the transient tooltip alive while the pointer is over it.
+    transient.root.addEventListener('mouseenter', cancelHide);
+    transient.root.addEventListener('mouseleave', scheduleHide);
+    transient.pinBtn.addEventListener('click', pinCurrent);
+    // Close button is meaningful only on pinned tooltips; the transient one
+    // hides itself on mouse-out, so hide its close button.
+    transient.closeBtn.style.display = 'none';
+
+    // Re-decorate whenever Tabulator (re)renders rows.
+    table.on('renderComplete', decorate);
+    table.on('dataFiltered', decorate);
+    table.on('dataSorted', decorate);
+
+    function isPinned(cell: CellComponent): boolean {
+        const row = cell.getRow();
+        const field = cell.getField();
+        return pins.some(p => p.row === row && p.field === field);
+    }
+
+    function onCellEnter(e: MouseEvent, cell: CellComponent) {
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+        const value = cell.getValue();
+        if (value === null || value === undefined || value === '') {
+            return;
+        }
+        // A pinned cell already has its own persistent tooltip — don't pop a
+        // transient one on top of it.
+        if (isPinned(cell)) {
+            clearShowTimer();
+            hideTransient();
+            return;
+        }
+        hoverCell = cell;
+        cancelHide();
+        clearShowTimer();
+        // Always re-arm the show delay on every cell enter. Moving directly
+        // between fields restarts the timer instead of instantly swapping
+        // content (which blinks). The currently-visible tooltip (if any) stays
+        // put until the timer fires and swaps to the new cell.
+        showTimer = window.setTimeout(() => updateTransient(cell), SHOW_DELAY);
+    }
+
+    // Track the pointer while over a cell so the tooltip appears where the
+    // cursor actually is when the show-delay fires (not where it entered).
+    function onCellMove(e: MouseEvent) {
+        pointerX = e.clientX;
+        pointerY = e.clientY;
+    }
+
+    function onCellLeave() {
+        clearShowTimer();
+        scheduleHide();
+    }
+
+    return {onCellEnter, onCellMove, onCellLeave};
+}
+
 export function table(queryResult: any, extProps: any) {
-    console.log("AUTOTABLE2", {queryResult, extProps});
     const props = Object.assign({}, extProps);
     props.format = props.format || {};
     props.width = props.width || {};
@@ -297,12 +638,7 @@ export function table(queryResult: any, extProps: any) {
         columnDefaults: {
             headerFilter: "input", // Add filter input to all column headers
             headerFilterPlaceholder: "Filter...",
-            tooltip: function(e, cell, onRendered) {
-                if (!cell.getValue()) {
-                    return "";
-                }
-                return html`<div class="tabulatorTable__tooltip"><code>${cell.getValue()}</code></div>`;
-            },
+            tooltip: false, // replaced by custom sticky tooltip (see cellMouseEnter below)
             headerMenu: [
                 {
                     label: "Auto-size column (based on visible data)",
@@ -327,6 +663,31 @@ export function table(queryResult: any, extProps: any) {
     // Listen to row selection changes
     tabulatorTable.on("rowSelectionChanged", (data, rows) => {
         state.selectedRecords = data;
+    });
+
+    // Custom sticky tooltip: hover a cell to show its full value; the pointer
+    // can move onto the tooltip to select/copy, pin it (marks the source cell
+    // [1]/[2]/… + highlights the row), or drag it around.
+    //
+    // Markup vs. behaviour — what fits here:
+    //   - Static skeleton is built with htl `html` (see createTooltipEl), the
+    //     same approach as `panelHeader` below. That's the house style in this
+    //     file for one-shot DOM.
+    //   - Behaviour (drag, viewport-clamped positioning, N independent pins,
+    //     live re-decoration on Tabulator renders) is imperative. Alpine (we
+    //     use @alpinejs/csp — CSP mode forbids inline expressions and wants
+    //     registered x-data components) is a poor fit for this transient,
+    //     multi-instance, pointer-driven widget; Alpine here stays where it
+    //     shines: the reactive search/selection state above.
+    const tooltipManager = createTooltipManager(tabulatorTable);
+    tabulatorTable.on("cellMouseEnter", (e: any, cell: CellComponent) => {
+        tooltipManager.onCellEnter(e, cell);
+    });
+    tabulatorTable.on("cellMouseMove", (e: any) => {
+        tooltipManager.onCellMove(e);
+    });
+    tabulatorTable.on("cellMouseLeave", () => {
+        tooltipManager.onCellLeave();
     });
 
     // Create record details panel with header
