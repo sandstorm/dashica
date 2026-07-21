@@ -264,7 +264,11 @@ function createTooltipManager(table: Tabulator) {
 
     let showTimer: number | null = null;
     let hideTimer: number | null = null;
-    let hoverCell: CellComponent | null = null;
+    // The cell whose value the transient tooltip currently *displays*. This is
+    // NOT the same as hoverCell: on the way to the tooltip the pointer crosses
+    // other cells (updating hoverCell), but the visible tooltip still shows this
+    // one — and Pin must capture what's shown, not the last cell crossed.
+    let transientCell: CellComponent | null = null;
     let pointerX = 0;
     let pointerY = 0;
 
@@ -276,6 +280,7 @@ function createTooltipManager(table: Tabulator) {
     }
     function hideTransient() {
         transient.root.style.display = 'none';
+        transientCell = null;
     }
     function scheduleHide() {
         cancelHide();
@@ -283,6 +288,7 @@ function createTooltipManager(table: Tabulator) {
     }
 
     function updateTransient(cell: CellComponent) {
+        transientCell = cell;
         transient.setValue(String(cell.getValue()));
         transient.root.style.display = '';
         // The transient element is shared across cells. Clear any inline size
@@ -305,7 +311,9 @@ function createTooltipManager(table: Tabulator) {
             const row = n as HTMLElement;
             row.classList.remove('stickyTooltip__pinnedRow');
             row.style.removeProperty('box-shadow');
-            row.style.removeProperty('background-color');
+            row.querySelectorAll('.tabulator-cell').forEach(c => {
+                (c as HTMLElement).style.removeProperty('background-color');
+            });
         });
 
         pins.forEach(pin => {
@@ -321,10 +329,17 @@ function createTooltipManager(table: Tabulator) {
             if (rowEl) {
                 rowEl.classList.add('stickyTooltip__pinnedRow');
                 rowEl.style.boxShadow = `inset 3px 0 0 0 ${pin.color}`;
-                rowEl.style.backgroundColor = pin.color + '14'; // ~8% alpha
-                // Frozen cells (checkbox column) keep their own opaque bg — no
-                // tint. Tinting them either bled the row color left or let the
-                // scrolled-under text show through.
+                // Tint only the scrolling cells, never the frozen (checkbox)
+                // column. The frozen column is position:sticky and hides the
+                // horizontally-scrolled cells sliding under it *only* while its
+                // background stays opaque. A translucent (8%-alpha) tint on the
+                // row would make the frozen cell see-through and the scrolled
+                // text would bleed through it. Leaving frozen cells untouched
+                // keeps their solid Tabulator background — same as an unpinned
+                // row, which is exactly why unpinned rows never showed the bug.
+                rowEl.querySelectorAll('.tabulator-cell:not(.tabulator-frozen)').forEach(c => {
+                    (c as HTMLElement).style.backgroundColor = pin.color + '14'; // ~8% alpha
+                });
             }
             if (cellEl && !cellEl.querySelector('.stickyTooltip__badge')) {
                 const badge = document.createElement('span');
@@ -344,8 +359,10 @@ function createTooltipManager(table: Tabulator) {
     }
 
     function pinCurrent() {
-        if (!hoverCell) return;
-        const cell = hoverCell;
+        // Pin what the tooltip actually shows, not the last cell the pointer
+        // crossed on its way here (that would pin the wrong column).
+        if (!transientCell) return;
+        const cell = transientCell;
         const pinned = createTooltipEl();
         pinned.root.classList.add('stickyTooltip--pinned');
         pinned.pinBtn.style.display = 'none'; // already pinned
@@ -359,8 +376,15 @@ function createTooltipManager(table: Tabulator) {
 
         pinned.setValue(String(cell.getValue()));
         document.body.appendChild(pinned.root);
-        // Cascade so stacked pins don't fully overlap.
-        positionTooltip(pinned.root, pointerX, pointerY, (index % 6) * 22);
+        // Appear exactly where the transient tooltip already sits — pinning is
+        // a promotion of the thing under the cursor, so it must not jump. (We
+        // deliberately don't re-run positionTooltip from the pointer here: that
+        // recomputed a fresh pointer+offset location and made the box jump.)
+        const tRect = transient.root.getBoundingClientRect();
+        pinned.root.style.left = tRect.left + 'px';
+        pinned.root.style.top = tRect.top + 'px';
+        pinned.root.style.right = 'auto';
+        pinned.root.style.bottom = 'auto';
 
         const pin: Pin = {el: pinned, index, color, row: cell.getRow(), field: cell.getField()};
         pins.push(pin);
@@ -370,8 +394,10 @@ function createTooltipManager(table: Tabulator) {
         decorate();
     }
 
-    // Keep the transient tooltip alive while the pointer is over it.
-    transient.root.addEventListener('mouseenter', cancelHide);
+    // Keep the transient tooltip alive while the pointer is over it. Also kill
+    // any pending show-timer armed by a cell crossed en route, so the content
+    // stays frozen on the shown cell instead of swapping under the cursor.
+    transient.root.addEventListener('mouseenter', () => { cancelHide(); clearShowTimer(); });
     transient.root.addEventListener('mouseleave', scheduleHide);
     transient.pinBtn.addEventListener('click', pinCurrent);
     // Close button is meaningful only on pinned tooltips; the transient one
@@ -403,7 +429,6 @@ function createTooltipManager(table: Tabulator) {
             hideTransient();
             return;
         }
-        hoverCell = cell;
         cancelHide();
         clearShowTimer();
         // Always re-arm the show delay on every cell enter. Moving directly
