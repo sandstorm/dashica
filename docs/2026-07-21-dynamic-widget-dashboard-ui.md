@@ -903,14 +903,14 @@ sanitization check.
 *Tests:* e2e against the dev-server: POST a widget JSON, compare response with the
 equivalent compiled widget's endpoint.
 
-**Phase 3 — Go code generation.**
-`gocode.go`; golden tests; CI compile check; `/api/gocode`.
-
-**Phase 4 — Editor UI (structured forms + live preview + Go code tab).**
+**Phase 3 — Editor UI (structured forms + live preview + Go code tab).**
 Form renderer + control set (4.4); widget tree; preview wiring through the existing
 `chart` component; localStorage/share-link state; JSON power-user tab.
 *Tests:* browser e2e (Playwright/Chrome MCP per CLAUDE.md): build a timeBar via
 forms, see preview, see generated Go, share-link round-trip.
+
+**Phase 4 — Go code generation.**
+`gocode.go`; golden tests; CI compile check; `/api/gocode`.
 
 **Phase 5 — Open existing dashboards in Explore.**
 Marshal registered dashboards; "Open in Explore" action; flattening caveat
@@ -926,15 +926,3 @@ Overlay editor per 4.6; tree drag-sort.
 
 ## 9. Open questions
 
-1. **Storage format:** JSON (exact wire format) — recommended; YAML only if
-   hand-editing stored files becomes common.
-2. **`/explore` URL & slug namespace:** `/explore/d/{slug}` as proposed, or a
-   separate top-level prefix for saved dynamic dashboards?
-3. **Strictness of decode:** unknown JSON fields = hard error (recommended: catches
-   typos and stale stored files after renames) vs. tolerated (survives field
-   renames without migration)?
-4. ~~`Opts` field exposure~~ — **resolved**: the `dashica-gen` approach (4.1) keeps
-   all widget fields private and adds no exported options structs; generated code
-   in the same package accesses unexported fields directly. Generated files are
-   not committed — regenerated on every build via `go:generate`, exactly like the
-   templ files (decided).
