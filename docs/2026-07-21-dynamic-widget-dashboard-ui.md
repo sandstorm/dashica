@@ -787,6 +787,32 @@ generator approach — do it first. If the generator turns out disproportionate,
 fall back to plan B (exported `Opts` + runtime reflection; same wire format)
 before any later phase depends on it.
 
+Progress (updated 2026-07-21):
+
+- [x] **`sql`-package serialization foundation** (`lib/dashboard/sql/`):
+    - [x] constructor `kind` stamps (`fieldImpl.kind`; `Field`→`expr`,
+      `Count`→`count`, `Enum`→`enum`; autoBucket via distinct type). Structs
+      otherwise byte-identical.
+    - [x] tagged-union wire format + per-type `MarshalJSON`/`UnmarshalJSON`
+      (`fieldImpl`, `autoBucketFieldImpl`, `SqlQuery`, `SqlFile`, `SqlString`)
+      in `serialization.go`.
+    - [x] `MarshalField`/`UnmarshalField`, `MarshalQueryable`/`UnmarshalQueryable`
+      interface helpers.
+    - [x] `sql.FromString` / `SqlString` (+ `FromStringWithoutFilters`); shared
+      `substitutePlaceholders`; `BuildWithFS` dispatch.
+    - [x] round-trip tests (`serialization_test.go`) — all green.
+- [ ] Widget envelope + registry (`widget.Widgets` Marshal/Unmarshal, `Register`).
+- [ ] Named layouts (`layout.Layout{Name, Fn}`, `WithLayout` change, registry).
+- [ ] Dashboard-level serialization (`dashboardImpl` fields).
+- [ ] `cmd/dashica-gen` generator (per-widget serializers, editor descriptors,
+      gocode tables) + `//go:generate` wiring + committed `zz_generated.dashica.go`.
+- [ ] CI staleness check (`go generate ./...` + `git diff --exit-code`).
+- [ ] Round-trip equivalence tests over dev-server example dashboards.
+
+Note: 6 widget `*_SQLGeneration` golden test files had stale WHERE expectations
+(clauses now wrapped in parens by `SqlQuery.Build()`, a prior correctness fix for
+OR-containing clauses) — updated to match; unrelated to serialization.
+
 **Phase 2 — `lib/explore` runtime.**
 `explore.New()` as `dashboard.Dashboard`; preview query/debug endpoints delegating
 to `httpserver.QueryHandler`; formmodel + schema + values endpoints; markdown
