@@ -58,11 +58,19 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 
 	// A fresh child context sharing the same dependencies. The widget assigns
 	// its own id via NextWidgetId() (starting at "1"); we do not call
-	// BuildComponents, so CurrentHandlerUrl is only informational here.
+	// BuildComponents here, so CurrentHandlerUrl is only informational.
+	//
+	// The widget definition arrived as JSON from the browser, so this context is
+	// UNTRUSTED — the invariant every Explore-built DashboardContext must uphold
+	// (docs §6). It has no effect on query/debug dispatch (data, not HTML), but
+	// setting it here keeps the seam live: the Phase 3 preview and Phase 6 stored
+	// render, which DO call BuildComponents (markdown → HTML), inherit the same
+	// discipline instead of re-deciding it.
 	childCtx := &rendering.DashboardContext{
 		MainMenu:          e.mainMenu,
 		CurrentHandlerUrl: e.baseURL + "/api/preview",
 		Deps:              e.deps,
+		UntrustedContent:  true,
 	}
 
 	capture := &capturingCollector{handlers: map[string]http.Handler{}}

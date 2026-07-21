@@ -18,6 +18,7 @@ import (
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 )
 
@@ -86,8 +87,19 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 		return nil, fmt.Errorf("markdown widget requires either Content() or File()")
 	}
 
-	// Convert markdown to HTML
+	// Convert markdown to HTML.
 	var buf bytes.Buffer
+
+	// Raw HTML in the markdown source passes through only for TRUSTED (compiled-in)
+	// content. When the widget is rendered from an untrusted author — a dashboard
+	// built or stored via Explore — html.WithUnsafe() is omitted, so goldmark
+	// escapes embedded <script>/<iframe>/on*-handlers instead of emitting them
+	// (docs §6; the rendered HTML still reaches the page via templ.Raw). GFM
+	// tables and syntax highlighting are renderer output, unaffected either way.
+	rendererOpts := []renderer.Option{}
+	if !ctx.UntrustedContent {
+		rendererOpts = append(rendererOpts, html.WithUnsafe())
+	}
 
 	md := goldmark.New(
 		goldmark.WithExtensions(
@@ -100,9 +112,7 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 		goldmark.WithParserOptions(
 			parser.WithAutoHeadingID(),
 		),
-		goldmark.WithRendererOptions(
-			html.WithUnsafe(),
-		),
+		goldmark.WithRendererOptions(rendererOpts...),
 	)
 
 	if err := md.Convert(markdownSource, &buf); err != nil {

@@ -20,6 +20,16 @@ type DashboardContext struct {
 
 	Deps Dependencies
 
+	// UntrustedContent marks a render whose widget definitions come from an
+	// untrusted author rather than compiled-in Go — i.e. a dashboard built or
+	// stored via the Explore view. Widgets that emit author-controlled HTML (the
+	// markdown widget) MUST render in a safe mode when this is set: compiled
+	// markdown is trusted and may embed raw HTML, but Explore-authored markdown
+	// is shown to other viewers and would otherwise be a stored-XSS vector (see
+	// docs/2026-07-21-dynamic-widget-dashboard-ui.md §6). The zero value (false)
+	// keeps every existing compiled dashboard fully trusted.
+	UntrustedContent bool
+
 	nextWidgetId int
 }
 

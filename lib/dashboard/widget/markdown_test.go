@@ -52,7 +52,7 @@ func TestMarkdown_Content(t *testing.T) {
 			},
 		},
 		{
-			name: "Code blocks with syntax highlighting",
+			name:    "Code blocks with syntax highlighting",
 			content: "```go\nfunc main() {}\n```",
 			expected: []string{
 				"<pre",
@@ -89,6 +89,42 @@ func TestMarkdown_Content(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMarkdown_UntrustedContentEscapesRawHTML verifies the Explore trust
+// boundary (docs §6): trusted (compiled) markdown passes raw HTML through, but
+// with DashboardContext.UntrustedContent set the raw HTML is escaped rather than
+// emitted, closing the stored-XSS vector for Explore-authored markdown.
+func TestMarkdown_UntrustedContentEscapesRawHTML(t *testing.T) {
+	const src = "hello\n\n<script>alert(1)</script>\n"
+
+	render := func(ctx *rendering.DashboardContext) string {
+		component, err := NewMarkdown().Content(src).BuildComponents(ctx)
+		if err != nil {
+			t.Fatalf("BuildComponents failed: %v", err)
+		}
+		var buf strings.Builder
+		if err := component.Render(context.Background(), &buf); err != nil {
+			t.Fatalf("Render failed: %v", err)
+		}
+		return buf.String()
+	}
+
+	// Trusted (compiled) markdown: raw HTML passes through verbatim.
+	trusted := render(&rendering.DashboardContext{})
+	if !strings.Contains(trusted, "<script>alert(1)</script>") {
+		t.Errorf("trusted markdown should keep raw HTML; got: %s", trusted)
+	}
+
+	// Untrusted (Explore) markdown: no live <script> tag may be emitted (goldmark
+	// omits raw HTML without WithUnsafe); the actual content still renders.
+	untrusted := render(&rendering.DashboardContext{UntrustedContent: true})
+	if strings.Contains(untrusted, "<script") {
+		t.Errorf("untrusted markdown must not emit a <script> tag; got: %s", untrusted)
+	}
+	if !strings.Contains(untrusted, "hello") {
+		t.Errorf("untrusted markdown should still render its text; got: %s", untrusted)
 	}
 }
 

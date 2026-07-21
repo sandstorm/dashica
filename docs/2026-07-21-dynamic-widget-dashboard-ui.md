@@ -960,8 +960,32 @@ Progress (updated 2026-07-21):
       (DB-free) asserts descriptor structure (hasQuery, required/timestamped x,
       query field excluded, enum→select options, group nesting) + defaults +
       layouts. All green; build/vet clean.
-- [ ] **markdown sanitization check** — verify/add HTML sanitization in the
-    markdown widget pipeline (stored/other-user content; see section 6).
+- [x] **markdown sanitization** — verified the vector and closed it via a trust
+    flag rather than a sanitizer library:
+    - Finding: `markdown.go` used `html.WithUnsafe()` and the rendered HTML reaches
+      the page through `templ.Raw` (`widget_component/markdown.templ`) — raw HTML
+      in the markdown source renders verbatim. Trusted today (all markdown is
+      compiled-in); a stored-XSS vector once Explore persists other-user markdown.
+      No compiled markdown relies on raw-HTML-in-source (grepped all examples/docs
+      + tests — only goldmark-*rendered* tables/highlighting), so `WithUnsafe` is
+      safe to drop for untrusted renders.
+    - Fix: `rendering.DashboardContext` gains `UntrustedContent bool` (zero value
+      false = compiled/trusted). `Markdown.BuildComponents` omits `html.WithUnsafe()`
+      when set, so goldmark drops embedded `<script>`/`<iframe>`/`on*` handlers;
+      GFM tables + syntax highlighting are renderer output, unaffected. Compiled
+      dashboards are unchanged (trusted, may embed raw HTML).
+    - The widget struct is identical whether compiled or Explore-deserialized, so
+      trust rides on the render context, NOT the widget. **Invariant: every
+      DashboardContext that Explore constructs sets `UntrustedContent = true`.**
+      Already enforced at the one such site today (`preview.go` — no effect on
+      query/debug dispatch, but keeps the seam live); Phase 3 preview and Phase 6
+      stored render, which DO call `BuildComponents` (markdown → HTML), inherit
+      the same discipline rather than re-deciding it.
+    - Test: `markdown_test.go::TestMarkdown_UntrustedContentEscapesRawHTML` — raw
+      HTML passes through when trusted, is dropped when untrusted. Green.
+    - Note: markdown-level `[x](javascript:...)` link URLs are still emitted; if
+      that matters, add a bluemonday pass in Phase 6 when the store lands. Raw-HTML
+      injection (the primary vector) is closed.
 
 **Phase 3 — Editor UI (structured forms + live preview + Go code tab).**
 Form renderer + control set (4.4); widget tree; preview wiring through the existing
