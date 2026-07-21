@@ -54,3 +54,22 @@ a.menu-active + .star-btn {
 .application__content {
     margin-top: 1.5rem;
 }
+
+.sidebar-search {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin-bottom: 1rem;
+}
+
+.sidebar-search__empty {
+    padding: 0.5rem;
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+
+/* Ensure the `hidden` attribute set by the sidebar search wins over DaisyUI/Tailwind
+   `display` rules on menu items. */
+.application__sidebar [hidden] {
+    display: none !important;
+}
