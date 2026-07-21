@@ -154,6 +154,9 @@ function _bars(data: QueryResult, props: ChartProps) {
                 offset: props.offset,
                 reverse: props.reverse,
                 marginRight: 150,
+                // Observable Plot does not clip marks to the frame by default, so a
+                // bucket wider than the domain paints outside the SVG onto the page.
+                clip: true,
                 tip: props.tip !== undefined ? props.tip : true,
                 fill: props.fill || '#A8C1D1',
                 // HEURISTIC to determine whether to add an inset or not

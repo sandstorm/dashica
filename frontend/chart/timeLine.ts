@@ -86,6 +86,10 @@ export function timeLine(data: QueryResult, props: ChartProps) {
                 fy: props.fy,
                 marginRight: 150,
                 stroke: props.stroke || '#4682B4',
+                // The first bucket start (e.g. toStartOfHour) can round below the
+                // domain start, so the line's first point plots left of the frame
+                // and bleeds over the y-axis. Clip crops it to the frame.
+                clip: true,
                 tip: props.tip !== undefined ? props.tip : true,
             }),
             _brushMark,

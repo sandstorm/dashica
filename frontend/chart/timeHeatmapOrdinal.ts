@@ -72,6 +72,9 @@ async function _heatmapOrdinal(data: QueryResult, props: ChartProps) {
                 x2: (d: any) => d[x] + props.xBucketSize,
 
                 y: y,
+                // Clip to the frame: the last bucket's x2 extends one bucket past
+                // the auto-fit domain and would otherwise paint outside the SVG.
+                clip: true,
                 tip: true,
                 fill: props.fill,
             }),
