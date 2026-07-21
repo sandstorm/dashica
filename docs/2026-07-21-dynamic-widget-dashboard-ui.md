@@ -112,15 +112,17 @@ Rejected, decisively:
 Rejected — violates requirement 2; four to five hand-synced definition places per
 widget option would drift within months.
 
-### Option C — Make the existing structs serializable (chosen)
+### Option C — Derive everything from the existing structs (chosen)
 
-**No parallel "spec" model.** The existing widget / query / field structs *are* the
-serialization model — annotated with JSON tags and lightly restructured. A thin
-JSON envelope exists only where Go's `encoding/json` fundamentally cannot work
-directly (see 4.1: interface-typed fields need a type discriminator; function
-values need a name registry). Everything derives from the one annotated struct:
-JSON wire format, editor form model, Go-code generation, and export of compiled
-dashboards.
+**No parallel "spec" model — and no restructuring either.** The existing widget /
+query / field structs *are* the model. A `go:generate` tool parses them (AST +
+doc comments) and emits, per package, the serializers, an editor descriptor
+(including the doc comments as help texts), and code-generation tables — see 4.1.
+The structs stay byte-for-byte as they are today, unexported fields and all. A
+thin JSON envelope exists only where `encoding/json` fundamentally cannot work
+(interface-typed fields need a type discriminator; function values need a name
+registry). Everything derives from the one existing struct: JSON wire format,
+editor form model, Go-code generation, and export of compiled dashboards.
 
 ### Option D — Frontend-only Go-snippet generator
 
@@ -131,70 +133,92 @@ as the main approach; its codegen part is Phase 3 of the chosen plan.
 
 ### 4.1 Core model adjustments (`lib/dashboard/...`, `lib/dashboard/sql`)
 
-**Principle: annotate the given structs — do not build a parallel tree.**
-A separate `DashboardSpec`/`WidgetSpec`/... hierarchy was considered and dropped:
-it would duplicate every widget's fields and inevitably drift. Instead, the
-existing structs become directly serializable. Only two kinds of indirection are
-unavoidable, and both are thin:
+**Principle: derive from the given structs — do not build a parallel tree, do not
+restructure.** A separate `DashboardSpec`/`WidgetSpec`/... hierarchy was considered
+and dropped (would duplicate every widget's fields and drift); so was restructuring
+widgets around an exported `Opts` struct + runtime reflection (grows the public API,
+churns every widget, and loses doc comments). Instead, a **`go:generate` tool**
+reads the existing structs and emits everything derived. Only two kinds of
+indirection are unavoidable, and both are thin:
 
-| Problem                                                                                | Why direct annotation is impossible                                 | Solution                                                                                           |
+| Problem                                                                                | Why plain serialization is impossible                               | Solution                                                                                           |
 |----------------------------------------------------------------------------------------|---------------------------------------------------------------------|----------------------------------------------------------------------------------------------------|
 | Interface-typed fields (`widget.WidgetDefinition`, `sql.SqlQueryable`, `sql.SqlField`) | `encoding/json` cannot decide which concrete type to unmarshal into | A small tagged-union **envelope** (`{"type": "timeBar", ...}`) resolved via a registry             |
 | Function-typed fields (`rendering.LayoutFunc`)                                         | Functions are not data                                              | Layouts become **named** (`layout.Layout{Name, Fn}`); JSON stores the name, a registry resolves it |
 
 Concrete adjustments, per package:
 
-**(1) Widgets: group options into one exported, json-tagged struct.**
-The builder API stays 100 % source-compatible; only the internal storage moves.
-Before/after for `TimeBar`:
+**(1) Widgets: keep the structs exactly as they are; a `go:generate` tool derives
+everything.**
+
+Widget structs today are loose unexported fields with doc comments, e.g.:
 
 ```go
-// BEFORE (today): ~15 loose unexported fields
 type TimeBar struct {
-sql    sql.SqlQueryable
-x      sql.TimestampedField
-y      sql.SqlField
-title  string
-height int
-// ...
-}
-
-// AFTER: one annotated options struct; builder methods write into it.
-// (Named field, not embedded — avoids field/method name collisions like Title.)
-type TimeBar struct {
-Opts TimeBarOptions
-}
-
-type TimeBarOptions struct {
-Query  sql.QueryRef   `json:"query"` // serializable interface holder, see (2)
-X      sql.FieldRef   `json:"x"    ui:"field,timestamped"` // see (2)
-Y      sql.FieldRef   `json:"y"    ui:"field"`
-Fill   *sql.FieldRef  `json:"fill,omitempty" ui:"field"`
-Fx     *sql.FieldRef  `json:"fx,omitempty"   ui:"field"`
-Fy     *sql.FieldRef  `json:"fy,omitempty"   ui:"field"`
-Title  string         `json:"title,omitempty"`
-Height int            `json:"height,omitempty"` // default 200
-Width  *int           `json:"width,omitempty"`
-Color  *color.ColorScale `json:"color,omitempty" ui:"colorScale"`
-Stack  StackOptions   `json:"stack,omitempty"`
-// ... margins, tipChannels, id — all existing options
-}
-
-// Builder methods: unchanged signature, new body — still immutable clones.
-func (b *TimeBar) Title(title string) *TimeBar {
-cloned := *b
-cloned.Opts.Title = title
-return &cloned
+    sql    sql.SqlQueryable
+    x      sql.TimestampedField
+    y      sql.SqlField
+    fill   *sql.SqlField
+    title  string
+    height int
+    // ... ~10 more
 }
 ```
 
-`buildChartProps()` / `buildQuery()` read from `Opts`. This makes JSON marshal,
-form-model generation, codegen, and `Spec()`-style export all read **the same
-struct the builder methods write** — the single-source-of-truth requirement.
+They stay **byte-for-byte unchanged** — private fields, private types, no `Opts`
+grouping, no JSON tags, no new exported API. A new generator (`cmd/dashica-gen`,
+built on `go/packages` + `go/ast` + `go/doc`, invoked via `//go:generate` in the
+widget package) parses each registered widget struct **including its field types
+and doc comments** and emits a sibling `zz_generated.dashica.go` **in the same
+package** — which is the trick that makes "private" work: generated code has full
+access to unexported fields, so no accessor, no exported options struct, and no
+runtime reflection are needed. Per widget it emits:
 
-`StackOrder`/`StackOffset` keep their unexported-field enum trick but gain
-`MarshalJSON`/`UnmarshalJSON` (validating against the known values).
-`color.ColorScale` gets json tags on its (already plain-data) fields.
+1. **`MarshalJSON` / `UnmarshalJSON`** reading/writing the unexported fields
+   directly. Interface-typed fields delegate to the `sql` serializers from (2)
+   and the widget envelope from (3). JSON property name = field name
+   (normalizations like `sql` → `"query"` via a struct tag on the unexported
+   field — legal Go, readable by the AST parser even though `encoding/json`
+   ignores unexported fields).
+2. **An editor descriptor** (data consumed by `/explore/api/formmodel`, 4.4):
+   field order, editor kind **inferred from the Go type** (`sql.TimestampedField`
+   → field picker in timestamped mode, `*sql.SqlField` → optional field picker,
+   `string`/`int`/`bool` → primitives, `color.ColorScale` → colorScale control,
+   `StackOptions` → its own group with select options read from the package-level
+   `Order*`/`Offset*` vars), and — the payoff of parsing source instead of
+   reflecting at runtime — **the existing doc comments as help texts/tooltips**
+   in the editor. The extensive comments already written (e.g. on `StackOptions`,
+   `StackOrder`, `WithFill`) become user-facing documentation for free.
+3. **A code-generation table** for 4.5: field ↔ builder method matched by name
+   (`title` → `.Title(...)`), **verified at generation time** — the generator
+   errors out if a field has no matching builder method and no override
+   (`//dashica:gocode method=StackOptions` or `//dashica:gocode skip` on e.g.
+   internal-only fields like `id`).
+
+Defaults (e.g. `height: 200` set in `NewTimeBar`) are not parsed from source —
+the registry's factory (3) constructs a zero-value widget at startup and
+marshals it; whatever it contains *is* the default set. Accurate by definition.
+
+Guard rails:
+- The generator **fails loudly** on field types outside its supported set
+  (primitives, pointers, maps, `sql` interfaces, `color.ColorScale`,
+  nested-widget maps, ...) — a new *type* of option is a conscious extension
+  (add a serializer case + an editor kind), never silent drift.
+- CI runs `go generate ./...` and fails on `git diff --exit-code` — generated
+  files can never go stale.
+
+`StackOrder`/`StackOffset` keep their unexported-field enum trick; the generator
+emits their (de)serializers validating against the known values.
+`color.ColorScale` is already plain data; serializer generated the same way.
+
+Chosen over the two alternatives for open-question-4 reasons:
+runtime reflection would require *exported* options structs (bigger public API,
+every widget restructured) and cannot see doc comments; hand-written serializers
+per widget would be requirement-2 drift. Cost of the generator: a one-time
+~500–1000-line tool plus a build step — concentrated, testable, and paid once.
+(Fallback if the generator stalls in practice: the exported-`Opts` +
+runtime-reflection design remains viable plan B; the wire format would be
+identical.)
 
 **(2) `sql`: keep the type structure as-is; add (de)serializers.**
 
@@ -220,25 +244,22 @@ unification, no exporting of internals. Serialization is added *around* them:
   code generator could then only emit `sql.Field("count(*)")` instead of the
   idiomatic `sql.Count()`, and the editor could only show "custom expression".
   A few bytes per field buy idiomatic codegen and better forms.
-- For **interface-typed struct fields** in widget `Opts`, the package provides two
-  exported wrapper types (the standard Go pattern for interfaces in JSON):
+- For **interface-typed fields in widget structs**, the package exports two pairs
+  of helper functions that the generated widget serializers (see (1)) call:
 
 ```go
-// FieldRef holds an SqlField and makes it usable as a JSON-(de)serializable
-// struct field. Marshal delegates to the concrete impl; Unmarshal dispatches
-// on "kind" to the right constructor.
-type FieldRef struct{ SqlField }
+// Marshal delegates to the concrete impl; Unmarshal dispatches on "kind"
+// to the right constructor.
+func MarshalField(f SqlField) ([]byte, error)
+func UnmarshalField(b []byte) (SqlField, error)
 
-func (r FieldRef) MarshalJSON() ([]byte, error)
-func (r *FieldRef) UnmarshalJSON(b []byte) error
-
-// QueryRef: same for SqlQueryable ("table" | "file" | "raw" envelope).
-type QueryRef struct{ SqlQueryable }
+// Same for SqlQueryable ("table" | "file" | "raw" envelope).
+func MarshalQueryable(q SqlQueryable) ([]byte, error)
+func UnmarshalQueryable(b []byte) (SqlQueryable, error)
 ```
 
-Builder method signatures keep accepting the plain interfaces
-(`X(xField sql.TimestampedField)`) and wrap into the ref types internally —
-zero API change for dashboard authors.
+Builder method signatures and widget fields keep the plain interfaces — zero API
+change for dashboard authors.
 
 New third `SqlQueryable` implementation for the Explore UI (also useful for
 compiled dashboards):
@@ -284,13 +305,15 @@ Register("table", func () WidgetDefinition { return NewTable(nil) })
 }
 
 // Wire format of one widget:
-// {"type": "timeBar", "props": { ...TimeBarOptions JSON... },
+// {"type": "timeBar", "props": { ...generated per-widget JSON... },
 //  "children": {"a": {...}, "b": {...}}}   // grid / group widgets only
 ```
 
-Unmarshal: look up factory by `type`, decode `props` into its `Opts` (strict
-decoding — unknown fields are errors, catching typos), recurse into `children`.
-Marshal: reverse lookup by `reflect.Type`.
+Unmarshal: look up factory by `type`, delegate `props` to the widget's generated
+`UnmarshalJSON` (strict decoding — unknown fields are errors, catching typos),
+recurse into `children`. Marshal: reverse lookup by `reflect.Type`, delegate to
+the generated `MarshalJSON`. The registry also feeds the generator (which structs
+to process) and the default extraction described in (1).
 
 **(4) Dashboard + layout.** `dashboardImpl`'s fields (`title`, `searchBar`,
 `widgets`, `layout`) become serializable the same way. `WithLayout` changes to
@@ -366,10 +389,13 @@ Serializes to (and deserializes from):
 ### 4.2 Package layout
 
 ```
+cmd/dashica-gen/      // the go:generate tool from 4.1 (go/packages + go/ast + go/doc)
+lib/dashboard/widget/
+    zz_generated.dashica.go  // generated: serializers, editor descriptors, gocode tables
 lib/explore/
     explore.go        // New(...Option), implements dashboard.Dashboard
     handlers.go       // editor page + API routes (see 4.3)
-    formmodel.go      // reflection: Opts structs + ui tags -> form model JSON
+    formmodel.go      // serves the generated editor descriptors as form model JSON
     gocode.go         // JSON widget/dashboard -> Go source (see 4.5)
     store.go          // Store interface + file store (optional persistence, 4.7)
     values.go         // distinct-value sampling for autocomplete (via db_sampler)
@@ -379,8 +405,8 @@ frontend/explore/
     controls/*.ts     // field picker, colorScale editor, whereList, gridDesigner...
 ```
 
-Core adjustments (4.1) are the only changes outside `lib/explore` /
-`frontend/explore`.
+Core adjustments (4.1) plus `cmd/dashica-gen` and its generated files are the only
+changes outside `lib/explore` / `frontend/explore`.
 
 ### 4.3 HTTP API (all under the registration URL, e.g. `/explore`)
 
@@ -417,10 +443,11 @@ A JSON textarea is not practical for the target users; **structured forms are th
 primary editing surface** (a raw JSON tab remains as power-user escape hatch).
 The build approach, concretely:
 
-**Server side — form model, generated, zero per-widget UI code.**
-`formmodel.go` reflects over each registered widget's `Opts` struct once at startup
-and emits a *form model*: field order, labels, editor kind, defaults, constraints.
-The editor kind is derived from the Go type, overridable via the `ui:` tag:
+**Server side — form model from the generated descriptors, zero per-widget UI
+code.** `formmodel.go` serves the editor descriptors that `dashica-gen` emitted
+(4.1): field order, labels, editor kind (inferred from the Go field type),
+defaults (extracted from factory instances), **and the widgets' Go doc comments
+as help texts** — shown as tooltips/help in the editor:
 
 ```json
 // GET /explore/api/formmodel  (excerpt for timeBar)
@@ -459,6 +486,7 @@ The editor kind is derived from the Go type, overridable via the `ui:` tag:
       },
       {
         "name": "stack",
+        "help": "Groups the Observable Plot stack transform options for the fill series (offset, order, reverse). ...",
         "editor": "group",
         "fields": [
           {
@@ -491,7 +519,7 @@ The editor kind is derived from the Go type, overridable via the `ui:` tag:
 }
 ```
 
-Because the form model is derived from the same annotated struct as the JSON wire
+Because the form model is derived from the same parsed struct as the JSON wire
 format and the codegen, **a new widget option appears in the editor automatically**.
 
 **Client side — one generic renderer + a small fixed set of controls.**
@@ -587,11 +615,11 @@ step.
 
 ### 4.5 Go code generation (`lib/explore/gocode.go`)
 
-- Generic, reflection-driven emitter over the same `Opts` structs: emit the
+- Generic emitter driven by the generated code-generation tables (4.1): emit the
   registry constructor (`widget.NewTimeBar(<query expr>)`), then one chained
-  builder call per non-zero field (`.Title("...")`, `.Height(150)`, ...). Field
-  name → method name is the identity mapping (true today); exceptions declared via
-  struct tag (`gocode:"StackOptions"`).
+  builder call per non-default field (`.Title("...")`, `.Height(150)`, ...). Field
+  name → method name is the identity mapping (true today), verified by
+  `dashica-gen` at generation time; exceptions via `//dashica:gocode` comments.
 - Small per-type value emitters: `sql.FieldRef` → `sql.AutoBucket("timestamp")` /
   `sql.Count().WithAlias("logs")` / ...; query envelope → `sql.New(sql.From(...),
   sql.Where(...))` / `sql.FromFile(...)` / `sql.FromString(...)`;
@@ -703,8 +731,8 @@ back.
 
 | Change                        | Work needed                                                                                                              | Explore picks it up                                 |
 |-------------------------------|--------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------|
-| New option on existing widget | 1 field in the `Opts` struct + 1 builder method (~5 lines)                                                               | JSON, form, preview, codegen, export: **automatic** |
-| New widget type               | `Opts` struct + widget behavior (needed today anyway) + 1 registry line (+ frontend chart renderer, needed today anyway) | everything else automatic                           |
+| New option on existing widget | 1 struct field + 1 builder method (~5 lines, exactly as today) + `go generate` (CI-checked)                               | JSON, form (incl. doc-comment help), preview, codegen, export: **automatic** |
+| New widget type               | widget struct + behavior (needed today anyway) + 1 registry line + `go generate` (+ frontend chart renderer, needed today anyway) | everything else automatic                           |
 | New `sql` field kind          | constructor + `kind` stamp + serializer case + codegen emitter case (~20 lines)                                           | automatic                                           |
 | New layout                    | 1 named-layout registry entry                                                                                            | automatic                                           |
 | New *type* of option value    | new form-model editor kind + 1 frontend control                                                                          | rare by design                                      |
@@ -744,14 +772,20 @@ The round-trip tests (4.1 (5), 4.5) turn forgotten wiring into failing builds.
 
 Each phase is independently shippable; stop/reassess after any.
 
-**Phase 1 — Core serialization (existing packages only).**
-`Opts` struct refactor per widget (builder API unchanged); `sql` (de)serializers +
-`FieldRef`/`QueryRef` wrappers + constructor `kind` stamps (type structure
-untouched); `sql.FromString`; envelopes + registries (widgets, queryables,
-layouts); named layouts.
+**Phase 1 — `dashica-gen` + core serialization (existing packages untouched in
+structure).**
+The `cmd/dashica-gen` generator (AST + doc-comment parsing → per-widget
+serializers, editor descriptors, gocode tables); hand-written `sql`
+(de)serializers + `Marshal/UnmarshalField|Queryable` helpers + constructor `kind`
+stamps; `sql.FromString`; envelopes + registries (widgets, queryables, layouts);
+named layouts; CI staleness check for generated files.
 *Tests:* per-widget equivalence (builder-built vs. JSON-round-tripped → identical
-chartProps + SQL) over the dev-server example dashboards.
-*Risk focus:* this proves or breaks the single-source-of-truth claim — do it first.
+chartProps + SQL) over the dev-server example dashboards; generator golden tests
+on a fixture package.
+*Risk focus:* this proves or breaks both the single-source-of-truth claim and the
+generator approach — do it first. If the generator turns out disproportionate,
+fall back to plan B (exported `Opts` + runtime reflection; same wire format)
+before any later phase depends on it.
 
 **Phase 2 — `lib/explore` runtime.**
 `explore.New()` as `dashboard.Dashboard`; preview query/debug endpoints delegating
@@ -790,7 +824,8 @@ Overlay editor per 4.6; tree drag-sort.
 3. **Strictness of decode:** unknown JSON fields = hard error (recommended: catches
    typos and stale stored files after renames) vs. tolerated (survives field
    renames without migration)?
-4. **`Opts` field exposure:** exporting `Opts` makes it part of the public Go API —
-   users could mutate it directly, bypassing the immutable-builder style. Accept
-   (document "use builders") or guard (unexported field + `Options()` getter, at
-   the cost of reflection needing an accessor)?
+4. ~~`Opts` field exposure~~ — **resolved**: the `dashica-gen` approach (4.1) keeps
+   all widget fields private and adds no exported options structs; generated code
+   in the same package accesses unexported fields directly. Remaining sub-question:
+   should generated files be committed (recommended: yes — `go build` works without
+   running the generator; CI checks staleness) or generated on every build?
