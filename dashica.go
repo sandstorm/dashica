@@ -101,13 +101,13 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	}()
 
 	deps := rendering.Dependencies{
-		clickhouseClientManager,
-		logger,
-		timeProvider,
-		projectFS,
-		alertResultStore,
-		alertEvaluator,
-		alertManager,
+		ClickhouseClientManager: clickhouseClientManager,
+		Logger:                  logger,
+		TimeProvider:            timeProvider,
+		FileSystem:              projectFS,
+		AlertResultStore:        alertResultStore,
+		AlertEvaluator:          alertEvaluator,
+		AlertManager:            alertManager,
 	}
 
 	return &DashicaImpl{

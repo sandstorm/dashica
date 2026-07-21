@@ -223,7 +223,7 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 
 		alertResult, err := b.alertEvaluator.evaluateThreshold(alertDefinition, resultsetRow)
 		if err != nil {
-			fmt.Errorf("evaluating resultset row: %w", err)
+			return fmt.Errorf("evaluating resultset row: %w", err)
 		}
 		// Persist the result with the timestamp from the execution time
 		alertResult.Timestamp = config.Time(executionTime)
