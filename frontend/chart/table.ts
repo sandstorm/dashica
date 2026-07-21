@@ -253,7 +253,7 @@ interface Pin {
 // pinned tooltips. Pinned tooltips mark their source cell ([1], [2], …) and
 // highlight the source row in a matching color. Re-decorates on every render
 // so markers survive scrolling/filtering (Tabulator recycles row DOM).
-function createTooltipManager(table: Tabulator) {
+function createTooltipManager(table: Tabulator, notifyRendered: () => void = () => {}) {
     const transient = createTooltipEl();
     transient.root.classList.add('stickyTooltip--transient');
     transient.root.style.display = 'none';
@@ -298,6 +298,7 @@ function createTooltipManager(table: Tabulator) {
         transient.root.style.width = '';
         transient.root.style.height = '';
         positionTooltip(transient.root, pointerX, pointerY);
+        notifyRendered(); // re-highlight search term inside the tooltip
     }
 
     // Re-apply source markers + row highlights for all pins. Runs on every
@@ -392,6 +393,7 @@ function createTooltipManager(table: Tabulator) {
 
         hideTransient();
         decorate();
+        notifyRendered(); // re-highlight search term inside the new pinned tooltip
     }
 
     // Keep the transient tooltip alive while the pointer is over it. Also kill
@@ -643,6 +645,47 @@ export function table(queryResult: any, extProps: any) {
     const tableRoot = document.createElement('div');
     tableRoot.classList.add("tabulatorTable");
 
+    // Highlight the search term everywhere it appears in the widget: visible
+    // table cells, the sticky tooltips, and the record-details panel. Uses the
+    // CSS Custom Highlight API — we paint style ranges rather than wrapping
+    // matches in <mark>: no DOM mutation means it can't corrupt cells with
+    // custom markup (timestamp innerHTML, pin badges) and it survives Tabulator
+    // recycling row DOM on scroll/sort/filter. A single named highlight spans
+    // all roots. Re-run on table render, on tooltip show/pin, and on record
+    // panel render (see call sites). Gracefully no-ops where unsupported —
+    // filtering still works.
+    function applySearchHighlight(term: string) {
+        const highlights = (CSS as any).highlights;
+        if (!highlights) return;
+        highlights.delete('tableSearch');
+        const needle = term.trim().toLowerCase();
+        if (!needle) return;
+        const roots = [
+            tableRoot.querySelector('.tabulator-tableholder'),
+            detailsPanel,
+            // All live tooltips (transient + every pin) — they append to <body>,
+            // so query them fresh each run rather than plumbing refs.
+            ...document.querySelectorAll('.stickyTooltip'),
+        ].filter((el): el is Element => !!el);
+        const ranges: Range[] = [];
+        for (const root of roots) {
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            while ((node = walker.nextNode())) {
+                const hay = (node.nodeValue ?? '').toLowerCase();
+                let from = 0, idx: number;
+                while ((idx = hay.indexOf(needle, from)) !== -1) {
+                    const r = document.createRange();
+                    r.setStart(node, idx);
+                    r.setEnd(node, idx + needle.length);
+                    ranges.push(r);
+                    from = idx + needle.length;
+                }
+            }
+        }
+        if (ranges.length) highlights.set('tableSearch', new (window as any).Highlight(...ranges));
+    }
+
     tabulatorTable = new Tabulator(tableRoot, {
         height: props.height,
         maxHeight: "100vh",
@@ -690,6 +733,10 @@ export function table(queryResult: any, extProps: any) {
         state.selectedRecords = data;
     });
 
+    // Re-paint search highlights after every (re)render — covers filter changes,
+    // sorting, and virtual-scroll row recycling.
+    tabulatorTable.on("renderComplete", () => applySearchHighlight(state.searchTerm));
+
     // Custom sticky tooltip: hover a cell to show its full value; the pointer
     // can move onto the tooltip to select/copy, pin it (marks the source cell
     // [1]/[2]/… + highlights the row), or drag it around.
@@ -704,7 +751,7 @@ export function table(queryResult: any, extProps: any) {
     //     registered x-data components) is a poor fit for this transient,
     //     multi-instance, pointer-driven widget; Alpine here stays where it
     //     shines: the reactive search/selection state above.
-    const tooltipManager = createTooltipManager(tabulatorTable);
+    const tooltipManager = createTooltipManager(tabulatorTable, () => applySearchHighlight(state.searchTerm));
     tabulatorTable.on("cellMouseEnter", (e: any, cell: CellComponent) => {
         tooltipManager.onCellEnter(e, cell);
     });
@@ -776,6 +823,7 @@ export function table(queryResult: any, extProps: any) {
             void detailsPanel.offsetHeight;
             detailsPanel.classList.add('open');
             detailsContainer.innerHTML = state.detailsHtml;
+            applySearchHighlight(state.searchTerm); // highlight term in record panel
         } else {
             detailsPanel.classList.remove('open');
             // Wait for animation before hiding

@@ -1,5 +1,18 @@
 /* Styles for the table chart (frontend/chart/table.ts). */
 
+/* Search-term highlight (CSS Custom Highlight API — see applySearchHighlight). */
+::highlight(tableSearch) {
+    background-color: #fde68a; /* amber-200 */
+    color: #1a1a1a;
+}
+
+@media (prefers-color-scheme: dark) {
+    ::highlight(tableSearch) {
+        background-color: #b45309; /* amber-700 */
+        color: #fff;
+    }
+}
+
 /* Table with details container */
 .table-with-details {
     display: flex;
