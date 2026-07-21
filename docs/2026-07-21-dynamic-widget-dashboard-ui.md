@@ -801,7 +801,23 @@ Progress (updated 2026-07-21):
     - [x] `sql.FromString` / `SqlString` (+ `FromStringWithoutFilters`); shared
       `substitutePlaceholders`; `BuildWithFS` dispatch.
     - [x] round-trip tests (`serialization_test.go`) — all green.
-- [ ] Widget envelope + registry (`widget.Widgets` Marshal/Unmarshal, `Register`).
+- [x] **Widget envelope + registry** (`lib/dashboard/widget/registry.go`):
+    - [x] `Register(typeName, factory)` with forward (name→factory) + reverse
+      (Go type→name) maps; panics on duplicate name / Go type / untyped-nil
+      factory. `RegisteredWidgetTypes()`, `NewWidgetByType()` accessors.
+    - [x] tagged envelope `{"type", "props"}`; `MarshalWidget`/`UnmarshalWidget`
+      delegate `props` to the widget's own JSON methods (generated later).
+    - [x] `Widgets` (array) + `WidgetsMap` (object) Marshal/Unmarshal → recursive
+      nesting; children live inside their parent's `props` (Grid.areas via
+      WidgetsMap, CollapsibleGroup.widgets via Widgets).
+    - [x] all v1 widget types registered in `init()`.
+    - [x] tests (`registry_test.go`) — envelope shape, recursive round-trip via
+      fake widgets, unknown/unregistered/nil handling, type discrimination over
+      every registered type. Green.
+
+  Note: real widgets currently marshal an empty `props` — their per-widget
+  serializers arrive with `dashica-gen` (next step); the envelope/registry layer
+  is what this step establishes.
 - [ ] Named layouts (`layout.Layout{Name, Fn}`, `WithLayout` change, registry).
 - [ ] Dashboard-level serialization (`dashboardImpl` fields).
 - [ ] `cmd/dashica-gen` generator (per-widget serializers, editor descriptors,
@@ -809,9 +825,6 @@ Progress (updated 2026-07-21):
 - [ ] CI staleness check (`go generate ./...` + `git diff --exit-code`).
 - [ ] Round-trip equivalence tests over dev-server example dashboards.
 
-Note: 6 widget `*_SQLGeneration` golden test files had stale WHERE expectations
-(clauses now wrapped in parens by `SqlQuery.Build()`, a prior correctness fix for
-OR-containing clauses) — updated to match; unrelated to serialization.
 
 **Phase 2 — `lib/explore` runtime.**
 `explore.New()` as `dashboard.Dashboard`; preview query/debug endpoints delegating
