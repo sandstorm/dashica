@@ -26,6 +26,7 @@ func TestCollectHandlers_RegistersAllRoutes(t *testing.T) {
 		"/explore",
 		"/explore/api/preview/query",
 		"/explore/api/preview/debug",
+		"/explore/api/formmodel",
 		"/explore/api/schema",
 		"/explore/api/values",
 	}

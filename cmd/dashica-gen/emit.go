@@ -21,9 +21,12 @@ func emit(m *model, outFile string) error {
 	groups := collectGroups(m)
 
 	data := struct {
-		Widgets []widgetView
-		Groups  []groupView
-	}{}
+		Widgets     []widgetView
+		Groups      []groupView
+		Descriptors string
+	}{
+		Descriptors: descriptorLiteral(m),
+	}
 	for _, w := range m.widgets {
 		data.Widgets = append(data.Widgets, widgetView{
 			Type:      w.TypeName,
@@ -247,6 +250,15 @@ func (r *{{.Type}}) UnmarshalJSON(b []byte) error {
 	return nil
 }
 {{end}}
+
+// widgetDescriptors is the editor form model for every registered widget type,
+// keyed by wire name. Served by /explore/api/formmodel; types in formmodel.go.
+var widgetDescriptors = map[string]WidgetDescriptor{
+{{.Descriptors}}}
+
+// WidgetDescriptors returns the editor descriptor for every registered widget
+// type, keyed by wire name.
+func WidgetDescriptors() map[string]WidgetDescriptor { return widgetDescriptors }
 
 {{range .Groups}}
 // --- group {{.Type}} ---

@@ -938,10 +938,28 @@ Progress (updated 2026-07-21):
       proves dispatch reaches the widget's query handler with the request intact;
       capturing-collector path recording; rejection paths; values validation.
       Green. (DB-backed preview-vs-compiled e2e needs a running ClickHouse.)
-- [ ] **formmodel endpoint** — blocked on `dashica-gen` editor-descriptor emission
-    (deferred from Phase 1 to its consumer). Next: emit descriptors from the
-    already-computed model (Title/GoMethod/Doc/enum options) + serve as
-    `/explore/api/formmodel`.
+- [x] **formmodel endpoint** (`/explore/api/formmodel`):
+    - [x] `dashica-gen` now emits editor descriptors (`cmd/dashica-gen/descriptors.go`):
+      per-widget `WidgetDescriptor{Title, HasQuery, Fields}` into
+      `zz_generated.dashica.go`. Editor kind derived from field category
+      (`field`/`text`/`int`/`bool`/`select`/`colorScale`/`keyValue`/`stringList`/
+      `group`/`children`); the query field is excluded from `Fields` and flagged
+      via `HasQuery`; enum fields carry `Options`; groups nest `Fields`; doc
+      comments become `Help`; `x` gets `Required`+`Timestamped`.
+    - [x] Descriptor **types** hand-written in `lib/dashboard/widget/formmodel.go`
+      (stable contract); the **data** var + `WidgetDescriptors()` accessor are
+      emitted into the generated file — deliberately NOT hand-written, so the
+      generator can still load/parse the package on a clean checkout (a
+      hand-written reference to the generated var would make it uncompilable in
+      that window).
+    - [x] `lib/explore/formmodel.go` — serves `{widgets: {<wire>: descriptor +
+      defaults}, layouts: [...]}`. Defaults are derived at request time by
+      marshalling a zero-value factory instance (accurate by definition), not
+      baked into the descriptor. Layouts from `layout.Names()`.
+    - [x] route registered + `handlers_test` updated; `formmodel_test.go`
+      (DB-free) asserts descriptor structure (hasQuery, required/timestamped x,
+      query field excluded, enum→select options, group nesting) + defaults +
+      layouts. All green; build/vet clean.
 - [ ] **markdown sanitization check** — verify/add HTML sanitization in the
     markdown widget pipeline (stored/other-user content; see section 6).
 
