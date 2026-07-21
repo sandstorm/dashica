@@ -76,7 +76,7 @@ func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *
 		t.Fatalf("%s", err)
 	}
 	assertions.AssertEquals(t, "schema.Tables does not match", IntrospectedSchema{
-		CommonColumns: []string{"customer_project", "customer_tenant", "event_dataset", "event_duration_ms", "event_module", "event_original", "host_group", "host_name", "level", "message", "timestamp"},
-		Tables:        []string{"full_logs"},
+		CommonColumns: []string{"customer_project", "customer_tenant", "host_group", "host_name", "timestamp"},
+		Tables:        []string{"full_logs", "mv_caddy_accesslog"},
 	}, *schema)
 }
