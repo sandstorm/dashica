@@ -926,3 +926,91 @@ Overlay editor per 4.6; tree drag-sort.
 
 ## 9. Open questions
 
+### Code review findings — Phase 1 implementation (2026-07-21, unfixed)
+
+Review of `lib/dashboard/sql` serialization, widget registry, named layouts,
+dashboard serialization, `cmd/dashica-gen` against the Sandstorm guidelines.
+Findings ordered by severity; none fixed yet.
+
+1. `cmd/dashica-gen/load.go:108` ✋ blocker — **Unknown unknowns (obvious design)**
+   `findRegistrations` silently *skips* a `Register(...)` call whose factory is
+   not a func literal (`factoryReturnType` returns nil → `return true`, no error).
+   Such a widget stays registered at runtime but gets **no generated serializer**,
+   so it marshals as empty `{}` props — stable under the round-trip tests (empty
+   both ways) yet silently lossy. Fix: hard error when a Register call's factory
+   type cannot be resolved; belt-and-braces: a runtime/test cross-check that every
+   registered type implements `json.Marshaler`.
+
+2. `cmd/dashica-gen/load.go:293` ✋ blocker — **Silently lossy round trip
+   (information hiding)**
+   Skipped fields (`id` by name convention, `dashica-gen:"skip"` e.g.
+   `markdown.assets`) are dropped on marshal with no trace: a compiled dashboard
+   using `TimeBar.Id(...)` (a real builder option that pins query URLs) or
+   markdown assets exports fine, but the re-imported widget differs. The
+   marshal==remarshal equivalence tests cannot see this (loss happens before the
+   first marshal). Fix: generated `MarshalJSON` returns an error (or a collectable
+   warning) when a skipped field is non-zero; document per skip why dropping is
+   safe. Decide explicitly whether `id` should serialize instead.
+
+3. `lib/dashboard/sql/serialization.go:189` ⚠ should-fix — **Inconsistent error
+   strictness (define errors out of existence)**
+   Widget-level JSON rejects unknown keys (generated strict switch), but the sql
+   DTOs are tolerant: unknown keys, or keys of the *wrong kind* (`"path"` on
+   `kind:"table"`, `"sql"` on `kind:"file"`), are silently dropped. A typo in the
+   query section of a stored dashboard vanishes without error while the same typo
+   one level up fails loudly. Fix: strict-key check per kind in
+   `UnmarshalQueryable`/`UnmarshalField`, mirroring the generated widgets.
+
+4. `lib/dashboard/dashboard_serialization.go:23` ⚠ should-fix — **Information
+   leakage across packages**
+   `dashboardDTO` embeds `rendering.SearchBarOption` (and its `FilterButton`)
+   directly, so a rendering-package struct silently *is* wire format: its
+   PascalCase field names (`IsVisible`, `FilterButtons`, `QueryPart`) leak into
+   otherwise-camelCase JSON, and any rename there breaks stored dashboards with no
+   compiler or test signal. Fix: a small searchBar DTO in the dashboard package
+   (owning the wire names), or json tags + an explicit "this is wire format"
+   comment + drift-guard test on `SearchBarOption`.
+
+5. `lib/dashboard/sql/serialization.go:161` ⚠ should-fix — **Change amplification
+   (missing drift guard)**
+   The sql serializers are hand-written by design, but nothing fails when someone
+   adds a field to `SqlQuery`/`SqlFile`/`SqlString` and forgets the DTO — the
+   "fails loudly" guarantee exists only on the generated widget path. Fix: a
+   reflect-based guard test asserting the expected field count/names per struct
+   (comment in the struct pointing at it), so drift becomes a red test.
+
+6. `lib/dashboard/widget/registry.go:203` 💡 suggestion — **Duplication**
+   `isJSONNull` exists identically in `sql` and `widget`. Acceptable (exporting it
+   for this would be worse); consider a shared internal util package only if a
+   third copy appears.
+
+7. `lib/dashboard/dashboard_serialization.go:36` 💡 suggestion — **Interface
+   comment / default semantics**
+   `dashboard.New()` defaults `searchBar.IsVisible = true`, but unmarshalling JSON
+   that omits `searchBar` yields `false`. Round trips are unaffected (marshal
+   always emits the key); hand-written/store JSON silently hides the search bar.
+   Fix: document, or default to visible when the key is absent.
+
+8. docs §4.1 (3) 💡 suggestion — **Doc drift**
+   The design doc's envelope sketch still shows a `"children"` key on the
+   envelope; the implementation (correctly) nests children inside the parent's
+   `props` (Grid.areas via `WidgetsMap`). Update the doc example.
+
+9. Phase 2/5 planning note (from `registry.go:97`): `MarshalWidget` errors on
+   unregistered types (loud — good), which means "Open in Explore" fails wholesale
+   for dashboards containing out-of-v1-scope widgets (alertOverview, schemaTable,
+   speedscopeLink). Phase 5 needs a defined behavior: skip-with-placeholder vs.
+   error.
+
+10. Phase 3 planning note (from `load.go:322`): constructor-argument options
+    (`NewCheckboxGroup(name, label, options)`, `NewTextInput(...)`) have
+    `MethodExists=false` and only the query field is modeled as a ctor arg — the
+    gocode emitter must handle multi-arg constructors or these widgets get
+    non-compiling generated Go.
+
+**Summary:** the layering (hand-written sql vocabulary + generated widget layer +
+envelopes only at interface boundaries) matches the design and is clean; registry
+and layout packages are tidy. The dominant theme is **silent lossiness at the
+edges** — findings 1–3 are all "data vanishes without an error" in different
+places; fixing them establishes the invariant the whole Explore feature rests on:
+*serialization either round-trips faithfully or fails loudly.*
