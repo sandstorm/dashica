@@ -231,7 +231,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     status
@@ -256,7 +256,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     category
@@ -281,7 +281,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     bucket

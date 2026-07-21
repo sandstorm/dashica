@@ -322,7 +322,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     category;`,
 		},
@@ -342,7 +342,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     date,
     status;`,
@@ -363,7 +363,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     hour,
     region;`,
@@ -384,7 +384,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     day,
     category;`,
@@ -407,7 +407,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     month,
     product,
@@ -431,7 +431,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     week,
     status,
@@ -455,7 +455,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     day,
     region,
@@ -481,7 +481,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     month,
     product,
@@ -502,7 +502,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     day;`,
 		},
@@ -522,7 +522,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     hour,
     status;`,
@@ -568,8 +568,8 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
-    AND status = 'active'
+    (timestamp > now() - INTERVAL 1 DAY)
+    AND (status = 'active')
 GROUP BY
     category;`,
 		},
@@ -591,9 +591,9 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
-    AND status = 'completed'
-    AND priority > 5
+    (timestamp > now() - INTERVAL 1 DAY)
+    AND (status = 'completed')
+    AND (priority > 5)
 GROUP BY
     day;`,
 		},
@@ -612,7 +612,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     product
 ORDER BY

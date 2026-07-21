@@ -236,7 +236,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time
 ORDER BY
@@ -258,7 +258,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     status
@@ -282,7 +282,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     region
@@ -305,7 +305,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     category
@@ -330,7 +330,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     product,
@@ -357,7 +357,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     status,
@@ -384,7 +384,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     region,
@@ -412,7 +412,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     product,
@@ -436,7 +436,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     hour_bucket
 ORDER BY
@@ -458,7 +458,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     status
@@ -507,8 +507,8 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
-    AND status = 'active'
+    (timestamp > now() - INTERVAL 1 DAY)
+    AND (status = 'active')
 GROUP BY
     time
 ORDER BY
@@ -532,9 +532,9 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
-    AND status = 'completed'
-    AND priority > 5
+    (timestamp > now() - INTERVAL 1 DAY)
+    AND (status = 'completed')
+    AND (priority > 5)
 GROUP BY
     time
 ORDER BY

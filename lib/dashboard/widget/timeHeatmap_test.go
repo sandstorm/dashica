@@ -179,7 +179,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     status
@@ -204,7 +204,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     category
@@ -229,7 +229,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     bucket
@@ -252,7 +252,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     hour_bucket,
     level
@@ -302,8 +302,8 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
-    AND priority > 5
+    (timestamp > now() - INTERVAL 1 DAY)
+    AND (priority > 5)
 GROUP BY
     time,
     status

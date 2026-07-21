@@ -136,7 +136,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time
 ORDER BY
@@ -158,7 +158,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     service
@@ -186,7 +186,7 @@ SELECT
 FROM
     events
 WHERE
-    timestamp > now() - INTERVAL 1 DAY
+    (timestamp > now() - INTERVAL 1 DAY)
 GROUP BY
     time,
     service,
