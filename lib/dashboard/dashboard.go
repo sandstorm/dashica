@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/util"
@@ -12,7 +13,7 @@ import (
 
 type Dashboard interface {
 	Widget(w widget.WidgetDefinition) Dashboard
-	WithLayout(layout rendering.LayoutFunc) Dashboard
+	WithLayout(l layout.Layout) Dashboard
 	WithTitle(title string) Dashboard
 	Title() string
 	HasSearchBar(value bool) Dashboard
@@ -28,7 +29,7 @@ func New() Dashboard {
 
 type dashboardImpl struct {
 	widgets   widget.Widgets
-	layout    rendering.LayoutFunc
+	layout    layout.Layout
 	title     string
 	searchBar rendering.SearchBarOption
 }
@@ -49,9 +50,9 @@ func (d *dashboardImpl) Widget(w widget.WidgetDefinition) Dashboard {
 	return &cloned
 }
 
-func (d *dashboardImpl) WithLayout(layout rendering.LayoutFunc) Dashboard {
+func (d *dashboardImpl) WithLayout(l layout.Layout) Dashboard {
 	cloned := *d
-	cloned.layout = layout
+	cloned.layout = l
 	return &cloned
 }
 
@@ -76,7 +77,7 @@ func (d *dashboardImpl) CollectHandlers(ctx *rendering.DashboardContext, handler
 		return fmt.Errorf("building components: %w", err)
 	}
 
-	err = handlerCollector.HandleRoot(templ.Handler(d.layout(*ctx, d.searchBar, templ.Join(components...))))
+	err = handlerCollector.HandleRoot(templ.Handler(d.layout.Fn(*ctx, d.searchBar, templ.Join(components...))))
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}
