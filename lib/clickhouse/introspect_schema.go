@@ -53,13 +53,14 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 		quotedTables = append(quotedTables, fmt.Sprintf("'%s'", table))
 	}
 
-	// Query to get columns for the tables
+	// Query to get columns for the tables. Ordered by table + position so the
+	// per-table column lists come back in schema-definition order.
 	columnQuery := fmt.Sprintf(`
 		SELECT table, name, comment, type
 		FROM system.columns
 		WHERE database = {db:String}
 		AND table IN (%s)
-		ORDER BY name
+		ORDER BY table, position
 	`, strings.Join(quotedTables, ", "))
 
 	type ColumnRow struct {
@@ -77,6 +78,8 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 	// Map for tracking which tables contain which columns
 	tablesPerColumn := make(map[string][]string)
 	columnsPerTable := make(map[string][]string)
+	// Full column detail (name/type/comment) per table, for the field pickers.
+	columnDetail := make(map[string][]Column, len(tables))
 
 	// Populate the maps
 	for _, row := range columnResult.Data {
@@ -88,6 +91,12 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 			columnsPerTable[table] = []string{}
 		}
 		columnsPerTable[table] = append(columnsPerTable[table], column)
+
+		columnDetail[table] = append(columnDetail[table], Column{
+			Name:    row.Name,
+			Type:    row.Type,
+			Comment: row.Comment,
+		})
 
 		// Add table to tablesPerColumn
 		if _, exists := tablesPerColumn[column]; !exists {
@@ -106,12 +115,21 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 
 	slices.Sort(commonColumns)
 
-	schema := &IntrospectedSchema{Tables: tables, CommonColumns: commonColumns}
+	schema := &IntrospectedSchema{Tables: tables, CommonColumns: commonColumns, Columns: columnDetail}
 	c.introspectedSchemaCached = schema
 	return schema, nil
+}
+
+// Column describes one table column: its name, ClickHouse type, and comment.
+type Column struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Comment string `json:"comment,omitempty"`
 }
 
 type IntrospectedSchema struct {
 	CommonColumns []string `json:"commonColumns"`
 	Tables        []string `json:"tables"`
+	// Columns maps each table to its columns (with types), in schema order.
+	Columns map[string][]Column `json:"columns"`
 }

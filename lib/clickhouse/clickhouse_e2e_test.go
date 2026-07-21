@@ -75,8 +75,25 @@ func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-	assertions.AssertEquals(t, "schema.Tables does not match", IntrospectedSchema{
-		CommonColumns: []string{"customer_project", "customer_tenant", "host_group", "host_name", "timestamp"},
-		Tables:        []string{"full_logs", "mv_caddy_accesslog"},
-	}, *schema)
+	assertions.AssertEquals(t, "schema.Tables does not match",
+		[]string{"full_logs", "mv_caddy_accesslog"}, schema.Tables)
+	assertions.AssertEquals(t, "schema.CommonColumns does not match",
+		[]string{"customer_project", "customer_tenant", "host_group", "host_name", "timestamp"}, schema.CommonColumns)
+
+	// Columns carries per-table name/type detail (in schema order). Assert the
+	// tables are present and spot-check a representative column's type rather
+	// than pinning the entire column list (brittle against schema tweaks).
+	if _, ok := schema.Columns["full_logs"]; !ok {
+		t.Fatalf("expected columns for full_logs, got %v", schema.Columns)
+	}
+	if _, ok := schema.Columns["mv_caddy_accesslog"]; !ok {
+		t.Fatalf("expected columns for mv_caddy_accesslog, got %v", schema.Columns)
+	}
+	timestampType := ""
+	for _, c := range schema.Columns["full_logs"] {
+		if c.Name == "timestamp" {
+			timestampType = c.Type
+		}
+	}
+	assertions.AssertEquals(t, "full_logs.timestamp type", "DateTime64(6)", timestampType)
 }
