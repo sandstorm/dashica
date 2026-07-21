@@ -97,12 +97,21 @@ func (f *SqlFile) BuildWithFS(fileSystem fs.ReadFileFS) (string, error) {
 }
 
 func (f *SqlFile) buildFromContent(content string) string {
+	return substitutePlaceholders(content, f.where, f.autoBucket, f.bucketRounding)
+}
+
+// substitutePlaceholders replaces DASHICA_FILTERS with the AND-joined Where()
+// clauses (or "1=1" when none) and, when auto-bucketing is enabled and a
+// rounding function has been chosen, DASHICA_BUCKET with that function. Shared
+// by SqlFile and SqlString, whose only difference is where the content comes
+// from (embedded file vs. inline string).
+func substitutePlaceholders(content string, where []string, autoBucket bool, bucketRounding string) string {
 	var clause string
-	if len(f.where) == 0 {
+	if len(where) == 0 {
 		clause = "1=1"
 	} else {
-		parts := make([]string, len(f.where))
-		for i, w := range f.where {
+		parts := make([]string, len(where))
+		for i, w := range where {
 			parts[i] = "(" + w + ")"
 		}
 		clause = strings.Join(parts, " AND ")
@@ -110,20 +119,24 @@ func (f *SqlFile) buildFromContent(content string) string {
 	out := strings.ReplaceAll(content, DashicaFiltersPlaceholder, clause)
 
 	// Substitute the bucket placeholder only when AutoBucketPlaceholder() was attached
-	// AND AdjustBuckets has chosen a rounding function. If the file uses the placeholder
+	// AND AdjustBuckets has chosen a rounding function. If the content uses the placeholder
 	// without opt-in (or before adjustment), leave it as-is — ClickHouse will fail to
 	// parse, surfacing the misconfiguration loudly.
-	if f.autoBucket && f.bucketRounding != "" {
-		out = strings.ReplaceAll(out, DashicaBucketPlaceholder, f.bucketRounding)
+	if autoBucket && bucketRounding != "" {
+		out = strings.ReplaceAll(out, DashicaBucketPlaceholder, bucketRounding)
 	}
 	return out
 }
 
 func BuildWithFS(query SqlQueryable, fileSystem fs.ReadFileFS) (string, error) {
-	if fileQuery, ok := query.(*SqlFile); ok {
-		return fileQuery.BuildWithFS(fileSystem)
+	switch q := query.(type) {
+	case *SqlFile:
+		return q.BuildWithFS(fileSystem)
+	case *SqlString:
+		return q.BuildWithFS(fileSystem)
+	default:
+		return query.Build(), nil
 	}
-	return query.Build(), nil
 }
 
 // AdjustBuckets is a no-op when the SqlFile was not built with

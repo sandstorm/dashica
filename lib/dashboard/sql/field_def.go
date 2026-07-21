@@ -7,7 +7,7 @@ type SqlField interface {
 }
 
 func Field(definition string) SqlField {
-	return &fieldImpl{definition: definition, alias: definition}
+	return &fieldImpl{kind: "expr", definition: definition, alias: definition}
 }
 
 type TimestampedField interface {
@@ -19,6 +19,13 @@ type fieldImpl struct {
 	definition              string
 	alias                   string
 	timestamp_xBucketSizeMs int64
+	// kind names the semantic constructor that produced this field ("count",
+	// "enum", "expr", ...). It is metadata only: serialization and Build() never
+	// depend on it, but it lets the Explore code generator emit the idiomatic
+	// constructor (sql.Count()) instead of the baked expression
+	// (sql.Field("count(*)")), and lets the editor label the field. Empty is
+	// treated as "expr".
+	kind string
 }
 
 func (f *fieldImpl) WithAlias(s string) SqlField {
