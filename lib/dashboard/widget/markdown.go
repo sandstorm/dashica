@@ -27,7 +27,9 @@ type Markdown struct {
 	content string
 	file    string
 	title   string
-	assets  fs.FS
+	// assets is a runtime filesystem handle, not serializable data — skipped by
+	// dashica-gen (see docs/2026-07-21-dynamic-widget-dashboard-ui.md §4.1).
+	assets fs.FS `dashica-gen:"skip"`
 }
 
 // NewMarkdown creates a new Markdown widget.

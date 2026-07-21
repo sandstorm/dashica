@@ -67,16 +67,21 @@ func (c *ColorScale) With(opts ...ColorScaleOption) *ColorScale {
 	return &cloned
 }
 
+// colorScaleDTO is the wire form of ColorScale, shared by Marshal/UnmarshalJSON.
+// ColorScale keeps unexported fields; (de)serialization is added around them
+// (see docs/2026-07-21-dynamic-widget-dashboard-ui.md §4.1) — hand-written like
+// the sql package, as the color vocabulary is small and stable.
+type colorScaleDTO struct {
+	Legend  bool     `json:"legend"`
+	Domain  []string `json:"domain,omitempty"`
+	Range   []string `json:"range,omitempty"`
+	Unknown string   `json:"unknown,omitempty"`
+	Type    string   `json:"type,omitempty"`
+	Scheme  string   `json:"scheme,omitempty"`
+}
+
 func (c *ColorScale) MarshalJSON() ([]byte, error) {
-	type Alias struct {
-		Legend  bool     `json:"legend"`
-		Domain  []string `json:"domain,omitempty"`
-		Range   []string `json:"range,omitempty"`
-		Unknown string   `json:"unknown,omitempty"`
-		Type    string   `json:"type,omitempty"`
-		Scheme  string   `json:"scheme,omitempty"`
-	}
-	return json.Marshal(&Alias{
+	return json.Marshal(&colorScaleDTO{
 		Legend:  c.legend,
 		Domain:  c.domain,
 		Range:   c.range_,
@@ -84,4 +89,20 @@ func (c *ColorScale) MarshalJSON() ([]byte, error) {
 		Type:    c.typ,
 		Scheme:  c.scheme,
 	})
+}
+
+func (c *ColorScale) UnmarshalJSON(b []byte) error {
+	var dto colorScaleDTO
+	if err := json.Unmarshal(b, &dto); err != nil {
+		return err
+	}
+	*c = ColorScale{
+		legend:  dto.Legend,
+		domain:  dto.Domain,
+		range_:  dto.Range,
+		unknown: dto.Unknown,
+		typ:     dto.Type,
+		scheme:  dto.Scheme,
+	}
+	return nil
 }

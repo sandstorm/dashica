@@ -634,6 +634,19 @@ step.
   (the only reliable guarantee that emitted API calls exist), plus round-trip:
   generated code (compiled in the test fixture) marshals back to the original JSON.
 
+**Emitter mechanics — stdlib `text/template` + `go/format`, no dependency
+(decided 2026-07-21).** Both this file's snippet emitter and the `dashica-gen`
+serializer/descriptor emitter (4.1) build source as text via `text/template`, then
+run it through `go/format.Source` (which also fixes spacing). Evaluated
+`dave/jennifer` (fluent AST builder) and lighter alternatives (`go/ast`+`go/printer`,
+`go-codegenutil`): jennifer's only real win is **automatic import management**, but
+emitted code touches a fixed, tiny import set (`sql`, `color`, `widget`,
+`encoding/json`, `bytes`) — hardcoding those imports is trivial and needs no
+resolver. Templates read like the target Go, keep golden-file diffs eyeball-able,
+and honour the stdlib-first ethos (zero new deps). Fallback: if conditional-call
+branching or import resolution ever turns painful, swapping in jennifer is a local
+change confined to the emitter.
+
 ### 4.6 Drag-and-drop WYSIWYG grid designer (how to build it)
 
 The `Grid` widget is CSS `grid-template-areas` (`Template("a a b", "c c b")` +
@@ -847,12 +860,40 @@ Progress (updated 2026-07-21):
       searchBar/widget-type), unknown layout error, no-layout omitted+zero. Green.
     Note: widget internals don't survive yet (per-widget serializers arrive with
     `dashica-gen`); only widget *type* round-trips at this layer.
-- [ ] `cmd/dashica-gen` generator (per-widget serializers, editor descriptors,
-      gocode tables) + `//go:generate` wiring; `zz_generated.dashica.go` is
-      **gitignored and regenerated on build** (templ convention — see
-      `lib/components/generator.go` + `.gitignore` `*_templ.go`), mise/CI build
-      steps run `go generate ./...` before `go build`.
-- [ ] Round-trip equivalence tests over dev-server example dashboards.
+- [x] `cmd/dashica-gen` generator + `//go:generate` wiring; `zz_generated.dashica.go`
+      is **gitignored and regenerated on build** (`.gitignore` already has
+      `/lib/**/zz_generated.*.go`; `//go:generate` in `lib/dashboard/widget/generate.go`;
+      `.mise/tasks/build/_default` already runs `go generate ./...` before build).
+      Emitter: stdlib `text/template` + `go/format`, no dependency (jennifer
+      evaluated and dropped — see 4.5). Structure:
+    - [x] `load.go` — go/packages load; discovers widgets from registry `init()`
+      `Register(...)` calls (no second hand-maintained list); classifies every
+      field into a **closed** category set (fails loudly on unsupported types);
+      extracts enum values (StackOrder/StackOffset) from AST var decls; harvests
+      field doc comments. Overrides via `dashica-gen:"skip"` / `"json=..."` /
+      `"method=..."` struct tags (only use so far: `markdown.assets fs.FS` skip).
+      Tests in `load_test.go` (classify against the real widget package).
+    - [x] `emit.go` — per-widget `MarshalJSON`/`UnmarshalJSON` (map[string]RawMessage,
+      strict unknown-field decode) + per-group-type serializers (StackOptions,
+      enum-validated). Interface fields delegate to `sql.Marshal/UnmarshalField|
+      Queryable`; `color.ColorScale` / `Widgets` / `WidgetsMap` via their own JSON
+      methods. Field JSON key = Go field name (no magic rename); `id` auto-skipped.
+    - [x] `summary.go` — `-dry-run` classification dump.
+    - [x] Scope note: **serializers only** this step. Editor descriptors + gocode
+      tables (also emittable from the same model — `Title`, `GoMethod`,
+      `MethodExists`, `IsCtorArg`, `Doc`, enum options are already computed) are
+      **deferred to their consuming phases (2/3)** to avoid untested dead code.
+    - [x] Prereq added: `color.ColorScale.UnmarshalJSON` (hand-written, mirrors its
+      `MarshalJSON`; sql-package-style exception).
+- [x] Round-trip equivalence tests:
+    - [x] `lib/dashboard/widget/serialization_equiv_test.go` — every registered
+      v1 widget round-trips with stable JSON (marshal == remarshal); completeness
+      guard fails if a new widget has no case. timeBar also asserts **identical
+      chartProps + built SQL** after round trip.
+    - [x] `docs/dev-server/examples/docs/serialization_roundtrip_test.go` — all 13
+      dev-server example dashboards round-trip byte-stable via
+      `dashboard.Marshal/UnmarshalDashboard` (none use out-of-v1-scope widgets).
+    - [x] All green; `go vet` clean.
 
 
 **Phase 2 — `lib/explore` runtime.**

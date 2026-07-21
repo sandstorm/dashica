@@ -12,3 +12,4 @@ node_modules
 /docs/dev-server/dashica-src/public/dist/index.js
 /speedscope_viewer/dist/*
 !/speedscope_viewer/dist/.gitkeep
+/lib/**/zz_generated.*.go
