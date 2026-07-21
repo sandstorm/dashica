@@ -23,7 +23,7 @@ func TestAlertEvaluatorE2E(t *testing.T) {
 	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, timeProvider)
 
 	alertManager := NewAlertManager(cfg, logger, os.DirFS("."), alertEvaluator, nil)
-	alertManager.alertDefinitionPattern = "alerting/test_fixtures/alert_evaluator_e2e_alerts.yaml"
+	alertManager.alertDefinitionPattern = "lib/alerting/test_fixtures/alert_evaluator_e2e_alerts.yaml"
 	err := alertManager.DiscoverAlertDefinitions()
 	if err != nil {
 		t.Fatalf("DiscoverAlertDefinitions: %s", err)

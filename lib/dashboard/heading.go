@@ -4,7 +4,7 @@ import "fmt"
 
 func LoadEnvAndPrintHeading() DashboardEnv {
 	fmt.Println("```js")
-	fmt.Println(`
+	fmt.Print(`
 import {chart, clickhouse, component} from '/dashica/index.js';
 const filters = view(component.globalFilter());
 const viewOptions = view(component.viewOptions());
