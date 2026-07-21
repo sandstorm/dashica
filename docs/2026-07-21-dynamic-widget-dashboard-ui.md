@@ -204,8 +204,12 @@ Guard rails:
   (primitives, pointers, maps, `sql` interfaces, `color.ColorScale`,
   nested-widget maps, ...) — a new *type* of option is a conscious extension
   (add a serializer case + an editor kind), never silent drift.
-- CI runs `go generate ./...` and fails on `git diff --exit-code` — generated
-  files can never go stale.
+- Generated files are **not committed** — same convention as the templ files
+  (`*_templ.go` are gitignored, regenerated via `//go:generate go tool templ
+  generate` in `lib/components/generator.go`). `zz_generated.dashica.go` gets the
+  analogous `//go:generate` line and a `.gitignore` entry; dev/CI/build pipelines
+  run `go generate ./...` before `go build` (mise task). Staleness is impossible
+  by construction.
 
 `StackOrder`/`StackOffset` keep their unexported-field enum trick; the generator
 emits their (de)serializers validating against the known values.
@@ -391,7 +395,8 @@ Serializes to (and deserializes from):
 ```
 cmd/dashica-gen/      // the go:generate tool from 4.1 (go/packages + go/ast + go/doc)
 lib/dashboard/widget/
-    zz_generated.dashica.go  // generated: serializers, editor descriptors, gocode tables
+    zz_generated.dashica.go  // generated (gitignored, via go:generate like *_templ.go):
+                             // serializers, editor descriptors, gocode tables
 lib/explore/
     explore.go        // New(...Option), implements dashboard.Dashboard
     handlers.go       // editor page + API routes (see 4.3)
@@ -778,7 +783,8 @@ The `cmd/dashica-gen` generator (AST + doc-comment parsing → per-widget
 serializers, editor descriptors, gocode tables); hand-written `sql`
 (de)serializers + `Marshal/UnmarshalField|Queryable` helpers + constructor `kind`
 stamps; `sql.FromString`; envelopes + registries (widgets, queryables, layouts);
-named layouts; CI staleness check for generated files.
+named layouts; `go:generate` + `.gitignore` wiring for generated files (templ
+convention) incl. mise/CI build-step integration.
 *Tests:* per-widget equivalence (builder-built vs. JSON-round-tripped → identical
 chartProps + SQL) over the dev-server example dashboards; generator golden tests
 on a fixture package.
@@ -831,10 +837,21 @@ Progress (updated 2026-07-21):
     - [x] tests (`layout_test.go`) — builtins registered, unknown, sorted Names,
       Register panics. Green.
     Note: requires `templ generate` (the templ func rename); user runs build.
-- [ ] Dashboard-level serialization (`dashboardImpl` fields).
+- [x] **Dashboard-level serialization** (`lib/dashboard/dashboard_serialization.go`):
+    - [x] `dashboardImpl` Marshal/UnmarshalJSON via `dashboardDTO`
+      (`title`, `layout` (name only), `searchBar`, `widgets`). Layout stored as
+      `Name`, re-resolved via `layout.ByName` (unknown name → error). searchBar is
+      plain data; widgets delegate to the envelope/registry.
+    - [x] `MarshalDashboard` / `UnmarshalDashboard` package helpers.
+    - [x] tests (`dashboard_serialization_test.go`) — round-trip (title/layout/
+      searchBar/widget-type), unknown layout error, no-layout omitted+zero. Green.
+    Note: widget internals don't survive yet (per-widget serializers arrive with
+    `dashica-gen`); only widget *type* round-trips at this layer.
 - [ ] `cmd/dashica-gen` generator (per-widget serializers, editor descriptors,
-      gocode tables) + `//go:generate` wiring + committed `zz_generated.dashica.go`.
-- [ ] CI staleness check (`go generate ./...` + `git diff --exit-code`).
+      gocode tables) + `//go:generate` wiring; `zz_generated.dashica.go` is
+      **gitignored and regenerated on build** (templ convention — see
+      `lib/components/generator.go` + `.gitignore` `*_templ.go`), mise/CI build
+      steps run `go generate ./...` before `go build`.
 - [ ] Round-trip equivalence tests over dev-server example dashboards.
 
 
@@ -877,6 +894,6 @@ Overlay editor per 4.6; tree drag-sort.
    renames without migration)?
 4. ~~`Opts` field exposure~~ — **resolved**: the `dashica-gen` approach (4.1) keeps
    all widget fields private and adds no exported options structs; generated code
-   in the same package accesses unexported fields directly. Remaining sub-question:
-   should generated files be committed (recommended: yes — `go build` works without
-   running the generator; CI checks staleness) or generated on every build?
+   in the same package accesses unexported fields directly. Generated files are
+   not committed — regenerated on every build via `go:generate`, exactly like the
+   templ files (decided).
