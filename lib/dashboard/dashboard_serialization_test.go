@@ -31,8 +31,8 @@ func TestDashboard_RoundTrip(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	gi := got.(*dashboardImpl)
-	oi := orig.(*dashboardImpl)
+	gi := got.(*Builder)
+	oi := orig
 
 	if gi.title != "My Dashboard" {
 		t.Errorf("title = %q", gi.title)
@@ -84,7 +84,7 @@ func TestDashboard_NoLayout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if got.(*dashboardImpl).layout.Name != "" {
-		t.Errorf("expected empty layout, got %q", got.(*dashboardImpl).layout.Name)
+	if got.(*Builder).layout.Name != "" {
+		t.Errorf("expected empty layout, got %q", got.(*Builder).layout.Name)
 	}
 }

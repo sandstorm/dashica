@@ -12,7 +12,7 @@ import (
 // This file makes a dashboard serializable for the Explore builder
 // (see docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1 (4)).
 //
-// dashboardImpl keeps its unexported fields; a DTO carries the wire form. The
+// Builder keeps its unexported fields; a DTO carries the wire form. The
 // layout is a function value, so only its registered Name is stored and
 // re-resolved via layout.ByName on unmarshal (see lib/components/layout). The
 // widgets delegate to the widget envelope/registry; searchBar is plain data.
@@ -24,7 +24,7 @@ type dashboardDTO struct {
 	Widgets   widget.Widgets            `json:"widgets"`
 }
 
-func (d *dashboardImpl) MarshalJSON() ([]byte, error) {
+func (d *Builder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(dashboardDTO{
 		Title:     d.title,
 		Layout:    d.layout.Name,
@@ -33,7 +33,7 @@ func (d *dashboardImpl) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (d *dashboardImpl) UnmarshalJSON(b []byte) error {
+func (d *Builder) UnmarshalJSON(b []byte) error {
 	var dto dashboardDTO
 	if err := json.Unmarshal(b, &dto); err != nil {
 		return err
@@ -48,7 +48,7 @@ func (d *dashboardImpl) UnmarshalJSON(b []byte) error {
 		l = resolved
 	}
 
-	*d = dashboardImpl{
+	*d = Builder{
 		widgets:   dto.Widgets,
 		layout:    l,
 		title:     dto.Title,
@@ -58,7 +58,7 @@ func (d *dashboardImpl) UnmarshalJSON(b []byte) error {
 }
 
 // MarshalDashboard serializes any Dashboard to JSON. (json.Marshal(d) works too
-// when d holds a *dashboardImpl; this is the explicit, discoverable entry point.)
+// when d holds a *Builder; this is the explicit, discoverable entry point.)
 func MarshalDashboard(d Dashboard) ([]byte, error) {
 	return json.Marshal(d)
 }
@@ -66,7 +66,7 @@ func MarshalDashboard(d Dashboard) ([]byte, error) {
 // UnmarshalDashboard reconstructs a Dashboard from JSON produced by
 // MarshalDashboard.
 func UnmarshalDashboard(b []byte) (Dashboard, error) {
-	d := &dashboardImpl{}
+	d := &Builder{}
 	if err := json.Unmarshal(b, d); err != nil {
 		return nil, err
 	}
