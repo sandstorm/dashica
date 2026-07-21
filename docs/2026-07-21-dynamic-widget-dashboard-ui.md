@@ -903,6 +903,48 @@ sanitization check.
 *Tests:* e2e against the dev-server: POST a widget JSON, compare response with the
 equivalent compiled widget's endpoint.
 
+Progress (updated 2026-07-21):
+
+- [x] **Smaller `dashboard.Dashboard` interface** (`lib/dashboard/dashboard.go`):
+    shrunk to the registration contract — `Title()` + `CollectHandlers()`. The
+    fluent construction API moved onto the now-exported concrete `*Builder`
+    (renamed from `dashboardImpl`); `New()` returns `*Builder`, builder methods
+    return `*Builder` so existing chains compile unchanged. Explore satisfies the
+    interface with just the two methods (no no-op builder stubs). Serialization
+    + tests updated to `*Builder`.
+- [x] **Column introspection moved into the clickhouse client**
+    (`lib/clickhouse/introspect_schema.go`): `IntrospectedSchema` now also carries
+    `Columns map[string][]Column` (name/type/comment, in schema `position` order),
+    populated by the existing `system.columns` query — no separate query in
+    `lib/explore`. `clickhouse.Column` type added. E2E test `introspectSchema`
+    adjusted (spot-checks columns instead of full-struct equality).
+- [x] **`lib/explore` runtime skeleton:**
+    - [x] `explore.go` — `New(...Option) dashboard.Dashboard`; `exploreImpl`
+      stashes `ctx.Deps`/`baseURL`/`MainMenu` at `CollectHandlers` time for the
+      API handler closures. `Option` type defined (persistence opts land Phase 6).
+    - [x] `handlers.go` — explicit route registration (root editor placeholder +
+      `/api/{preview/query,preview/debug,schema,values}`); `apiHandler` error→500
+      adapter matching `widget_common.go`. Editor page placeholder until Phase 3.
+    - [x] `preview.go` — POST widget JSON → `widget.UnmarshalWidget` → replay the
+      widget's **own** `CollectHandlers` against an in-memory `capturingCollector`
+      → dispatch the request to the captured `/query` (or `/debug`) handler. Reuses
+      the exact compiled path (`RegisterQueryHandlers`→`QueryHandler`), no parallel
+      execution logic. Rejects non-POST, empty/null, non-`InteractiveWidget`.
+    - [x] `schema.go` — serves `client.IntrospectSchema` verbatim.
+    - [x] `values.go` — top distinct values (LIMIT 100, most-frequent first) for
+      autocomplete; validates table/column against `^[A-Za-z_][A-Za-z0-9_]*$`
+      before interpolating into SQL.
+    - [x] tests (`preview_test.go`, `values_test.go`) — DB-free: fake echo widget
+      proves dispatch reaches the widget's query handler with the request intact;
+      capturing-collector path recording; rejection paths; values validation.
+      Green. (DB-backed preview-vs-compiled e2e needs a running ClickHouse.)
+- [ ] **formmodel endpoint** — blocked on `dashica-gen` editor-descriptor emission
+    (deferred from Phase 1 to its consumer). Next: emit descriptors from the
+    already-computed model (Title/GoMethod/Doc/enum options) + serve as
+    `/explore/api/formmodel`.
+- [ ] **markdown sanitization check** — verify/add HTML sanitization in the
+    markdown widget pipeline (stored/other-user content; see section 6).
+
 **Phase 3 — Editor UI (structured forms + live preview + Go code tab).**
 Form renderer + control set (4.4); widget tree; preview wiring through the existing
 `chart` component; localStorage/share-link state; JSON power-user tab.
