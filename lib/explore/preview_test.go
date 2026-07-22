@@ -58,9 +58,9 @@ func (c *chartEchoWidget) CollectHandlers(ctx *rendering.DashboardContext, colle
 }
 
 func init() {
-	widget.Register("exploreTestEcho", func() widget.WidgetDefinition { return &echoWidget{} })
-	widget.Register("exploreTestNonInteractive", func() widget.WidgetDefinition { return &nonInteractiveWidget{} })
-	widget.Register("exploreTestChart", func() widget.WidgetDefinition { return &chartEchoWidget{} })
+	widget.Register("exploreTestEcho", widget.CategoryChart, func() widget.WidgetDefinition { return &echoWidget{} })
+	widget.Register("exploreTestNonInteractive", widget.CategoryChart, func() widget.WidgetDefinition { return &nonInteractiveWidget{} })
+	widget.Register("exploreTestChart", widget.CategoryChart, func() widget.WidgetDefinition { return &chartEchoWidget{} })
 }
 
 func newTestExplore() *exploreImpl {

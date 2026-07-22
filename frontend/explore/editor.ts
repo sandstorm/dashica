@@ -33,14 +33,14 @@
 //     the deliberate per-card effect created once at mount (commented below).
 
 import Alpine from '@alpinejs/csp';
-import {ControlCtx, SchemaResponse} from "./controls";
+import {classBadge, Column, ControlCtx, FieldKind, SchemaResponse} from "./controls";
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
 
 interface WidgetState { id: string; type: string; props: Record<string, any>; }
 interface DashboardState { title: string; layout: string; widgets: WidgetState[]; }
 interface WidgetFormModel extends WidgetDescriptor { defaults: Record<string, any>; }
-interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[]; }
+interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[]; fieldKinds: FieldKind[]; }
 
 type DrawerTab = 'data' | 'gocode' | 'json';
 interface UiState { selectedId: string | null; drawerTab: DrawerTab; drawerCollapsed: boolean; }
@@ -93,6 +93,10 @@ class Editor {
 
     // Non-reactive bookkeeping — one entry per mounted preview card.
     private previews: Record<string, PreviewEntry> = {};
+
+    // The Data-tab sample-rows preview (its own controller, torn down whenever
+    // the drawer content is rebuilt).
+    private dataPreview: PreviewController | null = null;
 
     // Effects, kept only so a future teardown could release them.
     private effects: any[] = [];
@@ -232,6 +236,7 @@ class Editor {
             const tab = this.ui.drawerTab;
             const collapsed = this.ui.drawerCollapsed;
             this.updateDrawerTabs(tab, collapsed);
+            if (this.dataPreview) { this.dataPreview.destroy(); this.dataPreview = null; }
             this.elDrawerContent.innerHTML = '';
             this.jsonTextarea = null;
             if (collapsed) return; // content hidden — skip building it
@@ -293,7 +298,15 @@ class Editor {
         addRow.className = 'explore-tree__add';
         const sel = document.createElement('select');
         sel.className = 'explore-input';
+        // Only chart widgets are addable here. Parameter widgets (Text Input,
+        // Checkbox Group) render an input bound to a {name:String} query param that
+        // only does anything when ANOTHER widget's query references it — standing
+        // alone in Explore they affect nothing. Container widgets (Grid,
+        // Collapsible Group) are not yet buildable in the flat tree. Both stay
+        // registered/serializable so compiled dashboards and "Open in Explore"
+        // round-trip them; they are just hidden from the add list (see docs UX note).
         for (const type of Object.keys(this.formModel?.widgets ?? {})) {
+            if (this.formModel!.widgets[type].category !== 'chart') continue;
             const o = document.createElement('option');
             o.value = type;
             o.textContent = this.formModel!.widgets[type].title;
@@ -390,6 +403,7 @@ class Editor {
         const ctx: ControlCtx = {
             baseUrl: this.baseUrl,
             schema: this.schema,
+            fieldKinds: this.formModel!.fieldKinds ?? [],
             getTable: () => {
                 const q = queryKey ? w.props[queryKey] : null;
                 return q && q.kind === 'table' ? q.table : null;
@@ -587,18 +601,167 @@ class Editor {
             '(the <code>/api/gocode</code> endpoint). The JSON tab is the source of truth meanwhile.</div>';
     }
 
-    // Data tab: shows the selected widget's underlying data (columns + sample
-    // rows). The full data view is the next slice (docs UX plan (2)); for now a
-    // selection-aware placeholder. SQL / EXPLAIN is no longer a drawer tab — the
-    // preview chart's own wrench button opens the standard debug drawer.
+    // Data tab: makes the selected widget's data model visible (docs UX plan
+    // (2)) — the table's columns (name / type / comment / class, straight from
+    // the already-loaded /api/schema, no new endpoint) beside live sample rows.
+    // The sample is a *synthetic* table widget pushed through the exact same
+    // preview/render + preview/query path as any preview, so it respects the
+    // current time range and filters by construction and needs zero new backend.
+    // SQL / EXPLAIN is not a drawer tab — every preview chart's own wrench button
+    // opens the standard debug drawer.
+    //
+    // This runs inside the drawer effect; it reads only the selected widget's
+    // query *table* reactively (via getWidgetTable), so it refreshes when the
+    // table changes but not on unrelated prop edits.
     private buildDataTab(content: HTMLElement, selectedId: string | null) {
         const w = selectedId ? this.state.widgets.find((x) => x.id === selectedId) : null;
         if (!w) {
             content.innerHTML = '<div class="explore-empty">Select a widget to inspect its data.</div>';
             return;
         }
-        content.innerHTML = '<div class="explore-empty">Data view (columns + sample rows) ships in the next slice. ' +
-            'Meanwhile, open a preview chart\'s wrench button for its SQL / EXPLAIN.</div>';
+        const table = this.getWidgetTable(w);
+        if (!table) {
+            content.innerHTML = '<div class="explore-empty">This widget has no table source ' +
+                '(raw SQL or none), so there is no schema to show. Pick a table in the inspector.</div>';
+            return;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'explore-data';
+
+        // columns pane
+        const colsPane = document.createElement('div');
+        colsPane.className = 'explore-data__cols';
+        colsPane.appendChild(this.dataPaneTitle(`Columns · ${table}`));
+        const cols: Column[] = this.schema?.columns[table] ?? [];
+        if (cols.length === 0) {
+            colsPane.appendChild(this.emptyNote('No columns found for this table.'));
+        } else {
+            for (const c of cols) colsPane.appendChild(this.columnRow(table, c));
+        }
+        wrap.appendChild(colsPane);
+
+        // sample rows pane — synthetic table widget through the preview path.
+        const samplePane = document.createElement('div');
+        samplePane.className = 'explore-data__sample';
+        samplePane.appendChild(this.dataPaneTitle('Sample rows'));
+        const sampleBody = document.createElement('div');
+        sampleBody.className = 'explore-data__sample-body';
+        samplePane.appendChild(sampleBody);
+        wrap.appendChild(samplePane);
+
+        content.appendChild(wrap);
+
+        this.dataPreview = mountPreview(sampleBody, this.baseUrl);
+        // Plain SELECT * over the table. ClickHouse cannot serialize its JSON /
+        // Object / Dynamic / Variant columns to Arrow, but that concern is now
+        // owned by the transport layer (lib/clickhouse ensureArrowCompatible casts
+        // exactly those columns to String), so the editor stays DB-blind here.
+        const envelope: WidgetEnvelope = {type: 'table', props: {sql: {kind: 'table', table}, limit: 50}};
+        this.dataPreview.render(envelope);
+    }
+
+    private dataPaneTitle(text: string): HTMLElement {
+        const t = document.createElement('div');
+        t.className = 'explore-section-title';
+        t.textContent = text;
+        return t;
+    }
+
+    private emptyNote(text: string): HTMLElement {
+        const d = document.createElement('div');
+        d.className = 'explore-field__help';
+        d.textContent = text;
+        return d;
+    }
+
+    // Resolve the selected widget's base-query table (reactively reads the query
+    // kind + table, nothing else), or null when it is not a plain table source.
+    private getWidgetTable(w: WidgetState): string | null {
+        const key = this.formModel?.widgets[w.type]?.queryKey;
+        if (!key) return null;
+        const q = w.props[key];
+        return q && q.kind === 'table' && q.table ? q.table : null;
+    }
+
+    // One column row: class badge + name + type + comment. Categorical columns
+    // get a "values" toggle that fetches the top distinct values (/api/values) —
+    // the affordance is class-appropriate: sampling distinct values is
+    // meaningless/expensive on continuous columns, so it is offered only for
+    // categorical ones (docs UX plan (3)).
+    private columnRow(table: string, c: Column): HTMLElement {
+        const row = document.createElement('div');
+        row.className = 'explore-data__col';
+
+        const head = document.createElement('div');
+        head.className = 'explore-data__col-head';
+        const badge = classBadge(c.class);
+        if (badge) {
+            const b = document.createElement('span');
+            b.className = 'explore-badge';
+            b.textContent = badge;
+            b.title = c.class ?? '';
+            head.appendChild(b);
+        }
+        const name = document.createElement('span');
+        name.className = 'explore-data__col-name';
+        name.textContent = c.name;
+        head.appendChild(name);
+        const type = document.createElement('span');
+        type.className = 'explore-data__col-type';
+        type.textContent = c.type;
+        head.appendChild(type);
+
+        if (c.class === 'categorical') {
+            const btn = document.createElement('button');
+            btn.className = 'explore-btn explore-btn--sm explore-data__values-btn';
+            btn.type = 'button';
+            btn.textContent = 'values';
+            const valuesBox = document.createElement('div');
+            valuesBox.className = 'explore-data__values';
+            valuesBox.hidden = true;
+            let loaded = false;
+            btn.addEventListener('click', () => {
+                valuesBox.hidden = !valuesBox.hidden;
+                if (!valuesBox.hidden && !loaded) { loaded = true; this.loadColumnValues(table, c.name, valuesBox); }
+            });
+            head.appendChild(btn);
+            row.append(head, valuesBox);
+        } else {
+            row.appendChild(head);
+        }
+
+        if (c.comment) {
+            const cm = document.createElement('div');
+            cm.className = 'explore-data__col-comment';
+            cm.textContent = c.comment;
+            row.appendChild(cm);
+        }
+        return row;
+    }
+
+    private loadColumnValues(table: string, column: string, box: HTMLElement) {
+        box.textContent = 'loading…';
+        const url = `${this.baseUrl}/api/values?table=${encodeURIComponent(table)}&column=${encodeURIComponent(column)}`;
+        fetch(url)
+            .then((r) => r.ok ? r.json() : r.text().then((t) => { throw new Error(t); }))
+            .then((rows: {value: string; count: number}[]) => {
+                box.textContent = '';
+                if (!rows || rows.length === 0) { box.appendChild(this.emptyNote('No values.')); return; }
+                for (const rv of rows) {
+                    const line = document.createElement('div');
+                    line.className = 'explore-data__value';
+                    const v = document.createElement('span');
+                    v.className = 'explore-data__value-val';
+                    v.textContent = rv.value === '' ? '(empty)' : rv.value;
+                    const n = document.createElement('span');
+                    n.className = 'explore-data__value-count';
+                    n.textContent = String(rv.count);
+                    line.append(v, n);
+                    box.appendChild(line);
+                }
+            })
+            .catch((e) => { box.textContent = ''; box.appendChild(this.emptyNote(`Error: ${e.message}`)); });
     }
 }
 

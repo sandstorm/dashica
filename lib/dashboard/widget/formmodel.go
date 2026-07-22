@@ -43,6 +43,11 @@ type FieldDescriptor struct {
 type WidgetDescriptor struct {
 	// Title is the display label (camel-split type name, e.g. "Time Bar").
 	Title string `json:"title"`
+	// Category groups the widget for the add-widget UI ("chart" | "parameter" |
+	// "container"), declared at Register time. The editor lists only "chart"
+	// widgets; parameter/container widgets stay serializable (compiled dashboards
+	// and "Open in Explore" round-trip them) but are kept out of the flat list.
+	Category string `json:"category"`
 	// HasQuery is true when the widget has a base query (its SqlQueryable field),
 	// which the editor renders as a dedicated query section rather than a field.
 	HasQuery bool `json:"hasQuery"`

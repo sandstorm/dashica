@@ -1,7 +1,8 @@
 # Explore View — Dynamic Widget & Dashboard Builder
 
 **Started:** 2026-07-21 · **Last restructured:** 2026-07-22
-**Status:** core shipped (serialization, runtime, editor UI); next steps in §4.
+**Status:** core shipped (serialization, runtime, editor UI); Step 3 (Arrow
+Go-side fix) + Step 5 widget-categories done 2026-07-22; next steps in §4.
 
 ## 1. Goal & requirements
 
@@ -66,8 +67,27 @@ The `sql` package keeps its type structure; hand-written serializers in one
 `serialization.go` (deliberate exception — small stable vocabulary), tagged
 wire forms `{"kind": "expr"|"count"|"enum"|"autoBucket", ...}` and
 `{"kind": "table"|"file"|"raw", ...}`, plus `Marshal/UnmarshalField|Queryable`
-helpers the generated code calls. Constructors stamp an unexported `kind` so
-codegen/editor can be idiomatic (`sql.Count()`, not `sql.Field("count(*)")`).
+helpers the generated code calls.
+
+**Field kinds are constructor tags, not a semantic taxonomy.** The rule:
+`kind` ≡ "which Go constructor produced this field", 1:1, so the code
+generator emits the idiomatic call (`sql.Count()`, never
+`sql.Field("count(*)")`) and the wire format can never express anything the Go
+API cannot (a semantic decomposition like `{column, aggregate?, timeBucket?}`
+was considered and rejected exactly because it could). Semantics live one
+layer up: intent labels and column classes in the formmodel. Two consequences,
+tracked in §4 Step 2:
+- every constructor needs a kind — today `Timestamp15Min`/`TimestampField`/
+  `JsonExtractString` degrade to `expr` with baked SQL (round-trip-safe but
+  lossy for codegen and forms);
+- kinds should carry their constructor's *arguments* (`enum` → `column`), not
+  the baked SQL output (`definition: "level::String"`).
+Gaps in the Go API surface here as missing kinds by design — e.g. Y-axis
+aggregations beyond count (`sql.Sum(col)`, `sql.Avg(col)`, …) don't exist as
+constructors yet, so "sum of a column" currently forces the `expr` escape
+hatch; the fix is new constructors (backlog), after which kind + intent label
+follow mechanically.
+
 `sql.FromString` (inline SQL, same `{{DASHICA_FILTERS}}` enforcement) exists
 for Explore's raw-SQL mode.
 
@@ -187,6 +207,11 @@ hash; JSON power-user tab.
 - Review fixes landed along the way: share-link XSS, render-plumbing
   amplification, unvalidated state swallow, markdown `file` blocker,
   `start()` failure mode.
+- **Arrow-incompatible types** (Step 3): transport-level `ensureArrowCompatible`
+  in `lib/clickhouse` (DESCRIBE + `SELECT * REPLACE(toString(...))` wrap);
+  client-side stop-gap removed. Unit tests green; e2e needs dev ClickHouse.
+- **Widget categories** (Step 5, first bullet): `chart|parameter|container`
+  registry hint → generated descriptor → add-widget list shows charts only.
 
 Recurring gap: **frontend build + browser E2E have been deferred at the end of
 every slice** — no automated browser test exists yet.
@@ -195,13 +220,13 @@ every slice** — no automated browser test exists yet.
 
 Each step is a shippable slice. Order = dependencies first, then user value.
 
-**Step 1 — Browser E2E harness (pay the recurring debt first).**
+LATER - NOT RIGHT NOW!!! **Step 1 — Browser E2E harness (pay the recurring debt first).**
 Playwright/Chrome-MCP smoke: load `/explore`, add timeBar, pick table, see
 rendered chart, edit JSON tab, share-link round-trip. Every later step extends
 this instead of re-deferring it. (Frontend build stays the user's command; the
 tests assume a built bundle + dev ClickHouse.)
 
-**Step 2 — Serialization "fails loudly" sweep (open Phase-1 review findings).**
+LATER - NOT RIGHT NOW!!! **Step 2 — Serialization "fails loudly" sweep (open Phase-1 review findings).**
 The invariant everything rests on: *round-trips faithfully or fails loudly.*
 - ✋ `dashica-gen/load.go`: hard-error when a `Register(...)` factory type
   cannot be resolved (currently silently skipped → widget marshals empty
@@ -219,27 +244,34 @@ The invariant everything rests on: *round-trips faithfully or fails loudly.*
 - ⚠ invert the trust flag: `TrustedContent` (zero value = untrusted), set at
   the single compiled-context site in `dashica.go` — forgetting becomes
   fail-safe.
-- ⚠ **semantic wire kinds**: `enum` carries `column` (server builds the
-  `::String` cast via the real constructor); per-kind seeds served in the
-  formmodel. Kills the last one-source-of-truth violation — the client-side
-  `seed()` currently hardcodes `count(*)`, `::String`, `alias:'time'`
-  (survived every review round). Includes a stored-state migration: versioned
-  localStorage key + drop unknown prop keys against descriptors on load
-  (client tolerant, server strict).
+- ⚠ **constructor-faithful wire kinds** (see §2.1): kinds carry constructor
+  *arguments*, not baked SQL — `enum` carries `column` (server builds the
+  `::String` cast via the real constructor); add the missing kinds for
+  `Timestamp15Min`/`TimestampField`/`JsonExtractString` (currently lossy
+  `expr` degradation); per-kind seeds served in the formmodel. Kills the last
+  one-source-of-truth violation — the client-side `seed()` currently
+  hardcodes `count(*)`, `::String`, `alias:'time'` (survived every review
+  round). Includes a stored-state migration: versioned localStorage key +
+  drop unknown prop keys against descriptors on load (client tolerant,
+  server strict).
 
-**Step 3 — Arrow-incompatible ClickHouse types, Go-side.**
+**✅ Step 3 — Arrow-incompatible ClickHouse types, Go-side (DONE 2026-07-22).**
 CH cannot serialize `JSON`/`Object`/`Dynamic`/`Variant` to Arrow → any
-`SELECT *` over `full_logs` (`event_original JSON`) fails. Current stop-gap is
-a client-side `SELECT * REPLACE(toString(...))` in `editor.ts` — three
-layering violations and covers only the Data tab.
-Design (decided): **DESCRIBE + wrap in `lib/clickhouse`**, the only Arrow
-path (`QueryToHandler`): `DESCRIBE (<built query>)` (same params; ~ms; no
-cache — add only if profiling demands) → if the *result* has affected columns,
-wrap `SELECT * REPLACE(toString(`c`) AS `c`, …) FROM (<query>)`. Names, order,
-other types preserved; works for table/file/raw queries, compiled + dynamic,
-no SQL parsing. Must-test: row order through the wrap with ORDER BY +
-`WITH FILL` (contingency: `SETTINGS max_threads=1` on wrapped queries only).
-Cleanup: revert `sampleQuery()` to the plain `{kind:'table', table}` envelope.
+`SELECT *` over `full_logs` (`event_original JSON`) failed.
+Built: `lib/clickhouse/arrow_compat.go` — `ensureArrowCompatible` in
+`QueryToHandler` (the only Arrow path). No-op unless `Format=="Arrow"`;
+`DESCRIBE (<query>)` (same params, no cache) → if the *result* has affected
+columns, wrap `SELECT * REPLACE(toString(`c`) AS `c`, …) FROM (<query>)`.
+Names/order/other types preserved; works for table/file/raw, compiled +
+dynamic, no SQL parsing. Trailing `;` stripped before wrapping
+(`trimTrailingSemicolons` — a real bug hit on first run: `DESCRIBE (…;)` is a
+syntax error). FE stop-gap removed: `sampleQuery()` reverted to the plain
+`{kind:'table', table}` envelope. Tests: unit (detection regex, wrap SQL,
+trim) green; e2e (`clickhouse_e2e_test.go`: `SELECT *` over `full_logs`
+through `QueryToHandler` succeeds where raw Arrow errors; ORDER BY row-order
+survives the wrap) — **needs dev ClickHouse; blocked in the sandbox
+(`connect: operation not permitted`), user must run**. Contingency if order
+ever lost: `SETTINGS max_threads=1` on wrapped queries only (not needed yet).
 
 **Step 4 — Go code generation (the missing core requirement #1).**
 `lib/explore/gocode.go` + `POST /api/gocode` + live Go-code drawer tab.
@@ -253,10 +285,16 @@ Tests: golden files + **CI compile check** of generated code + marshal-back
 round trip.
 
 **Step 5 — Editor polish batch (cheap, visible).**
-- Widget **categories** `chart | parameter | container` (one registry hint,
-  emitted by dashica-gen): hide parameter widgets (textInput, checkboxGroup)
-  from the add list — standalone they affect nothing (v1: hide; later: teach
-  the query section to reference `{param:String}`).
+- ✅ **DONE 2026-07-22** — Widget **categories** `chart | parameter |
+  container`: single registry hint = 3rd arg to `widget.Register(name,
+  Category, factory)` (`WidgetCategory` const in `registry.go`), read straight
+  from the AST by `dashica-gen` (`constStringValue`) → `WidgetDescriptor.Category`
+  → served in `/api/formmodel`. Editor add-widget dropdown lists only
+  `category==='chart'`; parameter (textInput, checkboxGroup) and container
+  (grid, collapsibleGroup) widgets stay registered/serializable (compiled +
+  "Open in Explore" round-trip) but hidden from the flat list. Tests:
+  `formmodel_test.go` asserts category per widget. Later: teach the query
+  section to reference `{param:String}`, then surface parameter widgets.
 - UX polish: persistent labels on every input; labeled title/layout in the
   toolbar; tree rows show `props.title`; icon contrast; Fill/Fx/Fy collapsed
   into "Series & faceting"; friendly empty states instead of raw 500 text.
@@ -302,7 +340,10 @@ inputs (whereClause, rawSql, custom expression: highlighting, schema-fed
 completion, inline EXPLAIN errors) fits here or in Step 5 if the datalist
 UX pinches earlier.
 
-**Backlog (unordered, small):** `?database=` param for schema/values
+**Backlog (unordered, small):** aggregation constructors in the Go sql API
+(`sql.Sum(col)`, `sql.Avg`, `sql.Min/Max`, `sql.Uniq`, …) — unlocks Y-axis
+beyond count without the `expr` escape hatch; kinds + intent labels follow
+mechanically per §2.1; `?database=` param for schema/values
 (multi-server queries); configurable table-name filter in
 `introspect_schema.go` (Sandstorm prefixes hardcoded in the generic lib);
 introspection cache TTL + a deliberate look at the odd common-columns

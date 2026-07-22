@@ -37,8 +37,8 @@ func (f *fakeContainer) BuildComponents(*rendering.DashboardContext) (templ.Comp
 var _ WidgetDefinition = (*fakeContainer)(nil)
 
 func init() {
-	Register("_fakeWidget", func() WidgetDefinition { return &fakeWidget{} })
-	Register("_fakeContainer", func() WidgetDefinition { return &fakeContainer{} })
+	Register("_fakeWidget", CategoryChart, func() WidgetDefinition { return &fakeWidget{} })
+	Register("_fakeContainer", CategoryContainer, func() WidgetDefinition { return &fakeContainer{} })
 }
 
 func TestMarshalWidget_Envelope(t *testing.T) {

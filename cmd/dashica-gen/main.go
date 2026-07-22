@@ -75,6 +75,7 @@ type widgetInfo struct {
 	WireName string // "timeBar"
 	TypeName string // "TimeBar"
 	Title    string // "Time Bar" (camel-split, editor display label)
+	Category string // "chart" | "parameter" | "container"
 	Fields   []fieldInfo
 }
 

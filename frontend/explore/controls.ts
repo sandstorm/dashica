@@ -7,15 +7,34 @@
 // new widget *option* needs no new control, only a genuinely new *type of
 // value* would.
 //
+// The field pickers teach *intent*, not the serializer vocabulary (docs UX plan
+// (3)): kind labels ("Time bucket (automatic)", "Row count", …) and per-slot
+// column classes (temporal / categorical / continuous) come from the formmodel
+// so Go stays the source of truth. Column pickers are slot-aware — the
+// preferred class is offered first, wrong-class columns are demoted (not
+// hidden) and badged.
+//
 // SQL-ish inputs (whereClause / rawSql / the "expr" field mode) use
 // <input>+<datalist> for column completion in this slice; CodeMirror is
 // deferred to Phase 4 (see docs 4.4).
 
-export interface Column { name: string; type: string; comment?: string; }
+export type ColumnClass = 'temporal' | 'categorical' | 'continuous' | '';
+
+export interface Column { name: string; type: string; comment?: string; class?: ColumnClass; }
 export interface SchemaResponse {
     commonColumns: string[];
     tables: string[];
     columns: Record<string, Column[]>;
+}
+
+// FieldKind mirrors lib/explore/formmodel.go fieldKind — the intent vocabulary
+// of a field picker. Labels + slot metadata are served by the backend.
+export interface FieldKind {
+    kind: string;
+    label: string;
+    requiresColumn?: boolean;
+    columnClass?: ColumnClass;
+    advanced?: boolean;
 }
 
 // FieldDescriptor mirrors lib/dashboard/widget/formmodel.go FieldDescriptor.
@@ -32,9 +51,27 @@ export interface FieldDescriptor {
 export interface ControlCtx {
     baseUrl: string;
     schema: SchemaResponse | null;
+    // The intent vocabulary for field pickers (from the formmodel).
+    fieldKinds: FieldKind[];
     // The table currently selected in the query section, so field pickers can
     // offer that table's columns for autocomplete.
     getTable: () => string | null;
+    // Golden path: called by the query section when a table is chosen, so the
+    // form can seed required-but-empty field pickers and rebuild the options
+    // section (set by the form renderer). See docs UX plan (3).
+    onTableChosen?: (table: string) => void;
+}
+
+// The class → badge glyph the editor shows wherever a column appears (pickers,
+// Data-tab list, WHERE completion). Tooltip carries the class word.
+export const CLASS_BADGE: Record<string, string> = {
+    temporal: '⏱',
+    categorical: '🏷',
+    continuous: '#',
+};
+
+export function classBadge(cls?: string): string {
+    return (cls && CLASS_BADGE[cls]) || '';
 }
 
 // ---------------------------------------------------------------------------
@@ -65,14 +102,50 @@ function humanize(name: string): string {
     return name.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
 }
 
+// ---------------------------------------------------------------------------
+// column-reference click-to-insert plumbing
+// ---------------------------------------------------------------------------
+
+// The most-recently-focused SQL-ish input (a WHERE clause or a custom
+// expression). The query section's collapsible "Columns" reference inserts a
+// column name here on click — a lightweight value picker that needs no
+// selection state beyond "where was the cursor last".
+let lastSqlInput: HTMLInputElement | HTMLTextAreaElement | null = null;
+
+function trackSqlFocus(input: HTMLInputElement | HTMLTextAreaElement) {
+    input.addEventListener('focus', () => { lastSqlInput = input; });
+}
+
+function insertIntoLastSqlInput(text: string) {
+    const input = lastSqlInput;
+    if (!input || !input.isConnected) return;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    const caret = start + text.length;
+    input.setSelectionRange(caret, caret);
+    input.focus();
+    // Fire input so the reactive write in the control's listener runs.
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+}
+
+// ---------------------------------------------------------------------------
+// class-aware column completion
+// ---------------------------------------------------------------------------
+
 let datalistSeq = 0;
 // Wire an <input> to a column-name datalist that (re)populates on focus, so its
 // options are always a derived view of the *current* table — even after the
 // table is switched without rebuilding the form. This is what makes the
 // stale-datalist bug impossible by construction (populating on focus, not once
 // at build time, also avoids ever rebuilding the input and stealing focus).
-// Returns the datalist so the caller can append it near the input.
-function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, timestampedOnly: boolean): HTMLDataListElement {
+//
+// Slot-aware: when `preferred` is a column class, matching columns sort first
+// and every option's label carries a class badge + type, so the picker teaches
+// which columns fit the slot without hiding the escape hatches (docs UX plan
+// (3)). Returns the datalist so the caller can append it near the input.
+function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, preferred: ColumnClass | null): HTMLDataListElement {
+    trackSqlFocus(input);
     const dl = el('datalist');
     dl.id = `explore-cols-${datalistSeq++}`;
     input.setAttribute('list', dl.id);
@@ -80,11 +153,14 @@ function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, timest
         dl.innerHTML = '';
         const table = ctx.getTable();
         const cols = (table && ctx.schema?.columns[table]) || [];
-        for (const c of cols) {
-            if (timestampedOnly && !/date|time/i.test(c.type)) continue;
+        const ordered = preferred
+            ? [...cols].sort((a, b) => Number(b.class === preferred) - Number(a.class === preferred))
+            : cols;
+        for (const c of ordered) {
             const opt = el('option');
             opt.value = c.name;
-            opt.label = c.type;
+            const badge = classBadge(c.class);
+            opt.label = badge ? `${badge} ${c.type}` : c.type;
             dl.appendChild(opt);
         }
     };
@@ -209,81 +285,120 @@ function keyValueControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTM
 // field picker (composite) — SqlField / TimestampedField
 // ---------------------------------------------------------------------------
 
+// The wire "kinds" that apply to a slot. autoBucket only makes sense on a
+// timestamped axis (it buckets a DateTime column); a plain value/measure field
+// is count / enum / custom. (This slot rule is structural — the labels and
+// column classes come from the served fieldKinds.)
+function kindsForSlot(field: FieldDescriptor): string[] {
+    return field.timestamped ? ['autoBucket', 'expr'] : ['count', 'enum', 'expr'];
+}
+
+// Build the wire DTO for a chosen kind with sensible defaults, letting the
+// preview render immediately (see lib/dashboard/sql constructors).
+function seedKind(kind: string): any {
+    switch (kind) {
+        case 'autoBucket': return {kind, column: '', alias: 'time'};
+        case 'count': return {kind, definition: 'count(*)', alias: 'count'};
+        case 'enum': return {kind, definition: '', alias: ''};
+        case 'expr': return {kind, definition: '', alias: ''};
+        default: return null;
+    }
+}
+
 function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
     const container = el('div', 'explore-field-picker');
 
-    // autoBucket only makes sense on the timestamped X axis (it buckets a
-    // DateTime column); a plain value/measure field is count / enum / custom.
-    const kindsForField = field.timestamped ? ['autoBucket', 'expr'] : ['count', 'enum', 'expr'];
+    const slotKinds = kindsForSlot(field);
+    const info = (k: string): FieldKind =>
+        ctx.fieldKinds.find((f) => f.kind === k) ?? {kind: k, label: k};
+    const defaultKind = slotKinds.find((k) => !info(k).advanced) ?? slotKinds[0];
 
     function currentKind(): string {
         const v = obj[field.name];
         return v && typeof v === 'object' ? v.kind : '';
     }
 
-    // Build the wire DTO for a chosen kind with sensible defaults, letting the
-    // preview render immediately (see lib/dashboard/sql constructors).
-    function seed(kind: string): any {
-        switch (kind) {
-            case 'autoBucket': return {kind, column: '', alias: 'time'};
-            case 'count': return {kind, definition: 'count(*)', alias: 'count'};
-            case 'enum': return {kind, definition: '', alias: ''};
-            case 'expr': return {kind, definition: '', alias: ''};
-            default: return null;
-        }
-    }
+    // A required field always has a sensible default kind selected so its intent
+    // is visible before a column is picked (Y shows "Row count", X shows "Time
+    // bucket"). Optional fields keep "(none)".
+    if (field.required && !currentKind()) obj[field.name] = seedKind(defaultKind);
+
+    // Advanced reveals the custom-expression kind + the alias input. It starts
+    // on when the current value already uses them, so nothing is ever hidden.
+    let advanced = (() => {
+        const v = obj[field.name];
+        return !!(v && typeof v === 'object' && (info(v.kind).advanced || v.alias));
+    })();
 
     function redraw() {
         container.innerHTML = '';
+
+        // kind dropdown — human labels, advanced kinds gated by the toggle.
         const kindSel = el('select', 'explore-input');
-        const kinds = field.required ? kindsForField : ['', ...kindsForField];
-        for (const k of kinds) {
+        const shown = advanced ? slotKinds : slotKinds.filter((k) => !info(k).advanced);
+        const opts = field.required ? shown : ['', ...shown];
+        for (const k of opts) {
             const opt = el('option');
             opt.value = k;
-            opt.textContent = k === '' ? '(none)' : k;
+            opt.textContent = k === '' ? '(none)' : info(k).label;
             kindSel.appendChild(opt);
         }
         kindSel.value = currentKind();
         kindSel.addEventListener('change', () => {
-            obj[field.name] = seed(kindSel.value);
+            obj[field.name] = seedKind(kindSel.value);
             redraw();
         });
         container.appendChild(kindSel);
 
         const v = obj[field.name];
-        if (!v || typeof v !== 'object') return;
+        if (v && typeof v === 'object') {
+            const preferred = (info(v.kind).columnClass ?? '') as ColumnClass;
 
-        if (v.kind === 'autoBucket') {
-            const col = el('input', 'explore-input');
-            col.placeholder = 'column';
-            col.value = v.column ?? '';
-            col.addEventListener('input', () => { v.column = col.value; });
-            container.append(attachColumnCompletion(col, ctx, !!field.timestamped), col);
-        } else if (v.kind === 'enum') {
-            const col = el('input', 'explore-input');
-            col.placeholder = 'column';
-            // Present the underlying column; store the ::String cast expression.
-            col.value = (v.definition ?? '').replace(/::String$/, '');
-            col.addEventListener('input', () => {
-                v.definition = col.value ? `${col.value}::String` : '';
-                if (!v.alias) v.alias = col.value;
-            });
-            container.append(attachColumnCompletion(col, ctx, false), col);
-        } else if (v.kind === 'expr') {
-            const def = el('input', 'explore-input');
-            def.placeholder = 'SQL expression';
-            def.value = v.definition ?? '';
-            def.addEventListener('input', () => { v.definition = def.value; });
-            container.append(attachColumnCompletion(def, ctx, false), def);
+            if (v.kind === 'autoBucket') {
+                const col = el('input', 'explore-input');
+                col.placeholder = 'column';
+                col.value = v.column ?? '';
+                col.addEventListener('input', () => { v.column = col.value; });
+                container.append(attachColumnCompletion(col, ctx, preferred || 'temporal'), col);
+            } else if (v.kind === 'enum') {
+                const col = el('input', 'explore-input');
+                col.placeholder = 'column';
+                // Present the underlying column; store the ::String cast expression.
+                col.value = (v.definition ?? '').replace(/::String$/, '');
+                col.addEventListener('input', () => {
+                    v.definition = col.value ? `${col.value}::String` : '';
+                    if (!v.alias) v.alias = col.value;
+                });
+                container.append(attachColumnCompletion(col, ctx, preferred || 'categorical'), col);
+            } else if (v.kind === 'expr') {
+                const def = el('input', 'explore-input');
+                def.placeholder = 'SQL expression';
+                def.value = v.definition ?? '';
+                def.addEventListener('input', () => { v.definition = def.value; });
+                container.append(attachColumnCompletion(def, ctx, null), def);
+            }
+            // count: no extra input besides the (advanced) alias.
+
+            if (advanced) {
+                const alias = el('input', 'explore-input');
+                alias.placeholder = 'alias (column name in result)';
+                alias.value = v.alias ?? '';
+                alias.addEventListener('input', () => { v.alias = alias.value; });
+                container.appendChild(alias);
+            }
         }
-        // count: no extra input besides alias.
 
-        if (v.kind !== undefined) {
-            const alias = el('input', 'explore-input');
-            alias.placeholder = 'alias (column name in result)';
-            alias.value = v.alias ?? '';
-            alias.addEventListener('input', () => { v.alias = alias.value; });
-            container.appendChild(alias);
+        // advanced toggle — only shown when there is anything advanced to reveal
+        // (a custom-expression kind, or the alias input on a chosen kind).
+        const hasAdvancedKind = slotKinds.some((k) => info(k).advanced);
+        if (hasAdvancedKind || (v && typeof v === 'object')) {
+            const adv = el('label', 'explore-advanced-toggle');
+            const cb = el('input');
+            cb.type = 'checkbox';
+            cb.checked = advanced;
+            cb.addEventListener('change', () => { advanced = cb.checked; redraw(); });
+            adv.append(cb, el('span', undefined, 'Advanced (custom expression, alias)'));
+            container.appendChild(adv);
         }
     }
     redraw();
@@ -405,6 +520,7 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
             const ta = el('textarea', 'explore-input explore-textarea');
             ta.value = q.sql ?? '';
             ta.rows = 6;
+            trackSqlFocus(ta);
             ta.addEventListener('input', () => { q.sql = ta.value; });
             body.appendChild(labelled({name: 'sql', editor: 'rawSql', help: 'Must contain {{DASHICA_FILTERS}}.'}, ta));
         } else {
@@ -417,8 +533,19 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
             tbl.setAttribute('list', dl.id);
             tbl.value = q.table ?? '';
             // No re-render on input — just mutate, so focus is kept while typing.
-            tbl.addEventListener('input', () => { q.table = tbl.value; });
+            // Chosen a table? let the form seed required-but-empty pickers so
+            // "pick a table = a rendering chart" (docs UX plan (3)). The seeder
+            // rebuilds only the options section, never this focused input.
+            tbl.addEventListener('input', () => {
+                q.table = tbl.value;
+                if (tbl.value && ctx.onTableChosen) ctx.onTableChosen(tbl.value);
+            });
             body.append(dl, labelled({name: 'table', editor: 'text'}, tbl));
+
+            // collapsible column reference for the chosen table — badge + name +
+            // type; clicking a column inserts its name into the last-focused
+            // WHERE / expression input (docs UX plan (2)).
+            body.appendChild(columnReference(ctx));
 
             // where clause list
             q.where = q.where ?? [];
@@ -431,7 +558,7 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
                     input.placeholder = "e.g. level = 'error'";
                     input.value = w;
                     input.addEventListener('input', () => { q.where[i] = input.value; });
-                    const cdl = attachColumnCompletion(input, ctx, false);
+                    const cdl = attachColumnCompletion(input, ctx, null);
                     const del = el('button', 'explore-btn explore-btn--icon', '×');
                     del.type = 'button';
                     del.addEventListener('click', () => { q.where.splice(i, 1); drawWhere(); });
@@ -457,6 +584,78 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
     }
     rebuild();
     return container;
+}
+
+// columnReference is the collapsible list of the current table's columns, shown
+// under the table input. Repopulates each time it is opened, so it always
+// reflects the current table. Clicking a column inserts its name at the cursor
+// in the last-focused WHERE / expression input.
+function columnReference(ctx: ControlCtx): HTMLElement {
+    const details = el('details', 'explore-colref');
+    const summary = el('summary', undefined, 'Columns');
+    details.appendChild(summary);
+    const list = el('div', 'explore-colref__list');
+    details.appendChild(list);
+
+    const populate = () => {
+        list.innerHTML = '';
+        const table = ctx.getTable();
+        const cols = (table && ctx.schema?.columns[table]) || [];
+        if (cols.length === 0) {
+            list.appendChild(el('div', 'explore-field__help', table ? 'No columns.' : 'Pick a table first.'));
+            return;
+        }
+        for (const c of cols) {
+            const row = el('button', 'explore-colref__col');
+            row.type = 'button';
+            row.title = `${c.type}${c.comment ? ` — ${c.comment}` : ''} (click to insert)`;
+            const badge = classBadge(c.class);
+            if (badge) row.appendChild(el('span', 'explore-badge', badge));
+            row.appendChild(el('span', 'explore-colref__name', c.name));
+            row.appendChild(el('span', 'explore-colref__type', c.type));
+            row.addEventListener('click', () => insertIntoLastSqlInput(c.name));
+            list.appendChild(row);
+        }
+    };
+    details.addEventListener('toggle', () => { if (details.open) populate(); });
+    return details;
+}
+
+// ---------------------------------------------------------------------------
+// golden-path seeding (called by the form renderer on table selection)
+// ---------------------------------------------------------------------------
+
+// seedRequiredFields fills required-but-empty field pickers when a table is
+// chosen, so a freshly added widget renders immediately: the timestamped X gets
+// an auto-bucket on the first temporal column, a value field (Y) gets a row
+// count. Never clobbers a value the user already set. Returns whether anything
+// changed (so the caller can skip a needless rebuild).
+export function seedRequiredFields(fields: FieldDescriptor[], props: any, ctx: ControlCtx, table: string): boolean {
+    const cols = (ctx.schema?.columns[table]) || [];
+    const firstOfClass = (cls: ColumnClass) => cols.find((c) => c.class === cls)?.name;
+    let changed = false;
+
+    for (const f of fields) {
+        if (f.editor !== 'field' || !f.required) continue;
+        const v = props[f.name];
+
+        if (f.timestamped) {
+            const col = firstOfClass('temporal');
+            if (!v || typeof v !== 'object' || v.kind !== 'autoBucket') {
+                props[f.name] = {kind: 'autoBucket', column: col ?? '', alias: 'time'};
+                changed = true;
+            } else if (!v.column && col) {
+                v.column = col;
+                changed = true;
+            }
+        } else if (!v || typeof v !== 'object' || !v.kind) {
+            // A value field with nothing chosen defaults to row count (renders
+            // without needing a column).
+            props[f.name] = seedKind('count');
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 // ---------------------------------------------------------------------------

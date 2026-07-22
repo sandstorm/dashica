@@ -32,16 +32,38 @@ import (
 // widget's defaults by marshalling a factory instance.
 type WidgetFactory func() WidgetDefinition
 
-var (
-	registryMu    sync.RWMutex
-	typeToFactory = map[string]WidgetFactory{}
-	goTypeToName  = map[reflect.Type]string{}
+// WidgetCategory groups widgets for the Explore add-widget UI. It is a per-widget
+// hint declared at Register time (the single source of truth) and copied into the
+// generated WidgetDescriptor by dashica-gen, which reads it straight from the
+// Register(...) calls in this file.
+//
+//   - CategoryChart:     a data/display widget shown in the flat add-widget list.
+//   - CategoryParameter: provides a {name:String} query parameter for OTHER
+//     widgets (Text Input, Checkbox Group) — meaningless standing alone in
+//     Explore, so it is kept out of the add-widget list until the query section
+//     can reference parameters.
+//   - CategoryContainer: lays out child widgets (Grid, Collapsible Group) —
+//     also kept out of the flat list.
+type WidgetCategory string
+
+const (
+	CategoryChart     WidgetCategory = "chart"
+	CategoryParameter WidgetCategory = "parameter"
+	CategoryContainer WidgetCategory = "container"
 )
 
-// Register makes a widget type serializable under the given wire name. Called
-// from init() in this package; panics on a duplicate name or a nil factory
-// result (both are programmer errors caught at startup).
-func Register(typeName string, factory WidgetFactory) {
+var (
+	registryMu     sync.RWMutex
+	typeToFactory  = map[string]WidgetFactory{}
+	typeToCategory = map[string]WidgetCategory{}
+	goTypeToName   = map[reflect.Type]string{}
+)
+
+// Register makes a widget type serializable under the given wire name, tagged
+// with its editor category. Called from init() in this package; panics on a
+// duplicate name or a nil factory result (both are programmer errors caught at
+// startup).
+func Register(typeName string, category WidgetCategory, factory WidgetFactory) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 
@@ -57,6 +79,7 @@ func Register(typeName string, factory WidgetFactory) {
 	}
 
 	typeToFactory[typeName] = factory
+	typeToCategory[typeName] = category
 	goTypeToName[goType] = typeName
 }
 
@@ -214,17 +237,17 @@ func isJSONNull(b []byte) bool {
 // ---------------------------------------------------------------------------
 
 func init() {
-	Register("timeBar", func() WidgetDefinition { return NewTimeBar(nil) })
-	Register("timeLine", func() WidgetDefinition { return NewTimeLine(nil) })
-	Register("barVertical", func() WidgetDefinition { return NewBarVertical(nil) })
-	Register("barHorizontal", func() WidgetDefinition { return NewBarHorizontal(nil) })
-	Register("timeHeatmap", func() WidgetDefinition { return NewTimeHeatmap(nil) })
-	Register("timeHeatmapOrdinal", func() WidgetDefinition { return NewTimeHeatmapOrdinal(nil) })
-	Register("stats", func() WidgetDefinition { return NewStats(nil) })
-	Register("table", func() WidgetDefinition { return NewTable(nil) })
-	Register("markdown", func() WidgetDefinition { return NewMarkdown() })
-	Register("grid", func() WidgetDefinition { return NewGrid() })
-	Register("collapsibleGroup", func() WidgetDefinition { return NewCollapsibleGroup() })
-	Register("checkboxGroup", func() WidgetDefinition { return NewCheckboxGroup("", "", nil) })
-	Register("textInput", func() WidgetDefinition { return NewTextInput("", "") })
+	Register("timeBar", CategoryChart, func() WidgetDefinition { return NewTimeBar(nil) })
+	Register("timeLine", CategoryChart, func() WidgetDefinition { return NewTimeLine(nil) })
+	Register("barVertical", CategoryChart, func() WidgetDefinition { return NewBarVertical(nil) })
+	Register("barHorizontal", CategoryChart, func() WidgetDefinition { return NewBarHorizontal(nil) })
+	Register("timeHeatmap", CategoryChart, func() WidgetDefinition { return NewTimeHeatmap(nil) })
+	Register("timeHeatmapOrdinal", CategoryChart, func() WidgetDefinition { return NewTimeHeatmapOrdinal(nil) })
+	Register("stats", CategoryChart, func() WidgetDefinition { return NewStats(nil) })
+	Register("table", CategoryChart, func() WidgetDefinition { return NewTable(nil) })
+	Register("markdown", CategoryChart, func() WidgetDefinition { return NewMarkdown() })
+	Register("grid", CategoryContainer, func() WidgetDefinition { return NewGrid() })
+	Register("collapsibleGroup", CategoryContainer, func() WidgetDefinition { return NewCollapsibleGroup() })
+	Register("checkboxGroup", CategoryParameter, func() WidgetDefinition { return NewCheckboxGroup("", "", nil) })
+	Register("textInput", CategoryParameter, func() WidgetDefinition { return NewTextInput("", "") })
 }

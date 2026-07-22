@@ -35,6 +35,26 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 		t.Errorf("timeBar HasQuery = false, want true")
 	}
 
+	// Category is declared at Register time and carried through the generator.
+	// The editor lists only "chart" widgets; parameter/container widgets are
+	// hidden from the add list but stay served (serializable / round-trippable).
+	for wire, wantCat := range map[string]string{
+		"timeBar":          "chart",
+		"textInput":        "parameter",
+		"checkboxGroup":    "parameter",
+		"grid":             "container",
+		"collapsibleGroup": "container",
+	} {
+		w, ok := resp.Widgets[wire]
+		if !ok {
+			t.Errorf("%s missing from form model", wire)
+			continue
+		}
+		if w.Category != wantCat {
+			t.Errorf("%s category = %q, want %q", wire, w.Category, wantCat)
+		}
+	}
+
 	// x is a required, timestamped field picker; the query field must NOT appear
 	// as an editable field (it is the query section, flagged via HasQuery).
 	x := fieldByName(tb.Fields, "x")

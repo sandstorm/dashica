@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 	"reflect"
@@ -78,16 +79,18 @@ func dirOf(file string) string {
 	return file[:i]
 }
 
-// registration is one Register("wire", func() WidgetDefinition { return NewX(...) }) call.
+// registration is one Register("wire", Category, func() WidgetDefinition { return NewX(...) }) call.
 type registration struct {
 	wireName string
+	category string       // "chart" | "parameter" | "container"
 	typeName string       // "TimeBar"
 	named    *types.Named // the widget's named type
 }
 
-// findRegistrations scans for Register(<string>, <funclit>) calls in the widget
-// package's init() and resolves each factory's return type. This mirrors the
-// runtime registry exactly, so there is no second hand-maintained widget list.
+// findRegistrations scans for Register(<string>, <WidgetCategory>, <funclit>)
+// calls in the widget package's init(), resolving each factory's return type and
+// the category constant's string value. This mirrors the runtime registry
+// exactly, so there is no second hand-maintained widget list.
 func findRegistrations(pkg *packages.Package) ([]registration, error) {
 	var out []registration
 	for _, file := range pkg.Syntax {
@@ -97,7 +100,7 @@ func findRegistrations(pkg *packages.Package) ([]registration, error) {
 				return true
 			}
 			id, ok := call.Fun.(*ast.Ident)
-			if !ok || id.Name != "Register" || len(call.Args) != 2 {
+			if !ok || id.Name != "Register" || len(call.Args) != 3 {
 				return true
 			}
 			lit, ok := call.Args[0].(*ast.BasicLit)
@@ -105,11 +108,15 @@ func findRegistrations(pkg *packages.Package) ([]registration, error) {
 				return true
 			}
 			wire := strings.Trim(lit.Value, `"`)
-			named := factoryReturnType(pkg, call.Args[1])
+			category := constStringValue(pkg, call.Args[1])
+			if category == "" {
+				return true
+			}
+			named := factoryReturnType(pkg, call.Args[2])
 			if named == nil {
 				return true
 			}
-			out = append(out, registration{wireName: wire, typeName: named.Obj().Name(), named: named})
+			out = append(out, registration{wireName: wire, category: category, typeName: named.Obj().Name(), named: named})
 			return true
 		})
 	}
@@ -117,6 +124,17 @@ func findRegistrations(pkg *packages.Package) ([]registration, error) {
 		return nil, fmt.Errorf("no Register(...) calls found in %s", pkg.PkgPath)
 	}
 	return out, nil
+}
+
+// constStringValue resolves a typed-string-constant expression (e.g. the
+// CategoryChart const) to its underlying string value, or "" if it is not a
+// constant string.
+func constStringValue(pkg *packages.Package, expr ast.Expr) string {
+	tv, ok := pkg.TypesInfo.Types[expr]
+	if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+		return ""
+	}
+	return constant.StringVal(tv.Value)
 }
 
 // factoryReturnType resolves the widget *types.Named produced by a factory
@@ -267,6 +285,7 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 		WireName: r.wireName,
 		TypeName: r.typeName,
 		Title:    camelSplit(r.typeName),
+		Category: r.category,
 	}
 	methods := methodSet(r.named)
 

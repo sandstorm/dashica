@@ -2,11 +2,14 @@ package clickhouse
 
 import (
 	"context"
-	"github.com/sandstorm/dashica/lib/testutil/assertions"
-	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
+	"fmt"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/sandstorm/dashica/lib/testutil/assertions"
+	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -29,6 +32,14 @@ func TestClickhouseE2E(t *testing.T) {
 
 	t.Run("introspectSchema", func(t *testing.T) {
 		testIntrospectSchema(t, ctx, clickhouseManager)
+	})
+
+	t.Run("arrowJSONColumn", func(t *testing.T) {
+		testArrowJSONColumn(t, ctx, clickhouseManager)
+	})
+
+	t.Run("arrowWrapOrdering", func(t *testing.T) {
+		testArrowWrapOrdering(t, ctx, clickhouseManager)
 	})
 
 	// Check for goroutine leaks
@@ -63,6 +74,81 @@ func testQueryJSON(t *testing.T, ctx context.Context, clickhouseManager *Manager
 	firstResult, err := QueryJSONFirst[TestResult](ctx, dbClient, "SELECT 42 AS value", options)
 	require.NoError(t, err, "QueryJSONFirst should not return an error")
 	assertions.AssertEquals(t, "First result value should be 42", 42, firstResult.Value)
+}
+
+// findArrowUnsafeColumn returns the name of a full_logs column whose type
+// cannot be serialized to Arrow (JSON/Object/Dynamic/Variant), or "" if none.
+func findArrowUnsafeColumn(t *testing.T, ctx context.Context, c *Client) string {
+	t.Helper()
+	cols, err := c.describeQuery(ctx, "SELECT * FROM full_logs", DefaultQueryOptions())
+	require.NoError(t, err, "DESCRIBE full_logs")
+	for _, col := range cols {
+		if arrowUnsafeType(col.Type) {
+			return col.Name
+		}
+	}
+	return ""
+}
+
+// testArrowJSONColumn proves the transport-level fix: a SELECT * over a table
+// with a JSON column (full_logs.event_original) errors on a raw Arrow query but
+// succeeds through QueryToHandler, which wraps it to cast the column to String.
+func testArrowJSONColumn(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+	c, err := clickhouseManager.GetClient("alert_storage")
+	require.NoError(t, err)
+
+	unsafeCol := findArrowUnsafeColumn(t, ctx, c)
+	if unsafeCol == "" {
+		t.Skip("full_logs has no Arrow-incompatible column; nothing to exercise")
+	}
+
+	query := "SELECT * FROM full_logs LIMIT 5"
+
+	// Raw Arrow query must fail — this is the bug the fix addresses.
+	_, err = c.Query(ctx, query, DefaultQueryOptions())
+	require.Error(t, err, "raw Arrow SELECT * over a JSON column should error")
+
+	// Through QueryToHandler (with the arrow-compat wrap) it must succeed.
+	rec := httptest.NewRecorder()
+	err = c.QueryToHandler(ctx, query, DefaultQueryOptions(), rec)
+	require.NoError(t, err, "QueryToHandler should wrap the JSON column and succeed")
+	require.Equal(t, 200, rec.Code)
+	require.NotZero(t, rec.Body.Len(), "expected a non-empty Arrow stream")
+}
+
+// testArrowWrapOrdering guards the row-order risk of the outer pass-through
+// SELECT: an ORDER BY inside the wrapped subquery must survive the wrap.
+func testArrowWrapOrdering(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+	c, err := clickhouseManager.GetClient("alert_storage")
+	require.NoError(t, err)
+
+	unsafeCol := findArrowUnsafeColumn(t, ctx, c)
+	if unsafeCol == "" {
+		t.Skip("full_logs has no Arrow-incompatible column; nothing to exercise")
+	}
+
+	// Include the JSON column so ensureArrowCompatible actually wraps the query.
+	query := fmt.Sprintf(
+		"SELECT timestamp, `%s` FROM full_logs ORDER BY timestamp ASC LIMIT 20", unsafeCol)
+
+	wrapped, err := c.ensureArrowCompatible(ctx, query, DefaultQueryOptions())
+	require.NoError(t, err)
+	require.NotEqual(t, query, wrapped, "query with a JSON column should have been wrapped")
+
+	type row struct {
+		Timestamp string `json:"timestamp"`
+	}
+	res, err := QueryJSON[row](ctx, c, wrapped, DefaultQueryOptions())
+	require.NoError(t, err, "wrapped query should execute")
+
+	prev := ""
+	for i, r := range res.Data {
+		if i > 0 {
+			require.GreaterOrEqual(t, r.Timestamp, prev,
+				"wrapped query lost ORDER BY: row %d timestamp %q < %q", i, r.Timestamp, prev)
+		}
+		prev = r.Timestamp
+	}
 }
 
 func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
