@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -90,6 +92,22 @@ func New(projectFS fs.ReadFileFS) Dashica {
 			Err(err).
 			Msg("Failed to discover alert definitions")
 	}
+
+	// Top-level signal handler. The gronx tasker (started by RunAlertScheduler) installs its own
+	// signal.Notify for os.Interrupt and only stops itself, blocking on wg.Wait() for in-flight
+	// tasks; further Ctrl-C is swallowed and the HTTP server / main never exit. This handler
+	// guarantees Ctrl-C (and SIGTERM) always terminate the process. signal.Notify multiplexes to
+	// all registered channels, so the tasker still receives the signal too.
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+		s := <-sig
+		logger.Info().
+			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
+			Str("signal", s.String()).
+			Msg("shutdown signal received, exiting")
+		os.Exit(0)
+	}()
 
 	go func() {
 		if err := alertManager.RunAlertScheduler(); err != nil {
