@@ -2,7 +2,8 @@
 
 **Started:** 2026-07-21 · **Last restructured:** 2026-07-22
 **Status:** core shipped (serialization, runtime, editor UI); Step 3 (Arrow
-Go-side fix) + Step 5 widget-categories done 2026-07-22; next steps in §4.
+Go-side fix) + Step 5 widget-categories + Step 4 (Go code generation) + Step 6
+(open in Explore) done 2026-07-22; next steps in §4.
 
 ## 1. Goal & requirements
 
@@ -212,6 +213,12 @@ hash; JSON power-user tab.
   client-side stop-gap removed. Unit tests green; e2e needs dev ClickHouse.
 - **Widget categories** (Step 5, first bullet): `chart|parameter|container`
   registry hint → generated descriptor → add-widget list shows charts only.
+- **Go code generation** (Step 4): `dashica-gen` gocode table (JSON blob in the
+  widget package) + `lib/explore/gocode_emit.go` (model types + value emitters)
+  + `POST /api/gocode` + live Go-code drawer tab; generates the whole dashboard
+  as fluent-builder Go, idiomatic per-kind constructors, multi-arg constructors,
+  nested container children; fragment + file/raw + `go build` compile-check
+  tests green.
 
 Recurring gap: **frontend build + browser E2E have been deferred at the end of
 every slice** — no automated browser test exists yet.
@@ -290,16 +297,33 @@ The invariant everything rests on: *round-trips faithfully or fails loudly.*
   drop unknown prop keys against descriptors on load (client tolerant,
   server strict).
 
-**Step 4 — Go code generation (the missing core requirement #1).**
-`lib/explore/gocode.go` + `POST /api/gocode` + live Go-code drawer tab.
-Emitter: `dashica-gen`'s gocode tables (field↔builder-method verified at
-generation time; `//dashica:gocode` overrides) + per-type value emitters
-(`sql.AutoBucket("ts")`, `sql.New(sql.From(...))`, `color.New(...)`); stdlib
-`text/template` + `go/format` (jennifer evaluated and dropped — trivial fixed
-import set). Must handle **multi-arg constructors** (`NewCheckboxGroup(name,
-label, options)`) or those widgets emit non-compiling Go (known finding).
-Tests: golden files + **CI compile check** of generated code + marshal-back
-round trip.
+**Step 4 — Go code generation (the missing core requirement #1). DONE 2026-07-22.**
+`lib/explore/gocode_emit.go` + `POST /api/gocode` + live Go-code drawer tab
+(whole dashboard, not per-widget). Mechanism: `dashica-gen` emits the gocode
+table — constructor name, constructor-arg fields (in parameter order, resolved
+from the constructor's `return &T{...}` composite literal so a renamed param
+like `NewBarHorizontal(sqlq)`→`sql` still maps), and per-method signature shape
+(param count + variadic) — as an **opaque JSON blob** (`widgetGocodeJSON` +
+`WidgetGocodeJSON()`) in the widget package. Go-code generation is an Explore
+concern, so the MODEL types (`WidgetGocode`/`GocodeField`) and the emitter live
+in `lib/explore`, which unmarshals the blob at init (no gocode types in
+`lib/dashboard`). Field↔method mapping is verified at generation time (a genuinely
+method-less field like `BarVertical.colorScheme` is emitted with no method and
+fails loudly only if it ever carries a value). Method overrides via
+`dashica-gen:"method=..."` (grid→`Area`, collapsibleGroup→`Widget`,
+timeBar.stack→`StackOptions`, timeLine.zField→`Z`/fillStep→`WithFillStep`,
+barVertical.sortReverse→`SortByY`, checkboxGroup.defaults→`Default`). Per-type
+value emitters render idiomatic constructors from the wire kind (§2.1):
+`sql.AutoBucket("ts")`, `sql.Count().WithAlias(...)`, `sql.Enum(col)`,
+`sql.New(sql.From(...), sql.Where(...))`, `sql.FromFile/FromString` +`.With(...)`,
+`color.ColorLegend(...)`, `widget.StackOptions{Order: widget.OrderSum}`; **multi-arg
+constructors** handled (`NewCheckboxGroup(name, label, options)`). stdlib
+`go/format` lays out the file; imports tracked so no unused entry (jennifer
+dropped). Container children recurse (`.Area(name, child)` / `.Widget(child)`).
+Frontend: `buildGocodeTab` fetches `/api/gocode`, debounced live-refresh effect +
+copy button. Tests (`gocode_test.go`): fragment assertions (idiomatic, not baked)
++ file/raw queries + **CI compile check** (`go build` of the generated source in a
+throwaway in-module package). E2E in the browser still pending (recurring gap).
 
 **Step 5 — Editor polish batch (cheap, visible).**
 - UX polish: persistent labels on every input; labeled title/layout in the
@@ -346,35 +370,55 @@ per-request copy of the menu. Add a bluemonday pass for markdown link URLs
 store later behind the same interface.
 
 **Step 8 — Nested widgets + WYSIWYG grid designer.**
-Children editing in tree + inspector: **DONE 2026-07-22** (first half; WYSIWYG
-grid designer NOT started). Container widgets (grid, collapsibleGroup) are now
-addable at top level; their children are edited from the inspector's
-`childrenList` (Widgets slice, reorderable) / `childrenMap` (WidgetsMap keyed by
-area name) controls and shown nested in the tree. Mechanism: the generator now
-emits distinct `childrenList` / `childrenMap` editor kinds (was a single
-placeholder `children`) so the frontend knows list-vs-map without guessing;
-selection became a **path** (`w3/areas/main`, `w3/widgets/0`, nestable), resolved
-by `resolveNode()` to `{node, topId, parent}`; add/remove/move/type-switch live
-in the editor (single source), exposed to the pure-view control via `ChildrenApi`.
-Preview cards stay per top-level widget — a child's selection highlights/scrolls
-its top-level ancestor. **Tree drag-and-drop:** any row can be dragged onto a
-container row to move it inside (top-level widget → grid, or between containers;
-cycle-guarded); top-level rows still drag-reorder among themselves
-(`wireRowDnd`/`moveNodeIntoContainer`/`extractNode`). **Grid area naming is
-automatic** — children are assigned positional area names (1st `a`, 2nd `b`, …
-via `nextAreaName`), so the grid needs no area/template configuration: Go-side,
-`Grid.resolvedTemplate()` stacks the sorted areas one-per-row when no explicit
-`Template()` is set (explicit 2D templates on compiled dashboards still win). All
-reactive guardrails preserved (tree/inspector effects
-read only structural bits — types + container membership — so scalar edits don't
-rebuild them; verified by construction). **Known limitation (deferred, overlaps
-the visual/preview slice):** the in-editor live preview renders a container's
-layout, but nested child chart *data* does not load — `preview/query` dispatches
-by endpoint suffix (`findBySuffix("/query")`), which is ambiguous for a
-multi-child container, and the client wires only the first `[x-data="chart"]`.
-Correct nested-child data needs per-child preview dispatch (a preview-plumbing
-extension). Serialization / "Open in Explore" round-trip / (future) Go export of
-nested widgets are unaffected. Next: the visual grid editor:
+Nested-widget editing: **DONE 2026-07-22** (WYSIWYG grid designer NOT started).
+Container widgets (grid, collapsibleGroup) are addable at top level and their
+children are managed **entirely in the tree** (the inspector children control was
+removed as redundant clutter — `formRenderer` filters `childrenList`/
+`childrenMap` fields out of the form).
+
+Mechanism: the generator emits distinct `childrenList` (Widgets slice) /
+`childrenMap` (WidgetsMap keyed by area name) editor kinds (was a single
+placeholder `children`) so the frontend knows list-vs-map without guessing.
+Selection is a **path** (`w3/areas/a`, `w3/widgets/0`, nestable), resolved by
+`resolveNode()` → `{node, topId, parent}`. The tree is a recursive model
+(`buildTreeModel`/`treeNode`), rendered as one flat `<li>` list indented by
+depth. Preview cards stay per top-level widget — a child's selection
+highlights/scrolls its top-level ancestor. Reactive guardrails preserved (the
+tree effect repaints from ordinary reactivity — an earlier explicit `structRev`
+counter was tried and removed as redundant/churny).
+
+Tree affordances per row: click = select/edit (inspector), `+` on a container =
+add a child of the type chosen in the tree's add-picker (grid areas auto-named,
+below), `↑`/`↓` = reorder a list child, `×` = remove, `⧉` = duplicate (top level).
+
+**Tree drag-and-drop** (`wireTreeDnd`) — **delegated on the persistent tree
+`<ul>`** (keyed by each row's `data-path`), NOT per-row listeners: the `<li>`s
+are replaced on every repaint, so per-row listeners were lost mid-drag (the bug
+that made nested DnD silently no-op). Drop actions, by where the pointer lands:
+onto a **container row** → nest inside (append); onto a **list/grid child** →
+insert before/after it (`is-drop-before`/`after` chosen by the pointer's row
+half, so the *end* of a collection is reachable by dropping on the lower half of
+the last child); onto a **top-level row** → reorder (id preserved) or **promote**
+a nested widget to that slot; onto **empty list space** → promote/append to top
+level. Cycle-guarded (no dropping a container into its own descendant). The
+`dragover` indicator (line for before/after, box for into) is computed from the
+*same* `dropAfter()`/`isContainerPath()` the drop uses, so preview == action.
+
+**Grid area naming is automatic** — children get positional area names (1st `a`,
+2nd `b`, … via `nextAreaName`/`areaNameForIndex`); a mid-position insert
+renumbers `a, b, c…` in the new order. So the grid needs no area/template config:
+Go-side, `Grid.resolvedTemplate()` stacks the sorted areas one-per-row when no
+explicit `Template()` is set (explicit 2D templates on compiled dashboards still
+win). Grid marks `areas` with `dashica-gen:"method=Area"` for the (future) Go
+codegen.
+
+**Known limitation (deferred, overlaps the visual/preview slice):** the in-editor
+live preview renders a container's layout, but nested child chart *data* does not
+load — `preview/query` dispatches by endpoint suffix (`findBySuffix("/query")`),
+ambiguous for a multi-child container, and the client wires only the first
+`[x-data="chart"]`. Correct nested-child data needs per-child preview dispatch (a
+preview-plumbing extension). Serialization / "Open in Explore" round-trip /
+(future) Go export of nested widgets are unaffected. Next: the visual grid editor:
 `grid-template-areas` = named rectangles on a cell matrix
 (`{cols, rows, areas:[{name,r0,c0,r1,c1}]}`); overlay on the *real* preview
 grid (CSS aligns it); rubber-band create / edge-drag resize / body-drag move,

@@ -72,11 +72,12 @@ type enumValue struct {
 }
 
 type widgetInfo struct {
-	WireName string // "timeBar"
-	TypeName string // "TimeBar"
-	Title    string // "Time Bar" (camel-split, editor display label)
-	Category string // "chart" | "parameter" | "container"
-	Fields   []fieldInfo
+	WireName    string // "timeBar"
+	TypeName    string // "TimeBar"
+	Title       string // "Time Bar" (camel-split, editor display label)
+	Category    string // "chart" | "parameter" | "container"
+	Constructor string // factory function name, e.g. "NewTimeBar" (gocode)
+	Fields      []fieldInfo
 }
 
 // fieldCategory names how a field is (de)serialized and rendered. It is the
@@ -126,5 +127,15 @@ type fieldInfo struct {
 	// gocode:
 	GoMethod     string // builder method name (identity title-case, or override)
 	MethodExists bool   // whether *TypeName actually has GoMethod
-	IsCtorArg    bool   // query field -> constructor argument, not a chained call
+	IsCtorArg    bool   // field is passed to the constructor, not a chained call
+	// CtorOrder is the position of this field in the constructor's parameter
+	// list (only meaningful when IsCtorArg). Fields are emitted as constructor
+	// arguments in ascending CtorOrder.
+	CtorOrder int
+	// MethodParams / MethodVariadic describe the builder method's signature, so
+	// the value emitter can tell a no-arg toggle (Open()) from a one-arg setter
+	// and a variadic method (Template(...string)) from a slice one
+	// (Default([]string)). Only set when MethodExists.
+	MethodParams   int
+	MethodVariadic bool
 }

@@ -38,6 +38,16 @@ type DashboardContext struct {
 	// keeps every existing compiled dashboard fully trusted.
 	UntrustedContent bool
 
+	// PreviewBaseUrl, when non-empty, marks this render as an Explore preview
+	// (POST /api/preview/render). Leaf chart widgets then embed their OWN
+	// serialized envelope onto the chart element (data-preview-base /
+	// data-preview-body) so each chart — nested at any depth — knows to fetch
+	// its data by POSTing that envelope to <PreviewBaseUrl>/query instead of
+	// GETting a per-widget handler URL that Explore never mounts. The zero value
+	// (empty) is a compiled dashboard: charts fetch via their widget handler URL
+	// and the preview attributes are absent (byte-identical output).
+	PreviewBaseUrl string
+
 	nextWidgetId int
 }
 

@@ -284,6 +284,14 @@
 .explore-json__status.is-ok { color: var(--color-success, #16a34a); }
 .explore-json__status.is-err { color: var(--color-error, #dc2626); }
 
+.explore-gocode__bar { display: flex; justify-content: flex-end; margin-bottom: 0.25rem; }
+.explore-gocode {
+    width: 100%; min-height: 18vh; margin: 0; padding: 0.5rem 0.75rem;
+    overflow: auto; white-space: pre; tab-size: 4;
+    font-size: 0.78rem; line-height: 1.5;
+}
+.explore-gocode.is-err { color: var(--color-error, #dc2626); }
+
 /* ---------------------------------------------------------------------------
    Dockview theme — map dockview's --dv-* custom properties onto daisyUI tokens
    (§4.7). One place, shared by Explore now and dashboard chrome later. No fork

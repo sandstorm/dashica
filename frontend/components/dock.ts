@@ -70,6 +70,15 @@ function maximizeAction(group: DockviewGroupPanel): IHeaderActionsRenderer {
     let api: DockviewApi | null = null;
     const disposables: { dispose(): void }[] = [];
 
+    // dockview's maximize only hides sibling groups in the MAIN grid — it never
+    // touches shell EDGE groups (the menu / searchbar / tree gutters). Without
+    // this, maximizing the sole centre grid group is a visible no-op (nothing to
+    // hide). So on maximize we also collapse every visible edge group and record
+    // which ones, then restore exactly those on exit. The maximized group is the
+    // only header left on screen, so the same action instance handles restore.
+    const EDGES = ['top', 'right', 'bottom', 'left'] as const;
+    let hiddenEdges: (typeof EDGES)[number][] = [];
+
     const sync = () => {
         const max = group.api.isMaximized();
         btn.textContent = max ? '❏' : '⛶';
@@ -77,8 +86,15 @@ function maximizeAction(group: DockviewGroupPanel): IHeaderActionsRenderer {
     };
     const toggle = () => {
         if (!api) return;
-        if (group.api.isMaximized()) api.exitMaximizedGroup();
-        else group.api.maximize();
+        if (group.api.isMaximized()) {
+            api.exitMaximizedGroup();
+            for (const e of hiddenEdges) api.setEdgeGroupVisible(e, true);
+            hiddenEdges = [];
+        } else {
+            hiddenEdges = EDGES.filter((e) => api!.isEdgeGroupVisible(e));
+            group.api.maximize();
+            for (const e of hiddenEdges) api.setEdgeGroupVisible(e, false);
+        }
     };
 
     return {
@@ -132,7 +148,7 @@ function dashicaTab(): ITabRenderer {
 
 // Bump to invalidate saved layouts when the panel set / default arrangement
 // changes shape (a stale saved layout would otherwise mask the new default).
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 // initDock creates a dockview in `container` and builds the default layout.
 //
@@ -167,27 +183,34 @@ export function initDock(
 }
 
 // wireLazyDebugDrawer connects the chart wrench event (dispatched on `window` by
-// chart.ts, §4.5) to a lazy debug panel added as a tab into `referenceGroup` —
-// the LEFT gutter edge group (the dashboard menu / the Explore tree), so the
-// drawer OVERRIDES that gutter while open instead of taking new space. A second
-// wrench closes it (toggle); the gutter's other panel(s) stay. The panel is
-// `closable` (its tab shows ×) and adopts [data-dock-panel="debug"]; adoption
-// caches the node (adoptRenderer), so close+reopen re-adopts the same live
-// element — its `debugDrawer` Alpine component (listening on `window`) keeps
-// populating the query/EXPLAIN panes.
+// chart.ts, §4.5) to a lazy debug panel added BELOW `referencePanel` — the
+// dominant CENTRE grid panel (dashboard 'content' / Explore 'preview'). Splitting
+// the centre grid (rather than tabbing into a narrow gutter edge group) makes the
+// drawer full-width and tall enough to read the query + EXPLAIN, and — because it
+// is now a real grid group with a header — its maximize (⛶) button works, so a
+// second click can take it full-screen. `initialHeight` biases the split toward a
+// large drawer while keeping the content visible above it.
+//
+// A second wrench closes it (toggle); the centre panel reclaims the space
+// (dockview auto-removes the emptied group). The panel is `closable` (its tab
+// shows ×) and adopts [data-dock-panel="debug"]; adoption caches the node
+// (adoptRenderer), so close+reopen re-adopts the same live element — its
+// `debugDrawer` Alpine component (listening on `window`) keeps populating the
+// query/EXPLAIN panes.
 //
 // The "Pop out" button inside the drawer content moves the group into a separate
 // browser window (§4.5); wired via a delegated document click so it is robust to
 // adoption timing and survives close+reopen. Same JS realm, so the wrench event
 // still reaches the drawer; dockview mirrors its own stylesheets into the child.
-export function wireLazyDebugDrawer(api: DockviewApi, referenceGroup: string) {
+export function wireLazyDebugDrawer(api: DockviewApi, referencePanel: string) {
     window.addEventListener('dashica-debugDrawer-toggle', () => {
         const existing = api.getPanel('debug');
         if (existing) { existing.api.close(); return; } // toggle off
         api.addPanel({
             id: 'debug', component: 'adopt', title: 'Debug',
             params: { adopt: 'debug', closable: true }, renderer: 'always',
-            position: { referenceGroup },
+            position: { referencePanel, direction: 'below' },
+            initialHeight: 400,
         });
     });
 

@@ -2,7 +2,11 @@ package widget_component
 
 import "fmt"
 
-templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string, height int) {
+// previewBase/previewBody are set only in an Explore preview render: the chart
+// then fetches its data by POSTing previewBody (its own widget envelope) to
+// previewBase+"/query" instead of GETting widgetBaseUrl+"/query". Empty in a
+// compiled dashboard → both attributes are absent (byte-identical output).
+templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string, height int, previewBase string, previewBody string) {
     <div
         x-data="chart"
         x-intersect.once="handleEnteredViewport()"
@@ -12,6 +16,12 @@ templ Chart(widgetBaseUrl string, chartType string, chartPropsJSON string, heigh
         data-chart-type={chartType}
         data-chart-props={chartPropsJSON}
         data-widget-base-url={widgetBaseUrl}
+        if previewBase != "" {
+            data-preview-base={previewBase}
+        }
+        if previewBody != "" {
+            data-preview-body={previewBody}
+        }
     >
         <div
             x-show="_isLoading"

@@ -1,6 +1,8 @@
 package explore
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/a-h/templ"
@@ -37,7 +39,33 @@ func (e *exploreImpl) registerHandlers(ctx *rendering.DashboardContext, collecto
 	if err := api.Handle("values", apiHandler(e.handleValues).asHTTP()); err != nil {
 		return err
 	}
+	if err := api.Handle("gocode", apiHandler(e.handleGocode).asHTTP()); err != nil {
+		return err
+	}
 	return nil
+}
+
+// handleGocode turns the posted dashboard state (the editor JSON, identical to
+// the dashboard wire format) into fluent-builder Go source and returns it as
+// text/plain. This is docs requirement #1 (the Go-code drawer tab): a dashboard
+// prototyped in the browser copy/pastes verbatim into the repo. The generator
+// (gocode.go) reads the same wire format the round-trip serializers produce, so
+// its output round-trips.
+func (e *exploreImpl) handleGocode(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != http.MethodPost {
+		return fmt.Errorf("gocode: method %s not allowed, use POST", r.Method)
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("gocode: reading request body: %w", err)
+	}
+	src, err := GenerateDashboardCode(body)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, err = io.WriteString(w, src)
+	return err
 }
 
 // apiHandler is an http.Handler that may return an error; asHTTP converts a

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -143,7 +142,7 @@ func (b *BarHorizontal) BuildComponents(ctx *rendering.DashboardContext) (templ.
 		return nil, fmt.Errorf("barHorizontal: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "barHorizontal", string(propsJSON), b.height), nil
+	return chartComponent(ctx, b, b.id, "barHorizontal", string(propsJSON), b.height), nil
 }
 
 func (b *BarHorizontal) buildChartProps() map[string]interface{} {

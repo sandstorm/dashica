@@ -20,12 +20,19 @@ import (
 func emit(m *model, outFile string) error {
 	groups := collectGroups(m)
 
+	gocode, err := gocodeJSONLiteral(m)
+	if err != nil {
+		return fmt.Errorf("gocode table: %w", err)
+	}
+
 	data := struct {
 		Widgets     []widgetView
 		Groups      []groupView
 		Descriptors string
+		Gocode      string
 	}{
 		Descriptors: descriptorLiteral(m),
+		Gocode:      gocode,
 	}
 	for _, w := range m.widgets {
 		data.Widgets = append(data.Widgets, widgetView{
@@ -262,6 +269,17 @@ var widgetDescriptors = map[string]WidgetDescriptor{
 // WidgetDescriptors returns the editor descriptor for every registered widget
 // type, keyed by wire name.
 func WidgetDescriptors() map[string]WidgetDescriptor { return widgetDescriptors }
+
+// widgetGocodeJSON is the Go-code-generation table for every registered widget
+// type, keyed by wire name, as an opaque JSON blob. Go-code generation is an
+// Explore concern, so the widget package carries only the serialized data — the
+// model types and the emitter live in lib/explore, which unmarshals this at
+// init. See docs §4 Step 4.
+const widgetGocodeJSON = {{.Gocode}}
+
+// WidgetGocodeJSON returns the Go-code-generation table as a JSON blob, decoded
+// by lib/explore.
+func WidgetGocodeJSON() string { return widgetGocodeJSON }
 
 {{range .Groups}}
 // --- group {{.Type}} ---

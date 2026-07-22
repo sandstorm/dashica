@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
@@ -75,7 +74,7 @@ func (b *Table) BuildComponents(ctx *rendering.DashboardContext) (templ.Componen
 		return nil, fmt.Errorf("table: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "table", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, b.id, "table", string(chartPropsJSON), b.height), nil
 }
 
 func (b *Table) buildChartProps() map[string]interface{} {

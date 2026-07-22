@@ -84,6 +84,7 @@ type registration struct {
 	wireName string
 	category string       // "chart" | "parameter" | "container"
 	typeName string       // "TimeBar"
+	ctorName string       // factory function called in the funclit, e.g. "NewTimeBar"
 	named    *types.Named // the widget's named type
 }
 
@@ -112,11 +113,11 @@ func findRegistrations(pkg *packages.Package) ([]registration, error) {
 			if category == "" {
 				return true
 			}
-			named := factoryReturnType(pkg, call.Args[2])
+			named, ctorName := factoryReturnType(pkg, call.Args[2])
 			if named == nil {
 				return true
 			}
-			out = append(out, registration{wireName: wire, category: category, typeName: named.Obj().Name(), named: named})
+			out = append(out, registration{wireName: wire, category: category, typeName: named.Obj().Name(), ctorName: ctorName, named: named})
 			return true
 		})
 	}
@@ -138,13 +139,15 @@ func constStringValue(pkg *packages.Package, expr ast.Expr) string {
 }
 
 // factoryReturnType resolves the widget *types.Named produced by a factory
-// func literal `func() WidgetDefinition { return NewX(...) }`.
-func factoryReturnType(pkg *packages.Package, arg ast.Expr) *types.Named {
+// func literal `func() WidgetDefinition { return NewX(...) }`, plus the name of
+// the constructor function called (NewX) so the gocode emitter can reproduce it.
+func factoryReturnType(pkg *packages.Package, arg ast.Expr) (*types.Named, string) {
 	fl, ok := arg.(*ast.FuncLit)
 	if !ok {
-		return nil
+		return nil, ""
 	}
 	var named *types.Named
+	var ctorName string
 	ast.Inspect(fl.Body, func(n ast.Node) bool {
 		ret, ok := n.(*ast.ReturnStmt)
 		if !ok || len(ret.Results) != 1 {
@@ -152,9 +155,78 @@ func factoryReturnType(pkg *packages.Package, arg ast.Expr) *types.Named {
 		}
 		t := pkg.TypesInfo.TypeOf(ret.Results[0])
 		named = derefNamed(t)
+		if call, ok := ret.Results[0].(*ast.CallExpr); ok {
+			if id, ok := call.Fun.(*ast.Ident); ok {
+				ctorName = id.Name
+			}
+		}
 		return false
 	})
-	return named
+	return named, ctorName
+}
+
+// constructorArgs resolves the widget constructor `ctorName` and returns, in
+// parameter order, the struct field each parameter is assigned to in the
+// constructor's `return &T{...}` composite literal. Matching by the composite
+// literal (not by parameter name) is robust to renamed parameters — e.g.
+// NewBarHorizontal(sqlq sql.SqlQueryable) assigns sqlq to the `sql` field. A
+// parameter not assigned to any field (a default computed inline) yields "" and
+// is skipped as a positional arg the emitter cannot reproduce, which is a hard
+// error surfaced at classification time.
+func constructorArgs(pkg *packages.Package, ctorName string) []string {
+	if ctorName == "" {
+		return nil
+	}
+	fn := findFuncDecl(pkg, ctorName)
+	if fn == nil || fn.Type.Params == nil {
+		return nil
+	}
+
+	// Map each parameter identifier to the struct field it is assigned to in the
+	// returned composite literal.
+	paramToField := map[string]string{}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		cl, ok := n.(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		for _, elt := range cl.Elts {
+			kv, ok := elt.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := kv.Key.(*ast.Ident)
+			if !ok {
+				continue
+			}
+			if val, ok := kv.Value.(*ast.Ident); ok {
+				paramToField[val.Name] = key.Name
+			}
+		}
+		return true
+	})
+
+	var fields []string
+	for _, p := range fn.Type.Params.List {
+		for _, name := range p.Names {
+			fields = append(fields, paramToField[name.Name]) // "" if not assigned to a field
+		}
+	}
+	return fields
+}
+
+// findFuncDecl returns the top-level function declaration named `name` in the
+// package (no receiver), or nil.
+func findFuncDecl(pkg *packages.Package, name string) *ast.FuncDecl {
+	for _, file := range pkg.Syntax {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if ok && fn.Recv == nil && fn.Name.Name == name {
+				return fn
+			}
+		}
+	}
+	return nil
 }
 
 // derefNamed unwraps *T -> T and returns the underlying *types.Named, or nil.
@@ -282,17 +354,28 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 		return nil, fmt.Errorf("underlying type is not a struct")
 	}
 	wi := &widgetInfo{
-		WireName: r.wireName,
-		TypeName: r.typeName,
-		Title:    camelSplit(r.typeName),
-		Category: r.category,
+		WireName:    r.wireName,
+		TypeName:    r.typeName,
+		Title:       camelSplit(r.typeName),
+		Category:    r.category,
+		Constructor: r.ctorName,
 	}
 	methods := methodSet(r.named)
+
+	// Constructor argument fields, in parameter order → field-name → position.
+	ctorArgFields := constructorArgs(pkg, r.ctorName)
+	ctorOrder := map[string]int{}
+	for i, field := range ctorArgFields {
+		if field == "" {
+			return nil, fmt.Errorf("constructor %s parameter %d is not assigned to a struct field, so gocode cannot reproduce the call; give the parameter the field's name or add a builder method", r.ctorName, i)
+		}
+		ctorOrder[field] = i
+	}
 
 	for i := 0; i < st.NumFields(); i++ {
 		f := st.Field(i)
 		tag := st.Tag(i)
-		fi, skip, err := classifyField(pkg, r.typeName, f, tag, docs, enumTypes, enums, methods)
+		fi, skip, err := classifyField(pkg, r.typeName, f, tag, docs, enumTypes, enums, methods, ctorOrder)
 		if err != nil {
 			return nil, fmt.Errorf("field %q: %w", f.Name(), err)
 		}
@@ -305,7 +388,7 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 }
 
 // classifyField classifies one struct field. Returns (info, skip, error).
-func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag string, docs map[string]string, enumTypes map[string]bool, enums map[string][]enumValue, methods map[string]bool) (*fieldInfo, bool, error) {
+func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag string, docs map[string]string, enumTypes map[string]bool, enums map[string][]enumValue, methods map[string]*types.Signature, ctorOrder map[string]int) (*fieldInfo, bool, error) {
 	name := f.Name()
 
 	// The internal render-time id is never serialized/edited/emitted.
@@ -354,15 +437,26 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 	}
 	fi.Role = role
 
-	// gocode mapping (consumed in Phase 3): identity title-case unless overridden.
-	fi.IsCtorArg = cat == catQueryable
-	if !fi.IsCtorArg {
+	// gocode mapping (docs §4 Step 4). A field is a constructor argument when the
+	// constructor assigns it (the SqlQueryable of a chart; name/label/options of a
+	// parameter widget); otherwise it is a chained builder call whose method name
+	// is the identity title-case of the field, unless overridden by
+	// `dashica-gen:"method=..."` (grid areas → Area, collapsibleGroup widgets →
+	// Widget).
+	if order, ok := ctorOrder[name]; ok {
+		fi.IsCtorArg = true
+		fi.CtorOrder = order
+	} else {
 		method := upperFirst(name)
 		if ov := dashicaTag["method"]; ov != "" {
 			method = ov
 		}
 		fi.GoMethod = method
-		fi.MethodExists = methods[method]
+		if sig, ok := methods[method]; ok {
+			fi.MethodExists = true
+			fi.MethodParams = sig.Params().Len()
+			fi.MethodVariadic = sig.Variadic()
+		}
 	}
 	return fi, false, nil
 }
@@ -487,13 +581,16 @@ func classifyGroup(pkg *packages.Package, typeName string, st *types.Struct, enu
 	return out, nil
 }
 
-func methodSet(named *types.Named) map[string]bool {
-	out := map[string]bool{}
+func methodSet(named *types.Named) map[string]*types.Signature {
+	out := map[string]*types.Signature{}
 	// Methods on the pointer receiver (builder methods are pointer-receiver).
 	ptr := types.NewPointer(named)
 	ms := types.NewMethodSet(ptr)
 	for i := 0; i < ms.Len(); i++ {
-		out[ms.At(i).Obj().Name()] = true
+		obj := ms.At(i).Obj()
+		if sig, ok := obj.Type().(*types.Signature); ok {
+			out[obj.Name()] = sig
+		}
 	}
 	return out
 }

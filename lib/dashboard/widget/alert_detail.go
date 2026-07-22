@@ -9,7 +9,6 @@ import (
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -55,7 +54,7 @@ func (a *AlertDetail) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		return nil, fmt.Errorf("alertDetail: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+a.id, "timeBar", string(chartPropsJSON), 200), nil
+	return chartComponent(ctx, a, a.id, "timeBar", string(chartPropsJSON), 200), nil
 }
 
 func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {

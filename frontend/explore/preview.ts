@@ -23,11 +23,13 @@ function destroyTree(el: HTMLElement) {
 
 // mountPreview renders a widget preview into `container`. It asks the server to
 // render the widget's OWN component (POST /api/preview/render) and injects that
-// markup verbatim — the exact Chart element a compiled dashboard emits. For a
-// chart widget it then points that element at the preview endpoint (two data
-// attributes) and lets the real `chart` Alpine component take over: the chart
-// reads its own data-chart-props, fetches data by POSTing the envelope, reacts
-// to the time range, and drives the debug drawer — all reused, nothing parsed.
+// markup verbatim — the exact Chart element a compiled dashboard emits, except
+// each chart element is stamped server-side with data-preview-base /
+// data-preview-body (its own widget envelope). The real `chart` Alpine component
+// then takes over: it reads its own data-chart-props, fetches data by POSTing
+// that envelope to preview/query, reacts to the time range, and drives the debug
+// drawer — all reused, nothing parsed. Because the stamping is per-element, a
+// container's nested charts each fetch their own data (not just the first).
 // Non-chart widgets (markdown, …) render as their static server markup.
 export function mountPreview(container: HTMLElement, baseUrl: string): PreviewController {
     let abort: AbortController | null = null;
@@ -59,12 +61,10 @@ export function mountPreview(container: HTMLElement, baseUrl: string): PreviewCo
                     // Tear down the previous render's Alpine components first.
                     destroyTree(container);
                     // Server-rendered widget markup (templ-escaped), not free text.
+                    // Every chart element (including those nested in a container)
+                    // already carries its own data-preview-base / data-preview-body,
+                    // stamped by preview/render — so no client retrofit is needed.
                     container.innerHTML = html;
-                    const chartEl = container.querySelector<HTMLElement>('[x-data="chart"]');
-                    if (chartEl) {
-                        chartEl.dataset.previewBase = `${baseUrl}/api/preview`;
-                        chartEl.dataset.previewBody = JSON.stringify(envelope);
-                    }
                     // Activate the injected component(s) — the chart (or any
                     // static widget's Alpine bits).
                     Alpine.initTree(container);

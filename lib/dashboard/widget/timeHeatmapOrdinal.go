@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -149,7 +148,7 @@ func (h *TimeHeatmapOrdinal) BuildComponents(ctx *rendering.DashboardContext) (t
 	if h.height != nil {
 		heightVal = *h.height
 	}
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+h.id, "timeHeatmapOrdinal", string(chartPropsJSON), heightVal), nil
+	return chartComponent(ctx, h, h.id, "timeHeatmapOrdinal", string(chartPropsJSON), heightVal), nil
 }
 
 func (h *TimeHeatmapOrdinal) buildChartProps() map[string]interface{} {

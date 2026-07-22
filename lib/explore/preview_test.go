@@ -49,7 +49,7 @@ func (n *nonInteractiveWidget) BuildComponents(*rendering.DashboardContext) (tem
 type chartEchoWidget struct{}
 
 func (c *chartEchoWidget) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return widget_component.Chart("/base", "timeBar", `{"x":"time","y":"count"}`, 150), nil
+	return widget_component.Chart("/base", "timeBar", `{"x":"time","y":"count"}`, 150, "", ""), nil
 }
 
 func (c *chartEchoWidget) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {

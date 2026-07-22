@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -50,7 +49,7 @@ type TimeBar struct {
 	tipChannels map[string]string
 	// stack configures the Observable Plot stack transform (order, offset,
 	// reverse) applied to the fill series.
-	stack StackOptions
+	stack StackOptions `dashica-gen:"method=StackOptions"`
 }
 
 // StackOptions groups the Observable Plot stack transform options for the fill
@@ -232,7 +231,7 @@ func (b *TimeBar) BuildComponents(ctx *rendering.DashboardContext) (templ.Compon
 		return nil, fmt.Errorf("timeBar: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "timeBar", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, b.id, "timeBar", string(chartPropsJSON), b.height), nil
 }
 
 func (b *TimeBar) buildChartProps() map[string]interface{} {

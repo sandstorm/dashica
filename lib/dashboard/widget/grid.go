@@ -15,7 +15,7 @@ type Grid struct {
 	// string is one row of space-separated area names.
 	template []string
 	// areas maps area name to the widget rendered in that area, set via Area().
-	areas WidgetsMap
+	areas WidgetsMap `dashica-gen:"method=Area"`
 	// gap is the spacing between grid items (Tailwind spacing scale). Zero
 	// value from NewGrid(): "4px".
 	gap string

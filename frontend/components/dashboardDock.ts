@@ -73,8 +73,9 @@ function dashboardLayout(api: DockviewApi) {
     api.addPanel({ ...adopt('menu'), title: 'Menu', position: { referenceGroup: 'menu-edge' } });
 
     // Debug drawer starts absent — added lazily on the first wrench click as a
-    // tab in the LEFT menu gutter, overriding the menu while open.
-    wireLazyDebugDrawer(api, 'menu-edge');
+    // big, maximizable split BELOW the centre content panel (full-width, so the
+    // query/EXPLAIN are readable).
+    wireLazyDebugDrawer(api, 'content');
 }
 
 // The assembled dashboard dock, built by initDashboardDock() BEFORE

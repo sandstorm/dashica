@@ -140,6 +140,11 @@ func (e *exploreImpl) handlePreviewRender(w http.ResponseWriter, r *http.Request
 		CurrentHandlerUrl: e.baseURL + "/api/preview",
 		Deps:              e.deps,
 		UntrustedContent:  true,
+		// Preview render: every leaf chart stamps its own envelope + this base
+		// so it queries via POST <base>/query. Fixes nested charts (each child
+		// knows its own identity instead of the client retrofitting only the
+		// first element with the top-level container envelope).
+		PreviewBaseUrl: e.baseURL + "/api/preview",
 	}
 	comp, err := wd.BuildComponents(childCtx)
 	if err != nil {

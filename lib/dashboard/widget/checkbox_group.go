@@ -24,7 +24,7 @@ type CheckboxGroup struct {
 	options []string
 	// defaults are the initially-selected options, applied only when the
 	// param is empty (first page load).
-	defaults []string
+	defaults []string `dashica-gen:"method=Default"`
 }
 
 func NewCheckboxGroup(name, label string, options []string) *CheckboxGroup {

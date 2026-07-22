@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -53,7 +52,7 @@ type BarVertical struct {
 	color *color.ColorScale
 	// sortReverse sorts the x domain by y value when set; true for descending
 	// order, false for ascending. Zero value (nil): input order, unsorted.
-	sortReverse *bool
+	sortReverse *bool `dashica-gen:"method=SortByY"`
 	// tipChannels adds extra labeled channels to the hover tooltip.
 	tipChannels map[string]string
 }
@@ -184,7 +183,7 @@ func (b *BarVertical) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		return nil, fmt.Errorf("barVertical: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "barVertical", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, b.id, "barVertical", string(chartPropsJSON), b.height), nil
 }
 
 func (b *BarVertical) buildChartProps() map[string]interface{} {

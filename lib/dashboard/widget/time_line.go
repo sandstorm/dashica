@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -30,7 +29,7 @@ type TimeLine struct {
 	// together with strokeField to draw one line per z value (e.g. per session)
 	// all colored by the stroke value (e.g. per user), so overlapping series
 	// stay visually distinct but share a color.
-	zField *sql.SqlField `dashica-gen:"role=dimension"`
+	zField *sql.SqlField `dashica-gen:"role=dimension,method=Z"`
 	// fx facets the chart horizontally, bound to the fx scale.
 	fx *sql.SqlField `dashica-gen:"role=dimension"`
 	// fy facets the chart vertically, bound to the fy scale.
@@ -61,7 +60,7 @@ type TimeLine struct {
 	// them. It is a raw interval expression, e.g. "toIntervalHour(1)". Any
 	// strokeField is used as the fill partition key (filled independently per
 	// series); filled numeric y values default to 0. Zero value: no gap filling.
-	fillStep string
+	fillStep string `dashica-gen:"method=WithFillStep"`
 }
 
 func NewTimeLine(sql sql.SqlQueryable) *TimeLine {
@@ -209,7 +208,7 @@ func (b *TimeLine) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 		return nil, fmt.Errorf("timeLine: failed to marshal chart props: %w", err)
 	}
 
-	return widget_component.Chart(ctx.CurrentHandlerUrl+"/api/"+b.id, "timeLine", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, b.id, "timeLine", string(chartPropsJSON), b.height), nil
 }
 
 func (b *TimeLine) buildChartProps() map[string]interface{} {
