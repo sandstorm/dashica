@@ -4,7 +4,15 @@
 // as <div data-dock-panel="name">…</div> inside an inert <template>; the `adopt`
 // renderer MOVES that server-rendered element into the panel — so panel content
 // stays reviewable Go, styled by the existing CSS pipeline.
-import { createDockview, type DockviewApi, type IContentRenderer, type ITabRenderer, type DockviewTheme } from 'dockview';
+import {
+    createDockview,
+    type DockviewApi,
+    type DockviewGroupPanel,
+    type IContentRenderer,
+    type ITabRenderer,
+    type IHeaderActionsRenderer,
+    type DockviewTheme,
+} from 'dockview';
 import 'dockview/dist/styles/dockview.css';
 
 // A theme is just a className carrying the --dv-* variables (mapped onto daisyUI
@@ -19,6 +27,12 @@ const dashicaTheme: DockviewTheme = {
             : 'light',
 };
 
+// Once a [data-dock-panel] element is adopted it is MOVED out of the staging
+// block, so it is no longer findable via querySelector. A panel that is closed
+// and later re-added (the lazy debug drawer — docs §4.5) must re-adopt the SAME
+// node, so keep a reference the first time we find it and reuse it thereafter.
+const adoptedElements = new Map<string, Element>();
+
 // The single panel renderer: adopt a server-rendered element by name. Uses
 // renderer:'always' at the call site so the moved DOM (and its live Alpine
 // components) stays mounted even while the panel is hidden — an inactive tab
@@ -30,9 +44,61 @@ function adoptRenderer(): IContentRenderer {
         element,
         init(params) {
             const name = (params.params as { adopt?: string } | undefined)?.adopt;
-            const src = name ? document.querySelector(`[data-dock-panel="${name}"]`) : null;
+            if (!name) throw new Error('dock: adopt panel missing an adopt name');
+            const src = adoptedElements.get(name)
+                ?? document.querySelector(`[data-dock-panel="${name}"]`);
             if (!src) throw new Error(`dock: no [data-dock-panel="${name}"]`);
+            adoptedElements.set(name, src); // remember for re-adoption after close
             element.appendChild(src); // move, don't clone — assembled pre-Alpine.start()
+        },
+    };
+}
+
+// Right-header action shown on every group with a visible header: a
+// maximize/restore toggle (docs Slice D step 4). One implementation shared by
+// every dock (Explore gets it for free). Header-less locked groups (the
+// preview / search-bar strips) have no header, so the action never renders
+// there. Double-click on the tab bar toggles the same, matching IDE ergonomics.
+function maximizeAction(group: DockviewGroupPanel): IHeaderActionsRenderer {
+    const element = document.createElement('div');
+    element.className = 'dv-dashica-actions';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dv-dashica-action';
+    element.appendChild(btn);
+
+    let api: DockviewApi | null = null;
+    const disposables: { dispose(): void }[] = [];
+
+    const sync = () => {
+        const max = group.api.isMaximized();
+        btn.textContent = max ? '❏' : '⛶';
+        btn.title = max ? 'Restore' : 'Maximize';
+    };
+    const toggle = () => {
+        if (!api) return;
+        if (group.api.isMaximized()) api.exitMaximizedGroup();
+        else group.api.maximize();
+    };
+
+    return {
+        element,
+        init(params) {
+            api = params.containerApi;
+            btn.addEventListener('click', toggle);
+            // Double-click the tab strip toggles maximize too (dockview ships no
+            // default for this). The header container is our element's ancestor.
+            const header = element.closest('.dv-tabs-and-actions-container');
+            if (header) {
+                const onDbl = () => toggle();
+                header.addEventListener('dblclick', onDbl);
+                disposables.push({ dispose: () => header.removeEventListener('dblclick', onDbl) });
+            }
+            disposables.push(api.onDidMaximizedGroupChange(sync));
+            sync();
+        },
+        dispose() {
+            disposables.forEach((d) => d.dispose());
         },
     };
 }
@@ -85,6 +151,7 @@ export function initDock(
         defaultTabComponent: 'dashica-tab',
         createTabComponent: (options) =>
             options.name === 'dashica-tab' ? dashicaTab() : undefined,
+        createRightHeaderActionComponent: (group) => maximizeAction(group),
         createComponent: (options) => {
             switch (options.name) {
                 case 'adopt':
@@ -97,6 +164,39 @@ export function initDock(
 
     buildDefaultLayout(api);
     return api;
+}
+
+// wireLazyDebugDrawer connects the chart wrench event (dispatched on `window` by
+// chart.ts, §4.5) to a lazy debug panel added as a tab into `referenceGroup` —
+// the LEFT gutter edge group (the dashboard menu / the Explore tree), so the
+// drawer OVERRIDES that gutter while open instead of taking new space. A second
+// wrench closes it (toggle); the gutter's other panel(s) stay. The panel is
+// `closable` (its tab shows ×) and adopts [data-dock-panel="debug"]; adoption
+// caches the node (adoptRenderer), so close+reopen re-adopts the same live
+// element — its `debugDrawer` Alpine component (listening on `window`) keeps
+// populating the query/EXPLAIN panes.
+//
+// The "Pop out" button inside the drawer content moves the group into a separate
+// browser window (§4.5); wired via a delegated document click so it is robust to
+// adoption timing and survives close+reopen. Same JS realm, so the wrench event
+// still reaches the drawer; dockview mirrors its own stylesheets into the child.
+export function wireLazyDebugDrawer(api: DockviewApi, referenceGroup: string) {
+    window.addEventListener('dashica-debugDrawer-toggle', () => {
+        const existing = api.getPanel('debug');
+        if (existing) { existing.api.close(); return; } // toggle off
+        api.addPanel({
+            id: 'debug', component: 'adopt', title: 'Debug',
+            params: { adopt: 'debug', closable: true }, renderer: 'always',
+            position: { referenceGroup },
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement | null;
+        if (!target?.closest('[data-debug-popout]')) return;
+        const panel = api.getPanel('debug');
+        if (panel) api.addPopoutGroup(panel.group);
+    });
 }
 
 // resetDock rebuilds the default layout. With persistence off this just reloads

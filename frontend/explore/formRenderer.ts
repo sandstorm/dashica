@@ -45,9 +45,14 @@ export function renderForm(
     container.appendChild(optsWrap);
 
     function buildOptions() {
+        // Nested-widget fields (childrenList/childrenMap) are NOT shown here — the
+        // tree pane is the single place to add / select / reorder / remove / drag
+        // children. Listing them in the inspector too was redundant clutter.
+        const optionFields = descriptor.fields.filter(
+            (f) => f.editor !== 'childrenList' && f.editor !== 'childrenMap');
         optsWrap.replaceChildren(html`<div class="explore-options">
             <div class="explore-section-title">Options</div>
-            ${descriptor.fields.map((field) => makeControl(field, props, ctx))}
+            ${optionFields.map((field) => makeControl(field, props, ctx))}
         </div>`);
     }
 

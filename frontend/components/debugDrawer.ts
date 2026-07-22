@@ -26,7 +26,12 @@ Alpine.data('debugDrawer', () => ({
     },
 
     init() {
-        this.$el.addEventListener('dashica-debugDrawer-toggle', async (e) => {
+        // The wrench event is dispatched on `window` (chart.ts): the drawer lives
+        // in a dock panel (and may be popped out to another window), unreachable
+        // by DOM bubbling. dockview owns show/hide via a matching toggle
+        // (wireLazyDebugDrawer); `visible` flips in lockstep and gates the
+        // (re)population of the x-refs — both start closed, so they stay aligned.
+        window.addEventListener('dashica-debugDrawer-toggle', async (e) => {
             this.visible = !this.visible
 
             if (this.visible) {

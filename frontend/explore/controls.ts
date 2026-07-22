@@ -78,6 +78,10 @@ export interface ControlCtx {
     onTableChosen?: (table: string) => void;
 }
 
+// A single addable widget type offered in the tree's add picker (chart +
+// container widget types, with display titles).
+export interface AddableType { type: string; title: string; }
+
 // The class → badge glyph the editor shows wherever a column appears (pickers,
 // Data-tab list, WHERE completion). Tooltip carries the class word.
 export const CLASS_BADGE: Record<string, string> = {
@@ -94,11 +98,24 @@ export function classBadge(cls?: string): string {
 // small DOM helpers
 // ---------------------------------------------------------------------------
 
+// Splits a help string at the first sentence boundary ('. ' or end of
+// string). `first` is shown inline; `rest` (if non-empty) is only surfaced
+// via the `?` hint's title tooltip.
+function splitHelp(help: string): { first: string; rest: string } {
+    const idx = help.indexOf('. ');
+    if (idx === -1) {
+        return {first: help, rest: ''};
+    }
+    return {first: help.slice(0, idx + 1), rest: help.slice(idx + 2).trim()};
+}
+
 function labelled(field: FieldDescriptor, control: HTMLElement): HTMLElement {
+    const help = field.help ? splitHelp(field.help) : null;
     return html`<div class="explore-field">
         <label class="explore-field__label">${humanize(field.name)}${
-            field.required ? html`<span class="explore-field__req"> *</span>` : ''}</label>
-        ${field.help ? html`<div class="explore-field__help">${field.help}</div>` : ''}
+            field.required ? html`<span class="explore-field__req"> *</span>` : ''}${
+            help?.rest ? html`<span class="explore-field__hint" title="${field.help}">?</span>` : ''}</label>
+        ${help ? html`<div class="explore-field__help">${help.first}</div>` : ''}
         ${control}
     </div>` as HTMLElement;
 }
@@ -540,8 +557,9 @@ export function makeControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): 
         case 'keyValue': return labelled(field, keyValueControl(field, obj, ctx));
         case 'stringList': return labelled(field, stringListControl(field, obj, ctx));
         case 'group': return labelled(field, groupControl(field, obj, ctx));
-        case 'children':
-            return labelled(field, html`<div class="explore-field__help">Nested widgets (grid/group) are edited in a later phase.</div>` as HTMLElement);
+        // childrenList / childrenMap are intentionally NOT rendered here — nested
+        // widgets are managed entirely in the tree pane (add / select / reorder /
+        // remove / drag). formRenderer filters them out before dispatch.
         default:
             return labelled(field, html`<div class="explore-field__help">Unsupported editor: ${field.editor}</div>` as HTMLElement);
     }

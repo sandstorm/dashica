@@ -1,81 +1,88 @@
 package layout
 
-// DebugDrawer is a reusable component that provides debug functionality for all pages
-templ DebugDrawer() {
-	<div x-data="debugDrawer" class="drawer">
-		<input id="debug-drawer" type="checkbox" class="drawer-toggle" x-model="visible"/>
-		<div class="drawer-content">
-			{ children... }
+// DebugDrawerPanel is the dockview-panel form of the debug drawer — the ONLY
+// form now (defaultPage, docsPage and Explore all assemble a dock). Its
+// `debugDrawer` Alpine component listens on `window` for the wrench event and
+// populates the x-refs; dockview owns show/hide (the panel is added lazily on
+// the first wrench click, into the left gutter, and closed on the next). The
+// "Pop out" button (wired by wireLazyDebugDrawer in dock.ts) moves the panel
+// into a separate browser window.
+templ DebugDrawerPanel() {
+	<div x-data="debugDrawer" class="debug-panel bg-base-200 h-full overflow-y-auto p-4">
+		<div class="debug-panel__bar mb-4 flex items-center justify-between gap-4">
+			<h2 class="text-2xl font-bold">Debug Information</h2>
+			<button type="button" class="btn btn-sm btn-ghost" data-debug-popout title="Open the debug drawer in a separate window">Pop out ↗</button>
 		</div>
-		<div class="drawer-side z-50">
-			<label for="debug-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-			<div class="bg-base-200 min-h-full w-[90vw] max-w-7xl p-4 overflow-y-auto">
-				<h2 class="text-2xl font-bold mb-4">Debug Information</h2>
-				<div class="space-y-6">
-					<!-- Query Section -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox" checked/>
-						<div class="collapse-title text-xl font-medium">SQL Query</div>
-						<div class="collapse-content">
-							<pre class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="queryText"></pre>
-						</div>
-					</div>
-					<!-- EXPLAIN PLAN Section -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox" checked/>
-						<div class="collapse-title text-xl font-medium">EXPLAIN PLAN (with indexes & actions)</div>
-						<div class="collapse-content">
-							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainPlanText"></pre>
-						</div>
-					</div>
-					<!-- EXPLAIN PIPELINE Section -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox"/>
-						<div class="collapse-title text-xl font-medium">EXPLAIN PIPELINE (execution pipeline)</div>
-						<div class="collapse-content space-y-4">
-							<div>
-								<h3 class="font-semibold mb-2">Visual Graph:</h3>
-								<div class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="explainPipelineContainer"></div>
-							</div>
-							<div>
-								<h3 class="font-semibold mb-2">Detailed Steps:</h3>
-								<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainPipelineDetailText"></pre>
-							</div>
-						</div>
-					</div>
-					<!-- EXPLAIN SYNTAX Section -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox"/>
-						<div class="collapse-title text-xl font-medium">EXPLAIN SYNTAX (optimized query)</div>
-						<div class="collapse-content">
-							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainSyntaxText"></pre>
-						</div>
-					</div>
-					<!-- Stats Section -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox"/>
-						<div class="collapse-title text-xl font-medium">Query Stats</div>
-						<div class="collapse-content">
-							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="statsText"></pre>
-						</div>
-					</div>
-					<!-- Results Table Section -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox" checked/>
-						<div class="collapse-title text-xl font-medium">Query Results</div>
-						<div class="collapse-content">
-							<div x-ref="resultsTableContainer" class="mt-2"></div>
-						</div>
-					</div>
-					<!-- Legacy Clickhouse Summary -->
-					<div class="collapse collapse-arrow bg-base-100">
-						<input type="checkbox"/>
-						<div class="collapse-title text-xl font-medium">Clickhouse Summary (Legacy)</div>
-						<div class="collapse-content">
-							<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="clickhouseSummary"></pre>
-						</div>
-					</div>
+		@debugDrawerContent()
+	</div>
+}
+
+// debugDrawerContent is the shared inner markup (query + EXPLAIN sections). It
+// carries the x-refs the `debugDrawer` component populates on the wrench event;
+// both wrappers above provide the enclosing x-data="debugDrawer" scope.
+templ debugDrawerContent() {
+	<div class="space-y-6">
+		<!-- Query Section -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox" checked/>
+			<div class="collapse-title text-xl font-medium">SQL Query</div>
+			<div class="collapse-content">
+				<pre class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="queryText"></pre>
+			</div>
+		</div>
+		<!-- EXPLAIN PLAN Section -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox" checked/>
+			<div class="collapse-title text-xl font-medium">EXPLAIN PLAN (with indexes & actions)</div>
+			<div class="collapse-content">
+				<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainPlanText"></pre>
+			</div>
+		</div>
+		<!-- EXPLAIN PIPELINE Section -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox"/>
+			<div class="collapse-title text-xl font-medium">EXPLAIN PIPELINE (execution pipeline)</div>
+			<div class="collapse-content space-y-4">
+				<div>
+					<h3 class="font-semibold mb-2">Visual Graph:</h3>
+					<div class="bg-base-300 p-4 rounded overflow-x-auto" x-ref="explainPipelineContainer"></div>
 				</div>
+				<div>
+					<h3 class="font-semibold mb-2">Detailed Steps:</h3>
+					<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainPipelineDetailText"></pre>
+				</div>
+			</div>
+		</div>
+		<!-- EXPLAIN SYNTAX Section -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox"/>
+			<div class="collapse-title text-xl font-medium">EXPLAIN SYNTAX (optimized query)</div>
+			<div class="collapse-content">
+				<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm font-mono" x-ref="explainSyntaxText"></pre>
+			</div>
+		</div>
+		<!-- Stats Section -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox"/>
+			<div class="collapse-title text-xl font-medium">Query Stats</div>
+			<div class="collapse-content">
+				<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="statsText"></pre>
+			</div>
+		</div>
+		<!-- Results Table Section -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox" checked/>
+			<div class="collapse-title text-xl font-medium">Query Results</div>
+			<div class="collapse-content">
+				<div x-ref="resultsTableContainer" class="mt-2"></div>
+			</div>
+		</div>
+		<!-- Legacy Clickhouse Summary -->
+		<div class="collapse collapse-arrow bg-base-100">
+			<input type="checkbox"/>
+			<div class="collapse-title text-xl font-medium">Clickhouse Summary (Legacy)</div>
+			<div class="collapse-content">
+				<pre class="bg-base-300 p-4 rounded overflow-x-auto text-sm" x-ref="clickhouseSummary"></pre>
 			</div>
 		</div>
 	</div>

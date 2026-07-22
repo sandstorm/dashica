@@ -4,27 +4,44 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-
+// MainApplication is the dashboard chrome, assembled by dockview (docs
+// 2026-07-22-dockview-rewrite.md Slice D). The CSS-grid layout is gone: every
+// pane is an inert [data-dock-panel] element inside a hidden staging block that
+// the dock's `adopt` renderer MOVES into a real dockview panel before
+// Alpine.start() (frontend/components/dashboardDock.ts). Dockview owns GEOMETRY
+// (menu edge group, content tab group, lazy debug drawer); templ still owns the
+// MARKUP and Alpine still owns BEHAVIOR — the panes are untouched.
+//
+// The single page-level filter scope (Slice A) lives on the shell wrapper so it
+// contains every panel (menu / search bar / content): the search bar's SQL
+// filter and the content charts resolve the SAME scope by containment, exactly
+// as the old single-<main> page did. (Slice E later moves the scope onto each
+// dashboard tab and keeps only global time controls in the shell.)
 templ MainApplication(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
-    <div class="application">
-        <aside class="application__sidebar">
-            @PageMenu(renderingContext)
-        </aside>
-        <main class="application__main" x-data="filterScope" data-filter-scope>
-            if renderingContext.ExploreBaseURL != nil && *renderingContext.ExploreBaseURL != "" {
-                <div class="application__explore-link">
-                    <a href={ templ.SafeURL(renderingContext.CurrentHandlerUrl + "/open-in-explore") }>Open in Explore ↗</a>
-                </div>
-            }
-            if searchBar.IsVisible {
-                @SearchBar(searchBar)
-            }
-
-            <div class="application__content prose max-w-none">
-                @content
-            </div>
-        </main>
-    </div>
+	<div class="dashboard-shell" x-data="filterScope" data-filter-scope>
+		<div id="dashboard-dock" class="dashboard-dock"></div>
+		<div data-dock-staging hidden>
+			<aside data-dock-panel="menu" class="application__sidebar">
+				@PageMenu(renderingContext)
+			</aside>
+			<div data-dock-panel="searchbar" class="dashboard-searchbar">
+				if renderingContext.ExploreBaseURL != nil && *renderingContext.ExploreBaseURL != "" {
+					<div class="application__explore-link">
+						<a href={ templ.SafeURL(renderingContext.CurrentHandlerUrl + "/open-in-explore") }>Open in Explore ↗</a>
+					</div>
+				}
+				if searchBar.IsVisible {
+					@SearchBar(searchBar)
+				}
+			</div>
+			<main data-dock-panel="content" class="dashboard-content prose max-w-none">
+				@content
+			</main>
+			<div data-dock-panel="debug">
+				@DebugDrawerPanel()
+			</div>
+		</div>
+	</div>
 }
 
 templ defaultPageFn(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
@@ -40,10 +57,8 @@ templ defaultPageFn(renderingContext rendering.DashboardContext, searchBar rende
 			<script src="/public/dist/index.js"></script>
 		</head>
 		<body class="bg-base-200">
-			@DebugDrawer() {
-				@MainApplication(renderingContext, searchBar, content)
-			}
-			<script>window.Alpine.start();</script>
+			@MainApplication(renderingContext, searchBar, content)
+			<script>window.Dashica.initDashboardDock(); window.Alpine.start();</script>
 		</body>
 	</html>
 }

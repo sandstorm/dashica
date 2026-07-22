@@ -85,6 +85,23 @@
 .explore-tree__item .explore-btn--icon { opacity: 0; transition: opacity 0.1s; }
 .explore-tree__item:hover .explore-btn--icon { opacity: 1; }
 
+/* nested children: a subtle guide rail on indented rows so the hierarchy reads */
+.explore-tree__item[style*="padding-left"] {
+    border-left: 1px solid var(--color-base-300, #e5e7eb);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+/* container rows (grid / group) — a valid drop-into target; the drop highlight
+   frames the whole row rather than the top-edge bar used for reorder. */
+.explore-tree__item.is-container > .explore-tree__name { font-weight: 600; }
+.explore-tree__item.is-container.is-drop-target {
+    box-shadow: inset 0 0 0 2px var(--color-primary, #3b82f6);
+    background: color-mix(in srgb, var(--color-primary, #3b82f6) 12%, transparent);
+}
+
+.explore-inspector__type-label { font-weight: 600; }
+
 /* preview cards */
 .explore-card {
     position: relative;
@@ -115,6 +132,20 @@
 .explore-field__label { display: block; font-weight: 500; margin-bottom: 0.15rem; }
 .explore-field__req { color: var(--color-error, #dc2626); }
 .explore-field__help { font-size: 0.72rem; opacity: 0.7; margin-bottom: 0.2rem; }
+.explore-field__hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1em;
+    height: 1.1em;
+    margin-left: 0.35em;
+    border: 1px solid var(--color-base-300, #ccc);
+    border-radius: 50%;
+    font-size: 0.68rem;
+    line-height: 1;
+    opacity: 0.7;
+    cursor: help;
+}
 .explore-input {
     width: 100%;
     padding: 0.25rem 0.4rem;

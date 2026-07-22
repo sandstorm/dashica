@@ -135,10 +135,16 @@ Alpine.data('chart', () => ({
             console.error("Failed to fetch debug info:", e);
             this._debugInfo = {error: e.message};
         }
-        this.$dispatch('dashica-debugDrawer-toggle', {
-            queryResult: this._queryResult,
-            debugInfo: this._debugInfo
-        })
+        // Dispatch on `window`, not bubbling from $el: the debug drawer now lives
+        // in a separate dock panel (and may be popped out to another window), so
+        // it can't be reached by DOM bubbling — the debugDrawer component listens
+        // on window (docs 2026-07-22-dockview-rewrite.md §4.5).
+        window.dispatchEvent(new CustomEvent('dashica-debugDrawer-toggle', {
+            detail: {
+                queryResult: this._queryResult,
+                debugInfo: this._debugInfo
+            }
+        }))
     },
 
     handleResize(width: number, height: number) {

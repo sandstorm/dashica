@@ -37,11 +37,11 @@
 
 import Alpine from '@alpinejs/csp';
 import {html} from "htl";
-import {classBadge, Column, ControlCtx, FieldDescriptor, FieldKind, humanize, kindsForSlot, SchemaResponse} from "./controls";
+import {AddableType, classBadge, Column, ControlCtx, FieldDescriptor, FieldKind, humanize, kindsForSlot, SchemaResponse} from "./controls";
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
 import {createFilterScope} from "../store";
-import {initDock, resetDock, type DockviewApi} from "../components/dock";
+import {initDock, resetDock, wireLazyDebugDrawer, type DockviewApi} from "../components/dock";
 
 // localStorage key for the Explore editor's dockview layout (§4.2).
 const EXPLORE_DOCK_KEY = 'dashica.explore.dock';
@@ -55,6 +55,41 @@ type DrawerTab = 'data' | 'gocode' | 'json';
 // buildRev is the "commit" counter: previews query only when it changes (an
 // explicit Build), never on every keystroke — see the preview effect below.
 interface UiState { selectedId: string | null; drawerTab: DrawerTab; buildRev: number; }
+
+// A child widget lives inside its container's props as a bare {type, props}
+// envelope (no id) — grid areas (a map keyed by area name) and collapsibleGroup
+// widgets (a list). WidgetNode is the common shape of anything editable: a
+// top-level WidgetState or a child envelope.
+interface WidgetNode { type: string; props: Record<string, any>; }
+
+// NodeRef resolves a selection path to the addressed node plus enough context to
+// mutate it in place. `topId` is the top-level ancestor's id — the unit of
+// preview card, so selecting a child still highlights/scrolls its container.
+interface NodeRef {
+    node: WidgetNode;
+    topId: string;
+    // The container this node sits in (null for a top-level widget), so delete
+    // can splice/unset it without re-walking the path.
+    parent:
+        | { shape: 'list'; arr: WidgetNode[]; index: number }
+        | { shape: 'map'; map: Record<string, WidgetNode>; key: string }
+        | null;
+}
+
+// One rendered tree row: a selectable node plus its recursively-built children.
+interface TreeNode {
+    path: string;
+    type: string;
+    label: string;
+    depth: number;
+    // True when this widget has a childrenList/childrenMap field — a valid
+    // drop-into target and rendered with a container affordance.
+    isContainer: boolean;
+    // Reorder affordances (list children only); top-level uses drag instead.
+    reorder?: { up: () => void; down: () => void };
+    remove?: () => void;
+    children: TreeNode[];
+}
 
 interface PreviewEntry {
     card: HTMLElement;
@@ -123,6 +158,8 @@ class Editor {
     private drawerPanels: Record<DrawerTab, HTMLElement>;
     private titleInput!: HTMLInputElement;
     private elTreeList!: HTMLElement;
+    // The tree's add-widget type picker; also drives the per-container "+" button.
+    private treeAddSelect!: HTMLSelectElement;
     private jsonTextarea: HTMLTextAreaElement | null = null;
     private elUndoBtn!: HTMLButtonElement;
     private elRedoBtn!: HTMLButtonElement;
@@ -136,8 +173,9 @@ class Editor {
 
     private inspectorScheduled = false;
 
-    // Source row index during a tree drag-and-drop reorder (null when not dragging).
-    private dragIndex: number | null = null;
+    // Selection path of the row being dragged in the tree (null when not
+    // dragging). Drives both top-level reorder and drop-into-a-container.
+    private dragPath: string | null = null;
 
     // Last selection we scrolled the preview to — so we only auto-scroll on an
     // actual selection change, not on every structural repaint.
@@ -290,6 +328,61 @@ class Editor {
         this.reseedIdSeq();
     }
 
+    // ---- nested-widget addressing -----------------------------------------
+
+    // The container fields of a widget type (childrenList / childrenMap), in
+    // struct order — the slots that hold nested widgets.
+    private containerFields(type: string): { name: string; shape: 'list' | 'map' }[] {
+        return (this.formModel?.widgets[type]?.fields ?? [])
+            .filter((f) => f.editor === 'childrenList' || f.editor === 'childrenMap')
+            .map((f) => ({ name: f.name, shape: f.editor === 'childrenMap' ? 'map' : 'list' }));
+    }
+
+    private containerFieldShape(type: string, fieldName: string): 'list' | 'map' | null {
+        const f = this.formModel?.widgets[type]?.fields.find((x) => x.name === fieldName);
+        if (!f) return null;
+        return f.editor === 'childrenMap' ? 'map' : f.editor === 'childrenList' ? 'list' : null;
+    }
+
+    private topIdOf(sel: string | null): string | null {
+        return sel ? sel.split('/')[0] : null;
+    }
+
+    // Resolve a selection path ("w3", "w3/areas/main", "w3/widgets/0/…") to the
+    // addressed node and its parent container. Reads only structural bits (types
+    // + container membership) so, inside an effect, editing a scalar prop of a
+    // node never invalidates a resolve. Returns null for a stale/invalid path.
+    private resolveNode(sel: string | null): NodeRef | null {
+        if (!sel) return null;
+        const parts = sel.split('/');
+        const top = this.state.widgets.find((w) => w.id === parts[0]);
+        if (!top) return null;
+        let node: WidgetNode = top;
+        let parent: NodeRef['parent'] = null;
+        for (let i = 1; i < parts.length; i += 2) {
+            const fieldName = parts[i];
+            const key = parts[i + 1];
+            if (key === undefined) return null;
+            const shape = this.containerFieldShape(node.type, fieldName);
+            const container = node.props[fieldName];
+            if (shape === 'list' && Array.isArray(container)) {
+                const index = parseInt(key, 10);
+                const child = container[index];
+                if (!child) return null;
+                parent = { shape: 'list', arr: container, index };
+                node = child;
+            } else if (shape === 'map' && container && typeof container === 'object' && !Array.isArray(container)) {
+                const child = container[key];
+                if (!child) return null;
+                parent = { shape: 'map', map: container, key };
+                node = child;
+            } else {
+                return null;
+            }
+        }
+        return { node, topId: top.id, parent };
+    }
+
     // ---- effects (one per pane/concern; named) -----------------------------
 
     private wireEffects() {
@@ -305,21 +398,23 @@ class Editor {
             if (document.activeElement !== this.titleInput) this.titleInput.value = t;
         }));
 
-        // tree: follows widget structure + selection.
+        // tree: follows the (recursive) widget structure + selection. Building
+        // the model reads types + container membership at every level, so it
+        // repaints on add/remove/reorder anywhere in the tree, but NOT on a
+        // scalar prop edit (those values are never read here).
         this.effects.push(Alpine.effect(() => {
-            const widgets = this.state.widgets;
-            const items = widgets.map((w) => ({id: w.id, type: w.type})); // structural dep
-            const sel = this.ui.selectedId;                                // selection dep
-            this.renderTreeList(items, sel);
+            const model = this.buildTreeModel(); // structural dep (recursive)
+            const sel = this.ui.selectedId;       // selection dep
+            this.renderTreeNodes(model, sel);
         }));
 
-        // inspector: depends ONLY on (selectedId, widget.type). The actual form
-        // build is deferred to a microtask so control reads of props are
+        // inspector: depends ONLY on (selectedId, resolved node.type). The actual
+        // form build is deferred to a microtask so control reads of props are
         // untracked (guardrail 1 — no defocus).
         this.effects.push(Alpine.effect(() => {
             const id = this.ui.selectedId;
-            const w = id ? this.state.widgets.find((x) => x.id === id) : null;
-            void (w ? w.type : null); // track type; ignore the value here
+            const ref = this.resolveNode(id);
+            void (ref ? ref.node.type : null); // track type; ignore the value here
             this.scheduleInspector();
         }));
 
@@ -395,67 +490,235 @@ class Editor {
     // ---- tree --------------------------------------------------------------
 
     private buildTreeShell() {
-        // Only chart widgets are addable here. Parameter widgets (Text Input,
-        // Checkbox Group) render an input bound to a {name:String} query param that
-        // only does anything when ANOTHER widget's query references it — standing
-        // alone in Explore they affect nothing. Container widgets (Grid,
-        // Collapsible Group) are not yet buildable in the flat tree. Both stay
-        // registered/serializable so compiled dashboards and "Open in Explore"
-        // round-trip them; they are just hidden from the add list (see docs UX note).
-        const chartTypes = Object.keys(this.formModel?.widgets ?? {})
-            .filter((type) => this.formModel!.widgets[type].category === 'chart');
-        const sel = html`<select class="explore-input">${
-            chartTypes.map((type) => html`<option value=${type}>${this.formModel!.widgets[type].title}</option>`)}</select>` as HTMLSelectElement;
-        const add = html`<button class="explore-btn explore-btn--sm" onclick=${() => this.addWidget(sel.value)}>+ add</button>`;
+        // Addable at top level: chart widgets AND container widgets (grid,
+        // collapsibleGroup) — a container is the entry point for nesting. The
+        // same type <select> also feeds the per-container "+" add-child button in
+        // the tree rows (see appendTreeRows). Parameter widgets (Text Input,
+        // Checkbox Group) stay out: they render a {name:String} query param that
+        // only does anything when ANOTHER widget's query references it, so alone
+        // in Explore they affect nothing. They stay registered/serializable so
+        // compiled dashboards and "Open in Explore" round-trip them.
+        const addableTypes = this.addableTypes();
+        this.treeAddSelect = html`<select class="explore-input">${
+            addableTypes.map((t) => html`<option value=${t.type}>${t.title}</option>`)}</select>` as HTMLSelectElement;
+        const add = html`<button class="explore-btn explore-btn--sm" onclick=${() => this.addWidget(this.treeAddSelect.value)}>+ add</button>`;
 
         this.elTreeList = html`<ul class="explore-tree__list"></ul>` as HTMLElement;
         this.elTree.replaceChildren(
-            html`<div class="explore-tree__add">${sel}${add}</div>`,
+            html`<div class="explore-tree__add">${this.treeAddSelect}${add}</div>`,
             this.elTreeList);
     }
 
-    private renderTreeList(items: {id: string; type: string}[], sel: string | null) {
-        this.elTreeList.replaceChildren(...items.map((w, i) => {
-            const name = html`<span class="explore-tree__name"
-                onclick=${() => { this.ui.selectedId = w.id; }}>${this.formModel?.widgets[w.type]?.title ?? w.type}</span>`;
-            // Draggable row (replaces the ↑/↓ arrows): drag to reorder. Duplicate +
-            // delete controls sit at the trailing edge.
-            const li = html`<li draggable="true"
-                class=${'explore-tree__item' + (w.id === sel ? ' is-selected' : '')}>
-                <span class="explore-tree__grip" title="Drag to reorder">⠿</span>
-                ${name}
-                ${this.iconBtn('⧉', false, () => this.duplicateWidget(w.id))}
-                ${this.iconBtn('×', false, () => this.deleteWidget(w.id))}
-            </li>` as HTMLElement;
-            this.wireTreeDnd(li, i);
-            return li;
-        }));
+    // Add a child of the type currently chosen in the tree's add <select> into
+    // the container at containerPath. This is the tree's "+" affordance — the one
+    // place to grow a container besides dragging an existing widget in.
+    private addChildOfSelectedType(containerPath: string) {
+        const ref = this.resolveNode(containerPath);
+        if (!ref) return;
+        const cf = this.containerFields(ref.node.type)[0];
+        const type = this.treeAddSelect?.value;
+        if (!cf || !type) return;
+        this.addChild(containerPath, cf.name, cf.shape, type);
     }
 
-    // Wire one tree row for drag-and-drop reordering. dragstart stashes the source
-    // index; dragover marks the hovered row + allows the drop; drop moves the
-    // widget before the target. Kept local + imperative (CSP forbids Alpine
-    // expression handlers) — the state mutation flows through moveWidget, so the
-    // tree/preview effects repaint from the reordered array.
-    private wireTreeDnd(li: HTMLElement, index: number) {
+    // Widget types that can be added (top level or as a child): chart + container
+    // widgets, with display titles, in a stable order.
+    private addableTypes(): AddableType[] {
+        return Object.keys(this.formModel?.widgets ?? {})
+            .filter((type) => {
+                const c = this.formModel!.widgets[type].category;
+                return c === 'chart' || c === 'container';
+            })
+            .map((type) => ({ type, title: this.formModel!.widgets[type].title }));
+    }
+
+    // ---- tree model (recursive) -------------------------------------------
+
+    // Build the tree as a nested model rooted at the top-level widgets. Walking
+    // it reads each node's type + its container fields (childrenList/childrenMap)
+    // — establishing the structural reactive deps for the tree effect. The
+    // reorder/remove closures capture the mutation site so the row handlers are
+    // trivial. Called only inside the tree effect and buildTreeModel is pure over
+    // the current state.
+    private buildTreeModel(): TreeNode[] {
+        return this.state.widgets.map((w) => this.treeNode(w, w.id, 0));
+    }
+
+    private treeNode(node: WidgetNode, path: string, depth: number): TreeNode {
+        const label = this.formModel?.widgets[node.type]?.title ?? node.type;
+        const containerFields = this.containerFields(node.type);
+        const children: TreeNode[] = [];
+        for (const cf of containerFields) {
+            const container = node.props[cf.name];
+            if (cf.shape === 'list' && Array.isArray(container)) {
+                container.forEach((child: WidgetNode, i: number) => {
+                    const cn = this.treeNode(child, `${path}/${cf.name}/${i}`, depth + 1);
+                    cn.reorder = {
+                        up: () => this.moveChild(path, cf.name, i, -1),
+                        down: () => this.moveChild(path, cf.name, i, +1),
+                    };
+                    cn.remove = () => this.removeChild(path, cf.name, 'list', String(i));
+                    children.push(cn);
+                });
+            } else if (cf.shape === 'map' && container && typeof container === 'object' && !Array.isArray(container)) {
+                for (const key of Object.keys(container)) {
+                    const cn = this.treeNode(container[key], `${path}/${cf.name}/${key}`, depth + 1);
+                    cn.label = `${key} · ${cn.label}`;
+                    cn.remove = () => this.removeChild(path, cf.name, 'map', key);
+                    children.push(cn);
+                }
+            }
+        }
+        return { path, type: node.type, label, depth, isContainer: containerFields.length > 0, children };
+    }
+
+    // Render the recursive tree model as a flat <li> list (children indented by
+    // depth). Top-level rows are drag-reorderable + duplicable; child rows carry
+    // their own ↑/↓ (list) and × from the model's captured closures.
+    private renderTreeNodes(model: TreeNode[], sel: string | null) {
+        const lis: HTMLElement[] = [];
+        model.forEach((n) => this.appendTreeRows(n, sel, lis));
+        this.elTreeList.replaceChildren(...lis);
+    }
+
+    private appendTreeRows(n: TreeNode, sel: string | null, out: HTMLElement[]) {
+        const isTop = n.depth === 0;
+        const name = html`<span class="explore-tree__name"
+            onclick=${() => { this.ui.selectedId = n.path; }}>${n.label}</span>`;
+
+        const trailing: (Node | string)[] = [];
+        if (n.reorder) {
+            trailing.push(this.iconBtn('↑', false, n.reorder.up));
+            trailing.push(this.iconBtn('↓', false, n.reorder.down));
+        }
+        // Container rows: "+" adds a child of the type chosen in the tree's add
+        // picker (the tree is the only place nested widgets are managed now).
+        if (n.isContainer) trailing.push(this.iconBtn('+', false, () => this.addChildOfSelectedType(n.path)));
+        if (isTop) trailing.push(this.iconBtn('⧉', false, () => this.duplicateWidget(n.path)));
+        if (n.remove) trailing.push(this.iconBtn('×', false, n.remove));
+        else if (isTop) trailing.push(this.iconBtn('×', false, () => this.deleteWidget(n.path)));
+
+        // Every row is draggable: top-level rows reorder among themselves; any
+        // row can be dropped onto a container row (grid/group) to move it inside.
+        const title = n.isContainer ? 'Drag into a container, or drag a widget onto me' : 'Drag to reorder / into a container';
+        const li = html`<li draggable="true"
+            class=${'explore-tree__item' + (n.path === sel ? ' is-selected' : '') + (n.isContainer ? ' is-container' : '')}
+            style=${n.depth ? `padding-left:${n.depth * 14}px` : ''}>
+            <span class="explore-tree__grip" title=${title}>⠿</span>
+            ${name}
+            ${trailing}
+        </li>` as HTMLElement;
+        this.wireRowDnd(li, n);
+        out.push(li);
+
+        for (const c of n.children) this.appendTreeRows(c, sel, out);
+    }
+
+    // Wire one tree row for drag-and-drop. dragstart stashes the source PATH;
+    // dragover marks a valid drop target; drop performs one of two moves via
+    // onDropRow: reorder among top-level widgets, or move the dragged node into a
+    // container row. Kept local + imperative (CSP forbids Alpine expression
+    // handlers); all state mutation flows through the editor's move methods so
+    // the tree/preview effects repaint from the changed state.
+    private wireRowDnd(li: HTMLElement, node: TreeNode) {
         li.addEventListener('dragstart', (e: DragEvent) => {
-            this.dragIndex = index;
-            e.dataTransfer?.setData('text/plain', String(index));
+            this.dragPath = node.path;
+            e.dataTransfer?.setData('text/plain', node.path);
             if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+            e.stopPropagation(); // nested rows: only the grabbed row starts a drag
         });
         li.addEventListener('dragover', (e: DragEvent) => {
+            if (!this.isValidDrop(node)) return;
             e.preventDefault(); // required so drop fires
+            e.stopPropagation();
             if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
             li.classList.add('is-drop-target');
         });
         li.addEventListener('dragleave', () => li.classList.remove('is-drop-target'));
         li.addEventListener('drop', (e: DragEvent) => {
+            if (!this.isValidDrop(node)) return;
             e.preventDefault();
+            e.stopPropagation();
             li.classList.remove('is-drop-target');
-            if (this.dragIndex !== null && this.dragIndex !== index) this.moveWidget(this.dragIndex, index);
-            this.dragIndex = null;
+            this.onDropRow(node);
+            this.dragPath = null;
         });
-        li.addEventListener('dragend', () => { this.dragIndex = null; });
+        li.addEventListener('dragend', () => { this.dragPath = null; });
+    }
+
+    // A drop onto `target` is valid when: something is being dragged; it is not
+    // dropped on itself; and either the target is a container (drop-into) or both
+    // source and target are top-level (reorder). A container may not be dropped
+    // into itself or its own descendant (no cycles).
+    private isValidDrop(target: TreeNode): boolean {
+        const src = this.dragPath;
+        if (!src || src === target.path) return false;
+        if (target.isContainer) return target.path !== src && !target.path.startsWith(src + '/');
+        return this.isTopLevelPath(src) && this.isTopLevelPath(target.path);
+    }
+
+    private onDropRow(target: TreeNode) {
+        const src = this.dragPath;
+        if (!src) return;
+        if (target.isContainer) {
+            this.moveNodeIntoContainer(src, target.path);
+        } else if (this.isTopLevelPath(src) && this.isTopLevelPath(target.path)) {
+            this.moveWidget(this.topIndexOf(src), this.topIndexOf(target.path));
+        }
+    }
+
+    private isTopLevelPath(path: string): boolean {
+        return !path.includes('/');
+    }
+
+    private topIndexOf(path: string): number {
+        return this.state.widgets.findIndex((w) => w.id === path);
+    }
+
+    // Move the node at srcPath to become the last child of the container at
+    // destPath. The destination node object reference is captured BEFORE the
+    // extraction so it survives any index shift the removal causes; the moved
+    // envelope is deep-cloned and stripped of its (top-level-only) id.
+    private moveNodeIntoContainer(srcPath: string, destPath: string) {
+        if (destPath === srcPath || destPath.startsWith(srcPath + '/')) return; // no cycle
+        const destRef = this.resolveNode(destPath);
+        if (!destRef) return;
+        const cf = this.containerFields(destRef.node.type)[0];
+        if (!cf) return;
+        const destProps = destRef.node.props; // stable reference across the extraction
+        const moved = this.extractNode(srcPath);
+        if (!moved) return;
+        const child: WidgetNode = { type: moved.type, props: moved.props };
+        if (cf.shape === 'list') {
+            (this.ensureContainer(destProps, cf.name, 'list') as WidgetNode[]).push(child);
+        } else {
+            const map = this.ensureContainer(destProps, cf.name, 'map') as Record<string, WidgetNode>;
+            map[this.nextAreaName(map)] = child;
+        }
+        // Paths are index/key based and the tree just changed shape; drop the
+        // selection rather than risk pointing it at the wrong node.
+        this.ui.selectedId = null;
+        this.pushHistory();
+        this.scheduleInspector();
+    }
+
+    // Remove the node at `path` from its parent and return a plain (de-proxied,
+    // deep-cloned) {type, props} envelope — the unit that can be re-inserted as a
+    // child elsewhere. Returns null for an unresolvable path.
+    private extractNode(path: string): WidgetNode | null {
+        const ref = this.resolveNode(path);
+        if (!ref) return null;
+        const src = raw(ref.node) as WidgetNode & { id?: string };
+        const clone: WidgetNode = { type: src.type, props: deepClone(src.props) };
+        if (!ref.parent) {
+            const idx = this.topIndexOf(path);
+            if (idx >= 0) this.state.widgets.splice(idx, 1);
+        } else if (ref.parent.shape === 'list') {
+            ref.parent.arr.splice(ref.parent.index, 1);
+        } else {
+            delete ref.parent.map[ref.parent.key];
+        }
+        return clone;
     }
 
     private iconBtn(label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
@@ -474,8 +737,90 @@ class Editor {
 
     private deleteWidget(id: string) {
         this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
-        if (this.ui.selectedId === id) this.ui.selectedId = null;
+        // Clear the selection when it is this widget or any node nested inside it.
+        if (this.topIdOf(this.ui.selectedId) === id) this.ui.selectedId = null;
         this.pushHistory();
+    }
+
+    // ---- child (nested widget) mutations ----------------------------------
+    // parentPath addresses the CONTAINER node (whose props hold `fieldName`).
+    // All three commit (pushHistory) and rebuild the inspector so its children
+    // list reflects the change; the tree repaints reactively. None bump buildRev
+    // — like adding a top-level widget, the container card re-renders on the next
+    // Build/Apply, so an added-but-unconfigured child never fires a query.
+
+    private addChild(parentPath: string, fieldName: string, shape: 'list' | 'map', type: string, areaName?: string) {
+        if (!type || !this.formModel?.widgets[type]) return;
+        const ref = this.resolveNode(parentPath);
+        if (!ref) return;
+        const child: WidgetNode = { type, props: deepClone(this.formModel.widgets[type].defaults) };
+        if (shape === 'map') {
+            const map = this.ensureContainer(ref.node.props, fieldName, 'map') as Record<string, WidgetNode>;
+            // Area names are positional and automatic (a, b, c, …): the caller
+            // (control / drop) supplies none, so the grid needs no area config.
+            const name = (areaName ?? '').trim() || this.nextAreaName(map);
+            if (map[name]) return; // never clobber an existing area
+            map[name] = child;
+        } else {
+            (this.ensureContainer(ref.node.props, fieldName, 'list') as WidgetNode[]).push(child);
+        }
+        this.pushHistory();
+        this.scheduleInspector();
+    }
+
+    // The next positional area name for a map container: the first of a, b, c, …
+    // not already used (so 1st child → "a", 2nd → "b"; a gap left by a deletion
+    // is reused before spilling past "z" to two-letter names).
+    private nextAreaName(map: Record<string, unknown>): string {
+        for (let i = 0; ; i++) {
+            const name = i < 26
+                ? String.fromCharCode(97 + i)
+                : String.fromCharCode(97 + Math.floor(i / 26) - 1) + String.fromCharCode(97 + (i % 26));
+            if (!(name in map)) return name;
+        }
+    }
+
+    private removeChild(parentPath: string, fieldName: string, shape: 'list' | 'map', key: string) {
+        const ref = this.resolveNode(parentPath);
+        if (!ref) return;
+        const container = ref.node.props[fieldName];
+        if (shape === 'list' && Array.isArray(container)) container.splice(parseInt(key, 10), 1);
+        else if (shape === 'map' && container && typeof container === 'object') delete container[key];
+        this.reselectToContainer(parentPath, fieldName);
+        this.pushHistory();
+        this.scheduleInspector();
+    }
+
+    private moveChild(parentPath: string, fieldName: string, index: number, delta: number) {
+        const ref = this.resolveNode(parentPath);
+        if (!ref) return;
+        const arr = ref.node.props[fieldName];
+        if (!Array.isArray(arr)) return;
+        const to = index + delta;
+        if (to < 0 || to >= arr.length) return;
+        const [item] = arr.splice(index, 1);
+        arr.splice(to, 0, item);
+        this.reselectToContainer(parentPath, fieldName);
+        this.pushHistory();
+        this.scheduleInspector();
+    }
+
+    private ensureContainer(props: any, name: string, shape: 'list' | 'map'): any {
+        if (shape === 'list') {
+            if (!Array.isArray(props[name])) props[name] = [];
+        } else {
+            const v = props[name];
+            if (!v || typeof v !== 'object' || Array.isArray(v)) props[name] = {};
+        }
+        return props[name];
+    }
+
+    // Child paths under a container are index/area-name based, so a remove or
+    // reorder there can make the current selection stale. If the selection points
+    // into the mutated container, drop it back to the container itself.
+    private reselectToContainer(parentPath: string, fieldName: string) {
+        const sel = this.ui.selectedId;
+        if (sel && sel.startsWith(`${parentPath}/${fieldName}/`)) this.ui.selectedId = parentPath;
     }
 
     // Move the widget at `from` to just before the widget currently at `to`
@@ -534,7 +879,9 @@ class Editor {
     // pre-undo values).
     private restore(snap: DashboardState) {
         this.applyState(deepClone(snap));
-        if (this.ui.selectedId && !this.state.widgets.some((w) => w.id === this.ui.selectedId)) {
+        // Drop the selection if its path no longer resolves in the restored state
+        // (handles nested child paths, not just top-level ids).
+        if (this.ui.selectedId && !this.resolveNode(this.ui.selectedId)) {
             this.ui.selectedId = null;
         }
         this.ui.buildRev++;
@@ -563,23 +910,31 @@ class Editor {
         const insp = this.elInspector;
         insp.innerHTML = '';
         this.elInspectorValidation = null;
-        const w = this.state.widgets.find((x) => x.id === this.ui.selectedId);
-        if (!w) {
+        const selPath = this.ui.selectedId;
+        const ref = this.resolveNode(selPath);
+        if (!ref || selPath === null) {
             insp.innerHTML = '<div class="explore-empty">Select a widget to edit its options.</div>';
             return;
         }
-        const descriptor = this.formModel!.widgets[w.type];
+        const node = ref.node;
+        const descriptor = this.formModel!.widgets[node.type];
 
-        // Type switcher: change the widget's chart type in place, remapping the
-        // existing field choices onto the new type's slots by role (see
-        // switchType). Only chart types are offered (same filter as the add list).
-        const chartTypes = Object.keys(this.formModel!.widgets)
-            .filter((t) => this.formModel!.widgets[t].category === 'chart');
-        const typeSel = html`<select class="explore-input explore-inspector__type"
-            onchange=${() => this.switchType(w, typeSel.value)}>${
-            chartTypes.map((t) => html`<option value=${t}>${this.formModel!.widgets[t].title}</option>`)}</select>` as HTMLSelectElement;
-        typeSel.value = w.type;
-        insp.appendChild(html`<div class="explore-inspector__title">${typeSel}</div>`);
+        // Title row. Chart widgets get a type switcher (remap field choices onto
+        // the new type's slots by role, see switchType); container/parameter
+        // widgets show a static type label — their type is not interchangeable.
+        if (descriptor.category === 'chart') {
+            const chartTypes = Object.keys(this.formModel!.widgets)
+                .filter((t) => this.formModel!.widgets[t].category === 'chart');
+            const typeSel = html`<select class="explore-input explore-inspector__type"
+                onchange=${() => this.switchType(node, typeSel.value)}>${
+                chartTypes.map((t) => html`<option value=${t}>${this.formModel!.widgets[t].title}</option>`)}</select>` as HTMLSelectElement;
+            typeSel.value = node.type;
+            insp.appendChild(html`<div class="explore-inspector__title">${typeSel}</div>`);
+        } else {
+            insp.appendChild(html`<div class="explore-inspector__title">
+                <span class="explore-inspector__type-label">${descriptor.title}</span>
+            </div>`);
+        }
 
         // Client-side validation panel: lists required-but-empty fields. Updated
         // live by the delegated input listener (wireInspectorInteractions) and on
@@ -588,19 +943,21 @@ class Editor {
         insp.appendChild(this.elInspectorValidation);
 
         const queryKey = descriptor.queryKey;
-        // Controls write into w.props (the reactive proxy) — the per-widget
+        // Controls write into node.props (the reactive proxy) — the per-widget
         // preview effect and the persist effect react. No onChange plumbing.
+        // Nested widgets are NOT edited here (they are managed in the tree);
+        // renderForm filters childrenList/childrenMap fields out of the form.
         const ctx: ControlCtx = {
             baseUrl: this.baseUrl,
             schema: this.schema,
             fieldKinds: this.formModel!.fieldKinds ?? [],
             getTable: () => {
-                const q = queryKey ? w.props[queryKey] : null;
+                const q = queryKey ? node.props[queryKey] : null;
                 return q && q.kind === 'table' ? q.table : null;
             },
         };
         const form = document.createElement('div');
-        renderForm(form, descriptor, w.props, ctx);
+        renderForm(form, descriptor, node.props, ctx);
         insp.appendChild(form);
 
         // Apply runs the query for the edits above (same as Enter / Cmd+Enter).
@@ -617,17 +974,18 @@ class Editor {
     // ---- type switching ----------------------------------------------------
 
     // Change a widget's chart type in place, carrying its configuration across.
-    // Mutates props in the reactive proxy then commits (Build) so the preview
-    // re-renders and the change lands on the undo history. The inspector effect
-    // (which tracks w.type) rebuilds the form for the new type.
-    private switchType(w: WidgetState, newType: string) {
-        if (!newType || newType === w.type || !this.formModel?.widgets[newType]) return;
-        const remapped = this.remapProps(w.type, newType, raw(w.props));
-        w.type = newType;
+    // Mutates the node's type + props in the reactive proxy then commits (Build)
+    // so the preview re-renders and the change lands on the undo history. The
+    // inspector effect (which tracks the resolved node.type) rebuilds the form.
+    // Works for a top-level widget or a nested child alike (both are WidgetNode).
+    private switchType(node: WidgetNode, newType: string) {
+        if (!newType || newType === node.type || !this.formModel?.widgets[newType]) return;
+        const remapped = this.remapProps(node.type, newType, raw(node.props));
+        node.type = newType;
         // Replace props contents in place (keep the same reactive proxy object so
         // the per-card preview effect and controls stay bound to it).
-        for (const k of Object.keys(w.props)) delete w.props[k];
-        Object.assign(w.props, remapped);
+        for (const k of Object.keys(node.props)) delete node.props[k];
+        Object.assign(node.props, remapped);
         this.build();
     }
 
@@ -677,9 +1035,10 @@ class Editor {
             }
         }
 
-        // (4) like-named scalar/composite options (not fields, not the query).
+        // (4) like-named scalar/composite options (not fields, not the query,
+        //     not nested children — those don't carry across a chart-type swap).
         for (const oldF of oldDesc.fields) {
-            if (oldF.editor === 'field' || oldF.editor === 'children') continue;
+            if (oldF.editor === 'field' || oldF.editor === 'childrenList' || oldF.editor === 'childrenMap') continue;
             const nf = newDesc.fields.find((x) => x.name === oldF.name && x.editor === oldF.editor);
             if (nf && oldProps[oldF.name] !== undefined) newProps[oldF.name] = deepClone(oldProps[oldF.name]);
         }
@@ -699,7 +1058,7 @@ class Editor {
     // contains {{DASHICA_FILTERS}}, and each required field picker has a
     // column/expression. It never talks to the server — the query itself is the
     // authority on SQL correctness, surfaced on the card after Build.
-    private validateWidget(w: WidgetState): string[] {
+    private validateWidget(w: WidgetNode): string[] {
         const d = this.formModel?.widgets[w.type];
         if (!d) return [];
         const props = raw(w.props);
@@ -731,8 +1090,8 @@ class Editor {
     private refreshValidation() {
         const box = this.elInspectorValidation;
         if (!box) return;
-        const w = this.widgetById(this.ui.selectedId);
-        const issues = w ? this.validateWidget(w) : [];
+        const ref = this.resolveNode(this.ui.selectedId);
+        const issues = ref ? this.validateWidget(ref.node) : [];
         if (issues.length === 0) { box.replaceChildren(); return; }
         box.replaceChildren(html`<div class="explore-validation">
             <div class="explore-validation__title">Complete before building:</div>
@@ -757,20 +1116,24 @@ class Editor {
         }
         pv.querySelectorAll('.explore-empty').forEach((n) => n.remove());
 
+        // A card is the unit of a TOP-LEVEL widget; a nested child has no card of
+        // its own (its container renders it server-side), so map any selection to
+        // its top-level ancestor for highlighting + scroll.
+        const topSel = this.topIdOf(sel);
         for (const w of widgets) {
             let entry = this.previews[w.id];
             if (!entry) entry = this.mountWidgetPreview(w.id);
-            entry.card.classList.toggle('is-selected', w.id === sel);
+            entry.card.classList.toggle('is-selected', w.id === topSel);
             pv.appendChild(entry.card); // re-append = reorder, keeps the node (no refetch)
         }
 
         // When the selection *changes*, scroll its preview card into the middle of
         // the preview pane — so picking a widget in the tree reveals it. Guarded on
         // a change so structural repaints (add/delete/reorder) don't re-scroll.
-        if (sel && sel !== this.lastScrolledSel && this.previews[sel]) {
-            this.previews[sel].card.scrollIntoView({block: 'center', behavior: 'smooth'});
+        if (topSel && topSel !== this.lastScrolledSel && this.previews[topSel]) {
+            this.previews[topSel].card.scrollIntoView({block: 'center', behavior: 'smooth'});
         }
-        this.lastScrolledSel = sel;
+        this.lastScrolledSel = topSel;
     }
 
     private mountWidgetPreview(id: string): PreviewEntry {
@@ -895,12 +1258,12 @@ class Editor {
     // query *table* reactively (via getWidgetTable), so it refreshes when the
     // table changes but not on unrelated prop edits.
     private buildDataTab(content: HTMLElement, selectedId: string | null) {
-        const w = selectedId ? this.state.widgets.find((x) => x.id === selectedId) : null;
-        if (!w) {
+        const ref = this.resolveNode(selectedId);
+        if (!ref) {
             content.innerHTML = '<div class="explore-empty">Select a widget to inspect its data.</div>';
             return;
         }
-        const table = this.getWidgetTable(w);
+        const table = this.getWidgetTable(ref.node);
         if (!table) {
             content.innerHTML = '<div class="explore-empty">This widget has no table source ' +
                 '(raw SQL or none), so there is no schema to show. Pick a table in the inspector.</div>';
@@ -942,7 +1305,7 @@ class Editor {
 
     // Resolve the selected widget's base-query table (reactively reads the query
     // kind + table, nothing else), or null when it is not a plain table source.
-    private getWidgetTable(w: WidgetState): string | null {
+    private getWidgetTable(w: WidgetNode): string | null {
         const key = this.formModel?.widgets[w.type]?.queryKey;
         if (!key) return null;
         const q = w.props[key];
@@ -1043,6 +1406,11 @@ function exploreLayout(api: DockviewApi) {
 
     // Land on the Data tab.
     api.getPanel('drawer-data')?.api.setActive();
+
+    // Debug drawer starts absent — added lazily on the first wrench click as a
+    // tab in the LEFT tree gutter, overriding the tree while open. Replaces the
+    // old page-level daisyUI DebugDrawer wrapper.
+    wireLazyDebugDrawer(api, 'tree-edge');
 }
 
 // The assembled Explore dock, built by initExploreDock() BEFORE Alpine.start()

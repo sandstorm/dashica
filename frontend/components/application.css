@@ -89,3 +89,63 @@ a.menu-active + .star-btn {
 .application__sidebar [hidden] {
     display: none !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Dashboard dock (Slice D). The CSS-grid `.application` layout is replaced by a
+   dockview shell: a full-viewport flex column whose dock fills the remaining
+   space. Dockview owns the pane geometry; the page itself never scrolls — each
+   panel scrolls its own adopted content (the `.dock-adopt` fill rules live in
+   explore.css, bundled globally). The single [data-filter-scope] on the shell
+   contains every panel (Slice A).
+   --------------------------------------------------------------------------- */
+.dashboard-shell {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+.dashboard-dock {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+}
+
+/* The dashboard content panel scrolls internally (the `.dock-adopt` wrapper is
+   overflow:hidden). Keep the reading width + top spacing the old grid had. */
+.dashboard-content {
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+}
+
+/* The search-bar strip panel: fixed-height, locked, header-less. Its adopted
+   SearchBar keeps its own sticky/scroll behaviour inside. */
+.dashboard-searchbar {
+    overflow-y: auto;
+}
+
+/* Right-header maximize/restore action (dock.ts maximizeAction), shared by the
+   dashboard and Explore docks. */
+.dv-dashica-actions {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+.dv-dashica-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0 0.5rem;
+    border: 0;
+    background: transparent;
+    color: var(--color-base-content, #1f2937);
+    opacity: 0.6;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+.dv-dashica-action:hover {
+    opacity: 1;
+    background: var(--color-base-300, #ddd);
+}

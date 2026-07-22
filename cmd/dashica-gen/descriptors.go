@@ -36,8 +36,10 @@ func editorKind(cat fieldCategory) string {
 		return "group"
 	case catEnum:
 		return "select"
-	case catChildrenList, catChildrenMap:
-		return "children"
+	case catChildrenList:
+		return "childrenList"
+	case catChildrenMap:
+		return "childrenMap"
 	}
 	panic("editorKind: unhandled category " + string(cat))
 }

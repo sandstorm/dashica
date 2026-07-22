@@ -19,6 +19,7 @@ import "./components/sidebar";
 import favorites from './components/favorites';
 import sidebarSearch from './components/sidebarSearch';
 import exploreEditor, { initExploreDock } from './explore/editor';
+import { initDashboardDock } from './components/dashboardDock';
 import './explore/explore.css';
 
 Alpine.plugin(intersect);
@@ -42,3 +43,4 @@ window.Alpine = Alpine
 // initializer in their inline script ahead of Alpine.start().
 window.Dashica = window.Dashica || {};
 window.Dashica.initExploreDock = initExploreDock;
+window.Dashica.initDashboardDock = initDashboardDock;

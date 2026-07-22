@@ -10,7 +10,8 @@ import (
 // editor owns the whole screen. The time range lives inside the editor's
 // preview pane instead of a top search bar, so the searchBar option is ignored
 // here — the page just links the standard bundle and renders the editor shell
-// full-bleed inside the shared debug drawer.
+// full-bleed. The debug drawer is a lazy dock panel in the tree gutter now
+// (frontend/explore/editor.ts wireLazyDebugDrawer), not a page-level wrapper.
 templ explorePageFn(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
 	<html>
 		<head>
@@ -24,9 +25,7 @@ templ explorePageFn(renderingContext rendering.DashboardContext, searchBar rende
 			<script src="/public/dist/index.js"></script>
 		</head>
 		<body class="bg-base-200">
-			@DebugDrawer() {
-				@content
-			}
+			@content
 			<script>window.Dashica.initExploreDock(); window.Alpine.start();</script>
 		</body>
 	</html>

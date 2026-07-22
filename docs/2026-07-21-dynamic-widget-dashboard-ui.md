@@ -346,7 +346,35 @@ per-request copy of the menu. Add a bluemonday pass for markdown link URLs
 store later behind the same interface.
 
 **Step 8 — Nested widgets + WYSIWYG grid designer.**
-Children editing in tree + inspector, then the visual grid editor:
+Children editing in tree + inspector: **DONE 2026-07-22** (first half; WYSIWYG
+grid designer NOT started). Container widgets (grid, collapsibleGroup) are now
+addable at top level; their children are edited from the inspector's
+`childrenList` (Widgets slice, reorderable) / `childrenMap` (WidgetsMap keyed by
+area name) controls and shown nested in the tree. Mechanism: the generator now
+emits distinct `childrenList` / `childrenMap` editor kinds (was a single
+placeholder `children`) so the frontend knows list-vs-map without guessing;
+selection became a **path** (`w3/areas/main`, `w3/widgets/0`, nestable), resolved
+by `resolveNode()` to `{node, topId, parent}`; add/remove/move/type-switch live
+in the editor (single source), exposed to the pure-view control via `ChildrenApi`.
+Preview cards stay per top-level widget — a child's selection highlights/scrolls
+its top-level ancestor. **Tree drag-and-drop:** any row can be dragged onto a
+container row to move it inside (top-level widget → grid, or between containers;
+cycle-guarded); top-level rows still drag-reorder among themselves
+(`wireRowDnd`/`moveNodeIntoContainer`/`extractNode`). **Grid area naming is
+automatic** — children are assigned positional area names (1st `a`, 2nd `b`, …
+via `nextAreaName`), so the grid needs no area/template configuration: Go-side,
+`Grid.resolvedTemplate()` stacks the sorted areas one-per-row when no explicit
+`Template()` is set (explicit 2D templates on compiled dashboards still win). All
+reactive guardrails preserved (tree/inspector effects
+read only structural bits — types + container membership — so scalar edits don't
+rebuild them; verified by construction). **Known limitation (deferred, overlaps
+the visual/preview slice):** the in-editor live preview renders a container's
+layout, but nested child chart *data* does not load — `preview/query` dispatches
+by endpoint suffix (`findBySuffix("/query")`), which is ambiguous for a
+multi-child container, and the client wires only the first `[x-data="chart"]`.
+Correct nested-child data needs per-child preview dispatch (a preview-plumbing
+extension). Serialization / "Open in Explore" round-trip / (future) Go export of
+nested widgets are unaffected. Next: the visual grid editor:
 `grid-template-areas` = named rectangles on a cell matrix
 (`{cols, rows, areas:[{name,r0,c0,r1,c1}]}`); overlay on the *real* preview
 grid (CSS aligns it); rubber-band create / edge-drag resize / body-drag move,

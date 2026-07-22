@@ -1,6 +1,6 @@
 # Dockview evaluation — Explore view and normal dashboards
 
-**Date:** 2026-07-22 · **Status:** analysis only, nothing implemented.
+**Date:** 2026-07-22 · **Status:** Slices A–C implemented (see §5) — `frontend/components/dock.ts` adapter (package `dockview`, custom `dashica-tab` renderer with per-panel `closable`, layout persistence intentionally OFF for now), Explore editor on edge groups (`exploreLayout` in `frontend/explore/editor.ts`), `FilterScope`/`timeState` split live. Slices D–F planned.
 Companion to `2026-07-21-dynamic-widget-dashboard-ui.md` (the Explore plan);
 section references below point there.
 
@@ -690,21 +690,145 @@ sticky inspector footer; and the exact default geometry (dockview split order is
 approximate — users rearrange at runtime, not persisted while persistence is
 off). Prior slices' e2e keys on `data-explore`, preserved by adoption.
 
-### Slice D — dashboard chrome (`defaultPage`)
+### Slice D — dashboard chrome (`defaultPage`), edge-group shape — DONE 2026-07-22 (needs build + browser verify)
 
-1. `default_page.templ`: `MainApplication` grid → staging block (sidebar /
-   searchbar / content / debug), `initDashboardDock()` before
-   `Alpine.start()`; `docsPage` untouched.
-2. `dashboardLayout` (§4.4): locked header-less content group; search bar as
-   its own fixed locked panel above content (kills the sticky-scroll
-   question, §2.1); sidebar panel.
-3. Debug drawer: lazy panel + window-level toggle event (§4.5, incl. the
-   re-adopt-kept-reference caveat); popout button in the drawer header.
-4. Done when: every dev-server example dashboard renders identically
-   (screenshot diff), wrench → drawer → popout works, anchors/print
-   re-checked.
+**Implemented 2026-07-22.** The `defaultPage` grid is replaced by a dockview
+shell mirroring `exploreLayout`. Files:
+- `frontend/components/dashboardDock.ts` (new) — `initDashboardDock()` (called
+  before `Alpine.start()`), `dashboardLayout` (TOP `searchbar-edge` edge group =
+  full-width global search/SQL-filter dock, locked + header-less, skipped when
+  empty via `hasStagedPanel`; LEFT `menu-edge` edge group, 340px wide; centre
+  `content` **tab group**, unlocked + visible header, titled by
+  `document.title`), plus the lazy debug drawer wiring.
+- `lib/components/layout/default_page.templ` — `MainApplication` grid → a
+  `.dashboard-shell` wrapper (carries the single `x-data="filterScope"
+  data-filter-scope`, so search bar + content share one scope as before —
+  **deviation from the sketch's "scope on content panel root"**, deliberate:
+  Slice D keeps the shared SQL-filter search bar, so the scope must contain both
+  panels; Slice E moves it per-tab) + `#dashboard-dock` + an inert
+  `[data-dock-staging hidden]` block (menu / searchbar / content / debug).
+  `initDashboardDock(); Alpine.start()` in the inline script.
+- `lib/components/layout/debug_drawer.templ` — legacy daisyUI `DebugDrawer`
+  wrapper **deleted**. Only `DebugDrawerPanel` (dock-panel form, `data-debug-popout`
+  button) + shared `debugDrawerContent` (x-ref panes) remain. Used by every
+  layout's staging block.
+- `frontend/components/chart.ts` — wrench `$dispatch` → `window.dispatchEvent`
+  (drawer lives in a separate panel / popout window, unreachable by bubbling).
+- `frontend/components/debugDrawer.ts` — listener `this.$el` → `window`; `visible`
+  flips in lockstep with the dock's toggle (both start closed) and gates
+  x-ref (re)population. One `debugDrawer` instance per page.
+- `frontend/index.js` — exposes `window.Dashica.initDashboardDock`.
+- `frontend/components/application.css` — `.dashboard-shell` / `.dashboard-dock`
+  / `.dashboard-content` fill+scroll rules; shared `.dv-dashica-action`
+  (maximize) styling. `.application` grid kept (unused now, harmless).
+- `frontend/components/dock.ts` — adopt renderer now **caches** each adopted node
+  (`adoptedElements` map) so the lazy debug drawer re-adopts the same live
+  element after close (§4.5 caveat); shared `createRightHeaderActionComponent`
+  = a maximize/restore toggle (`group.api.maximize()` /
+  `api.exitMaximizedGroup()`, synced via `onDidMaximizedGroupChange`) + a
+  dbl-click-header fallback (Explore gets it free); new exported
+  `wireLazyDebugDrawer(api, referenceGroup)` — the shared lazy-debug + popout
+  wiring used by both docks.
+
+**Debug drawer unified across ALL three layouts.** `defaultPage`, `docsPage` and
+`explorePage` now render `DebugDrawerPanel` in their staging block and open it as
+a **lazy tab in the LEFT gutter edge group** (menu-edge on dashboards, tree-edge
+in Explore), overriding that gutter while open. Consequences:
+- `explore_page.templ` drops its `@DebugDrawer(){ … }` wrapper; `editor.ts`
+  `exploreLayout` calls `wireLazyDebugDrawer(api, 'tree-edge')`; `editor.templ`
+  stages `@layout.DebugDrawerPanel()`.
+- `docs_page.templ` now routes through `MainApplication` + `initDashboardDock()`
+  (searchBar passed hidden → top dock skipped). `DocsApplication` **deleted**.
+  This **supersedes §4.1 rule 4** (docsPage was to stay pure SSR): docs pages are
+  now JS-assembled like dashboards — accepted so the debug drawer is one code
+  path everywhere.
+
+**Implementation decisions vs the sketch:**
+- **Debug drawer = lazy `closable` tab in the LEFT gutter edge group**
+  (per user request "debug should override menu edge; add to left gutter"), not
+  the bottom `details-edge` edge group and not a separate left panel. It takes
+  the gutter's width (sash-resizable). The bottom `details-edge` (row details,
+  Slice F) is unaffected.
+- **Popout** is a `data-debug-popout` button inside the drawer content, wired via
+  a **delegated** document click listener → `api.addPopoutGroup(panel.group)`
+  (robust against adoption timing + close/reopen), rather than a header action.
+
+**Unverified (needs `templ generate` + esbuild build, then a browser / e2e):**
+adopt-before-`Alpine.start()` for the search bar + charts inside the content
+tab; the search-bar strip height (160px initial) fitting the 3-row bar; panel
+scroll vs the SearchBar's `sticky`; anchors/print inside a scroll panel;
+wrench → drawer toggle → popout (stylesheet mirroring into the child window,
+§4.8 Q2); maximize/restore + dbl-click in both views; the menu edge group
+collapse/resize. No dashboard e2e exists yet — only the Explore suite, which
+keys on `data-explore` (unaffected).
+
+---
+
+Mirror the as-built `exploreLayout` (`frontend/explore/editor.ts`) — edge
+groups for structural slots, centre main grid for the star of the page:
+
+- **LEFT edge group** — the menu (`PageMenu` sidebar): collapsible,
+  resizable, permanent structural slot (like Explore's tree edge group). and the debug drawer
+  live here as well.
+- **CENTRE main grid** — the dashboard content as a **tab group** from day
+  one: the initially-loaded dashboard is the first tab; further dashboards
+  open as additional tabs (full multi-dashboard wiring is Slice E, but the
+  geometry — visible header, unlocked group — is built here so E adds no
+  layout change). Search bar as a locked, header-less strip panel above the
+  tab group (same pattern as Explore's `preview-controls`).
+- **BOTTOM edge group** — record/row details (Slice F)
+
+```ts
+function dashboardLayout(api: DockviewApi) {
+    const R = { renderer: 'always' as const };
+    const adopt = (id: string, closable = false) =>
+        ({ id, component: 'adopt', params: { adopt: id, closable }, ...R });
+
+    api.addEdgeGroup('left',   { id: 'menu-edge',    initialSize: 240, minimumSize: 150 });
+    api.addEdgeGroup('bottom', { id: 'details-edge', initialSize: 220, minimumSize: 100 });
+
+    // Centre: dashboard tabs (unlocked, visible header — Slice E adds tabs),
+    // with the search bar as a locked strip above.
+    api.addPanel({ ...adopt('content'), title: documentTitle() });
+    api.addPanel({ ...adopt('searchbar'),
+        position: { referencePanel: 'content', direction: 'above' },
+        initialHeight: 48, maximumHeight: 110 });
+    const sb = api.getPanel('searchbar');
+    if (sb) { sb.group.locked = 'no-drop-target'; sb.group.header.hidden = true; }
+
+    api.addPanel({ ...adopt('menu'), title: 'Menu',
+        position: { referenceGroup: 'menu-edge' } });
+    // details-edge starts EMPTY — row-details (F) and the debug drawer (§4.5)
+    // add panels lazily; dockview edge groups may need a hidden placeholder or
+    // deferred group creation on first panel — decide in implementation.
+}
+```
+
+Steps:
+
+1. `default_page.templ`: `MainApplication` grid → staging block
+   (`data-dock-panel` = menu / searchbar / content / debug),
+   `initDashboardDock()` before `Alpine.start()`; `docsPage` untouched.
+2. `dashboardLayout` as above; `FilterScope` on the content panel root
+   (Slice A is live — classic page scope moves from page root to panel
+   root here).
+3. Debug drawer: lazy panel into `details-edge` + window-level toggle event
+   (§4.5, incl. the re-adopt-kept-reference caveat); popout button.
+4. **Maximize groups** (both views): a right-header action in `dock.ts` —
+   dockview's `createRightHeaderActionComponent`-style hook next to the
+   `dashica-tab` renderer — toggling `group.api.maximize()` /
+   `api.exitMaximizedGroup()`. One implementation, shows on every group
+   with a visible header (Explore gets it for free). Also wire double-click
+   on the group header if dockview doesn't ship it by default.
+5. Done when: every dev-server example dashboard renders identically inside
+   the content tab (screenshot diff), menu edge collapses/resizes, wrench →
+   drawer in bottom edge → popout works, maximize/restore works in both
+   dashboard and Explore views, anchors/print re-checked.
 
 ### Slice E — workspace tabs (needs A + D)
+
+The geometry already exists after D (centre tab group, visible header) —
+this slice is purely content wiring: fragments, scopes, navigation.
 
 1. Go: bare-fragment rendering — reuse the dashboard's existing route with a
    layout variant (e.g. `?fragment=1` or an `HX-style` header): content +
@@ -729,9 +853,11 @@ off). Prior slices' e2e keys on `data-explore`, preserved by adoption.
 1. Table widget (tabulator): row click / context menu → bubbling
    `dashica-row-details` with row payload; same menu hosts B6
    "filter from data".
-2. `dock.ts`: `details` renderer (key/value via `htl`, §4.6); one live
-   panel, pin action promotes (rename or re-id), next click spawns a fresh
-   live panel.
+2. `dock.ts`: `details` renderer (key/value via `htl`, §4.6); panels land
+   in D's **bottom `details-edge` group** as tabs, next to the debug
+   drawer; one live panel, pin action promotes (rename or re-id), next
+   click spawns a fresh live panel — pinned rows = tabs, side-by-side
+   compare = drag a tab sideways within the edge group.
 3. Data-tab sample rows in Explore get the same affordance (B6/B7 synergy).
 4. Done when: click row → panel; pin two rows → side-by-side compare;
    popout works.

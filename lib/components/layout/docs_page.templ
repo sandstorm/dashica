@@ -4,21 +4,11 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-// DocsApplication renders the application without the search/filter bar for documentation pages
-templ DocsApplication(renderingContext rendering.DashboardContext, content templ.Component) {
-    <div class="application">
-        <aside class="application__sidebar">
-            @PageMenu(renderingContext)
-        </aside>
-        <main class="application__main" x-data="filterScope" data-filter-scope>
-            <div class="application__content prose max-w-none">
-                @content
-            </div>
-        </main>
-    </div>
-}
-
-// DocsPage is a layout for documentation pages without search/filter functionality
+// docsPageFn is documentation-with-embedded-charts. It shares the dashboard
+// dockview shell (MainApplication): sidebar menu in the left edge group, content
+// in the centre tab group, the debug drawer as a lazy panel in the menu gutter.
+// The only difference from defaultPage is the search bar — docs pages pass a
+// hidden searchBar, so MainApplication skips the top search/filter dock.
 templ docsPageFn(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
 	<html>
 		<head>
@@ -32,10 +22,8 @@ templ docsPageFn(renderingContext rendering.DashboardContext, searchBar renderin
 			<script src="/public/dist/index.js"></script>
 		</head>
 		<body class="bg-base-200">
-			@DebugDrawer() {
-				@DocsApplication(renderingContext, content)
-			}
-			<script>window.Alpine.start();</script>
+			@MainApplication(renderingContext, searchBar, content)
+			<script>window.Dashica.initDashboardDock(); window.Alpine.start();</script>
 		</body>
 	</html>
 }

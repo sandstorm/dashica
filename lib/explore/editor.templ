@@ -1,5 +1,7 @@
 package explore
 
+import "github.com/sandstorm/dashica/lib/components/layout"
+
 // EditorShell is the static DOM scaffold the frontend `exploreEditor` Alpine
 // component (frontend/explore/editor.ts) populates. The data-explore attributes
 // name the panes it fills; data-base-url tells the frontend where the API lives.
@@ -33,6 +35,9 @@ templ EditorShell(baseURL string) {
 			<div data-dock-panel="drawer-data" class="explore-drawer__content" data-explore="drawer-data"></div>
 			<div data-dock-panel="drawer-gocode" class="explore-drawer__content" data-explore="drawer-gocode"></div>
 			<div data-dock-panel="drawer-json" class="explore-drawer__content" data-explore="drawer-json"></div>
+			<div data-dock-panel="debug">
+				@layout.DebugDrawerPanel()
+			</div>
 		</div>
 	</div>
 }
