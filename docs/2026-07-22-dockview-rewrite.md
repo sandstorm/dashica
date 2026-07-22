@@ -639,22 +639,56 @@ only, answer §4.8:
 workaround → stop, fall back to CSS-resize plan, keep Slices A and F′
 (row details as plain overlay) — the doc's earlier verdicts remain honest.
 
-### Slice C — Explore editor chrome on dockview
+### Slice C — Explore editor chrome on dockview — DONE 2026-07-22 (needs build + browser verify)
 
-1. `frontend/components/dock.ts` (§4.2): adapter, `adopt` renderer,
-   `initDock`, autosave, `STATE_VERSION`.
-2. `lib/explore/editor.templ`: five mount points → staging block
-   (`data-dock-panel` = tree / preview-controls / preview / inspector /
-   drawer-data / drawer-gocode / drawer-json); keep `data-explore`
-   attributes on the inner elements (e2e keys on them).
-3. `frontend/explore/editor.ts`: mount lookup via adapter
-   (`dock.panelElement(id)`); delete the hand-rolled drawer tab strip
-   (three panels in one group now, §4.4); preview-controls = locked
-   header-less panel above preview (§2.1).
-4. `explore.css`: delete the shell grid; add `dockview-theme-dashica`
-   (§4.7).
-5. Done when: Explore e2e green; layout survives reload (localStorage);
-   reset-layout button exists (drop the storage key, rebuild default).
+**Implemented 2026-07-22** against `dockview-core@7.0.2`. Notes on the 7.x API vs
+the §4.2 sketch: theming is a `theme` *object* (`{name, className, colorScheme}`)
+not a bare `className`; `createComponent` receives `{id, name}` and returns an
+`IContentRenderer`; adopt panels use `renderer:'always'` so moved DOM (+ live
+Alpine) survives being hidden. Files:
+- `frontend/components/dock.ts` (new) — the only dockview importer: `adopt`
+  renderer (moves `[data-dock-panel]` element in), `initDock` (localStorage
+  autosave behind `STATE_VERSION`, fromJSON→default fallback), `resetDock`,
+  `dockview-theme-dashica`.
+- `lib/explore/editor.templ` — five mount points → fixed toolbar + `#explore-dock`
+  container + inert `[data-dock-staging hidden]` block (tree / preview-controls /
+  preview / inspector / drawer-data / drawer-gocode / drawer-json); `data-explore`
+  attrs kept on inner elements.
+- `frontend/explore/editor.ts` — `initExploreDock()` (called before
+  `Alpine.start()` from the page script) assembles the dock; `exploreLayout`
+  builds the default arrangement; the drawer's three tabs are now dockview panels
+  in one full-width bottom group (hand-rolled tab strip / collapse / resize
+  deleted); drawer content builds into the active panel via
+  `onDidActivePanelChange`. Toolbar gained a tree collapse toggle + "Reset layout".
+- `lib/components/layout/explore_page.templ` — script now
+  `initExploreDock(); Alpine.start()`.
+- `frontend/index.js` — exposes `window.Dashica.initExploreDock`.
+- `frontend/explore/explore.css` — grid shell → flex + dock-fill rules; dockview
+  theme mapping; dead drawer CSS removed.
+- `e2e/explore.spec.ts` — drawer-tab selectors `.explore-tab`→`.dv-tab`,
+  `[data-explore="drawer"]`→`[data-explore="drawer-data"]`.
+
+Layout (VSCode/dockview-demo shape, per user) uses **edge groups**
+(`api.addEdgeGroup` — dockview.dev/docs/core/groups/edgeGroups): tree = LEFT,
+inspector = RIGHT, drawer (Data/Go code/JSON tab group) = BOTTOM edge group — all
+three collapsible sidebars docked to the shell edge, outside the main grid. The
+centre main grid holds only the dominant preview with a short (40px) locked
+header-less time-strip above it, so the preview stays dominant. Edge groups need no manual module registration — the
+full `dockview-core` package appends `AllModules` (incl. `EdgeGroupModule`) at
+construction. Removability is per-panel: a custom tab renderer in `dock.ts` shows
+the close × only for panels whose params mark them `closable` (just the tree).
+Inspector Apply footer stays sticky-bottom. **Layout persistence is disabled for
+now** (per request): `initDock` builds the default on every load, no localStorage
+read/autosave — the fromJSON/toJSON plumbing is stubbed out in one place, ready to
+re-enable behind `STATE_VERSION` later.
+
+**Unverified (needs `templ generate` + esbuild build, then a browser / the e2e
+suite)** — the §4.8 open questions this slice is the first to exercise: (1)
+adopt-before-`Alpine.start()` actually lets the preview-controls searchBar and the
+preview charts' `x-intersect`/`x-resize` fire inside panels; (3) panel scroll vs
+sticky inspector footer; and the exact default geometry (dockview split order is
+approximate — users rearrange at runtime, not persisted while persistence is
+off). Prior slices' e2e keys on `data-explore`, preserved by adoption.
 
 ### Slice D — dashboard chrome (`defaultPage`)
 

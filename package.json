@@ -13,6 +13,7 @@
     "@types/alpinejs": "^3.13.11",
     "@viz-js/viz": "^3.24.0",
     "apache-arrow": "^21.1.0",
+    "dockview": "^7.0.2",
     "esbuild": "^0.27.2",
     "esbuild-plugin-tailwindcss": "^2.1.0",
     "flatpickr": "^4.6.13",

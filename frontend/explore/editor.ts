@@ -41,6 +41,10 @@ import {classBadge, Column, ControlCtx, FieldDescriptor, FieldKind, humanize, ki
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
 import {createFilterScope} from "../store";
+import {initDock, resetDock, type DockviewApi} from "../components/dock";
+
+// localStorage key for the Explore editor's dockview layout (§4.2).
+const EXPLORE_DOCK_KEY = 'dashica.explore.dock';
 
 interface WidgetState { id: string; type: string; props: Record<string, any>; }
 interface DashboardState { title: string; layout: string; widgets: WidgetState[]; }
@@ -50,7 +54,7 @@ interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[
 type DrawerTab = 'data' | 'gocode' | 'json';
 // buildRev is the "commit" counter: previews query only when it changes (an
 // explicit Build), never on every keystroke — see the preview effect below.
-interface UiState { selectedId: string | null; drawerTab: DrawerTab; drawerCollapsed: boolean; buildRev: number; }
+interface UiState { selectedId: string | null; drawerTab: DrawerTab; buildRev: number; }
 
 interface PreviewEntry {
     card: HTMLElement;
@@ -113,12 +117,12 @@ class Editor {
     private elTree: HTMLElement;
     private elPreview: HTMLElement;
     private elInspector: HTMLElement;
-    private elDrawer: HTMLElement;
+    // The three drawer panels (Data / Go code / JSON) are dockview panels now;
+    // each has its own content element, and the drawer effect builds into the
+    // active one (dockview owns the tab bar and which panel is visible).
+    private drawerPanels: Record<DrawerTab, HTMLElement>;
     private titleInput!: HTMLInputElement;
     private elTreeList!: HTMLElement;
-    private elDrawerTabs!: HTMLElement;
-    private elDrawerCollapse!: HTMLButtonElement;
-    private elDrawerContent!: HTMLElement;
     private jsonTextarea: HTMLTextAreaElement | null = null;
     private elUndoBtn!: HTMLButtonElement;
     private elRedoBtn!: HTMLButtonElement;
@@ -139,16 +143,24 @@ class Editor {
     // actual selection change, not on every structural repaint.
     private lastScrolledSel: string | null = null;
 
-    constructor(private root: HTMLElement, private baseUrl: string) {
+    // dockApi is the assembled Explore dock (built before Alpine.start by
+    // initExploreDock). The mount elements below were MOVED out of the staging
+    // block into dock panels, but remain descendants of `root`, so the same
+    // querySelectors still resolve them.
+    constructor(private root: HTMLElement, private baseUrl: string, private dockApi: DockviewApi | null) {
         this.elToolbar = root.querySelector('[data-explore="toolbar"]')!;
         this.elTree = root.querySelector('[data-explore="tree"]')!;
         this.elPreview = root.querySelector('[data-explore="preview"]')!;
         this.elInspector = root.querySelector('[data-explore="inspector"]')!;
-        this.elDrawer = root.querySelector('[data-explore="drawer"]')!;
+        this.drawerPanels = {
+            data: root.querySelector('[data-explore="drawer-data"]')!,
+            gocode: root.querySelector('[data-explore="drawer-gocode"]')!,
+            json: root.querySelector('[data-explore="drawer-json"]')!,
+        };
     }
 
     async start() {
-        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'data', drawerCollapsed: false, buildRev: 0} as UiState);
+        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'data', buildRev: 0} as UiState);
         this.state = Alpine.reactive(this.loadState());
         this.reseedIdSeq();
         this.history = [deepClone(this.state)];
@@ -171,12 +183,26 @@ class Editor {
         // dynamic parts in sync. Effect first-runs paint the initial state.
         this.buildToolbar();
         this.buildTreeShell();
-        this.buildDrawerShell();
+        this.wireDrawerTabs();
         this.wireFilterToggle();
         this.wireKeyboard();
         this.wireInspectorInteractions();
         this.wireEffects();
         this.updateHistoryButtons();
+    }
+
+    // Mirror the dock's active drawer panel into ui.drawerTab so the drawer
+    // effect rebuilds the right content when the user clicks a dockview tab.
+    // (Preview / tree / inspector activations are ignored — not drawer tabs.)
+    private wireDrawerTabs() {
+        if (!this.dockApi) return;
+        const byId: Record<string, DrawerTab> = {
+            'drawer-data': 'data', 'drawer-gocode': 'gocode', 'drawer-json': 'json',
+        };
+        this.dockApi.onDidActivePanelChange((e) => {
+            const tab = e.panel ? byId[e.panel.id] : undefined;
+            if (tab) this.ui.drawerTab = tab;
+        });
     }
 
     // ---- explicit build + keyboard ----------------------------------------
@@ -305,20 +331,22 @@ class Editor {
             this.reconcilePreviews(widgets, ids, sel);
         }));
 
-        // drawer chrome: tab bar + content pane follow the active tab and the
-        // collapsed flag. The Data tab is selection-aware (reads selectedId only
-        // in its own branch, so json/gocode don't rebuild on selection changes).
+        // drawer content follows the active tab. dockview owns the tab bar and
+        // which panel is visible; we build content only into the active panel
+        // (matching the old single-content behaviour — inactive tabs stay empty
+        // until activated). The Data tab is selection-aware (reads selectedId
+        // only in its own branch, so json/gocode don't rebuild on selection).
         this.effects.push(Alpine.effect(() => {
             const tab = this.ui.drawerTab;
-            const collapsed = this.ui.drawerCollapsed;
-            this.updateDrawerTabs(tab, collapsed);
             if (this.dataPreview) { this.dataPreview.destroy(); this.dataPreview = null; }
-            this.elDrawerContent.innerHTML = '';
+            this.drawerPanels.data.innerHTML = '';
+            this.drawerPanels.gocode.innerHTML = '';
+            this.drawerPanels.json.innerHTML = '';
             this.jsonTextarea = null;
-            if (collapsed) return; // content hidden — skip building it
-            if (tab === 'json') this.buildJsonTab(this.elDrawerContent);
-            else if (tab === 'gocode') this.buildGocodeTab(this.elDrawerContent);
-            else this.buildDataTab(this.elDrawerContent, this.ui.selectedId); // data: selection dep
+            const content = this.drawerPanels[tab];
+            if (tab === 'json') this.buildJsonTab(content);
+            else if (tab === 'gocode') this.buildGocodeTab(content);
+            else this.buildDataTab(content, this.ui.selectedId); // data: selection dep
         }));
 
         // json live sync: the textarea reflects state when the json tab is open
@@ -346,9 +374,17 @@ class Editor {
             onclick=${() => this.undo()}>↶</button>` as HTMLButtonElement;
         this.elRedoBtn = html`<button class="explore-btn explore-btn--icon" title="Redo (Cmd/Ctrl+Shift+Z)"
             onclick=${() => this.redo()}>↷</button>` as HTMLButtonElement;
+
+        // Reset the dockview pane arrangement back to the default (drops the saved
+        // layout in localStorage and reloads so buildDefaultLayout runs). Also the
+        // way to bring the tree back after closing it. Panel CONTENT (the
+        // dashboard) is untouched — only geometry resets.
+        const resetLayout = html`<button class="explore-btn" title="Reset pane layout"
+            onclick=${() => resetDock(EXPLORE_DOCK_KEY)}>Reset layout</button>` as HTMLButtonElement;
+
         this.elToolbar.replaceChildren(
             this.titleInput,
-            this.elUndoBtn, this.elRedoBtn, share);
+            this.elUndoBtn, this.elRedoBtn, share, resetLayout);
     }
 
     private shareUrl(): string {
@@ -803,66 +839,6 @@ class Editor {
 
     // ---- drawer (Go code / JSON / SQL) ------------------------------------
 
-    private buildDrawerShell() {
-        // Drag handle along the drawer's top edge → resize its height.
-        const resize = html`<div class="explore-drawer__resize" title="Drag to resize"></div>` as HTMLElement;
-        this.wireDrawerResize(resize);
-
-        const tabDefs: [DrawerTab, string][] = [['data', 'Data'], ['gocode', 'Go code'], ['json', 'JSON']];
-        const tabs = tabDefs.map(([key, label]) =>
-            // Clicking the active tab while expanded collapses; otherwise select + expand.
-            html`<button class="explore-tab" data-tab=${key} onclick=${() => {
-                if (this.ui.drawerTab === key && !this.ui.drawerCollapsed) { this.ui.drawerCollapsed = true; return; }
-                this.ui.drawerTab = key;
-                this.ui.drawerCollapsed = false;
-            }}>${label}</button>`);
-
-        this.elDrawerCollapse = html`<button class="explore-btn explore-btn--sm explore-drawer__collapse"
-            onclick=${() => { this.ui.drawerCollapsed = !this.ui.drawerCollapsed; }}></button>` as HTMLButtonElement;
-
-        this.elDrawerTabs = html`<div class="explore-drawer__tabs">
-            ${tabs}
-            <div class="explore-drawer__tabs-spacer"></div>
-            ${this.elDrawerCollapse}
-        </div>` as HTMLElement;
-
-        this.elDrawerContent = html`<div class="explore-drawer__content"></div>` as HTMLElement;
-
-        this.elDrawer.replaceChildren(resize, this.elDrawerTabs, this.elDrawerContent);
-    }
-
-    private updateDrawerTabs(active: DrawerTab, collapsed: boolean) {
-        this.elDrawerTabs.querySelectorAll<HTMLElement>('.explore-tab').forEach((b) => {
-            b.classList.toggle('is-active', b.dataset.tab === active && !collapsed);
-        });
-        this.elDrawer.classList.toggle('is-collapsed', collapsed);
-        this.elDrawerCollapse.textContent = collapsed ? '▲' : '▼';
-        this.elDrawerCollapse.title = collapsed ? 'Expand drawer' : 'Collapse drawer';
-    }
-
-    // Pointer-drag the top edge to resize the drawer height (clamped). Height is
-    // set inline on the drawer element, which sizes the grid's auto "drawer" row.
-    private wireDrawerResize(handle: HTMLElement) {
-        handle.addEventListener('pointerdown', (down: PointerEvent) => {
-            if (this.ui.drawerCollapsed) return;
-            down.preventDefault();
-            const startY = down.clientY;
-            const startH = this.elDrawer.getBoundingClientRect().height;
-            handle.setPointerCapture(down.pointerId);
-            const onMove = (move: PointerEvent) => {
-                const h = startH + (startY - move.clientY); // drag up → taller
-                const max = window.innerHeight * 0.8;
-                this.elDrawer.style.height = `${Math.max(90, Math.min(max, h))}px`;
-            };
-            const onUp = () => {
-                handle.removeEventListener('pointermove', onMove);
-                handle.removeEventListener('pointerup', onUp);
-            };
-            handle.addEventListener('pointermove', onMove);
-            handle.addEventListener('pointerup', onUp);
-        });
-    }
-
     // The preview strip's "filters" button toggles the SQL-filter textarea
     // (server-rendered inside the searchBar-scoped controls). Kept out of Alpine
     // to avoid CSP expression limits — plain DOM toggle of the [hidden] panel.
@@ -1018,15 +994,80 @@ class Editor {
     }
 }
 
-// Alpine boundary: register the component, construct the plain Editor, start it.
-// The editor root carries [data-filter-scope]; we create its single URL-syncing
-// filter scope here (before the preview charts mount, since Alpine inits parents
-// first) so the preview strip's SQL filter + the global $store.timeState drive
-// the preview charts automatically — the editor needs no filter effect.
+// Default layout for the Explore editor dock (§4.4). Every pane is an `adopt`
+// panel with renderer:'always' so its moved DOM (and live Alpine components) stay
+// mounted while hidden. preview-controls is a locked, header-less strip pinned
+// above the preview cards — it is the previewed dashboard's state, not a
+// user-draggable pane. The drawer's three tabs are one group (direction 'within').
+// VSCode/dockview-demo shape using EDGE GROUPS (dockview.dev/docs/core/groups/
+// edgeGroups): the tree is a LEFT edge group and the inspector a RIGHT edge group
+// — collapsible sidebars docked to the shell edge, outside the main grid. The
+// centre main grid holds the dominant preview with its locked time-strip above
+// and the Data / Go code / JSON drawer tab group below. `closable` (in params)
+// drives the custom tab's × — only the tree gets one.
+function exploreLayout(api: DockviewApi) {
+    const R = { renderer: 'always' as const };
+    const adopt = (id: string, closable = false) =>
+        ({ id, component: 'adopt', params: { adopt: id, closable }, ...R });
+
+    // Edge groups (collapsible; permanent structural slots): tree LEFT, inspector
+    // RIGHT, drawer BOTTOM. The centre main grid keeps just the preview + its
+    // locked time-strip, so the preview stays dominant.
+    api.addEdgeGroup('left', { id: 'tree-edge', initialSize: 250, minimumSize: 150 });
+    api.addEdgeGroup('right', { id: 'inspector-edge', initialSize: 320, minimumSize: 200 });
+    api.addEdgeGroup('bottom', { id: 'drawer-edge', initialSize: 220, minimumSize: 100 });
+
+    // Centre main grid: preview dominant, with the locked time-strip above it.
+    api.addPanel({ ...adopt('preview'), title: 'Preview' });
+    api.addPanel({ ...adopt('preview-controls'),
+        position: { referencePanel: 'preview', direction: 'above' }, initialHeight: 40, maximumHeight: 100 });
+    const pc = api.getPanel('preview-controls');
+    if (pc) {
+        pc.group.locked = 'no-drop-target';
+        pc.group.header.hidden = true;
+    }
+
+    // Drawer tab group (Data / Go code / JSON) into the BOTTOM edge group.
+    api.addPanel({ ...adopt('drawer-data'), title: 'Data',
+        position: { referenceGroup: 'drawer-edge' } });
+    api.addPanel({ ...adopt('drawer-gocode'), title: 'Go code',
+        position: { referencePanel: 'drawer-data', direction: 'within' } });
+    api.addPanel({ ...adopt('drawer-json'), title: 'JSON',
+        position: { referencePanel: 'drawer-data', direction: 'within' } });
+
+    // Sidebar panels into their edge groups (tree removable, inspector not).
+    api.addPanel({ ...adopt('tree'), title: 'Tree',
+        position: { referenceGroup: 'tree-edge' } });
+    api.addPanel({ ...adopt('inspector'), title: 'Inspector',
+        position: { referenceGroup: 'inspector-edge' } });
+
+    // Land on the Data tab.
+    api.getPanel('drawer-data')?.api.setActive();
+}
+
+// The assembled Explore dock, built by initExploreDock() BEFORE Alpine.start()
+// (§4.2 rule 2) and read by the Alpine boundary below to hand into the Editor.
+let exploreDockApi: DockviewApi | null = null;
+
+// initExploreDock assembles the dock and adopts the staged panes into it. Called
+// from the Explore page's inline script before window.Alpine.start(), so the
+// panes (and the searchBar inside preview-controls) are in their final position
+// when Alpine walks the tree — no re-init, no reparenting edge cases (§4.8 Q1).
+export function initExploreDock() {
+    const container = document.getElementById('explore-dock');
+    if (!container) return; // not the Explore page
+    exploreDockApi = initDock(container, EXPLORE_DOCK_KEY, exploreLayout);
+}
+
+// Alpine boundary: create the filter scope, construct the plain Editor with the
+// pre-built dock, start it. The editor root carries [data-filter-scope]; the
+// scope is created here (before the preview charts mount, since Alpine inits
+// parents first) so the preview strip's SQL filter + the global $store.timeState
+// drive the preview charts automatically — the editor needs no filter effect.
 export default () => ({
     init() {
         createFilterScope(this.$el, { syncUrl: true });
-        const editor = new Editor(this.$el, this.$el.dataset.baseUrl || '');
+        const editor = new Editor(this.$el, this.$el.dataset.baseUrl || '', exploreDockApi);
         editor.start();
     },
 });

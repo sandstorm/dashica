@@ -61,8 +61,9 @@ test('editor loads: panes, drawer tabs, toolbar', async ({page}) => {
     await expect(page.locator('[data-explore="tree"]')).toBeVisible();
     await expect(page.locator('[data-explore="preview"]')).toBeVisible();
     await expect(page.locator('[data-explore="inspector"]')).toBeVisible();
+    // Drawer tabs are dockview tabs now (Data / Go code / JSON in one group).
     for (const tab of ['Data', 'Go code', 'JSON']) {
-        await expect(page.locator('.explore-tab', {hasText: tab})).toBeVisible();
+        await expect(page.locator('.dv-tab', {hasText: tab})).toBeVisible();
     }
     // No dashboard sidebar — Explore owns the full screen.
     await expect(page.locator('[data-explore="preview"]')).toContainText('Add a widget to start building.');
@@ -173,8 +174,8 @@ test('a complete WHERE clause filters the chart without error', async ({page}) =
 
 test('Data tab shows columns with classes/help and live sample rows', async ({page}) => {
     await chartWithTable(page);
-    await page.locator('.explore-tab', {hasText: 'Data'}).click();
-    const drawer = page.locator('[data-explore="drawer"]');
+    await page.locator('.dv-tab', {hasText: 'Data'}).click();
+    const drawer = page.locator('[data-explore="drawer-data"]');
     await expect(drawer).toContainText(`Columns · ${TABLE}`);
     await expect(drawer).toContainText('customer_tenant');
     await expect(drawer).toContainText('Sample rows');
@@ -184,8 +185,8 @@ test('Data tab shows columns with classes/help and live sample rows', async ({pa
 
 test('values button lists top distinct values for a categorical column', async ({page}) => {
     await chartWithTable(page);
-    await page.locator('.explore-tab', {hasText: 'Data'}).click();
-    const drawer = page.locator('[data-explore="drawer"]');
+    await page.locator('.dv-tab', {hasText: 'Data'}).click();
+    const drawer = page.locator('[data-explore="drawer-data"]');
     // host_name is categorical → has a values button.
     const row = drawer.locator('div', {hasText: 'host_name'}).locator('button', {hasText: 'values'}).first();
     await row.click();

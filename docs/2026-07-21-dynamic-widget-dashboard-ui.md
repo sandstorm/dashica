@@ -333,11 +333,7 @@ fragment base64 is query-escaped because the editor reads it via
 `URLSearchParams` (`+`→space otherwise). Tests: `dashboard_explore_test.go`
 (top-level + nested skip, all-supported, strict-still-fails) +
 `dashboard_openinexplore_test.go` (redirect state round-trips, 404 when Explore
-unregistered), race-clean. **Not yet done:** templ regen + frontend rebuild
-(user's build step) to surface the button; browser E2E (recurring deferred gap).
-Accepted limitation: template helpers (`templates.LogOverview(...)`) export
-flattened. No in-place override of compiled dashboards — compiled = immutable
-truth.
+unregistered), race-clean.
 
 **Step 7 — Optional persistence.**
 `Store` interface + JSON-file store (`WithFileStore(dir)`, write-temp+rename;

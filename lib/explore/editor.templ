@@ -8,21 +8,32 @@ package explore
 // The preview pane carries its own sticky time-range strip (explorePreviewControls),
 // because the time range is part of the *previewed dashboard's* state — it belongs
 // above the widgets it re-queries, exactly as on a real dashboard page.
+// The toolbar stays as fixed chrome above the dock; everything below it is owned
+// by dockview (geometry). The panes live in an inert [data-dock-staging] block as
+// [data-dock-panel="…"] elements — the dock's `adopt` renderer MOVES each into its
+// panel before Alpine.start() (frontend/components/dock.ts, editor.ts
+// initExploreDock). The data-explore attributes stay on the inner elements so
+// editor.ts's mount lookups and the e2e suite are unaffected by the move.
+// The drawer's Data / Go code / JSON tabs are now three dockview panels in one
+// group (replacing the hand-rolled tab strip); dockview renders the tab bar.
 templ EditorShell(baseURL string) {
 	<div x-data="exploreEditor" class="explore-editor" data-base-url={ baseURL } data-filter-scope>
 		<div class="explore-toolbar">
 			<a class="explore-home" href="/">← Dashica</a>
 			<div class="explore-toolbar__editor" data-explore="toolbar"></div>
 		</div>
-		<div class="explore-body">
-			<aside class="explore-tree" data-explore="tree"></aside>
-			<section class="explore-preview">
+		<div id="explore-dock" class="explore-dock"></div>
+		<div data-dock-staging hidden>
+			<aside data-dock-panel="tree" class="explore-tree" data-explore="tree"></aside>
+			<div data-dock-panel="preview-controls">
 				@explorePreviewControls()
-				<div class="explore-preview__cards" data-explore="preview"></div>
-			</section>
-			<aside class="explore-inspector" data-explore="inspector"></aside>
+			</div>
+			<div data-dock-panel="preview" class="explore-preview__cards" data-explore="preview"></div>
+			<aside data-dock-panel="inspector" class="explore-inspector" data-explore="inspector"></aside>
+			<div data-dock-panel="drawer-data" class="explore-drawer__content" data-explore="drawer-data"></div>
+			<div data-dock-panel="drawer-gocode" class="explore-drawer__content" data-explore="drawer-gocode"></div>
+			<div data-dock-panel="drawer-json" class="explore-drawer__content" data-explore="drawer-json"></div>
 		</div>
-		<div class="explore-drawer" data-explore="drawer"></div>
 	</div>
 }
 

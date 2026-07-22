@@ -1,29 +1,27 @@
 /* Explore editor — full-viewport, chrome-free (its own ExplorePage layout, no
-   dashboard sidebar). A CSS grid owns the whole screen: toolbar / body / drawer
-   rows; the page itself never scrolls — each pane scrolls independently. Colors
-   use daisyUI's CSS custom props so the editor tracks the active theme. */
+   dashboard sidebar). Dockview owns the pane geometry; colors use daisyUI's CSS
+   custom props so the editor tracks the active theme. */
 
+/* Full-viewport shell: fixed toolbar, then the dockview fills the rest. Dockview
+   owns the pane geometry (§4.1); the page itself never scrolls — each panel
+   scrolls its own adopted content. */
 .explore-editor {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    grid-template-areas: "toolbar" "body" "drawer";
+    display: flex;
+    flex-direction: column;
     height: 100vh;
-    gap: 0.5rem;
-    padding: 0.5rem;
     box-sizing: border-box;
     overflow: hidden;
     font-size: 0.85rem;
 }
 
 .explore-toolbar {
-    grid-area: toolbar;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     gap: 0.75rem;
     padding: 0.4rem 0.6rem;
     background: var(--color-base-100, #fff);
-    border: 1px solid var(--color-base-300, #ddd);
-    border-radius: 0.5rem;
+    border-bottom: 1px solid var(--color-base-300, #ddd);
 }
 .explore-home {
     font-weight: 600;
@@ -36,43 +34,36 @@
 .explore-toolbar__editor { display: flex; flex: 1; align-items: center; gap: 0.5rem; }
 .explore-toolbar__title { flex: 1; font-weight: 600; }
 
-.explore-body {
-    grid-area: body;
-    display: grid;
-    grid-template-columns: 220px minmax(0, 1fr) 320px;
-    gap: 0.5rem;
-    min-height: 0;
-}
+/* the dockview container fills the remaining height */
+.explore-dock { flex: 1; min-height: 0; position: relative; }
+
+/* dockview gives every panel a .dock-adopt wrapper; the adopted element fills it
+   and scrolls internally */
+.dock-adopt { height: 100%; min-height: 0; overflow: hidden; }
+.dock-adopt > * { height: 100%; min-height: 0; box-sizing: border-box; }
 
 .explore-tree,
-.explore-inspector,
-.explore-preview {
+.explore-inspector {
     background: var(--color-base-100, #fff);
-    border: 1px solid var(--color-base-300, #ddd);
-    border-radius: 0.5rem;
-    min-height: 0;
+    padding: 0.5rem;
+    overflow: auto;
 }
-.explore-tree,
-.explore-inspector { padding: 0.5rem; overflow: auto; }
 
-/* preview pane: sticky compact time-range strip above a scrolling card list */
-.explore-preview {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: var(--color-base-200, #f4f4f5);
-}
+/* preview cards fill their panel and scroll */
+.explore-preview__cards { overflow: auto; padding: 0.5rem; background: var(--color-base-200, #f4f4f5); }
+
+/* time-range strip — its own locked, header-less panel above the preview */
 .explore-preview__controls {
-    flex: 0 0 auto;
     padding: 0.4rem 0.5rem;
     background: var(--color-base-100, #fff);
-    border-bottom: 1px solid var(--color-base-300, #ddd);
-    border-radius: 0.5rem 0.5rem 0 0;
+    overflow: auto;
 }
 .explore-preview__controls-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .explore-preview__controls-spacer { flex: 1; }
 .explore-preview__filters { margin-top: 0.4rem; }
-.explore-preview__cards { flex: 1; min-height: 0; overflow: auto; padding: 0.5rem; }
+
+/* drawer tab panels (Data / Go code / JSON) — dockview renders the tab bar */
+.explore-drawer__content { overflow: auto; padding: 0.5rem; background: var(--color-base-100, #fff); }
 
 /* tree */
 .explore-tree__add { display: flex; gap: 0.25rem; margin-bottom: 0.5rem; }
@@ -199,53 +190,6 @@
 
 .explore-empty { padding: 1.5rem; text-align: center; opacity: 0.6; }
 
-/* drawer — bottom sheet: tab bar always visible, content collapsible, height
-   draggable via the top resize handle. Lives in the grid's "drawer" row; its
-   explicit height (set inline by the drag handler) sizes that auto row. */
-.explore-drawer {
-    grid-area: drawer;
-    position: relative;
-    height: 240px;
-    background: var(--color-base-100, #fff);
-    border: 1px solid var(--color-base-300, #ddd);
-    border-radius: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-}
-.explore-drawer.is-collapsed { height: auto !important; }
-.explore-drawer.is-collapsed .explore-drawer__content { display: none; }
-
-.explore-drawer__resize {
-    position: absolute;
-    top: -3px; left: 0; right: 0;
-    height: 7px;
-    cursor: ns-resize;
-    z-index: 1;
-}
-.explore-drawer__resize::after {
-    content: "";
-    position: absolute;
-    top: 3px; left: 50%;
-    transform: translateX(-50%);
-    width: 2.5rem; height: 2px;
-    border-radius: 2px;
-    background: var(--color-base-300, #ddd);
-}
-
-.explore-drawer__tabs { display: flex; align-items: center; gap: 0.25rem; padding: 0.4rem; border-bottom: 1px solid var(--color-base-300, #ddd); }
-.explore-drawer__tabs-spacer { flex: 1; }
-.explore-drawer__collapse { padding: 0.1rem 0.45rem; line-height: 1; }
-.explore-tab {
-    padding: 0.2rem 0.6rem;
-    border: none;
-    border-radius: 0.375rem;
-    background: transparent;
-    cursor: pointer;
-    color: inherit;
-}
-.explore-tab.is-active { background: var(--color-primary, #3b82f6); color: var(--color-primary-content, #fff); }
-.explore-drawer__content { flex: 1; padding: 0.5rem; overflow: auto; min-height: 0; }
 /* column class badges (temporal ⏱ / categorical 🏷 / continuous #) */
 .explore-badge {
     display: inline-block;
@@ -299,3 +243,33 @@
 .explore-json__status { font-size: 0.72rem; margin-top: 0.25rem; }
 .explore-json__status.is-ok { color: var(--color-success, #16a34a); }
 .explore-json__status.is-err { color: var(--color-error, #dc2626); }
+
+/* ---------------------------------------------------------------------------
+   Dockview theme — map dockview's --dv-* custom properties onto daisyUI tokens
+   (§4.7). One place, shared by Explore now and dashboard chrome later. No fork
+   of a shipped dockview theme; dockview.css provides the structure, this only
+   recolours it. The theme's colorScheme (set in dock.ts) already adapts to the
+   OS light/dark preference.
+   --------------------------------------------------------------------------- */
+.dockview-theme-dashica {
+    --dv-group-view-background-color: var(--color-base-100, #fff);
+    --dv-tabs-and-actions-container-background-color: var(--color-base-200, #f4f4f5);
+    --dv-activegroup-visiblepanel-tab-background-color: var(--color-base-100, #fff);
+    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-base-200, #f4f4f5);
+    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-base-100, #fff);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base-200, #f4f4f5);
+    --dv-tab-divider-color: var(--color-base-300, #ddd);
+    --dv-separator-border: var(--color-base-300, #ddd);
+    --dv-paneview-active-outline-color: var(--color-primary, #3b82f6);
+    --dv-activegroup-visiblepanel-tab-color: var(--color-base-content, #1f2937);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--color-base-content, #1f2937);
+    --dv-activegroup-hiddenpanel-tab-color: var(--color-base-content, #6b7280);
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-base-content, #6b7280);
+    --dv-tabs-container-scrollbar-color: var(--color-base-300, #ddd);
+    --dv-icon-hover-background-color: var(--color-base-300, #ddd);
+    --dv-drag-over-background-color: color-mix(in srgb, var(--color-primary, #3b82f6) 20%, transparent);
+    --dv-active-sash-color: var(--color-primary, #3b82f6);
+    height: 100%;
+}
+/* Removability is per-panel: the custom tab renderer (dock.ts) shows the close
+   (×) action only for panels marked `closable` (the tree). */

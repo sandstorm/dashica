@@ -18,7 +18,7 @@ import "./components/debugDrawer";
 import "./components/sidebar";
 import favorites from './components/favorites';
 import sidebarSearch from './components/sidebarSearch';
-import exploreEditor from './explore/editor';
+import exploreEditor, { initExploreDock } from './explore/editor';
 import './explore/explore.css';
 
 Alpine.plugin(intersect);
@@ -36,3 +36,9 @@ Alpine.data('exploreEditor', exploreEditor);
 
 
 window.Alpine = Alpine
+
+// Dock assembly must run BEFORE window.Alpine.start() (dockview owns geometry;
+// see frontend/components/dock.ts). Pages that use a dock call the matching
+// initializer in their inline script ahead of Alpine.start().
+window.Dashica = window.Dashica || {};
+window.Dashica.initExploreDock = initExploreDock;
