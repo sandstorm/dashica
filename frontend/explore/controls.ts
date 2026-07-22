@@ -264,7 +264,7 @@ function slotColumnClass(field: FieldDescriptor): ColumnClass {
 // categorical) offers enum + expr but never "Row count" (a measure); a time X
 // (dimension, temporal) offers autoBucket; a Y (measure) offers count + expr.
 // Order follows the served fieldKinds (golden-path first).
-function kindsForSlot(field: FieldDescriptor, fieldKinds: FieldKind[]): string[] {
+export function kindsForSlot(field: FieldDescriptor, fieldKinds: FieldKind[]): string[] {
     const role = field.role;
     const slotClass = slotColumnClass(field);
     return fieldKinds

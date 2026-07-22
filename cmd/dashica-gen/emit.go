@@ -167,8 +167,11 @@ func unmarshalStmt(typeName string, f fieldInfo) string {
 	case catField:
 		return head + fmt.Sprintf("if r.%s, err = sql.UnmarshalField(raw); err != nil {\nreturn err\n}\n}", f.GoName)
 	case catOptField:
+		// JSON null → nil interface → leave the pointer nil. Guarding here (rather
+		// than always taking &f) keeps `r.<field> != nil` a faithful "was set"
+		// test, so buildQuery's `if b.fill != nil` never derefs a nil interface.
 		return head + fmt.Sprintf(
-			"var f sql.SqlField\nif f, err = sql.UnmarshalField(raw); err != nil {\nreturn err\n}\nr.%s = &f\n}", f.GoName)
+			"var f sql.SqlField\nif f, err = sql.UnmarshalField(raw); err != nil {\nreturn err\n}\nif f != nil {\nr.%s = &f\n}\n}", f.GoName)
 	case catEnum:
 		return head + enumUnmarshal(typeName, f) + "\n}"
 	default:

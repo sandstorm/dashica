@@ -17,6 +17,9 @@ interface ChartProps {
     height?: number;
     width?: number,
     marginLeft?: number,
+    marginRight?: number,
+    marginBottom?: number,
+    marginTop?: number,
 
     /**
      * Options for the *color* scale for fill or stroke. The *color* scale
@@ -63,6 +66,9 @@ async function _horizontal(data: QueryResult, props: ChartProps) {
         height: props.height,
         width: props.width,
         marginLeft: props.marginLeft,
+        marginRight: props.marginRight,
+        marginBottom: props.marginBottom,
+        marginTop: props.marginTop,
         x: {
             label: String(props.x),
             grid: true,

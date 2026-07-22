@@ -109,6 +109,34 @@ func TestBarHorizontal_Immutability(t *testing.T) {
 	}
 }
 
+// Regression: an optional *SqlField (fill) sent as JSON null must unmarshal to a
+// nil pointer, not a non-nil pointer wrapping a nil interface. The editor emits
+// `"fill": null` when the user switches Fill back to "(none)"; the old generated
+// unmarshal did `r.fill = &f` unconditionally, so `b.fill != nil` was true and
+// buildQuery/BuildComponents dereferenced the nil interface (panic seen as
+// "preview render: widget is incomplete or invalid (nil pointer dereference)").
+func TestBarHorizontal_FillNullUnmarshalsToNil(t *testing.T) {
+	jsonIn := `{"sql":{"kind":"table","table":"events"},` +
+		`"x":{"kind":"count","definition":"count(*)","alias":"cnt"},` +
+		`"y":{"kind":"enum","definition":"path::String","alias":"path"},` +
+		`"fill":null,"height":200}`
+
+	var bh BarHorizontal
+	if err := json.Unmarshal([]byte(jsonIn), &bh); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if bh.fill != nil {
+		t.Fatalf("fill should be nil for JSON null, got non-nil pointer wrapping %v", *bh.fill)
+	}
+
+	// Must not panic (the reported bug).
+	_ = bh.buildQuery().Build()
+	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
+	if _, err := bh.BuildComponents(ctx); err != nil {
+		t.Fatalf("BuildComponents: %v", err)
+	}
+}
+
 // renderComponent helper renders a templ.Component to a string for assertion.
 func renderComponent(t *testing.T, w WidgetDefinition) string {
 	t.Helper()

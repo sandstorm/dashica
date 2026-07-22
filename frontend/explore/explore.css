@@ -110,6 +110,9 @@
     padding-bottom: 0.25rem;
     border-bottom: 1px solid var(--color-base-300, #ddd);
 }
+/* the chart-type switcher sits in the inspector title row */
+.explore-inspector__title { padding-bottom: 0.4rem; }
+.explore-inspector__type { font-weight: 600; }
 .explore-field { margin-bottom: 0.6rem; }
 .explore-field__label { display: block; font-weight: 500; margin-bottom: 0.15rem; }
 .explore-field__req { color: var(--color-error, #dc2626); }

@@ -37,7 +37,7 @@
 
 import Alpine from '@alpinejs/csp';
 import {html} from "htl";
-import {classBadge, Column, ControlCtx, FieldKind, humanize, SchemaResponse} from "./controls";
+import {classBadge, Column, ControlCtx, FieldDescriptor, FieldKind, humanize, kindsForSlot, SchemaResponse} from "./controls";
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
 
@@ -482,7 +482,17 @@ class Editor {
             return;
         }
         const descriptor = this.formModel!.widgets[w.type];
-        insp.appendChild(html`<div class="explore-inspector__title">${descriptor.title}</div>`);
+
+        // Type switcher: change the widget's chart type in place, remapping the
+        // existing field choices onto the new type's slots by role (see
+        // switchType). Only chart types are offered (same filter as the add list).
+        const chartTypes = Object.keys(this.formModel!.widgets)
+            .filter((t) => this.formModel!.widgets[t].category === 'chart');
+        const typeSel = html`<select class="explore-input explore-inspector__type"
+            onchange=${() => this.switchType(w, typeSel.value)}>${
+            chartTypes.map((t) => html`<option value=${t}>${this.formModel!.widgets[t].title}</option>`)}</select>` as HTMLSelectElement;
+        typeSel.value = w.type;
+        insp.appendChild(html`<div class="explore-inspector__title">${typeSel}</div>`);
 
         // Client-side validation panel: lists required-but-empty fields. Updated
         // live by the delegated input listener (wireInspectorInteractions) and on
@@ -515,6 +525,79 @@ class Editor {
                 onclick=${() => this.build()}>Apply <kbd class="explore-kbd">⏎ Enter</kbd></button>
         </div>`);
         this.refreshValidation();
+    }
+
+    // ---- type switching ----------------------------------------------------
+
+    // Change a widget's chart type in place, carrying its configuration across.
+    // Mutates props in the reactive proxy then commits (Build) so the preview
+    // re-renders and the change lands on the undo history. The inspector effect
+    // (which tracks w.type) rebuilds the form for the new type.
+    private switchType(w: WidgetState, newType: string) {
+        if (!newType || newType === w.type || !this.formModel?.widgets[newType]) return;
+        const remapped = this.remapProps(w.type, newType, raw(w.props));
+        w.type = newType;
+        // Replace props contents in place (keep the same reactive proxy object so
+        // the per-card preview effect and controls stay bound to it).
+        for (const k of Object.keys(w.props)) delete w.props[k];
+        Object.assign(w.props, remapped);
+        this.build();
+    }
+
+    // Only top-level field slots (editor 'field'). Nested group fields are not
+    // remapped — same scope as seedRequiredFields.
+    private fieldSlots(type: string): FieldDescriptor[] {
+        return (this.formModel!.widgets[type]?.fields ?? []).filter((f) => f.editor === 'field');
+    }
+
+    // Build the new type's props from the old widget's props:
+    //  1. start from the new type's defaults,
+    //  2. carry the query source (table / WHERE / raw SQL) verbatim,
+    //  3. remap field slots POSITIONALLY within each role — the i-th old
+    //     dimension fills the i-th new dimension slot, i-th measure → i-th
+    //     measure — but only when the old value's kind is valid for the new slot
+    //     (so an enum never lands in a time-bucket slot; the seeded default stays),
+    //  4. copy like-named non-field options (title, height, margins, color, …).
+    // This makes bar-vertical ⇄ bar-horizontal a lossless swap: the grouping
+    // (categorical) field and the value (measure) field keep their meaning even
+    // though the axes trade places.
+    private remapProps(oldType: string, newType: string, oldProps: Record<string, any>): Record<string, any> {
+        const oldDesc = this.formModel!.widgets[oldType];
+        const newDesc = this.formModel!.widgets[newType];
+        const fieldKinds = this.formModel!.fieldKinds ?? [];
+        const newProps: Record<string, any> = deepClone(newDesc.defaults);
+
+        // (2) query source verbatim.
+        if (oldDesc.hasQuery && oldDesc.queryKey && newDesc.hasQuery && newDesc.queryKey
+            && oldProps[oldDesc.queryKey] != null) {
+            newProps[newDesc.queryKey] = deepClone(oldProps[oldDesc.queryKey]);
+        }
+
+        // (3) field slots, positional within role.
+        const oldByRole: Record<string, any[]> = {};
+        for (const f of this.fieldSlots(oldType)) {
+            const v = oldProps[f.name];
+            if (v && typeof v === 'object' && v.kind) (oldByRole[f.role ?? ''] ??= []).push(v);
+        }
+        const cursor: Record<string, number> = {};
+        for (const f of this.fieldSlots(newType)) {
+            const role = f.role ?? '';
+            const i = cursor[role] ?? 0;
+            cursor[role] = i + 1;
+            const cand = oldByRole[role]?.[i];
+            if (cand && kindsForSlot(f, fieldKinds).includes(cand.kind)) {
+                newProps[f.name] = deepClone(cand);
+            }
+        }
+
+        // (4) like-named scalar/composite options (not fields, not the query).
+        for (const oldF of oldDesc.fields) {
+            if (oldF.editor === 'field' || oldF.editor === 'children') continue;
+            const nf = newDesc.fields.find((x) => x.name === oldF.name && x.editor === oldF.editor);
+            if (nf && oldProps[oldF.name] !== undefined) newProps[oldF.name] = deepClone(oldProps[oldF.name]);
+        }
+
+        return newProps;
     }
 
     // ---- client-side validation -------------------------------------------
