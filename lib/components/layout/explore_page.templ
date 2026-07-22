@@ -1,0 +1,33 @@
+package layout
+
+import (
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+)
+
+// explorePageFn is a full-viewport, chrome-free layout for the Explore editor
+// (docs/2026-07-21-dynamic-widget-dashboard-ui.md, UX plan (1)). Unlike
+// defaultPageFn it renders NO dashboard sidebar and NO global search bar: the
+// editor owns the whole screen. The time range lives inside the editor's
+// preview pane instead of a top search bar, so the searchBar option is ignored
+// here — the page just links the standard bundle and renders the editor shell
+// full-bleed inside the shared debug drawer.
+templ explorePageFn(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
+	<html>
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>Dashica Explore</title>
+			<link rel="stylesheet" href="/public/dist/index.css"/>
+			<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon/apple-touch-icon.png"/>
+			<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon/favicon-32x32.png"/>
+			<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon/favicon-16x16.png"/>
+			<script src="/public/dist/index.js"></script>
+		</head>
+		<body class="bg-base-200">
+			@DebugDrawer() {
+				@content
+			}
+			<script>window.Alpine.start();</script>
+		</body>
+	</html>
+}

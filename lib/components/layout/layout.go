@@ -74,9 +74,11 @@ func Names() []string {
 var (
 	DefaultPage = Layout{Name: "defaultPage", Fn: defaultPageFn}
 	DocsPage    = Layout{Name: "docsPage", Fn: docsPageFn}
+	ExplorePage = Layout{Name: "explorePage", Fn: explorePageFn}
 )
 
 func init() {
 	Register(DefaultPage)
 	Register(DocsPage)
+	Register(ExplorePage)
 }

@@ -53,13 +53,13 @@ func (h apiHandler) asHTTP() http.Handler {
 	})
 }
 
-// editorPage renders the editor UI: the standard Dashica page chrome (sidebar,
-// search bar — the latter drives the preview time range) wrapping the editor
-// shell. All dynamic behaviour lives in the frontend `exploreEditor` Alpine
-// component (frontend/explore/editor.ts): the shell is just the mount points it
-// fills. Rendered via the shared layout so it links the same JS/CSS bundle as
-// any dashboard.
+// editorPage renders the editor UI on the full-viewport ExplorePage layout: no
+// dashboard sidebar and no global search bar — the editor owns the screen. The
+// time range lives inside the preview pane (EditorShell's own compact strip),
+// so the layout's searchBar option is unused here. All dynamic behaviour lives
+// in the frontend `exploreEditor` Alpine component (frontend/explore/editor.ts):
+// the shell is just the mount points it fills. Rendered via the shared layout
+// so it links the same JS/CSS bundle as any dashboard.
 func (e *exploreImpl) editorPage(ctx *rendering.DashboardContext) templ.Component {
-	searchBar := rendering.SearchBarOption{IsVisible: true}
-	return layout.DefaultPage.Fn(*ctx, searchBar, EditorShell(e.baseURL))
+	return layout.ExplorePage.Fn(*ctx, rendering.SearchBarOption{}, EditorShell(e.baseURL))
 }

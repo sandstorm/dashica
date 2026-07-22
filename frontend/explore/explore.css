@@ -1,31 +1,46 @@
-/* Explore editor — Neos-style three-pane layout (tree | preview | inspector)
-   plus a collapsible bottom drawer. Colors use daisyUI's CSS custom props so
-   the editor tracks the active theme; layout is plain flex/grid. */
+/* Explore editor — full-viewport, chrome-free (its own ExplorePage layout, no
+   dashboard sidebar). A CSS grid owns the whole screen: toolbar / body / drawer
+   rows; the page itself never scrolls — each pane scrolls independently. Colors
+   use daisyUI's CSS custom props so the editor tracks the active theme. */
 
 .explore-editor {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 6rem);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "toolbar" "body" "drawer";
+    height: 100vh;
     gap: 0.5rem;
+    padding: 0.5rem;
+    box-sizing: border-box;
+    overflow: hidden;
     font-size: 0.85rem;
 }
 
 .explore-toolbar {
+    grid-area: toolbar;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
+    gap: 0.75rem;
+    padding: 0.4rem 0.6rem;
     background: var(--color-base-100, #fff);
     border: 1px solid var(--color-base-300, #ddd);
     border-radius: 0.5rem;
 }
+.explore-home {
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+.explore-home:hover { opacity: 1; text-decoration: underline; }
+.explore-toolbar__editor { display: flex; flex: 1; align-items: center; gap: 0.5rem; }
 .explore-toolbar__title { flex: 1; font-weight: 600; }
 
 .explore-body {
+    grid-area: body;
     display: grid;
-    grid-template-columns: 220px 1fr 320px;
+    grid-template-columns: 220px minmax(0, 1fr) 320px;
     gap: 0.5rem;
-    flex: 1;
     min-height: 0;
 }
 
@@ -35,11 +50,29 @@
     background: var(--color-base-100, #fff);
     border: 1px solid var(--color-base-300, #ddd);
     border-radius: 0.5rem;
-    padding: 0.5rem;
-    overflow: auto;
     min-height: 0;
 }
-.explore-preview { background: var(--color-base-200, #f4f4f5); }
+.explore-tree,
+.explore-inspector { padding: 0.5rem; overflow: auto; }
+
+/* preview pane: sticky compact time-range strip above a scrolling card list */
+.explore-preview {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--color-base-200, #f4f4f5);
+}
+.explore-preview__controls {
+    flex: 0 0 auto;
+    padding: 0.4rem 0.5rem;
+    background: var(--color-base-100, #fff);
+    border-bottom: 1px solid var(--color-base-300, #ddd);
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+.explore-preview__controls-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.explore-preview__controls-spacer { flex: 1; }
+.explore-preview__filters { margin-top: 0.4rem; }
+.explore-preview__cards { flex: 1; min-height: 0; overflow: auto; padding: 0.5rem; }
 
 /* tree */
 .explore-tree__add { display: flex; gap: 0.25rem; margin-bottom: 0.5rem; }
@@ -109,23 +142,50 @@
     font-size: 0.78rem;
 }
 .explore-btn:hover { background: var(--color-base-300, #e4e4e7); }
+.explore-btn.is-active { background: var(--color-primary, #3b82f6); color: var(--color-primary-content, #fff); border-color: transparent; }
 .explore-btn:disabled { opacity: 0.4; cursor: default; }
 .explore-btn--sm { padding: 0.15rem 0.4rem; }
 .explore-btn--icon { padding: 0.1rem 0.35rem; line-height: 1; }
 
 .explore-empty { padding: 1.5rem; text-align: center; opacity: 0.6; }
 
-/* drawer */
+/* drawer — bottom sheet: tab bar always visible, content collapsible, height
+   draggable via the top resize handle. Lives in the grid's "drawer" row; its
+   explicit height (set inline by the drag handler) sizes that auto row. */
 .explore-drawer {
+    grid-area: drawer;
+    position: relative;
+    height: 240px;
     background: var(--color-base-100, #fff);
     border: 1px solid var(--color-base-300, #ddd);
     border-radius: 0.5rem;
-    max-height: 30vh;
     display: flex;
     flex-direction: column;
     min-height: 0;
 }
-.explore-drawer__tabs { display: flex; gap: 0.25rem; padding: 0.4rem; border-bottom: 1px solid var(--color-base-300, #ddd); }
+.explore-drawer.is-collapsed { height: auto !important; }
+.explore-drawer.is-collapsed .explore-drawer__content { display: none; }
+
+.explore-drawer__resize {
+    position: absolute;
+    top: -3px; left: 0; right: 0;
+    height: 7px;
+    cursor: ns-resize;
+    z-index: 1;
+}
+.explore-drawer__resize::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 50%;
+    transform: translateX(-50%);
+    width: 2.5rem; height: 2px;
+    border-radius: 2px;
+    background: var(--color-base-300, #ddd);
+}
+
+.explore-drawer__tabs { display: flex; align-items: center; gap: 0.25rem; padding: 0.4rem; border-bottom: 1px solid var(--color-base-300, #ddd); }
+.explore-drawer__tabs-spacer { flex: 1; }
+.explore-drawer__collapse { padding: 0.1rem 0.45rem; line-height: 1; }
 .explore-tab {
     padding: 0.2rem 0.6rem;
     border: none;
@@ -135,9 +195,8 @@
     color: inherit;
 }
 .explore-tab.is-active { background: var(--color-primary, #3b82f6); color: var(--color-primary-content, #fff); }
-.explore-drawer__content { padding: 0.5rem; overflow: auto; min-height: 0; }
+.explore-drawer__content { flex: 1; padding: 0.5rem; overflow: auto; min-height: 0; }
 .explore-json { width: 100%; min-height: 18vh; }
 .explore-json__status { font-size: 0.72rem; margin-top: 0.25rem; }
 .explore-json__status.is-ok { color: var(--color-success, #16a34a); }
 .explore-json__status.is-err { color: var(--color-error, #dc2626); }
-.explore-sql { font-family: ui-monospace, monospace; font-size: 0.75rem; white-space: pre-wrap; margin: 0; }

@@ -42,8 +42,8 @@ interface DashboardState { title: string; layout: string; widgets: WidgetState[]
 interface WidgetFormModel extends WidgetDescriptor { defaults: Record<string, any>; }
 interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[]; }
 
-type DrawerTab = 'gocode' | 'json' | 'sql';
-interface UiState { selectedId: string | null; drawerTab: DrawerTab; }
+type DrawerTab = 'data' | 'gocode' | 'json';
+interface UiState { selectedId: string | null; drawerTab: DrawerTab; drawerCollapsed: boolean; }
 
 interface PreviewEntry {
     card: HTMLElement;
@@ -107,6 +107,7 @@ class Editor {
     private layoutSel!: HTMLSelectElement;
     private elTreeList!: HTMLElement;
     private elDrawerTabs!: HTMLElement;
+    private elDrawerCollapse!: HTMLButtonElement;
     private elDrawerContent!: HTMLElement;
     private jsonTextarea: HTMLTextAreaElement | null = null;
 
@@ -121,7 +122,7 @@ class Editor {
     }
 
     async start() {
-        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'json'} as UiState);
+        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'data', drawerCollapsed: false} as UiState);
         this.state = Alpine.reactive(this.loadState());
         this.reseedIdSeq();
 
@@ -146,6 +147,7 @@ class Editor {
         this.buildToolbar();
         this.buildTreeShell();
         this.buildDrawerShell();
+        this.wireFilterToggle();
         this.wireEffects();
     }
 
@@ -223,16 +225,19 @@ class Editor {
             this.reconcilePreviews(widgets, ids, sel);
         }));
 
-        // drawer chrome: tab bar + content pane follow the active tab (and, for
-        // the sql tab, the selection). Reads no props.
+        // drawer chrome: tab bar + content pane follow the active tab and the
+        // collapsed flag. The Data tab is selection-aware (reads selectedId only
+        // in its own branch, so json/gocode don't rebuild on selection changes).
         this.effects.push(Alpine.effect(() => {
             const tab = this.ui.drawerTab;
-            this.updateDrawerTabs(tab);
+            const collapsed = this.ui.drawerCollapsed;
+            this.updateDrawerTabs(tab, collapsed);
             this.elDrawerContent.innerHTML = '';
             this.jsonTextarea = null;
+            if (collapsed) return; // content hidden — skip building it
             if (tab === 'json') this.buildJsonTab(this.elDrawerContent);
             else if (tab === 'gocode') this.buildGocodeTab(this.elDrawerContent);
-            else this.buildSqlTab(this.elDrawerContent, this.ui.selectedId); // sql: selection dep
+            else this.buildDataTab(this.elDrawerContent, this.ui.selectedId); // data: selection dep
         }));
 
         // json live sync: the textarea reflects state when the json tab is open
@@ -463,17 +468,40 @@ class Editor {
 
     private buildDrawerShell() {
         this.elDrawer.innerHTML = '';
+
+        // Drag handle along the drawer's top edge → resize its height.
+        const resize = document.createElement('div');
+        resize.className = 'explore-drawer__resize';
+        resize.title = 'Drag to resize';
+        this.wireDrawerResize(resize);
+        this.elDrawer.appendChild(resize);
+
         this.elDrawerTabs = document.createElement('div');
         this.elDrawerTabs.className = 'explore-drawer__tabs';
-        const tabDefs: [DrawerTab, string][] = [['gocode', 'Go code'], ['json', 'JSON'], ['sql', 'SQL / debug']];
+        const tabDefs: [DrawerTab, string][] = [['data', 'Data'], ['gocode', 'Go code'], ['json', 'JSON']];
         for (const [key, label] of tabDefs) {
             const b = document.createElement('button');
             b.className = 'explore-tab';
             b.dataset.tab = key;
             b.textContent = label;
-            b.addEventListener('click', () => { this.ui.drawerTab = key; });
+            // Clicking the active tab while expanded collapses; otherwise select + expand.
+            b.addEventListener('click', () => {
+                if (this.ui.drawerTab === key && !this.ui.drawerCollapsed) { this.ui.drawerCollapsed = true; return; }
+                this.ui.drawerTab = key;
+                this.ui.drawerCollapsed = false;
+            });
             this.elDrawerTabs.appendChild(b);
         }
+
+        const spacer = document.createElement('div');
+        spacer.className = 'explore-drawer__tabs-spacer';
+        this.elDrawerTabs.appendChild(spacer);
+
+        this.elDrawerCollapse = document.createElement('button');
+        this.elDrawerCollapse.className = 'explore-btn explore-btn--sm explore-drawer__collapse';
+        this.elDrawerCollapse.addEventListener('click', () => { this.ui.drawerCollapsed = !this.ui.drawerCollapsed; });
+        this.elDrawerTabs.appendChild(this.elDrawerCollapse);
+
         this.elDrawer.appendChild(this.elDrawerTabs);
 
         this.elDrawerContent = document.createElement('div');
@@ -481,9 +509,49 @@ class Editor {
         this.elDrawer.appendChild(this.elDrawerContent);
     }
 
-    private updateDrawerTabs(active: DrawerTab) {
+    private updateDrawerTabs(active: DrawerTab, collapsed: boolean) {
         this.elDrawerTabs.querySelectorAll<HTMLElement>('.explore-tab').forEach((b) => {
-            b.classList.toggle('is-active', b.dataset.tab === active);
+            b.classList.toggle('is-active', b.dataset.tab === active && !collapsed);
+        });
+        this.elDrawer.classList.toggle('is-collapsed', collapsed);
+        this.elDrawerCollapse.textContent = collapsed ? '▲' : '▼';
+        this.elDrawerCollapse.title = collapsed ? 'Expand drawer' : 'Collapse drawer';
+    }
+
+    // Pointer-drag the top edge to resize the drawer height (clamped). Height is
+    // set inline on the drawer element, which sizes the grid's auto "drawer" row.
+    private wireDrawerResize(handle: HTMLElement) {
+        handle.addEventListener('pointerdown', (down: PointerEvent) => {
+            if (this.ui.drawerCollapsed) return;
+            down.preventDefault();
+            const startY = down.clientY;
+            const startH = this.elDrawer.getBoundingClientRect().height;
+            handle.setPointerCapture(down.pointerId);
+            const onMove = (move: PointerEvent) => {
+                const h = startH + (startY - move.clientY); // drag up → taller
+                const max = window.innerHeight * 0.8;
+                this.elDrawer.style.height = `${Math.max(90, Math.min(max, h))}px`;
+            };
+            const onUp = () => {
+                handle.removeEventListener('pointermove', onMove);
+                handle.removeEventListener('pointerup', onUp);
+            };
+            handle.addEventListener('pointermove', onMove);
+            handle.addEventListener('pointerup', onUp);
+        });
+    }
+
+    // The preview strip's "filters" button toggles the SQL-filter textarea
+    // (server-rendered inside the searchBar-scoped controls). Kept out of Alpine
+    // to avoid CSP expression limits — plain DOM toggle of the [hidden] panel.
+    private wireFilterToggle() {
+        const btn = this.root.querySelector<HTMLElement>('[data-explore="filters-toggle"]');
+        const panel = this.root.querySelector<HTMLElement>('[data-explore="filters"]');
+        if (!btn || !panel) return;
+        btn.addEventListener('click', () => {
+            const show = panel.hasAttribute('hidden');
+            panel.toggleAttribute('hidden', !show);
+            btn.classList.toggle('is-active', show);
         });
     }
 
@@ -519,26 +587,18 @@ class Editor {
             '(the <code>/api/gocode</code> endpoint). The JSON tab is the source of truth meanwhile.</div>';
     }
 
-    private buildSqlTab(content: HTMLElement, selectedId: string | null) {
-        const w = this.state.widgets.find((x) => x.id === selectedId);
+    // Data tab: shows the selected widget's underlying data (columns + sample
+    // rows). The full data view is the next slice (docs UX plan (2)); for now a
+    // selection-aware placeholder. SQL / EXPLAIN is no longer a drawer tab — the
+    // preview chart's own wrench button opens the standard debug drawer.
+    private buildDataTab(content: HTMLElement, selectedId: string | null) {
+        const w = selectedId ? this.state.widgets.find((x) => x.id === selectedId) : null;
         if (!w) {
-            content.innerHTML = '<div class="explore-empty">Select a widget to see its SQL / EXPLAIN.</div>';
+            content.innerHTML = '<div class="explore-empty">Select a widget to inspect its data.</div>';
             return;
         }
-        const pre = document.createElement('pre');
-        pre.className = 'explore-sql';
-        pre.textContent = 'Loading…';
-        content.appendChild(pre);
-        const params = new URLSearchParams();
-        params.append('filters', JSON.stringify(this.urlState.getCombinedFilter()));
-        fetch(`${this.baseUrl}/api/preview/debug?${params.toString()}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(this.envelope(w)),
-        })
-            .then((r) => r.ok ? r.json() : r.text().then((t) => { throw new Error(t); }))
-            .then((info) => { pre.textContent = JSON.stringify(info, null, 2); })
-            .catch((e) => { pre.textContent = `ERROR: ${e.message}`; });
+        content.innerHTML = '<div class="explore-empty">Data view (columns + sample rows) ships in the next slice. ' +
+            'Meanwhile, open a preview chart\'s wrench button for its SQL / EXPLAIN.</div>';
     }
 }
 

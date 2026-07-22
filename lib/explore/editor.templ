@@ -4,16 +4,83 @@ package explore
 // component (frontend/explore/editor.ts) populates. The data-explore attributes
 // name the panes it fills; data-base-url tells the frontend where the API lives.
 // All dynamic behaviour is client-side — this template only lays out the mount
-// points (Neos-style: tree left, live preview centre, inspector right, plus a
-// bottom drawer for Go code / JSON / SQL).
+// points: a full-viewport grid (toolbar / (tree | preview | inspector) / drawer).
+// The preview pane carries its own sticky time-range strip (explorePreviewControls),
+// because the time range is part of the *previewed dashboard's* state — it belongs
+// above the widgets it re-queries, exactly as on a real dashboard page.
 templ EditorShell(baseURL string) {
 	<div x-data="exploreEditor" class="explore-editor" data-base-url={ baseURL }>
-		<div class="explore-toolbar" data-explore="toolbar"></div>
+		<div class="explore-toolbar">
+			<a class="explore-home" href="/">← Dashica</a>
+			<div class="explore-toolbar__editor" data-explore="toolbar"></div>
+		</div>
 		<div class="explore-body">
 			<aside class="explore-tree" data-explore="tree"></aside>
-			<section class="explore-preview" data-explore="preview"></section>
+			<section class="explore-preview">
+				@explorePreviewControls()
+				<div class="explore-preview__cards" data-explore="preview"></div>
+			</section>
 			<aside class="explore-inspector" data-explore="inspector"></aside>
 		</div>
 		<div class="explore-drawer" data-explore="drawer"></div>
+	</div>
+}
+
+// explorePreviewControls is the compact time-range strip pinned above the
+// preview cards. It reuses the standard `searchBar` Alpine component and the
+// shared `$store.urlState`, so range/log-scale/SQL-filter drive the preview
+// charts identically to a real dashboard's search bar — just laid out compactly:
+// range presets + custom picker + log-scale in one row, the SQL filter tucked
+// behind a "filters" toggle (wired by editor.ts). Auto-refresh and per-dashboard
+// filter buttons are intentionally omitted to keep the strip small.
+templ explorePreviewControls() {
+	<div x-data="searchBar" x-init="init()" class="explore-preview__controls" data-explore="preview-controls">
+		<div class="explore-preview__controls-row">
+			<div class="join">
+				<template x-for="preset in timePresets" :key="preset.value">
+					<button
+						@click="$store.urlState.setTimePreset(preset.value)"
+						:class="$store.urlState.timeRange === preset.value ? 'btn-active' : ''"
+						class="btn btn-xs join-item"
+						x-text="preset.label"
+					></button>
+				</template>
+				<button
+					@click="openCustomDatePicker()"
+					:class="$store.urlState.timeRange === 'custom' ? 'btn-active' : ''"
+					class="btn btn-xs join-item"
+				>Custom</button>
+			</div>
+			<div x-show="$store.urlState.timeRange === 'custom'" x-cloak class="form-control">
+				<input
+					x-ref="datePicker"
+					type="text"
+					class="input input-xs input-bordered w-72 font-mono"
+					placeholder="Select date range"
+					readonly
+				/>
+			</div>
+			<label class="label cursor-pointer gap-2">
+				<span class="label-text text-xs font-medium">Log scale</span>
+				<input
+					type="checkbox"
+					:checked="$store.urlState.logScale"
+					@change="$store.urlState.toggleLogScale()"
+					class="toggle toggle-xs"
+				/>
+			</label>
+			<div class="explore-preview__controls-spacer"></div>
+			<button type="button" class="explore-btn explore-btn--sm" data-explore="filters-toggle">filters</button>
+			<span x-show="$store.urlState.sqlFilter" x-cloak class="badge badge-primary badge-xs">active</span>
+		</div>
+		<div class="explore-preview__filters" data-explore="filters" hidden>
+			<textarea
+				:value="$store.urlState.sqlFilter"
+				@input="$store.urlState.setSqlFilter($event.target.value)"
+				class="textarea textarea-bordered textarea-xs w-full font-mono"
+				placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
+				rows="2"
+			></textarea>
+		</div>
 	</div>
 }
