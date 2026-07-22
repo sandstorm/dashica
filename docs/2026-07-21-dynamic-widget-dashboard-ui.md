@@ -338,24 +338,6 @@ Tests: golden files + **CI compile check** of generated code + marshal-back
 round trip.
 
 **Step 5 — Editor polish batch (cheap, visible).**
-- ✅ **DONE 2026-07-22** — Widget **categories** `chart | parameter |
-  container`: single registry hint = 3rd arg to `widget.Register(name,
-  Category, factory)` (`WidgetCategory` const in `registry.go`), read straight
-  from the AST by `dashica-gen` (`constStringValue`) → `WidgetDescriptor.Category`
-  → served in `/api/formmodel`. Editor add-widget dropdown lists only
-  `category==='chart'`; parameter (textInput, checkboxGroup) and container
-  (grid, collapsibleGroup) widgets stay registered/serializable (compiled +
-  "Open in Explore" round-trip) but hidden from the flat list. Tests:
-  `formmodel_test.go` asserts category per widget. Later: teach the query
-  section to reference `{param:String}`, then surface parameter widgets.
-- **From the browser session (B-findings above):** preview readiness gate +
-  friendly empty/error states (B1, B3, B9); drop empty WHERE clauses client-
-  AND server-side (B2); **slot roles dimension|measure** via dashica-gen tag →
-  descriptor → kind filtering (B4 — the categorical/continuous vocabulary
-  finally constrains widgets, not just autocomplete ordering); WHERE scope
-  help text served from Go (B5); "Filter from data" context menu on table
-  cells + Data-tab values inserting into the selected widget's WHERE (B6, B7);
-  title-input CSS fix (B8); tree icon contrast (B10).
 - UX polish: persistent labels on every input; labeled title/layout in the
   toolbar; tree rows show `props.title`; Fill/Fx/Fy collapsed
   into "Series & faceting".

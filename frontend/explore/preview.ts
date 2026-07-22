@@ -10,6 +10,9 @@ export interface WidgetEnvelope {
 // tears it down.
 export interface PreviewController {
     render(envelope: WidgetEnvelope): void;
+    // Show a plain text message in place of a chart (readiness/validation hints)
+    // — aborts any in-flight render so a stale query can't overwrite it.
+    message(text: string, cls?: string): void;
     destroy(): void;
 }
 
@@ -70,6 +73,11 @@ export function mountPreview(container: HTMLElement, baseUrl: string): PreviewCo
                     if (signal.aborted || e.name === 'AbortError') return;
                     setMessage(`ERROR: ${e.message}`, "explore-preview-msg--error");
                 });
+        },
+        message(text, cls = "explore-preview-msg--hint") {
+            if (abort) abort.abort();
+            abort = null;
+            setMessage(text, cls);
         },
         destroy() {
             if (abort) abort.abort();

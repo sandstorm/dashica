@@ -25,8 +25,11 @@
 //     islands; reactivity coordinates *between* panes, not inside a control.
 //  2. Text inputs (title, JSON textarea) are written by their effect only when
 //     not focused (`document.activeElement !== el`).
-//  3. Preview deps are coarse on purpose: one effect per card tracks
-//     `JSON.stringify(widget.props)`, debounced — correct-by-default.
+//  3. Previews are commit-driven, not keystroke-driven: each card effect's ONLY
+//     dependency is `ui.buildRev`, bumped by an explicit Build (button / Enter /
+//     Cmd+Enter) or by undo/redo. The widget props are read *untracked* inside
+//     renderCard, which gates on client-side validation before firing a query —
+//     so typing never fires a query and never overwrites the last good chart.
 //  4. Effect lifecycle is explicit: per-widget effects are kept on the preview
 //     entry and `Alpine.release`d on widget removal.
 //  5. One effect per pane/widget with a name comment; no nested effects except
@@ -34,7 +37,7 @@
 
 import Alpine from '@alpinejs/csp';
 import {html} from "htl";
-import {classBadge, Column, ControlCtx, FieldKind, SchemaResponse} from "./controls";
+import {classBadge, Column, ControlCtx, FieldKind, humanize, SchemaResponse} from "./controls";
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
 
@@ -44,13 +47,15 @@ interface WidgetFormModel extends WidgetDescriptor { defaults: Record<string, an
 interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[]; fieldKinds: FieldKind[]; }
 
 type DrawerTab = 'data' | 'gocode' | 'json';
-interface UiState { selectedId: string | null; drawerTab: DrawerTab; drawerCollapsed: boolean; }
+// buildRev is the "commit" counter: previews query only when it changes (an
+// explicit Build), never on every keystroke — see the preview effect below.
+interface UiState { selectedId: string | null; drawerTab: DrawerTab; drawerCollapsed: boolean; buildRev: number; }
 
 interface PreviewEntry {
     card: HTMLElement;
     controller: PreviewController;
-    eff: any;         // the per-widget preview effect (released on teardown)
-    first: boolean;   // render immediately on the effect's first run, debounce after
+    eff: any;                      // the per-widget preview effect (released on teardown)
+    lastRendered: string | null;   // JSON of the last envelope sent — skip refetch when unchanged
 }
 
 const LS_KEY = 'dashica-explore-state';
@@ -115,6 +120,15 @@ class Editor {
     private elDrawerCollapse!: HTMLButtonElement;
     private elDrawerContent!: HTMLElement;
     private jsonTextarea: HTMLTextAreaElement | null = null;
+    private elUndoBtn!: HTMLButtonElement;
+    private elRedoBtn!: HTMLButtonElement;
+    private elInspectorValidation: HTMLElement | null = null;
+
+    // Undo/redo history: snapshots of the full dashboard state. A snapshot is
+    // pushed on every discrete action (add/delete/move) and on Build (which
+    // commits the edits typed since the last snapshot). Cmd/Ctrl+Z / Y step it.
+    private history: DashboardState[] = [];
+    private histIndex = -1;
 
     private inspectorScheduled = false;
 
@@ -127,9 +141,11 @@ class Editor {
     }
 
     async start() {
-        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'data', drawerCollapsed: false} as UiState);
+        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'data', drawerCollapsed: false, buildRev: 0} as UiState);
         this.state = Alpine.reactive(this.loadState());
         this.reseedIdSeq();
+        this.history = [deepClone(this.state)];
+        this.histIndex = 0;
 
         try {
             const [fm, sc] = await Promise.all([
@@ -150,7 +166,60 @@ class Editor {
         this.buildTreeShell();
         this.buildDrawerShell();
         this.wireFilterToggle();
+        this.wireKeyboard();
+        this.wireInspectorInteractions();
         this.wireEffects();
+        this.updateHistoryButtons();
+    }
+
+    // ---- explicit build + keyboard ----------------------------------------
+
+    // Build is the single "run the query" trigger. Preview cards read the widget
+    // props untracked and re-render ONLY when ui.buildRev changes, so typing in
+    // the inspector never fires a query (fixes the every-keystroke error walls).
+    // Build also commits the typed edits to the undo history.
+    private build() {
+        this.pushHistory();
+        this.ui.buildRev++;
+        this.refreshValidation();
+    }
+
+    private wireKeyboard() {
+        document.addEventListener('keydown', (e: KeyboardEvent) => {
+            const meta = e.metaKey || e.ctrlKey;
+            if (!meta) return;
+            const k = e.key.toLowerCase();
+            if (k === 'enter') { e.preventDefault(); this.build(); return; }
+            if (k === 'z') {
+                // Leave native text-undo alone while editing a field (unless it's
+                // a redo chord); otherwise step the dashboard history.
+                if (!e.shiftKey && this.isTextField(document.activeElement)) return;
+                e.preventDefault();
+                if (e.shiftKey) this.redo(); else this.undo();
+                return;
+            }
+            if (k === 'y') { e.preventDefault(); this.redo(); }
+        });
+    }
+
+    private isTextField(el: Element | null): boolean {
+        if (!el) return false;
+        const tag = el.tagName;
+        return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable === true;
+    }
+
+    // Enter in a single-line inspector input builds the query (the explicit
+    // "press Enter to run" affordance); live-validate on every edit so required
+    // fields flag immediately without waiting for a build. Delegated on the
+    // persistent inspector root so it survives every form rebuild.
+    private wireInspectorInteractions() {
+        this.elInspector.addEventListener('keydown', (e: KeyboardEvent) => {
+            const t = e.target as HTMLElement;
+            if (e.key === 'Enter' && t.tagName === 'INPUT') { e.preventDefault(); this.build(); }
+        });
+        const revalidate = () => this.refreshValidation();
+        this.elInspector.addEventListener('input', revalidate);
+        this.elInspector.addEventListener('change', revalidate);
     }
 
     // ---- initial state -----------------------------------------------------
@@ -176,11 +245,12 @@ class Editor {
     }
 
     // Replace the reactive state in place (never reassign — effects hold the
-    // reference). Used by the JSON tab and share-link apply. Previews are torn
-    // down first so the reconcile effect rebuilds each card + per-widget effect
-    // against the NEW widget objects (fixes stale JSON-tab previews).
+    // reference). Used by the JSON tab, share-link apply and undo/redo. Preview
+    // cards look their widget up by id at render time, so they rebind to the new
+    // widget objects for free; the reconcile effect creates/destroys cards for
+    // ids that appeared/vanished. Cards do NOT re-query here — that waits for the
+    // next Build (or the buildRev bump undo/redo issues explicitly).
     private applyState(ns: DashboardState) {
-        for (const id of Object.keys(this.previews)) this.teardownPreview(id);
         this.state.title = ns.title;
         this.state.layout = ns.layout;
         this.state.widgets.splice(0, this.state.widgets.length, ...ns.widgets);
@@ -267,7 +337,13 @@ class Editor {
             setTimeout(() => { share.textContent = 'Copy share link'; }, 1500);
         }}>Copy share link</button>` as HTMLButtonElement;
 
-        this.elToolbar.replaceChildren(this.titleInput, this.layoutSel, share);
+        this.elUndoBtn = html`<button class="explore-btn explore-btn--icon" title="Undo (Cmd/Ctrl+Z)"
+            onclick=${() => this.undo()}>↶</button>` as HTMLButtonElement;
+        this.elRedoBtn = html`<button class="explore-btn explore-btn--icon" title="Redo (Cmd/Ctrl+Shift+Z)"
+            onclick=${() => this.redo()}>↷</button>` as HTMLButtonElement;
+        this.elToolbar.replaceChildren(
+            this.titleInput, this.layoutSel,
+            this.elUndoBtn, this.elRedoBtn, share);
     }
 
     private shareUrl(): string {
@@ -321,11 +397,13 @@ class Editor {
         const w: WidgetState = {id: `w${this.idSeq++}`, type, props: deepClone(this.formModel.widgets[type].defaults)};
         this.state.widgets.push(w);
         this.ui.selectedId = w.id;
+        this.pushHistory();
     }
 
     private deleteWidget(id: string) {
         this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
         if (this.ui.selectedId === id) this.ui.selectedId = null;
+        this.pushHistory();
     }
 
     private move(index: number, dir: number) {
@@ -333,6 +411,54 @@ class Editor {
         const arr = this.state.widgets;
         if (j < 0 || j >= arr.length) return;
         [arr[index], arr[j]] = [arr[j], arr[index]];
+        this.pushHistory();
+    }
+
+    // ---- undo / redo history ----------------------------------------------
+
+    // Snapshot the current state onto the history stack (truncating any redo
+    // tail). A no-op if the state is unchanged since the last snapshot, so
+    // Build-with-no-edits or a settle-on-same-value never adds noise.
+    private pushHistory() {
+        const snap = deepClone(this.state);
+        const head = this.history[this.histIndex];
+        if (head && JSON.stringify(head) === JSON.stringify(snap)) return;
+        this.history = this.history.slice(0, this.histIndex + 1);
+        this.history.push(snap);
+        this.histIndex = this.history.length - 1;
+        this.updateHistoryButtons();
+    }
+
+    private undo() {
+        if (this.histIndex <= 0) return;
+        this.histIndex--;
+        this.restore(this.history[this.histIndex]);
+    }
+
+    private redo() {
+        if (this.histIndex >= this.history.length - 1) return;
+        this.histIndex++;
+        this.restore(this.history[this.histIndex]);
+    }
+
+    // Apply a history snapshot and re-render previews from it. Undo/redo ARE an
+    // explicit commit, so they bump buildRev (previews re-query) and rebuild the
+    // inspector (whose form is not prop-reactive, so it would otherwise show the
+    // pre-undo values).
+    private restore(snap: DashboardState) {
+        this.applyState(deepClone(snap));
+        if (this.ui.selectedId && !this.state.widgets.some((w) => w.id === this.ui.selectedId)) {
+            this.ui.selectedId = null;
+        }
+        this.ui.buildRev++;
+        this.scheduleInspector();
+        this.updateHistoryButtons();
+        this.refreshValidation();
+    }
+
+    private updateHistoryButtons() {
+        if (this.elUndoBtn) this.elUndoBtn.disabled = this.histIndex <= 0;
+        if (this.elRedoBtn) this.elRedoBtn.disabled = this.histIndex >= this.history.length - 1;
     }
 
     // ---- inspector ---------------------------------------------------------
@@ -349,6 +475,7 @@ class Editor {
     private buildInspector() {
         const insp = this.elInspector;
         insp.innerHTML = '';
+        this.elInspectorValidation = null;
         const w = this.state.widgets.find((x) => x.id === this.ui.selectedId);
         if (!w) {
             insp.innerHTML = '<div class="explore-empty">Select a widget to edit its options.</div>';
@@ -356,6 +483,12 @@ class Editor {
         }
         const descriptor = this.formModel!.widgets[w.type];
         insp.appendChild(html`<div class="explore-inspector__title">${descriptor.title}</div>`);
+
+        // Client-side validation panel: lists required-but-empty fields. Updated
+        // live by the delegated input listener (wireInspectorInteractions) and on
+        // build/undo — a purely local, understandable check (no server round-trip).
+        this.elInspectorValidation = html`<div></div>` as HTMLElement;
+        insp.appendChild(this.elInspectorValidation);
 
         const queryKey = descriptor.queryKey;
         // Controls write into w.props (the reactive proxy) — the per-widget
@@ -372,6 +505,69 @@ class Editor {
         const form = document.createElement('div');
         renderForm(form, descriptor, w.props, ctx);
         insp.appendChild(form);
+
+        // Apply runs the query for the edits above (same as Enter / Cmd+Enter).
+        // Placed at the foot of the property form — where the edits are — rather
+        // than the global toolbar, so the "edit here → apply here" flow is local.
+        insp.appendChild(html`<div class="explore-inspector__footer">
+            <button class="explore-btn explore-btn--primary explore-inspector__apply"
+                title="Run the query for these edits (Enter / Cmd+Enter)"
+                onclick=${() => this.build()}>Apply <kbd class="explore-kbd">⏎ Enter</kbd></button>
+        </div>`);
+        this.refreshValidation();
+    }
+
+    // ---- client-side validation -------------------------------------------
+
+    private widgetById(id: string | null): WidgetState | undefined {
+        if (!id) return undefined;
+        return (raw(this.state.widgets) as WidgetState[]).find((w) => w.id === id);
+    }
+
+    // validateWidget returns human-readable messages for required-but-empty
+    // fields. Deliberately shallow and local: table chosen, raw SQL non-empty +
+    // contains {{DASHICA_FILTERS}}, and each required field picker has a
+    // column/expression. It never talks to the server — the query itself is the
+    // authority on SQL correctness, surfaced on the card after Build.
+    private validateWidget(w: WidgetState): string[] {
+        const d = this.formModel?.widgets[w.type];
+        if (!d) return [];
+        const props = raw(w.props);
+        const issues: string[] = [];
+        const nonEmpty = (v: any) => typeof v === 'string' && v.trim() !== '';
+
+        if (d.hasQuery && d.queryKey) {
+            const q = props[d.queryKey];
+            if (!q || typeof q !== 'object') issues.push('Configure the query source.');
+            else if (q.kind === 'table' && !nonEmpty(q.table)) issues.push('Pick a table.');
+            else if (q.kind === 'raw') {
+                if (!nonEmpty(q.sql)) issues.push('Raw SQL is empty.');
+                else if (!q.sql.includes('{{DASHICA_FILTERS}}')) issues.push('Raw SQL must contain {{DASHICA_FILTERS}}.');
+            }
+        }
+        for (const f of d.fields) {
+            if (f.editor !== 'field' || !f.required) continue;
+            const v = props[f.name];
+            const label = humanize(f.name);
+            if (!v || typeof v !== 'object' || !v.kind) issues.push(`${label} is required.`);
+            else if (v.kind === 'autoBucket' && !nonEmpty(v.column)) issues.push(`${label}: choose a column.`);
+            else if ((v.kind === 'enum' || v.kind === 'expr') && !nonEmpty(v.definition)) issues.push(`${label}: choose a column or expression.`);
+        }
+        return issues;
+    }
+
+    // Refresh the inspector's validation panel for the selected widget. Cheap and
+    // imperative — rewrites only its own box, so it never disturbs form focus.
+    private refreshValidation() {
+        const box = this.elInspectorValidation;
+        if (!box) return;
+        const w = this.widgetById(this.ui.selectedId);
+        const issues = w ? this.validateWidget(w) : [];
+        if (issues.length === 0) { box.replaceChildren(); return; }
+        box.replaceChildren(html`<div class="explore-validation">
+            <div class="explore-validation__title">Complete before building:</div>
+            <ul class="explore-validation__list">${issues.map((m) => html`<li>${m}</li>`)}</ul>
+        </div>`);
     }
 
     // ---- preview (reconcile + one effect per card) -------------------------
@@ -393,33 +589,64 @@ class Editor {
 
         for (const w of widgets) {
             let entry = this.previews[w.id];
-            if (!entry) entry = this.mountWidgetPreview(w);
+            if (!entry) entry = this.mountWidgetPreview(w.id);
             entry.card.classList.toggle('is-selected', w.id === sel);
             pv.appendChild(entry.card); // re-append = reorder, keeps the node (no refetch)
         }
     }
 
-    private mountWidgetPreview(w: WidgetState): PreviewEntry {
+    private mountWidgetPreview(id: string): PreviewEntry {
         const body = html`<div class="explore-card__body"></div>` as HTMLElement;
-        const card = html`<div class="explore-card" onclick=${() => { this.ui.selectedId = w.id; }}>${body}</div>` as HTMLElement;
+        const card = html`<div class="explore-card" onclick=${() => { this.ui.selectedId = id; }}>${body}</div>` as HTMLElement;
 
-        const entry: PreviewEntry = {card, controller: mountPreview(body, this.baseUrl), eff: null, first: true};
-        this.previews[w.id] = entry;
+        const entry: PreviewEntry = {card, controller: mountPreview(body, this.baseUrl), eff: null, lastRendered: null};
+        this.previews[id] = entry;
 
-        const render = () => entry.controller.render(this.envelope(w));
-        const debounced = debounce(render);
-        // Deliberate per-card effect, created once at mount (guardrail 5): it
-        // tracks this widget's props coarsely (JSON.stringify) and re-renders
-        // the preview, debounced. Released in teardownPreview.
+        // Per-card effect (guardrail 5): its ONLY reactive dep is ui.buildRev, so
+        // it re-renders on an explicit Build (or undo/redo bump) — never on a prop
+        // edit. The widget + its props are read untracked inside renderCard, which
+        // gates on client validation before firing a query. First run at mount
+        // paints the loaded/committed state (or a "pick a table" hint for a fresh
+        // widget) without waiting for a Build.
         entry.eff = Alpine.effect(() => {
-            JSON.stringify(w.props); // deep dep on this widget's props only
-            if (entry.first) { entry.first = false; render(); }
-            else debounced();
+            void this.ui.buildRev;   // the sole dependency
+            this.renderCard(entry, id);
         });
         return entry;
     }
 
-    private envelope(w: WidgetState): WidgetEnvelope { return {type: w.type, props: raw(w.props)}; }
+    // Render (or gate) one card from the CURRENT widget state, read untracked.
+    // Not ready → a friendly hint, no query. Ready + unchanged since last render
+    // → skip (so a Build that touched other widgets doesn't refetch this one).
+    private renderCard(entry: PreviewEntry, id: string) {
+        const w = this.widgetById(id);
+        if (!w) return;
+        const issues = this.validateWidget(w);
+        if (issues.length > 0) {
+            entry.controller.message(issues[0]);
+            entry.lastRendered = null;
+            return;
+        }
+        const env = this.cleanEnvelope(w);
+        const json = JSON.stringify(env);
+        if (json === entry.lastRendered) return;
+        entry.lastRendered = json;
+        entry.controller.render(env);
+    }
+
+    // Build the wire envelope, dropping empty/whitespace WHERE clauses so a
+    // half-typed or just-added blank row never serializes into `WHERE () AND …`.
+    // Client-side only — kept simple and visible rather than papered over on the
+    // server.
+    private cleanEnvelope(w: WidgetState): WidgetEnvelope {
+        const props = deepClone(raw(w.props));
+        const qk = this.formModel?.widgets[w.type]?.queryKey;
+        const q = qk ? props[qk] : null;
+        if (q && q.kind === 'table' && Array.isArray(q.where)) {
+            q.where = q.where.filter((c: any) => typeof c === 'string' && c.trim() !== '');
+        }
+        return {type: w.type, props};
+    }
 
     private teardownPreview(id: string) {
         const e = this.previews[id];

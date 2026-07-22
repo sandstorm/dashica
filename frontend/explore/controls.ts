@@ -97,7 +97,7 @@ function labelled(field: FieldDescriptor, control: HTMLElement): HTMLElement {
     </div>` as HTMLElement;
 }
 
-function humanize(name: string): string {
+export function humanize(name: string): string {
     return name.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
 }
 
