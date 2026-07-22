@@ -47,8 +47,8 @@ func editorKind(cat fieldCategory) string {
 func descriptorLiteral(m *model) string {
 	var b strings.Builder
 	for _, w := range m.widgets {
-		fmt.Fprintf(&b, "%q: {Title: %q, HasQuery: %v, Fields: []FieldDescriptor{\n",
-			w.WireName, w.Title, hasQuery(w))
+		fmt.Fprintf(&b, "%q: {Title: %q, HasQuery: %v, QueryKey: %q, Fields: []FieldDescriptor{\n",
+			w.WireName, w.Title, hasQuery(w), queryKey(w))
 		for _, f := range w.Fields {
 			if f.Category == catQueryable {
 				continue // rendered as the query section, flagged via HasQuery
@@ -68,6 +68,19 @@ func hasQuery(w widgetInfo) bool {
 		}
 	}
 	return false
+}
+
+// queryKey returns the JSON wire key of the widget's SqlQueryable field (the Go
+// field name, e.g. "sql"), so the editor writes the base query under the exact
+// key the generated serializer reads — no client-side guessing. Empty if the
+// widget has no query.
+func queryKey(w widgetInfo) string {
+	for _, f := range w.Fields {
+		if f.Category == catQueryable {
+			return f.JSONKey
+		}
+	}
+	return ""
 }
 
 func fieldDescriptorLiteral(f fieldInfo) string {

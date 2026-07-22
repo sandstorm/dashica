@@ -8,6 +8,7 @@ import (
 
 	"github.com/sandstorm/dashica"
 	"github.com/sandstorm/dashica/docs/dev-server/examples/docs"
+	"github.com/sandstorm/dashica/lib/explore"
 )
 
 func main() {
@@ -38,6 +39,10 @@ func main() {
 		RegisterDashboard("/docs/widgets/bar-vertical", docs.BarVertical()).
 		RegisterDashboard("/docs/widgets/stats", docs.Stats()).
 		RegisterDashboard("/docs/widgets/table", docs.Table())
+
+	// Explore — on-demand widget/dashboard builder (pure builder, no persistence).
+	d.RegisterDashboardGroup("🧪 Explore").
+		RegisterDashboard("/explore", explore.New())
 
 	// Advanced Examples section (to be implemented)
 	// d.RegisterDashboardGroup("🚀 Advanced Examples").
