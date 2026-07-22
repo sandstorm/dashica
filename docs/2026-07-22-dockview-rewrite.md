@@ -579,10 +579,28 @@ and later slices depend only on earlier ones. Precondition for everything:
 Explore **Step 1 (Playwright harness) is running** and the B1–B10 fixes are
 in — a chrome rewrite without a browser test suite is how regressions hide.
 
-### Slice A — `urlState` split (no dockview; do this regardless)
+### Slice A — `urlState` split (no dockview; do this regardless) — DONE 2026-07-22
 
 The §3.4 time-vs-filter tear-apart. Pure store refactor, invisible on
 existing pages, unblocks the workspace later.
+
+**Implemented 2026-07-22.** `frontend/store.ts` now exports a global
+`Alpine.store('timeState')` (timeRange, customDateRange, autoRefresh,
+refreshInterval, logScale, `_refreshNonce`) + `createFilterScope(root,{syncUrl})`
+(sqlFilter, widgetParams, addFilter) registered in a `WeakMap<Element,FilterScope>`
+with `resolveScope(el)=registry.get(el.closest('[data-filter-scope]'))` and
+`getCombinedFilter(el)=merge(timeState, resolveScope(el))`. URL split by disjoint
+keys (timeState: time/range/refresh/log · scope: sql/wp), both read-modify-write
+the same query string and only push a history entry when it changed. New
+`frontend/components/filterScope.ts` Alpine component stamps the single page scope
+(on `application__main` in default/docs pages); the Explore editor creates its own
+scope on `.explore-editor` (data-filter-scope) in `editor.ts`. Consumers updated:
+chart.ts, searchBar.js (time→timeState, filter→scope getters), textInput/
+checkboxGroup/speedscopeLink (resolveScope), filterButton.js + table.ts
+(`dashica-add-filter` now bubbles from the element, caught+stopped at the scope
+root). `dashica-set-time` stays window-level (global time). SearchBar.templ +
+editor.templ bindings retargeted. **Requires `templ generate` + frontend esbuild
+rebuild** (user runs the build).
 
 1. `frontend/store.ts`: split into `Alpine.store('timeState')`
    (timeRange, customDateRange, autoRefresh, refreshInterval, logScale,

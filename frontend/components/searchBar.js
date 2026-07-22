@@ -1,4 +1,5 @@
 import flatpickr from 'flatpickr';
+import { resolveScope } from '../store';
 
 export default () => ({
     timePresets: [
@@ -16,17 +17,35 @@ export default () => ({
     ],
 
     flatpickrInstance: null,
+    // The nearest filter scope — where SQL-filter state lives (per-dashboard),
+    // as opposed to the global $store.timeState (time range / refresh / log).
+    _scope: null,
 
     init() {
+        this._scope = resolveScope(this.$el);
         this.initFlatpickr();
 
         // Set flatpickr date if custom range is loaded from URL
-        if (this.$store.urlState.customDateRange) {
-            const dates = this.$store.urlState.customDateRange.split(' to ');
+        if (this.$store.timeState.customDateRange) {
+            const dates = this.$store.timeState.customDateRange.split(' to ');
             if (this.flatpickrInstance) {
                 this.flatpickrInstance.setDate(dates);
             }
         }
+    },
+
+    // --- filter state, resolved from the nearest scope ---
+    get sqlFilter() {
+        return this._scope?.sqlFilter ?? '';
+    },
+    setSqlFilter(value) {
+        this._scope?.setSqlFilter(value);
+    },
+    clearSqlFilter() {
+        this._scope?.clearSqlFilter();
+    },
+    addFilter(queryPart) {
+        this._scope?.addFilter(queryPart);
     },
 
     initFlatpickr() {
@@ -36,24 +55,24 @@ export default () => ({
             enableTime: true,
             time_24hr: true,
             onChange: (selectedDates, dateStr) => {
-                this.$store.urlState.setCustomDateRange(dateStr);
+                this.$store.timeState.setCustomDateRange(dateStr);
             }
         });
     },
 
     refreshData() {
-        this.$store.urlState._triggerRefresh();
+        this.$store.timeState._triggerRefresh();
     },
 
     openCustomDatePicker() {
-        this.$store.urlState.timeRange = 'custom';
+        this.$store.timeState.timeRange = 'custom';
 
         setTimeout(() => {
             this.flatpickrInstance.open();
         }, 100);
 
-        if (this.$store.urlState.autoRefresh) {
-            this.$store.urlState.autoRefresh = false;
+        if (this.$store.timeState.autoRefresh) {
+            this.$store.timeState.autoRefresh = false;
         }
     },
 })

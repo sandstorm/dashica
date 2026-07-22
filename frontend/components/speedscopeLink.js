@@ -1,3 +1,5 @@
+import { getCombinedFilter, resolveScope } from '../store';
+
 export default () => ({
     widgetBaseUrl: '',
 
@@ -6,8 +8,8 @@ export default () => ({
     },
 
     href() {
-        const wp = this.$store.urlState.widgetParams || {};
-        const f = this.$store.urlState.getCombinedFilter();
+        const wp = resolveScope(this.$el)?.widgetParams ?? {};
+        const f = getCombinedFilter(this.$el);
         const u = new URLSearchParams();
         u.set('filters', JSON.stringify(f));
         if (Object.keys(wp).length > 0) {

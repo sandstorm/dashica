@@ -9,7 +9,7 @@ package explore
 // because the time range is part of the *previewed dashboard's* state — it belongs
 // above the widgets it re-queries, exactly as on a real dashboard page.
 templ EditorShell(baseURL string) {
-	<div x-data="exploreEditor" class="explore-editor" data-base-url={ baseURL }>
+	<div x-data="exploreEditor" class="explore-editor" data-base-url={ baseURL } data-filter-scope>
 		<div class="explore-toolbar">
 			<a class="explore-home" href="/">← Dashica</a>
 			<div class="explore-toolbar__editor" data-explore="toolbar"></div>
@@ -27,9 +27,10 @@ templ EditorShell(baseURL string) {
 }
 
 // explorePreviewControls is the compact time-range strip pinned above the
-// preview cards. It reuses the standard `searchBar` Alpine component and the
-// shared `$store.urlState`, so range/log-scale/SQL-filter drive the preview
-// charts identically to a real dashboard's search bar — just laid out compactly:
+// preview cards. It reuses the standard `searchBar` Alpine component: the global
+// `$store.timeState` (range/log-scale) plus this page's filter scope (SQL filter,
+// resolved by containment — the editor root carries data-filter-scope) drive the
+// preview charts identically to a real dashboard's search bar — just laid out compactly:
 // range presets + custom picker + log-scale in one row, the SQL filter tucked
 // behind a "filters" toggle (wired by editor.ts). Auto-refresh and per-dashboard
 // filter buttons are intentionally omitted to keep the strip small.
@@ -39,19 +40,19 @@ templ explorePreviewControls() {
 			<div class="join">
 				<template x-for="preset in timePresets" :key="preset.value">
 					<button
-						@click="$store.urlState.setTimePreset(preset.value)"
-						:class="$store.urlState.timeRange === preset.value ? 'btn-active' : ''"
+						@click="$store.timeState.setTimePreset(preset.value)"
+						:class="$store.timeState.timeRange === preset.value ? 'btn-active' : ''"
 						class="btn btn-xs join-item"
 						x-text="preset.label"
 					></button>
 				</template>
 				<button
 					@click="openCustomDatePicker()"
-					:class="$store.urlState.timeRange === 'custom' ? 'btn-active' : ''"
+					:class="$store.timeState.timeRange === 'custom' ? 'btn-active' : ''"
 					class="btn btn-xs join-item"
 				>Custom</button>
 			</div>
-			<div x-show="$store.urlState.timeRange === 'custom'" x-cloak class="form-control">
+			<div x-show="$store.timeState.timeRange === 'custom'" x-cloak class="form-control">
 				<input
 					x-ref="datePicker"
 					type="text"
@@ -64,19 +65,19 @@ templ explorePreviewControls() {
 				<span class="label-text text-xs font-medium">Log scale</span>
 				<input
 					type="checkbox"
-					:checked="$store.urlState.logScale"
-					@change="$store.urlState.toggleLogScale()"
+					:checked="$store.timeState.logScale"
+					@change="$store.timeState.toggleLogScale()"
 					class="toggle toggle-xs"
 				/>
 			</label>
 			<div class="explore-preview__controls-spacer"></div>
 			<button type="button" class="explore-btn explore-btn--sm" data-explore="filters-toggle">filters</button>
-			<span x-show="$store.urlState.sqlFilter" x-cloak class="badge badge-primary badge-xs">active</span>
+			<span x-show="sqlFilter" x-cloak class="badge badge-primary badge-xs">active</span>
 		</div>
 		<div class="explore-preview__filters" data-explore="filters" hidden>
 			<textarea
-				:value="$store.urlState.sqlFilter"
-				@input="$store.urlState.setSqlFilter($event.target.value)"
+				:value="sqlFilter"
+				@input="setSqlFilter($event.target.value)"
 				class="textarea textarea-bordered textarea-xs w-full font-mono"
 				placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
 				rows="2"

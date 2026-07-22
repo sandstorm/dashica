@@ -10,7 +10,7 @@ templ DocsApplication(renderingContext rendering.DashboardContext, content templ
         <aside class="application__sidebar">
             @PageMenu(renderingContext)
         </aside>
-        <main class="application__main">
+        <main class="application__main" x-data="filterScope" data-filter-scope>
             <div class="application__content prose max-w-none">
                 @content
             </div>

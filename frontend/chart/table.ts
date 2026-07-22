@@ -482,8 +482,9 @@ export function table(queryResult: any, extProps: any) {
             label: "Filter: Equals this timestamp",
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} = '${value}'`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} = '${value}'`
                 }));
             }
         },
@@ -494,8 +495,9 @@ export function table(queryResult: any, extProps: any) {
                 const dt = new Date(value);
                 const startSec = (dt.getTime() - 5 * 60 * 1000) / 1000;
                 const endSec = (dt.getTime() + 5 * 60 * 1000) / 1000;
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} BETWEEN ${startSec} AND ${endSec}`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} BETWEEN ${startSec} AND ${endSec}`
                 }));
             }
         },
@@ -506,8 +508,9 @@ export function table(queryResult: any, extProps: any) {
                 const dt = new Date(value);
                 const startSec = (dt.getTime() - 60 * 60 * 1000) / 1000;
                 const endSec = (dt.getTime() + 60 * 60 * 1000) / 1000;
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} BETWEEN ${startSec} AND ${endSec}`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} BETWEEN ${startSec} AND ${endSec}`
                 }));
             }
         },
@@ -518,8 +521,9 @@ export function table(queryResult: any, extProps: any) {
                 const dt = new Date(value);
                 const startSec = (dt.getTime() - 24 * 60 * 60 * 1000) / 1000;
                 const endSec = (dt.getTime() + 24 * 60 * 60 * 1000) / 1000;
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} BETWEEN ${startSec} AND ${endSec}`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} BETWEEN ${startSec} AND ${endSec}`
                 }));
             }
         }
@@ -531,8 +535,9 @@ export function table(queryResult: any, extProps: any) {
             label: "Filter: Equals this value",
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} = '${value}'`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} = '${value}'`
                 }));
             }
         },
@@ -540,8 +545,9 @@ export function table(queryResult: any, extProps: any) {
             label: "Filter: Not equals this value",
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} != '${value}'`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} != '${value}'`
                 }));
             }
         },
@@ -549,8 +555,9 @@ export function table(queryResult: any, extProps: any) {
             label: "Filter: Contains this value",
             action: function(e: any, cell: CellComponent) {
                 const value = cell.getValue();
-                window.dispatchEvent(new CustomEvent('dashica-add-filter', {
-                    detail: `${fieldName} LIKE '%${value}%'`
+                cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+                    bubbles: true,
+                    detail:`${fieldName} LIKE '%${value}%'`
                 }));
             }
         }

@@ -40,6 +40,7 @@ import {html} from "htl";
 import {classBadge, Column, ControlCtx, FieldDescriptor, FieldKind, humanize, kindsForSlot, SchemaResponse} from "./controls";
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
+import {createFilterScope} from "../store";
 
 interface WidgetState { id: string; type: string; props: Record<string, any>; }
 interface DashboardState { title: string; layout: string; widgets: WidgetState[]; }
@@ -138,7 +139,7 @@ class Editor {
     // actual selection change, not on every structural repaint.
     private lastScrolledSel: string | null = null;
 
-    constructor(private root: HTMLElement, private baseUrl: string, private urlState: any) {
+    constructor(private root: HTMLElement, private baseUrl: string) {
         this.elToolbar = root.querySelector('[data-explore="toolbar"]')!;
         this.elTree = root.querySelector('[data-explore="tree"]')!;
         this.elPreview = root.querySelector('[data-explore="preview"]')!;
@@ -1018,11 +1019,14 @@ class Editor {
 }
 
 // Alpine boundary: register the component, construct the plain Editor, start it.
-// Preview charts subscribe to $store.urlState themselves, so the time range
-// re-queries them automatically — the editor needs no filter effect.
+// The editor root carries [data-filter-scope]; we create its single URL-syncing
+// filter scope here (before the preview charts mount, since Alpine inits parents
+// first) so the preview strip's SQL filter + the global $store.timeState drive
+// the preview charts automatically — the editor needs no filter effect.
 export default () => ({
     init() {
-        const editor = new Editor(this.$el, this.$el.dataset.baseUrl || '', this.$store.urlState);
+        createFilterScope(this.$el, { syncUrl: true });
+        const editor = new Editor(this.$el, this.$el.dataset.baseUrl || '');
         editor.start();
     },
 });

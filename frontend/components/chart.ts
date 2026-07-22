@@ -10,6 +10,7 @@ import {stats} from '../chart/stats'
 import {table} from '../chart/table'
 import {alertOverview} from '../chart/alertOverview'
 import {query, queryPost} from "./util/clickhouse-new";
+import {getCombinedFilter, resolveScope} from "../store";
 
 // Exported so the Explore preview (frontend/explore) can render a widget from a
 // POST'd JSON envelope through the exact same renderers as compiled dashboards.
@@ -80,8 +81,8 @@ Alpine.data('chart', () => ({
             if (!this._visible) return;
             this._isLoading = true;
             try {
-                const filter = this.$store.urlState.getCombinedFilter();
-                const wp = this.$store.urlState.widgetParams;
+                const filter = getCombinedFilter(this.$el);
+                const wp = resolveScope(this.$el)?.widgetParams ?? {};
                 this._queryResult = this._previewBase
                     ? await queryPost(this._previewBase + "/query", this._previewBody, filter, wp)
                     : await query(widgetBaseUrl + "/query", filter, wp)
@@ -96,7 +97,7 @@ Alpine.data('chart', () => ({
         Alpine.effect(async () => {
             try {
                 if (this._queryResult) {
-                    const viewOptions = this.$store.urlState.logScale ? ['VIEW_LOGARITHMIC'] : [];
+                    const viewOptions = this.$store.timeState.logScale ? ['VIEW_LOGARITHMIC'] : [];
                     const finalChartProps = {...chartProps, width: this._width, colorSchemeDark: this._colorSchemeDark, viewOptions};
                     const chart = await charts[chartType](this._queryResult, finalChartProps);
                     this.$refs.chartContainer.innerHTML = '';
@@ -117,7 +118,7 @@ Alpine.data('chart', () => ({
     async toggleDebug() {
         try {
             const qs = "?" + new URLSearchParams({
-                filters: JSON.stringify(this.$store.urlState.getCombinedFilter())
+                filters: JSON.stringify(getCombinedFilter(this.$el))
             });
             const response = this._previewBase
                 ? await fetch(this._previewBase + "/debug" + qs, {

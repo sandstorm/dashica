@@ -7,6 +7,7 @@ import intersect from '@alpinejs/intersect'
 import resize from '@alpinejs/resize'
 
 import filterButton from './components/filterButton'
+import filterScope from './components/filterScope'
 import searchBar from './components/searchBar'
 import textInput from './components/textInput'
 import checkboxGroup from './components/checkboxGroup'
@@ -24,6 +25,7 @@ Alpine.plugin(intersect);
 Alpine.plugin(resize);
 
 Alpine.data('filterButton', filterButton);
+Alpine.data('filterScope', filterScope);
 Alpine.data('searchBar', searchBar);
 Alpine.data('textInput', textInput);
 Alpine.data('checkboxGroup', checkboxGroup);

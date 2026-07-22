@@ -7,6 +7,8 @@ export default () => ({
                 sqlFilter = sqlFilter.replaceAll('...', parameter);
             }
         }
-        window.dispatchEvent(new CustomEvent('dashica-add-filter', {detail: sqlFilter}));
+        // Bubble to the owning [data-filter-scope] root (stops there), so the
+        // filter lands on THIS dashboard's scope, not a global store.
+        this.$dispatch('dashica-add-filter', sqlFilter);
     }
 })
