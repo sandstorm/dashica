@@ -117,33 +117,6 @@ function addButton(label: string, onClick: () => void): HTMLButtonElement {
 }
 
 // ---------------------------------------------------------------------------
-// column-reference click-to-insert plumbing
-// ---------------------------------------------------------------------------
-
-// The most-recently-focused SQL-ish input (a WHERE clause or a custom
-// expression). The query section's collapsible "Columns" reference inserts a
-// column name here on click — a lightweight value picker that needs no
-// selection state beyond "where was the cursor last".
-let lastSqlInput: HTMLInputElement | HTMLTextAreaElement | null = null;
-
-function trackSqlFocus(input: HTMLInputElement | HTMLTextAreaElement) {
-    input.addEventListener('focus', () => { lastSqlInput = input; });
-}
-
-function insertIntoLastSqlInput(text: string) {
-    const input = lastSqlInput;
-    if (!input || !input.isConnected) return;
-    const start = input.selectionStart ?? input.value.length;
-    const end = input.selectionEnd ?? input.value.length;
-    input.value = input.value.slice(0, start) + text + input.value.slice(end);
-    const caret = start + text.length;
-    input.setSelectionRange(caret, caret);
-    input.focus();
-    // Fire input so the reactive write in the control's listener runs.
-    input.dispatchEvent(new Event('input', {bubbles: true}));
-}
-
-// ---------------------------------------------------------------------------
 // class-aware column completion
 // ---------------------------------------------------------------------------
 
@@ -159,7 +132,6 @@ let datalistSeq = 0;
 // which columns fit the slot without hiding the escape hatches (docs UX plan
 // (3)). Returns the datalist so the caller can append it near the input.
 function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, preferred: ColumnClass | null): HTMLDataListElement {
-    trackSqlFocus(input);
     const id = `explore-cols-${datalistSeq++}`;
     const dl = html`<datalist id=${id}></datalist>` as HTMLDataListElement;
     input.setAttribute('list', id);
@@ -460,7 +432,6 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
             const ta = html`<textarea class="explore-input explore-textarea" rows="6"
                 oninput=${() => { q.sql = ta.value; }}></textarea>` as HTMLTextAreaElement;
             ta.value = q.sql ?? '';
-            trackSqlFocus(ta);
             parts.push(labelled({name: 'sql', editor: 'rawSql', help: 'Must contain {{DASHICA_FILTERS}}.'}, ta));
         } else {
             const id = `explore-tables-${datalistSeq++}`;
@@ -477,10 +448,9 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
                 }}>` as HTMLInputElement;
             parts.push(dl, labelled({name: 'table', editor: 'text'}, tbl));
 
-            // collapsible column reference for the chosen table — badge + name +
-            // type; clicking a column inserts its name into the last-focused
-            // WHERE / expression input (docs UX plan (2)).
-            parts.push(columnReference(ctx));
+            // (No inline column reference here: the Data tab in the bottom drawer
+            // already lists the table's columns. Autocomplete on the WHERE /
+            // field inputs (attachColumnCompletion) covers in-place discovery.)
 
             // where clause list
             q.where = q.where ?? [];
@@ -502,39 +472,6 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
     }
     rebuild();
     return container;
-}
-
-// columnReference is the collapsible list of the current table's columns, shown
-// under the table input. Repopulates each time it is opened, so it always
-// reflects the current table. Clicking a column inserts its name at the cursor
-// in the last-focused WHERE / expression input.
-function columnReference(ctx: ControlCtx): HTMLElement {
-    const list = html`<div class="explore-colref__list"></div>` as HTMLElement;
-    const details = html`<details class="explore-colref">
-        <summary>Columns</summary>
-        ${list}
-    </details>` as HTMLElement;
-
-    const populate = () => {
-        const table = ctx.getTable();
-        const cols = (table && ctx.schema?.columns[table]) || [];
-        if (cols.length === 0) {
-            list.replaceChildren(html`<div class="explore-field__help">${table ? 'No columns.' : 'Pick a table first.'}</div>`);
-            return;
-        }
-        list.replaceChildren(...cols.map((c) => {
-            const badge = classBadge(c.class);
-            return html`<button type="button" class="explore-colref__col"
-                title=${`${c.type}${c.comment ? ` — ${c.comment}` : ''} (click to insert)`}
-                onclick=${() => insertIntoLastSqlInput(c.name)}>
-                ${badge ? html`<span class="explore-badge">${badge}</span>` : ''}
-                <span class="explore-colref__name">${c.name}</span>
-                <span class="explore-colref__type">${c.type}</span>
-            </button>`;
-        }));
-    };
-    details.addEventListener('toggle', () => { if ((details as HTMLDetailsElement).open) populate(); });
-    return details;
 }
 
 // ---------------------------------------------------------------------------

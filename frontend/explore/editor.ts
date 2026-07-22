@@ -114,7 +114,6 @@ class Editor {
     private elInspector: HTMLElement;
     private elDrawer: HTMLElement;
     private titleInput!: HTMLInputElement;
-    private layoutSel!: HTMLSelectElement;
     private elTreeList!: HTMLElement;
     private elDrawerTabs!: HTMLElement;
     private elDrawerCollapse!: HTMLButtonElement;
@@ -131,6 +130,13 @@ class Editor {
     private histIndex = -1;
 
     private inspectorScheduled = false;
+
+    // Source row index during a tree drag-and-drop reorder (null when not dragging).
+    private dragIndex: number | null = null;
+
+    // Last selection we scrolled the preview to — so we only auto-scroll on an
+    // actual selection change, not on every structural repaint.
+    private lastScrolledSel: string | null = null;
 
     constructor(private root: HTMLElement, private baseUrl: string, private urlState: any) {
         this.elToolbar = root.querySelector('[data-explore="toolbar"]')!;
@@ -264,11 +270,12 @@ class Editor {
         const persist = debounce((json: string) => localStorage.setItem(LS_KEY, json));
         this.effects.push(Alpine.effect(() => { persist(JSON.stringify(this.state)); }));
 
-        // toolbar sync: title/layout inputs reflect state when not focused.
+        // toolbar sync: title input reflects state when not focused. The layout
+        // is not user-editable here (defaults to defaultPage); it round-trips via
+        // the JSON tab / share link but has no toolbar control.
         this.effects.push(Alpine.effect(() => {
-            const t = this.state.title, l = this.state.layout;
+            const t = this.state.title;
             if (document.activeElement !== this.titleInput) this.titleInput.value = t;
-            if (document.activeElement !== this.layoutSel) this.layoutSel.value = l;
         }));
 
         // tree: follows widget structure + selection.
@@ -328,9 +335,6 @@ class Editor {
         this.titleInput = html`<input class="explore-input explore-toolbar__title" placeholder="Dashboard title"
             oninput=${() => { this.state.title = this.titleInput.value; }}>` as HTMLInputElement;
 
-        this.layoutSel = html`<select class="explore-input" onchange=${() => { this.state.layout = this.layoutSel.value; }}>${
-            (this.formModel?.layouts ?? []).map((l) => html`<option value=${l}>${l}</option>`)}</select>` as HTMLSelectElement;
-
         const share = html`<button class="explore-btn" onclick=${() => {
             navigator.clipboard.writeText(this.shareUrl());
             share.textContent = 'Copied!';
@@ -342,7 +346,7 @@ class Editor {
         this.elRedoBtn = html`<button class="explore-btn explore-btn--icon" title="Redo (Cmd/Ctrl+Shift+Z)"
             onclick=${() => this.redo()}>↷</button>` as HTMLButtonElement;
         this.elToolbar.replaceChildren(
-            this.titleInput, this.layoutSel,
+            this.titleInput,
             this.elUndoBtn, this.elRedoBtn, share);
     }
 
@@ -377,13 +381,44 @@ class Editor {
         this.elTreeList.replaceChildren(...items.map((w, i) => {
             const name = html`<span class="explore-tree__name"
                 onclick=${() => { this.ui.selectedId = w.id; }}>${this.formModel?.widgets[w.type]?.title ?? w.type}</span>`;
-            return html`<li class=${'explore-tree__item' + (w.id === sel ? ' is-selected' : '')}>
+            // Draggable row (replaces the ↑/↓ arrows): drag to reorder. Duplicate +
+            // delete controls sit at the trailing edge.
+            const li = html`<li draggable="true"
+                class=${'explore-tree__item' + (w.id === sel ? ' is-selected' : '')}>
+                <span class="explore-tree__grip" title="Drag to reorder">⠿</span>
                 ${name}
-                ${this.iconBtn('↑', i === 0, () => this.move(i, -1))}
-                ${this.iconBtn('↓', i === items.length - 1, () => this.move(i, 1))}
+                ${this.iconBtn('⧉', false, () => this.duplicateWidget(w.id))}
                 ${this.iconBtn('×', false, () => this.deleteWidget(w.id))}
-            </li>`;
+            </li>` as HTMLElement;
+            this.wireTreeDnd(li, i);
+            return li;
         }));
+    }
+
+    // Wire one tree row for drag-and-drop reordering. dragstart stashes the source
+    // index; dragover marks the hovered row + allows the drop; drop moves the
+    // widget before the target. Kept local + imperative (CSP forbids Alpine
+    // expression handlers) — the state mutation flows through moveWidget, so the
+    // tree/preview effects repaint from the reordered array.
+    private wireTreeDnd(li: HTMLElement, index: number) {
+        li.addEventListener('dragstart', (e: DragEvent) => {
+            this.dragIndex = index;
+            e.dataTransfer?.setData('text/plain', String(index));
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+        });
+        li.addEventListener('dragover', (e: DragEvent) => {
+            e.preventDefault(); // required so drop fires
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            li.classList.add('is-drop-target');
+        });
+        li.addEventListener('dragleave', () => li.classList.remove('is-drop-target'));
+        li.addEventListener('drop', (e: DragEvent) => {
+            e.preventDefault();
+            li.classList.remove('is-drop-target');
+            if (this.dragIndex !== null && this.dragIndex !== index) this.moveWidget(this.dragIndex, index);
+            this.dragIndex = null;
+        });
+        li.addEventListener('dragend', () => { this.dragIndex = null; });
     }
 
     private iconBtn(label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
@@ -406,12 +441,27 @@ class Editor {
         this.pushHistory();
     }
 
-    private move(index: number, dir: number) {
-        const j = index + dir;
+    // Move the widget at `from` to just before the widget currently at `to`
+    // (drag-and-drop reorder). Splices the reactive array in place so the tree +
+    // preview effects repaint without refetching (cards look up by id).
+    private moveWidget(from: number, to: number) {
         const arr = this.state.widgets;
-        if (j < 0 || j >= arr.length) return;
-        [arr[index], arr[j]] = [arr[j], arr[index]];
+        if (from < 0 || from >= arr.length || to < 0 || to >= arr.length || from === to) return;
+        const [item] = arr.splice(from, 1);
+        arr.splice(to > from ? to - 1 : to, 0, item);
         this.pushHistory();
+    }
+
+    // Duplicate a widget: a deep copy of its props with a fresh id, inserted right
+    // after the original and selected. Commits (build) so the new card renders.
+    private duplicateWidget(id: string) {
+        const arr = this.state.widgets;
+        const i = arr.findIndex((w) => w.id === id);
+        if (i < 0) return;
+        const copy: WidgetState = {id: `w${this.idSeq++}`, type: arr[i].type, props: deepClone(raw(arr[i].props))};
+        arr.splice(i + 1, 0, copy);
+        this.ui.selectedId = copy.id;
+        this.build();
     }
 
     // ---- undo / redo history ----------------------------------------------
@@ -676,10 +726,20 @@ class Editor {
             entry.card.classList.toggle('is-selected', w.id === sel);
             pv.appendChild(entry.card); // re-append = reorder, keeps the node (no refetch)
         }
+
+        // When the selection *changes*, scroll its preview card into the middle of
+        // the preview pane — so picking a widget in the tree reveals it. Guarded on
+        // a change so structural repaints (add/delete/reorder) don't re-scroll.
+        if (sel && sel !== this.lastScrolledSel && this.previews[sel]) {
+            this.previews[sel].card.scrollIntoView({block: 'center', behavior: 'smooth'});
+        }
+        this.lastScrolledSel = sel;
     }
 
     private mountWidgetPreview(id: string): PreviewEntry {
         const body = html`<div class="explore-card__body"></div>` as HTMLElement;
+        // No overlay controls on the card — duplicate/delete live in the tree row
+        // (shown on hover). The card is just a click target to select.
         const card = html`<div class="explore-card" onclick=${() => { this.ui.selectedId = id; }}>${body}</div>` as HTMLElement;
 
         const entry: PreviewEntry = {card, controller: mountPreview(body, this.baseUrl), eff: null, lastRendered: null};
