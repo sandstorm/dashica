@@ -71,6 +71,21 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 	if len(resp.Layouts) == 0 {
 		t.Errorf("no layouts returned")
 	}
+
+	// fieldKinds carry the intent labels + slot metadata the pickers speak.
+	byKind := map[string]fieldKind{}
+	for _, fk := range resp.FieldKinds {
+		byKind[fk.Kind] = fk
+	}
+	if ab, ok := byKind["autoBucket"]; !ok || ab.Label == "" || !ab.RequiresColumn || ab.ColumnClass != "temporal" {
+		t.Errorf("autoBucket fieldKind = %+v, want labelled, requiresColumn, temporal", ab)
+	}
+	if cnt, ok := byKind["count"]; !ok || cnt.Label == "" || cnt.RequiresColumn {
+		t.Errorf("count fieldKind = %+v, want labelled, no column", cnt)
+	}
+	if ex, ok := byKind["expr"]; !ok || !ex.Advanced {
+		t.Errorf("expr fieldKind = %+v, want advanced", ex)
+	}
 }
 
 func fieldByName(fields []widget.FieldDescriptor, name string) *widget.FieldDescriptor {

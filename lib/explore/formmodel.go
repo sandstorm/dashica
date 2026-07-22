@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
@@ -31,9 +32,40 @@ func (e *exploreImpl) handleFormModel(w http.ResponseWriter, r *http.Request) er
 		widgets[name] = widgetFormModel{WidgetDescriptor: d, Defaults: defaults}
 	}
 
-	resp := formModelResponse{Widgets: widgets, Layouts: layout.Names()}
+	resp := formModelResponse{Widgets: widgets, Layouts: layout.Names(), FieldKinds: fieldKinds}
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(resp)
+}
+
+// fieldKind describes one selectable kind of a SqlField / TimestampedField, with
+// the human-facing intent label the editor shows instead of the raw serializer
+// vocabulary (autoBucket/count/enum/expr). Keeping the labels + slot metadata on
+// the server keeps Go the source of truth (docs UX plan (3)); the sql field
+// vocabulary is small and stable, so this static table mirrors it directly.
+type fieldKind struct {
+	// Kind is the wire "kind" discriminator (matches lib/dashboard/sql).
+	Kind string `json:"kind"`
+	// Label is the intent-teaching display text, e.g. "Time bucket (automatic)".
+	Label string `json:"label"`
+	// RequiresColumn is true when the kind needs a column picked (autoBucket,
+	// enum); false for count (needs none) and expr (free SQL).
+	RequiresColumn bool `json:"requiresColumn,omitempty"`
+	// ColumnClass is the column class the kind prefers, so the picker offers the
+	// right columns first (clickhouse.ColumnClass*). Empty when class-agnostic.
+	ColumnClass string `json:"columnClass,omitempty"`
+	// Advanced hides the kind (and the alias input) behind the "advanced" toggle;
+	// the golden path never needs it.
+	Advanced bool `json:"advanced,omitempty"`
+}
+
+// fieldKinds is the intent vocabulary the editor's field pickers speak. Order is
+// the golden-path order: the first non-advanced kind valid for a slot is its
+// default (autoBucket for the timestamped X, count for a value/Y field).
+var fieldKinds = []fieldKind{
+	{Kind: "autoBucket", Label: "Time bucket (automatic)", RequiresColumn: true, ColumnClass: clickhouse.ColumnClassTemporal},
+	{Kind: "count", Label: "Row count"},
+	{Kind: "enum", Label: "Column (as category)", RequiresColumn: true, ColumnClass: clickhouse.ColumnClassCategorical},
+	{Kind: "expr", Label: "Custom SQL expression", Advanced: true},
 }
 
 // widgetFormModel is a widget's generated descriptor plus its runtime-derived
@@ -44,6 +76,7 @@ type widgetFormModel struct {
 }
 
 type formModelResponse struct {
-	Widgets map[string]widgetFormModel `json:"widgets"`
-	Layouts []string                   `json:"layouts"`
+	Widgets    map[string]widgetFormModel `json:"widgets"`
+	Layouts    []string                   `json:"layouts"`
+	FieldKinds []fieldKind                `json:"fieldKinds"`
 }
