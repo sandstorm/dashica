@@ -220,11 +220,82 @@ every slice** — no automated browser test exists yet.
 
 Each step is a shippable slice. Order = dependencies first, then user value.
 
-LATER - NOT RIGHT NOW!!! **Step 1 — Browser E2E harness (pay the recurring debt first).**
-Playwright/Chrome-MCP smoke: load `/explore`, add timeBar, pick table, see
-rendered chart, edit JSON tab, share-link round-trip. Every later step extends
-this instead of re-deferring it. (Frontend build stays the user's command; the
-tests assume a built bundle + dev ClickHouse.)
+**Step 1 — Browser E2E harness.** STARTED 2026-07-22: Playwright suite written
+(`playwright.config.ts`, `e2e/explore.spec.ts`, `e2e/README.md`; npm scripts
+`e2e`/`e2e:ui`; `@playwright/test` devDependency — user runs `npm install` +
+`npx playwright install chromium`). Covers: editor shell, chart-only add list,
+golden path (add + table → chart), WHERE editing, Data tab, values, JSON tab,
+share link. Known bugs B1–B4 below are encoded as `test.fail(...)` tests —
+they flip loudly when fixed, then the marker is removed and the assertion
+stays as a regression test. Still to run once installed.
+
+### Browser-session findings (2026-07-22) — feed the steps below
+
+From driving the real editor on `127.0.0.1:8081` (dev ClickHouse,
+`mv_agent_metrics`). B1–B4 have `test.fail` e2e tests.
+
+**B1 — Preview fires before the widget is buildable.** Adding a widget
+immediately shows a raw ClickHouse error (`toStartOfFiveMinutes()` with empty
+column, no FROM). Fix: client-side readiness gate — no preview until required
+fields are satisfiable (table + required pickers non-empty); show "Pick a
+table to see data" instead.
+
+**B2 — "+ WHERE" breaks the query.** The new row is empty and the preview
+fires instantly; the empty clause serializes into `WHERE tuple() AND (…)` →
+`ILLEGAL_TYPE_OF_ARGUMENT`. Fix in BOTH layers: client drops empty/whitespace
+clauses from the envelope; `sql` builder skips blank `where` entries too
+(compiled-API robustness — an empty `Where("")` should never emit `()`).
+
+**B3 — Typing a WHERE clause fights the user.** Every debounce tick mid-typing
+replaces the whole chart with a full-panel raw SQL syntax error
+(`host_name =` → SYNTAX_ERROR wall). Fix: keep the last good chart rendered
+and show errors as a compact overlay/badge on the card; additionally consider
+apply-on-Enter/blur for SQL-ish inputs (they are the only inputs where
+intermediate states are *expected* to be invalid).
+
+**B4 — Field slots lack roles; column classes not reflected in widgets.**
+BarVertical's X offers "Row count" — nonsense — because the kind list is
+derived from a single bit (`timestamped?`): X, Y, Fill, Fx, Fy all get
+`[count, enum, expr]`. The missing concept is the **slot role**:
+- **dimension** — what you group by; lands in `GROUP BY` (X of bar charts,
+  Fill, Fx, Fy). Valid kinds: column-as-category, custom expr. A time-widget X
+  is a *temporal* dimension (auto-bucket).
+- **measure** — the aggregation per group (Y). Valid kinds: count (later
+  sum/avg/…), custom expr. A bare category column is equally wrong here — the
+  same bug mirrored.
+The widget's Go code already knows each field's role (`buildQuery` puts
+x/fill/fx/fy into `GroupBy`), but the descriptor doesn't carry it. Fix:
+`role=dimension|measure` per field via `dashica-gen` struct tag → descriptor →
+`fieldKinds` declare which roles they serve → the picker shows only matching
+kinds; column *classes* then filter columns within the slot (categorical for
+Fill, temporal for time-X — completing what the class vocabulary started).
+
+**B5 — WHERE needs a scope explanation** (user request). Add help text on the
+Where section: *"Applies only to this widget's query — combined with the
+dashboard-wide time range and filters (top of the preview), which apply to
+every widget."* Doc-comment or formmodel-served so wording lives in Go.
+
+**B6 — "Filter from data" (user request).** Right-clicking a value in a table
+widget / Data-tab sample should offer "Filter: `column = 'value'`" —
+appending to the **selected widget's WHERE**, not the global filter bar.
+Design: small custom context menu on table cells + Data-tab values; inserts
+into the widget envelope's `where` list (reactive state makes this one
+mutation). Same affordance left-click on a Data-tab *values* row (B7).
+
+**B7 — values list is display-only.** Clicking a value does nothing; it
+should insert `column = 'value'` as a widget WHERE clause (or at least copy).
+
+**B8 — Title input collapsed to 15 px.** `.explore-toolbar__title` renders as
+an unusable sliver ("mystery box"); placeholder exists but the flex sizing is
+broken.
+
+**B9 — No loading state in preview cards.** After edits, the card can sit
+blank (in-flight fetch) with no spinner — indistinguishable from "no data".
+Compiled dashboards have a refresh indicator; reuse it. Also add an explicit
+"no rows in range" empty state.
+
+**B10 — Tree icon buttons nearly invisible** on the selected row (pale blue
+on blue; ↑ ↓ × only readable when zoomed).
 
 LATER - NOT RIGHT NOW!!! **Step 2 — Serialization "fails loudly" sweep (open Phase-1 review findings).**
 The invariant everything rests on: *round-trips faithfully or fails loudly.*
@@ -277,19 +348,18 @@ round trip.
   "Open in Explore" round-trip) but hidden from the flat list. Tests:
   `formmodel_test.go` asserts category per widget. Later: teach the query
   section to reference `{param:String}`, then surface parameter widgets.
+- **From the browser session (B-findings above):** preview readiness gate +
+  friendly empty/error states (B1, B3, B9); drop empty WHERE clauses client-
+  AND server-side (B2); **slot roles dimension|measure** via dashica-gen tag →
+  descriptor → kind filtering (B4 — the categorical/continuous vocabulary
+  finally constrains widgets, not just autocomplete ordering); WHERE scope
+  help text served from Go (B5); "Filter from data" context menu on table
+  cells + Data-tab values inserting into the selected widget's WHERE (B6, B7);
+  title-input CSS fix (B8); tree icon contrast (B10).
 - UX polish: persistent labels on every input; labeled title/layout in the
-  toolbar; tree rows show `props.title`; icon contrast; Fill/Fx/Fy collapsed
-  into "Series & faceting"; friendly empty states instead of raw 500 text.
+  toolbar; tree rows show `props.title`; Fill/Fx/Fy collapsed
+  into "Series & faceting".
 - keyValue control: commit key+value atomically on blur (phantom-key bug).
-- ✅ **DONE 2026-07-22** — Adopt `htl` for DOM assembly (already a dependency;
-  ~halves controls/editor boilerplate). `controls.ts`/`editor.ts`/
-  `formRenderer.ts` DOM assembly swapped from `document.createElement` +
-  `el()`/append chains to htl `html` templates (same idiom as
-  `chart/table.ts`); `el()` helper dropped, row-list redraws use
-  `replaceChildren`. ~230 lines cut. Reactive guardrails preserved (column
-  completion keeps `addEventListener('focus')`; select/checkbox `.value`/
-  `.checked` set after build; textarea value via property). Not yet
-  built/browser-E2E'd.
 - values endpoint: time-bound the scan (schema knows the timestamp column)
   — currently full-table GROUP BY per autocomplete call; add continuous-column
   min/max/quantiles as the class-appropriate alternative.
