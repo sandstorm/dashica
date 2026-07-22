@@ -53,6 +53,11 @@ type exploreImpl struct {
 
 func (e *exploreImpl) Title() string { return e.title }
 
+// IsExploreView marks this dashboard as the Explore editor so the Dashica
+// registrar records its URL (used to wire up "Open in Explore" on every
+// compiled dashboard). See DashicaImpl.RegisterDashboard.
+func (e *exploreImpl) IsExploreView() bool { return true }
+
 func (e *exploreImpl) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
 	e.deps = ctx.Deps
 	e.baseURL = ctx.CurrentHandlerUrl

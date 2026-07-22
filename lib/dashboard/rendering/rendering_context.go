@@ -18,6 +18,14 @@ type DashboardContext struct {
 	CurrentHandlerUrl string
 	FilterButtons     []FilterButton
 
+	// ExploreBaseURL points at the registration URL of the Explore view (e.g.
+	// "/explore"), or is nil / empty when Explore is not registered. It is a
+	// pointer shared across every dashboard context so it resolves at request
+	// time regardless of dashboard/Explore registration order: the page layout
+	// renders the "Open in Explore" link only when it is set, and each
+	// dashboard's own open-in-explore handler redirects to it.
+	ExploreBaseURL *string
+
 	Deps Dependencies
 
 	// UntrustedContent marks a render whose widget definitions come from an

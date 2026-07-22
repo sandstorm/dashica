@@ -314,15 +314,30 @@ round trip.
 - Small robustness: `destroyTree` fallback (private Alpine API), `lz-string`
   share links + length warning.
 
-**Step 6 — Open existing (compiled) dashboards in Explore.**
-"Open in Explore" action on every dashboard page (rendered only when Explore
-is registered): server marshals the registered dashboard → editor loads it as
-client-side state (no store needed). Decide the behavior for
-out-of-v1-scope widgets (alert widgets, schemaTable, speedscopeLink):
-skip-with-placeholder vs. whole-export error (`MarshalWidget` currently errors
-— loud but all-or-nothing). Accepted limitation: template helpers
-(`templates.LogOverview(...)`) export flattened. No in-place override of
-compiled dashboards — compiled = immutable truth.
+**Step 6 — Open existing (compiled) dashboards in Explore. DONE 2026-07-22.**
+"Open in Explore" link on every standard dashboard page (top of main content,
+rendered only when Explore is registered). Mechanism: each `*Builder` registers
+its own `<dashboard-url>/open-in-explore` handler (no lookup registry — the
+dashboard has itself), which marshals itself and 302-redirects to
+`<exploreURL>#s=<base64>` — the editor's existing share-link loader reconstructs
+it, zero frontend logic. The Explore URL is discovered order-independently: the
+registrar marks the Explore view via an `IsExploreView()` marker and every
+`DashboardContext` carries a shared `*ExploreBaseURL` pointer (nil/empty ⇒ no
+button). Out-of-v1-scope widgets are **skipped** (chosen over placeholder/whole-
+export error): `widget.ErrWidgetNotRegistered` sentinel + a mutex-serialised
+lenient-marshal mode threaded through `Widgets`/`WidgetsMap.MarshalJSON`, so an
+unsupported widget nested in a grid/collapsibleGroup drops **only that child**,
+the container survives. Skipped widgets are logged server-side. Strict
+`MarshalJSON` unchanged (round-trip invariant intact). Encoding note: the
+fragment base64 is query-escaped because the editor reads it via
+`URLSearchParams` (`+`→space otherwise). Tests: `dashboard_explore_test.go`
+(top-level + nested skip, all-supported, strict-still-fails) +
+`dashboard_openinexplore_test.go` (redirect state round-trips, 404 when Explore
+unregistered), race-clean. **Not yet done:** templ regen + frontend rebuild
+(user's build step) to surface the button; browser E2E (recurring deferred gap).
+Accepted limitation: template helpers (`templates.LogOverview(...)`) export
+flattened. No in-place override of compiled dashboards — compiled = immutable
+truth.
 
 **Step 7 — Optional persistence.**
 `Store` interface + JSON-file store (`WithFileStore(dir)`, write-temp+rename;

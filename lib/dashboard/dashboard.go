@@ -1,7 +1,10 @@
 package dashboard
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/http"
+	"net/url"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/layout"
@@ -86,7 +89,45 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 	if err != nil {
 		return fmt.Errorf("registering layout handler: %w", err)
 	}
+
+	// "Open in Explore": redirect to the Explore editor pre-loaded with this
+	// dashboard's state (via the same #s= share-link the editor already reads).
+	// Registered unconditionally; it 404s at request time when Explore is not
+	// wired up. The button that links here is rendered by the page layout only
+	// when ctx.ExploreBaseURL is set.
+	if err := handlerCollector.Handle("open-in-explore", d.openInExploreHandler(ctx)); err != nil {
+		return fmt.Errorf("registering open-in-explore handler: %w", err)
+	}
+
 	return d.widgets.CollectHandlers(ctx, handlerCollector.Nested("/api"))
+}
+
+// openInExploreHandler serializes this dashboard (skipping out-of-scope widgets)
+// and redirects to the Explore editor with the state in the URL fragment. The
+// fragment value is query-escaped: the editor reads it via URLSearchParams,
+// which would otherwise turn base64 '+' into a space before atob.
+func (d *Builder) openInExploreHandler(ctx *rendering.DashboardContext) http.Handler {
+	exploreBaseURL := ctx.ExploreBaseURL
+	logger := ctx.Deps.Logger
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if exploreBaseURL == nil || *exploreBaseURL == "" {
+			http.Error(w, "Explore view is not registered", http.StatusNotFound)
+			return
+		}
+		jsonBytes, skipped, err := d.MarshalForExplore()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("cannot open in Explore: %v", err), http.StatusInternalServerError)
+			return
+		}
+		for _, s := range skipped {
+			logger.Warn().Str("dashboard", d.title).Str("skipped", s).
+				Msg("Open in Explore: dropping out-of-scope widget")
+		}
+		encoded := base64.StdEncoding.EncodeToString(jsonBytes)
+		location := *exploreBaseURL + "#s=" + url.QueryEscape(encoded)
+		w.Header().Set("Location", location)
+		w.WriteHeader(http.StatusFound)
+	})
 }
 
 var _ Dashboard = (*Builder)(nil)

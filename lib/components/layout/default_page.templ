@@ -10,7 +10,12 @@ templ MainApplication(renderingContext rendering.DashboardContext, searchBar ren
         <aside class="application__sidebar">
             @PageMenu(renderingContext)
         </aside>
-        <main class="application__main">
+        <main class="application__main" x-data="filterScope" data-filter-scope>
+            if renderingContext.ExploreBaseURL != nil && *renderingContext.ExploreBaseURL != "" {
+                <div class="application__explore-link">
+                    <a href={ templ.SafeURL(renderingContext.CurrentHandlerUrl + "/open-in-explore") }>Open in Explore ↗</a>
+                </div>
+            }
             if searchBar.IsVisible {
                 @SearchBar(searchBar)
             }

@@ -3,10 +3,12 @@ package widget
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 // This file makes widgets serializable for the Explore builder
@@ -115,6 +117,14 @@ type widgetEnvelope struct {
 	Props json.RawMessage `json:"props"`
 }
 
+// ErrWidgetNotRegistered is returned by MarshalWidget for a widget type that
+// has no registry entry. It is a sentinel so callers can distinguish "this
+// widget type is out of scope" from a genuine marshalling failure — the Explore
+// export path (dashboard.MarshalForExplore) skips these and errors on everything
+// else. Matched with errors.Is, so it survives the %w wrapping the Widgets /
+// WidgetsMap encoders add around it.
+var ErrWidgetNotRegistered = errors.New("widget: type not registered")
+
 // MarshalWidget serializes any registered widget to its tagged envelope,
 // delegating "props" to the widget's own MarshalJSON.
 func MarshalWidget(w WidgetDefinition) ([]byte, error) {
@@ -126,7 +136,7 @@ func MarshalWidget(w WidgetDefinition) ([]byte, error) {
 	name, ok := goTypeToName[reflect.TypeOf(w)]
 	registryMu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("widget: type %T not registered", w)
+		return nil, fmt.Errorf("%w: %T", ErrWidgetNotRegistered, w)
 	}
 
 	props, err := json.Marshal(w)
@@ -162,17 +172,71 @@ func UnmarshalWidget(b []byte) (WidgetDefinition, error) {
 }
 
 // ---------------------------------------------------------------------------
+// Lenient marshalling (Explore export) — skip out-of-scope widgets
+//
+// The strict Marshal path fails loudly on an unregistered widget (the
+// round-trip invariant). The Explore "Open in Explore" export instead wants to
+// carry over what it CAN and drop the rest (alert widgets, schemaTable, …).
+// Because a container widget (grid, collapsibleGroup) serializes its children
+// through the same Widgets / WidgetsMap encoders below via the generated
+// container MarshalJSON, the only place a per-child skip can happen is inside
+// those encoders — hence a process-wide mode flag rather than a parameter that
+// cannot be threaded through encoding/json.
+//
+// BeginLenientMarshal serialises exports with a mutex, so only one export runs
+// at a time; `lenient` is atomic so the encoders can read it without the lock.
+// This is safe because no code path marshals a widget strictly at request time
+// (all strict marshalling is boot-time or in sequential tests) — a concurrent
+// strict marshal during an export would otherwise also skip.
+// ---------------------------------------------------------------------------
+
+var (
+	lenientMu      sync.Mutex
+	lenient        atomic.Bool
+	lenientSkipped []string
+)
+
+// BeginLenientMarshal switches on skip-unregistered mode for the calling
+// goroutine's marshalling and returns (notes, done): notes() reports the
+// widgets skipped (call it before done()), done() restores strict mode and must
+// be deferred. Only dashboard.MarshalForExplore uses this.
+func BeginLenientMarshal() (notes func() []string, done func()) {
+	lenientMu.Lock()
+	lenient.Store(true)
+	lenientSkipped = nil
+	return func() []string { return lenientSkipped },
+		func() {
+			lenient.Store(false)
+			lenientSkipped = nil
+			lenientMu.Unlock()
+		}
+}
+
+// skipInLenientMode reports whether err is an out-of-scope widget that lenient
+// mode should drop; it records a note when so.
+func skipInLenientMode(context string, err error) bool {
+	if !lenient.Load() || !errors.Is(err, ErrWidgetNotRegistered) {
+		return false
+	}
+	lenientSkipped = append(lenientSkipped, fmt.Sprintf("%s: %v", context, err))
+	return true
+}
+
+// ---------------------------------------------------------------------------
 // Widgets slice + WidgetsMap — array / object of envelopes
 // ---------------------------------------------------------------------------
 
 func (w Widgets) MarshalJSON() ([]byte, error) {
-	envs := make([]json.RawMessage, len(w))
+	envs := make([]json.RawMessage, 0, len(w))
 	for i, wd := range w {
 		b, err := MarshalWidget(wd)
 		if err != nil {
+			if skipInLenientMode(fmt.Sprintf("widget %d", i), err) {
+				continue
+			}
 			return nil, fmt.Errorf("widget %d: %w", i, err)
 		}
-		envs[i] = b
+		envs = append(envs, b)
 	}
 	return json.Marshal(envs)
 }
@@ -199,6 +263,9 @@ func (w WidgetsMap) MarshalJSON() ([]byte, error) {
 	for k, wd := range w {
 		b, err := MarshalWidget(wd)
 		if err != nil {
+			if skipInLenientMode(fmt.Sprintf("area %q", k), err) {
+				continue
+			}
 			return nil, fmt.Errorf("area %q: %w", k, err)
 		}
 		envs[k] = b

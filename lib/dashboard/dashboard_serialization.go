@@ -63,6 +63,31 @@ func MarshalDashboard(d Dashboard) ([]byte, error) {
 	return json.Marshal(d)
 }
 
+// MarshalForExplore serializes a Builder for the "Open in Explore" flow: like
+// MarshalJSON, but out-of-scope widgets (alert widgets, schemaTable, … — any
+// type not in the widget registry) are skipped rather than failing the whole
+// export, including when they are nested inside a grid/collapsibleGroup (only
+// the offending child is dropped). It returns the JSON, a note per skipped
+// widget (for logging), and an error only for genuine marshalling failures.
+//
+// The strict MarshalJSON is unchanged; the round-trip invariant still fails
+// loudly. This is the deliberate lenient path for opening compiled dashboards.
+func (d *Builder) MarshalForExplore() ([]byte, []string, error) {
+	notes, done := widget.BeginLenientMarshal()
+	defer done()
+
+	b, err := json.Marshal(dashboardDTO{
+		Title:     d.title,
+		Layout:    d.layout.Name,
+		SearchBar: d.searchBar,
+		Widgets:   d.widgets,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return b, notes(), nil
+}
+
 // UnmarshalDashboard reconstructs a Dashboard from JSON produced by
 // MarshalDashboard.
 func UnmarshalDashboard(b []byte) (Dashboard, error) {

@@ -144,6 +144,19 @@ type DashicaImpl struct {
 	dashboardGroups  []rendering.MenuGroup
 	handlerCollector handler_collector.HandlerCollector
 	deps             rendering.Dependencies
+
+	// exploreBaseURL is the registration URL of the Explore view once one is
+	// registered (empty otherwise). Every DashboardContext carries a pointer to
+	// this field, so the "Open in Explore" affordance appears regardless of
+	// whether Explore is registered before or after the dashboards.
+	exploreBaseURL string
+}
+
+// exploreView is the marker a dashboard implements to identify itself as the
+// Explore editor. It is structural (Explore need not import this package); the
+// method name doubles as documentation of intent.
+type exploreView interface {
+	IsExploreView() bool
 }
 
 func (d *DashicaImpl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -183,11 +196,19 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		Str("url", url).
 		Msg("Registering new dashboard")
 
+	// Record the Explore view's URL so every dashboard's "Open in Explore"
+	// affordance (and its redirect target) can find it, whatever the
+	// registration order.
+	if _, ok := dashb.(exploreView); ok {
+		d.exploreBaseURL = url
+	}
+
 	err := dashb.CollectHandlers(
 		&rendering.DashboardContext{
 			MainMenu:          &d.dashboardGroups,
 			CurrentHandlerUrl: url,
 			Deps:              d.deps,
+			ExploreBaseURL:    &d.exploreBaseURL,
 		},
 		d.handlerCollector.Nested(url),
 	)

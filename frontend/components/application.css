@@ -18,6 +18,22 @@
     overflow-y: auto;
 }
 
+/* "Open in Explore" affordance, rendered only when the Explore view is registered. */
+.application__explore-link {
+    display: flex;
+    justify-content: flex-end;
+    padding: 4px 8px 0;
+}
+
+.application__explore-link a {
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.application__explore-link a:hover {
+    opacity: 1;
+}
+
 .application__sidebar ul.menu li {
     position: relative;
 }
