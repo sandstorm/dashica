@@ -16,7 +16,10 @@ type FieldDescriptor struct {
 	// Name is the JSON property name (the wire key of the field).
 	Name string `json:"name"`
 	// Editor is the control kind the frontend renders: text, int, bool, select,
-	// field, colorScale, keyValue, stringList, group, children.
+	// field, colorScale, keyValue, stringList, group, childrenList (a Widgets
+	// slice — collapsibleGroup) or childrenMap (a WidgetsMap keyed by area name —
+	// grid). The two children kinds differ so the editor knows whether adding a
+	// child needs an area name (map) or just appends (list).
 	Editor string `json:"editor"`
 	// Required marks fields without which the widget cannot build (the query
 	// fields x/y and mandatory pickers).

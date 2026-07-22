@@ -14,8 +14,11 @@ import (
 )
 
 type AlertOverview struct {
+	// alertGroupPattern is an ILIKE pattern (e.g. "prod-%") selecting which
+	// alert groups' history rows are shown.
 	alertGroupPattern string
-	id                string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
 }
 
 func NewAlertOverview(alertGroupPattern string) *AlertOverview {

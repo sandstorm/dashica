@@ -13,15 +13,26 @@ import (
 )
 
 type TimeHeatmap struct {
-	sql         sql.SqlQueryable
-	x           sql.TimestampedField
-	y           sql.SqlField  `dashica-gen:"role=dimension"`
-	fill        *sql.SqlField `dashica-gen:"role=measure"`
-	title       string
-	id          string
-	height      *int
-	width       *int
-	marginLeft  *int
+	// sql is the underlying query builder; adjust it with AdjustQuery.
+	sql sql.SqlQueryable
+	// x is the timestamped time-axis field, bucketed by xBucketSize.
+	x sql.TimestampedField
+	// y is the numeric field bucketed by yBucketSize into the rectangle rows.
+	y sql.SqlField `dashica-gen:"role=dimension"`
+	// fill is the measure bound to the color scale, coloring each cell.
+	// Zero value: cells are colored by Observable Plot's default scheme.
+	fill *sql.SqlField `dashica-gen:"role=measure"`
+	// title is the chart title shown above the plot.
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
+	// height is the chart height in pixels. Zero value: Observable Plot's default.
+	height *int
+	// width is the chart width in pixels. Zero value: fills the container width.
+	width *int
+	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
+	marginLeft *int
+	// yBucketSize is the height of each row in y-axis units; required, must be positive.
 	yBucketSize int64
 }
 

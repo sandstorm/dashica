@@ -24,9 +24,13 @@ import (
 // Markdown is a simple widget for rendering markdown content without any legacy features.
 // It is intended for documentation and static content, not for Observable-style dashboards.
 type Markdown struct {
+	// content is the markdown source rendered inline, set via Content().
 	content string
-	file    string
-	title   string
+	// file is the project-relative path to a markdown file to load and
+	// render, set via File(). Ignored for untrusted content.
+	file string
+	// title is the optional title shown above the rendered markdown.
+	title string
 	// assets is a runtime filesystem handle, not serializable data — skipped by
 	// dashica-gen (see docs/2026-07-21-dynamic-widget-dashboard-ui.md §4.1).
 	assets fs.FS `dashica-gen:"skip"`

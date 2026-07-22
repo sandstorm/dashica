@@ -17,7 +17,9 @@ import (
 // renders the resulting DDL inside a <pre> block. Useful for documenting the source
 // table of a dashboard inline.
 type SchemaTable struct {
+	// table is the ClickHouse table name to run SHOW CREATE TABLE against.
 	table string
+	// title is the optional title rendered above the schema block.
 	title string
 }
 

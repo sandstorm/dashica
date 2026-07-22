@@ -23,9 +23,13 @@ import (
 // endpoint. The query body is a sql.SqlQueryable just like chart widgets — customer/project
 // constants belong in WHERE clauses, user-driven values flow through $store.urlState.widgetParams.
 type SpeedscopeLink struct {
+	// sqlQuery is the query run when the link is clicked, streamed to the
+	// bundled Speedscope viewer as space-delimited CSV.
 	sqlQuery sql.SqlQueryable
-	title    string
-	id       string
+	// title is the link's button label. Zero value: "Open Speedscope".
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
 }
 
 func NewSpeedscopeLink(query sql.SqlQueryable) *SpeedscopeLink {

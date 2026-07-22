@@ -13,11 +13,17 @@ import (
 )
 
 type Table struct {
-	sql    sql.SqlQueryable
-	title  string
-	id     string
+	// sql is the underlying query builder; adjust it with AdjustQuery. Columns
+	// are taken as-is from the query result, one column per table column.
+	sql sql.SqlQueryable
+	// title is the table title shown above the widget.
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
+	// height is the table height in pixels.
 	height int
-	limit  int
+	// limit caps the number of rows fetched via a SQL LIMIT clause.
+	limit int
 }
 
 func NewTable(sql sql.SqlQueryable) *Table {

@@ -17,9 +17,12 @@ import (
 )
 
 type AlertDetail struct {
+	// alertId identifies the alert (group + key) whose history this widget renders.
 	alertId alerting.AlertId
-	title   string
-	id      string
+	// title is the chart title shown above the plot. Defaults to "group#key".
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
 }
 
 func NewAlertDetail(alertGroup, alertKey string) *AlertDetail {

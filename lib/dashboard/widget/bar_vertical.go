@@ -13,25 +13,49 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
+// BarVertical draws bars from bottom to top: x is the grouping/category axis,
+// y is the value axis.
 type BarVertical struct {
-	sql          sql.SqlQueryable
-	x            sql.SqlField  `dashica-gen:"role=dimension"`
-	y            sql.SqlField  `dashica-gen:"role=measure"`
-	fill         *sql.SqlField `dashica-gen:"role=dimension"`
-	fx           *sql.SqlField `dashica-gen:"role=dimension"`
-	fy           *sql.SqlField `dashica-gen:"role=dimension"`
-	title        string
-	id           string
-	height       int
-	width        *int
-	marginLeft   *int
-	marginRight  *int
+	// sql is the underlying query builder; adjust it with AdjustQuery.
+	sql sql.SqlQueryable
+	// x is the category (grouping) field, plotted on the horizontal axis.
+	x sql.SqlField `dashica-gen:"role=dimension"`
+	// y is the measure plotted as bar height.
+	y sql.SqlField `dashica-gen:"role=measure"`
+	// fill is the series bound to the color scale. Zero value: bars use a
+	// single default color, or are colored by x when fx is set.
+	fill *sql.SqlField `dashica-gen:"role=dimension"`
+	// fx facets the chart horizontally, bound to the fx scale.
+	fx *sql.SqlField `dashica-gen:"role=dimension"`
+	// fy facets the chart vertically, bound to the fy scale.
+	fy *sql.SqlField `dashica-gen:"role=dimension"`
+	// title is the chart title shown above the plot.
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
+	// height is the chart height in pixels.
+	height int
+	// width is the chart width in pixels. Zero value: fills the container width.
+	width *int
+	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
+	marginLeft *int
+	// marginRight is the right margin in pixels. Zero value: Observable Plot's default.
+	marginRight *int
+	// marginBottom is the bottom margin in pixels. Zero value: Observable Plot's default.
 	marginBottom *int
-	marginTop    *int
-	colorScheme  string
-	color        *color.ColorScale
-	sortReverse  *bool
-	tipChannels  map[string]string
+	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
+	marginTop *int
+	// colorScheme is currently unused by this widget; reserved for a future
+	// direct color-scheme override.
+	colorScheme string
+	// color configures the color scale used for fill. Zero value: an ordinal
+	// scale with the observable10 scheme, shown with a legend.
+	color *color.ColorScale
+	// sortReverse sorts the x domain by y value when set; true for descending
+	// order, false for ascending. Zero value (nil): input order, unsorted.
+	sortReverse *bool
+	// tipChannels adds extra labeled channels to the hover tooltip.
+	tipChannels map[string]string
 }
 
 func NewBarVertical(sql sql.SqlQueryable) *BarVertical {

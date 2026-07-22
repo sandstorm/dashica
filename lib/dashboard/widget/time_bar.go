@@ -14,23 +14,43 @@ import (
 )
 
 type TimeBar struct {
-	sql          sql.SqlQueryable
-	x            sql.TimestampedField
-	y            sql.SqlField  `dashica-gen:"role=measure"`
-	fill         *sql.SqlField `dashica-gen:"role=dimension"`
-	fx           *sql.SqlField `dashica-gen:"role=dimension"`
-	fy           *sql.SqlField `dashica-gen:"role=dimension"`
-	title        string
-	id           string
-	height       int
-	width        *int
-	marginLeft   *int
-	marginRight  *int
+	// sql is the underlying query builder; adjust it with AdjustQuery.
+	sql sql.SqlQueryable
+	// x is the timestamped time-axis field, bucketed by xBucketSize.
+	x sql.TimestampedField
+	// y is the measure plotted as bar height.
+	y sql.SqlField `dashica-gen:"role=measure"`
+	// fill is the series bound to the color scale and stacked per x bucket.
+	// Zero value: bars use a single default color and are not stacked.
+	fill *sql.SqlField `dashica-gen:"role=dimension"`
+	// fx facets the chart horizontally, bound to the fx scale.
+	fx *sql.SqlField `dashica-gen:"role=dimension"`
+	// fy facets the chart vertically, bound to the fy scale.
+	fy *sql.SqlField `dashica-gen:"role=dimension"`
+	// title is the chart title shown above the plot.
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
+	// height is the chart height in pixels.
+	height int
+	// width is the chart width in pixels. Zero value: fills the container width.
+	width *int
+	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
+	marginLeft *int
+	// marginRight is the right margin in pixels. Zero value: Observable Plot's default.
+	marginRight *int
+	// marginBottom is the bottom margin in pixels. Zero value: Observable Plot's default.
 	marginBottom *int
-	marginTop    *int
-	color        *color.ColorScale
-	tipChannels  map[string]string
-	stack        StackOptions
+	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
+	marginTop *int
+	// color configures the color scale used for fill. Zero value: an ordinal
+	// scale with the observable10 scheme, shown with a legend.
+	color *color.ColorScale
+	// tipChannels adds extra labeled channels to the hover tooltip.
+	tipChannels map[string]string
+	// stack configures the Observable Plot stack transform (order, offset,
+	// reverse) applied to the fill series.
+	stack StackOptions
 }
 
 // StackOptions groups the Observable Plot stack transform options for the fill

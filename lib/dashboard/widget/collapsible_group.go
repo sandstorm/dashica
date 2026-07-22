@@ -11,9 +11,12 @@ import (
 )
 
 type CollapsibleGroup struct {
-	title   string
+	// title is the text shown on the collapsible header.
+	title string
+	// widgets are the child widgets rendered inside the group, in order.
 	widgets Widgets
-	open    bool
+	// open controls whether the group starts expanded. Zero value: collapsed.
+	open bool
 }
 
 func NewCollapsibleGroup() *CollapsibleGroup {

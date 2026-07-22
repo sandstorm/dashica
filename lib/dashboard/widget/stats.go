@@ -13,10 +13,17 @@ import (
 )
 
 type Stats struct {
-	sql        sql.SqlQueryable
+	// sql is the underlying query builder; adjust it with AdjustQuery. Each
+	// result row renders as one stat, using its "label" and "value" columns.
+	sql sql.SqlQueryable
+	// titleField overrides the per-row "label" column with a fixed title used
+	// for every stat. Zero value: each row's "label" column is used.
 	titleField *sql.SqlField `dashica-gen:"role=dimension"`
-	fillField  *sql.SqlField `dashica-gen:"role=measure"`
-	id         string
+	// fillField selects a column giving each stat's text color as a CSS color
+	// string. Zero value: a row's own "color" column, or the default color.
+	fillField *sql.SqlField `dashica-gen:"role=measure"`
+	// id is the stable widget id; assigned automatically when empty.
+	id string
 }
 
 func (s *Stats) TitleField(field sql.SqlField) *Stats {

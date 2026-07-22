@@ -2,6 +2,7 @@ package widget
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
@@ -10,9 +11,14 @@ import (
 )
 
 type Grid struct {
+	// template is the CSS grid-template-areas rows, set via Template(); each
+	// string is one row of space-separated area names.
 	template []string
-	areas    WidgetsMap
-	gap      string
+	// areas maps area name to the widget rendered in that area, set via Area().
+	areas WidgetsMap
+	// gap is the spacing between grid items (Tailwind spacing scale). Zero
+	// value from NewGrid(): "4px".
+	gap string
 }
 
 func NewGrid() *Grid {
@@ -63,7 +69,25 @@ func (g *Grid) BuildComponents(ctx *rendering.DashboardContext) (templ.Component
 		areaComponents[name] = component
 	}
 
-	return widget_component.Grid(g.template, g.gap, areaComponents), nil
+	return widget_component.Grid(g.resolvedTemplate(), g.gap, areaComponents), nil
+}
+
+// resolvedTemplate is the grid-template-areas to render with. When Template()
+// was set, it wins (compiled dashboards lay out 2D grids explicitly). Otherwise
+// the areas are stacked one per row in sorted-name order — so a grid built by
+// simply adding widgets (each auto-named "a", "b", … in the Explore editor)
+// renders without any template configuration. Sorted so it is deterministic and
+// matches Go's alphabetical map-key marshalling.
+func (g *Grid) resolvedTemplate() []string {
+	if len(g.template) > 0 {
+		return g.template
+	}
+	names := make([]string, 0, len(g.areas))
+	for name := range g.areas {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func (g *Grid) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {

@@ -13,9 +13,14 @@ import (
 // TextInput is a single-line text input bound to $store.urlState.widgetParams[name].
 // Other widgets on the page that send `params` automatically pick up the value.
 type TextInput struct {
-	name         string
-	label        string
-	placeholder  string
+	// name is the widget-param slot key this input writes to.
+	name string
+	// label is the text shown above the input field.
+	label string
+	// placeholder is the input's placeholder text, shown when empty.
+	placeholder string
+	// prependCaret prefixes the stored value with "^" when non-empty, turning
+	// a typed path prefix into a regex anchor for the SQL query.
 	prependCaret bool
 }
 

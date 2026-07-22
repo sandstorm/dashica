@@ -16,9 +16,14 @@ import (
 // The stored value is a JSON-encoded array of selected option strings, suitable for
 // ClickHouse usage like `countSubstrings({name:String}, column) > 0`.
 type CheckboxGroup struct {
-	name     string
-	label    string
-	options  []string
+	// name is the widget-param slot key this checkbox group writes to.
+	name string
+	// label is the text shown above the checkbox row.
+	label string
+	// options are the checkbox labels/values offered, in display order.
+	options []string
+	// defaults are the initially-selected options, applied only when the
+	// param is empty (first page load).
 	defaults []string
 }
 

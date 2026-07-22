@@ -11,8 +11,10 @@ import (
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
+// Widgets is an ordered list of child widgets, e.g. inside a CollapsibleGroup.
 type Widgets []WidgetDefinition
 
+// WidgetsMap maps an area/slot name to its widget, e.g. Grid's named areas.
 type WidgetsMap map[string]WidgetDefinition
 
 func (w Widgets) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {

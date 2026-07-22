@@ -14,19 +14,34 @@ import (
 
 // BarHorizontal: bars go from left to right. x is the value axis, y is the category axis.
 type BarHorizontal struct {
-	sql          sql.SqlQueryable
-	x            sql.SqlField  `dashica-gen:"role=measure"`
-	y            sql.SqlField  `dashica-gen:"role=dimension"`
-	fill         *sql.SqlField `dashica-gen:"role=dimension"`
-	title        string
-	id           string
-	height       int
-	width        *int
-	marginLeft   *int
-	marginRight  *int
+	// sql is the underlying query builder; adjust it with AdjustQuery.
+	sql sql.SqlQueryable
+	// x is the measure plotted as bar length.
+	x sql.SqlField `dashica-gen:"role=measure"`
+	// y is the category (grouping) field, plotted on the vertical axis.
+	y sql.SqlField `dashica-gen:"role=dimension"`
+	// fill is the series bound to the color scale. Zero value: bars use a
+	// single default color, or are colored by y when fy is set.
+	fill *sql.SqlField `dashica-gen:"role=dimension"`
+	// title is the chart title shown above the plot.
+	title string
+	// id is the stable widget id; assigned automatically when empty.
+	id string
+	// height is the chart height in pixels.
+	height int
+	// width is the chart width in pixels. Zero value: fills the container width.
+	width *int
+	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
+	marginLeft *int
+	// marginRight is the right margin in pixels. Zero value: Observable Plot's default.
+	marginRight *int
+	// marginBottom is the bottom margin in pixels. Zero value: Observable Plot's default.
 	marginBottom *int
-	marginTop    *int
-	color        *color.ColorScale
+	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
+	marginTop *int
+	// color configures the color scale used for fill. Zero value: an ordinal
+	// scale with the observable10 scheme, shown with a legend.
+	color *color.ColorScale
 }
 
 func NewBarHorizontal(sqlq sql.SqlQueryable) *BarHorizontal {
