@@ -87,17 +87,8 @@ templ explorePreviewControls() {
 				/>
 			</label>
 			<div class="explore-preview__controls-spacer"></div>
-			<button type="button" class="explore-btn explore-btn--sm" data-explore="filters-toggle">filters</button>
-			<span x-show="sqlFilter" x-cloak class="badge badge-primary badge-xs">active</span>
+			@layout.SqlFilterToggle()
 		</div>
-		<div class="explore-preview__filters" data-explore="filters" hidden>
-			<textarea
-				:value="sqlFilter"
-				@input="setSqlFilter($event.target.value)"
-				class="textarea textarea-bordered textarea-xs w-full font-mono"
-				placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
-				rows="2"
-			></textarea>
-		</div>
+		@layout.SqlFilterPanel()
 	</div>
 }

@@ -54,6 +54,8 @@ interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[
 type DrawerTab = 'data' | 'gocode' | 'json';
 // buildRev is the "commit" counter: previews query only when it changes (an
 // explicit Build), never on every keystroke — see the preview effect below.
+// buildRev is the preview "commit" counter: previews re-query only when it
+// changes (an explicit Build) — see the preview effect below.
 interface UiState { selectedId: string | null; drawerTab: DrawerTab; buildRev: number; }
 
 // A child widget lives inside its container's props as a bare {type, props}
@@ -176,6 +178,8 @@ class Editor {
     // Selection path of the row being dragged in the tree (null when not
     // dragging). Drives both top-level reorder and drop-into-a-container.
     private dragPath: string | null = null;
+    // The row element currently highlighted as the drop target (delegated DnD).
+    private dropTargetEl: HTMLElement | null = null;
 
     // Last selection we scrolled the preview to — so we only auto-scroll on an
     // actual selection change, not on every structural repaint.
@@ -222,7 +226,6 @@ class Editor {
         this.buildToolbar();
         this.buildTreeShell();
         this.wireDrawerTabs();
-        this.wireFilterToggle();
         this.wireKeyboard();
         this.wireInspectorInteractions();
         this.wireEffects();
@@ -403,8 +406,8 @@ class Editor {
         // repaints on add/remove/reorder anywhere in the tree, but NOT on a
         // scalar prop edit (those values are never read here).
         this.effects.push(Alpine.effect(() => {
-            const model = this.buildTreeModel(); // structural dep (recursive)
-            const sel = this.ui.selectedId;       // selection dep
+            const model = this.buildTreeModel(); // structural dep (recursive reads)
+            const sel = this.ui.selectedId;      // selection dep
             this.renderTreeNodes(model, sel);
         }));
 
@@ -507,6 +510,7 @@ class Editor {
         this.elTree.replaceChildren(
             html`<div class="explore-tree__add">${this.treeAddSelect}${add}</div>`,
             this.elTreeList);
+        this.wireTreeDnd();
     }
 
     // Add a child of the type currently chosen in the tree's add <select> into
@@ -598,77 +602,197 @@ class Editor {
         if (n.remove) trailing.push(this.iconBtn('×', false, n.remove));
         else if (isTop) trailing.push(this.iconBtn('×', false, () => this.deleteWidget(n.path)));
 
-        // Every row is draggable: top-level rows reorder among themselves; any
-        // row can be dropped onto a container row (grid/group) to move it inside.
-        const title = n.isContainer ? 'Drag into a container, or drag a widget onto me' : 'Drag to reorder / into a container';
-        const li = html`<li draggable="true"
+        // Every row is draggable and a drop target (DnD is delegated on the list —
+        // see wireTreeDnd — keyed by data-path so it survives tree re-renders).
+        // Drop onto a container → move inside it; onto a list child → reorder /
+        // move into that list; onto a top-level row → reorder top level.
+        const title = n.isContainer ? 'Drag a widget onto me to nest it here' : 'Drag to move / reorder';
+        const li = html`<li draggable="true" data-path=${n.path}
             class=${'explore-tree__item' + (n.path === sel ? ' is-selected' : '') + (n.isContainer ? ' is-container' : '')}
             style=${n.depth ? `padding-left:${n.depth * 14}px` : ''}>
             <span class="explore-tree__grip" title=${title}>⠿</span>
             ${name}
             ${trailing}
         </li>` as HTMLElement;
-        this.wireRowDnd(li, n);
         out.push(li);
 
         for (const c of n.children) this.appendTreeRows(c, sel, out);
     }
 
-    // Wire one tree row for drag-and-drop. dragstart stashes the source PATH;
-    // dragover marks a valid drop target; drop performs one of two moves via
-    // onDropRow: reorder among top-level widgets, or move the dragged node into a
-    // container row. Kept local + imperative (CSP forbids Alpine expression
-    // handlers); all state mutation flows through the editor's move methods so
-    // the tree/preview effects repaint from the changed state.
-    private wireRowDnd(li: HTMLElement, node: TreeNode) {
-        li.addEventListener('dragstart', (e: DragEvent) => {
-            this.dragPath = node.path;
-            e.dataTransfer?.setData('text/plain', node.path);
+    // Drag-and-drop is DELEGATED on the persistent tree <ul> (wired once in
+    // buildTreeShell), keyed by each row's data-path. Delegation is essential:
+    // the row <li>s are replaced on every tree re-render, so per-row listeners
+    // would be lost mid-interaction — the earlier bug where dropping onto a
+    // nested row did nothing. The <ul> node is stable, so these listeners
+    // survive every repaint. `closest('li[data-path]')` finds the row under the
+    // pointer at event time.
+    private wireTreeDnd() {
+        const list = this.elTreeList;
+        const rowOf = (e: Event) => (e.target as HTMLElement | null)?.closest('li[data-path]') as HTMLElement | null;
+
+        list.addEventListener('dragstart', (e: DragEvent) => {
+            const li = rowOf(e);
+            if (!li) return;
+            this.dragPath = li.dataset.path ?? null;
+            e.dataTransfer?.setData('text/plain', this.dragPath ?? '');
             if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-            e.stopPropagation(); // nested rows: only the grabbed row starts a drag
         });
-        li.addEventListener('dragover', (e: DragEvent) => {
-            if (!this.isValidDrop(node)) return;
-            e.preventDefault(); // required so drop fires
-            e.stopPropagation();
+        // A row under the pointer targets that row; empty space in the list
+        // targets the ROOT (top level) — the way to pull a nested widget back
+        // out to the top level (drop on a top-level row promotes it to that
+        // position; drop on empty space appends it).
+        list.addEventListener('dragover', (e: DragEvent) => {
+            if (!this.dragPath) return;
+            const li = rowOf(e);
+            const targetPath = li?.dataset.path ?? null;
+            if (!this.isValidDrop(this.dragPath, targetPath)) return;
+            e.preventDefault(); // required so `drop` fires
             if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-            li.classList.add('is-drop-target');
+            // Show the indicator at the position the drop will ACTUALLY land:
+            // a container row → box (drop inside); any other row → a line at its
+            // top (before) or bottom (after); empty space → the list (top level).
+            this.clearDropTarget();
+            if (!li) { list.classList.add('is-drop-target'); this.dropTargetEl = list; return; }
+            const cls = this.isContainerPath(targetPath!) ? 'is-drop-into'
+                : this.dropAfter(li, e.clientY) ? 'is-drop-after' : 'is-drop-before';
+            li.classList.add(cls);
+            this.dropTargetEl = li;
         });
-        li.addEventListener('dragleave', () => li.classList.remove('is-drop-target'));
-        li.addEventListener('drop', (e: DragEvent) => {
-            if (!this.isValidDrop(node)) return;
+        list.addEventListener('drop', (e: DragEvent) => {
+            const li = rowOf(e);
+            const targetPath = li?.dataset.path ?? null;
+            this.clearDropTarget();
+            if (!this.dragPath || !this.isValidDrop(this.dragPath, targetPath)) return;
             e.preventDefault();
-            e.stopPropagation();
-            li.classList.remove('is-drop-target');
-            this.onDropRow(node);
+            const after = li ? this.dropAfter(li, e.clientY) : false;
+            this.onDrop(this.dragPath, targetPath, after);
             this.dragPath = null;
         });
-        li.addEventListener('dragend', () => { this.dragPath = null; });
+        list.addEventListener('dragend', () => { this.clearDropTarget(); this.dragPath = null; });
     }
 
-    // A drop onto `target` is valid when: something is being dragged; it is not
-    // dropped on itself; and either the target is a container (drop-into) or both
-    // source and target are top-level (reorder). A container may not be dropped
-    // into itself or its own descendant (no cycles).
-    private isValidDrop(target: TreeNode): boolean {
-        const src = this.dragPath;
-        if (!src || src === target.path) return false;
-        if (target.isContainer) return target.path !== src && !target.path.startsWith(src + '/');
-        return this.isTopLevelPath(src) && this.isTopLevelPath(target.path);
+    // Pointer in the row's lower half → insert AFTER the target (the only way to
+    // reach the END of a children collection by dropping on its last item).
+    private dropAfter(li: HTMLElement, clientY: number): boolean {
+        const r = li.getBoundingClientRect();
+        return clientY > r.top + r.height / 2;
     }
 
-    private onDropRow(target: TreeNode) {
-        const src = this.dragPath;
-        if (!src) return;
-        if (target.isContainer) {
-            this.moveNodeIntoContainer(src, target.path);
-        } else if (this.isTopLevelPath(src) && this.isTopLevelPath(target.path)) {
-            this.moveWidget(this.topIndexOf(src), this.topIndexOf(target.path));
+    private isContainerPath(path: string): boolean {
+        const ref = this.resolveNode(path);
+        return !!ref && this.containerFields(ref.node.type).length > 0;
+    }
+
+    private clearDropTarget() {
+        this.dropTargetEl?.classList.remove('is-drop-target', 'is-drop-into', 'is-drop-before', 'is-drop-after');
+        this.dropTargetEl = null;
+    }
+
+    // A drop of src is valid unless: nothing dragged; onto itself; or onto its
+    // own descendant (cycle). targetPath === null means the ROOT (top level),
+    // always a valid destination. Any row is a target — onDrop picks the action.
+    private isValidDrop(src: string, targetPath: string | null): boolean {
+        if (!src) return false;
+        if (targetPath === null) return true;                                  // → top level
+        if (src === targetPath || targetPath.startsWith(src + '/')) return false;
+        return this.resolveNode(targetPath) !== null;
+    }
+
+    private onDrop(src: string, targetPath: string | null, after = false) {
+        if (targetPath === null) { this.moveNodeToTopLevel(src, null, false); return; } // empty space → append top level
+        const targetRef = this.resolveNode(targetPath);
+        if (!targetRef) return;
+        if (this.containerFields(targetRef.node.type).length > 0) {
+            this.moveNodeIntoContainer(src, targetPath);                 // drop onto a container → nest inside (append)
+        } else if (targetRef.parent?.shape === 'list') {
+            this.moveNodeBeforeListSibling(src, targetPath, after);      // drop onto a list child → insert before/after
+        } else if (targetRef.parent?.shape === 'map') {
+            this.moveNodeBeforeMapSibling(src, targetPath, after);       // drop onto a grid area → insert before/after
+        } else if (this.isTopLevelPath(src)) {
+            this.reorderTopLevel(src, targetPath, after);               // top-level reorder (keeps id/card)
+        } else {
+            this.moveNodeToTopLevel(src, targetPath, after);            // promote a nested widget to this top-level slot
         }
+    }
+
+    // Reorder a top-level widget relative to another, preserving its id (so its
+    // preview card is kept, not rebuilt). Recomputes the target index after
+    // removing src, and allows landing at the very end (index === length).
+    private reorderTopLevel(srcId: string, targetId: string, after: boolean) {
+        const arr = this.state.widgets;
+        const from = arr.findIndex((w) => w.id === srcId);
+        if (from < 0) return;
+        const [item] = arr.splice(from, 1);
+        let to = arr.findIndex((w) => w.id === targetId);
+        to = to < 0 ? arr.length : to + (after ? 1 : 0);
+        arr.splice(to, 0, item);
+        this.markStructureChanged();
     }
 
     private isTopLevelPath(path: string): boolean {
         return !path.includes('/');
+    }
+
+    // Pull the node at srcPath out to the top level: extract it, wrap it as a
+    // top-level widget (fresh id — children carry none), and insert before (or
+    // after) the top-level widget at targetPath (append when targetPath is null).
+    // Index is computed AFTER extraction so a top-level→top-level move lands right.
+    private moveNodeToTopLevel(srcPath: string, targetPath: string | null, after: boolean) {
+        const moved = this.extractNode(srcPath);
+        if (!moved) return;
+        const w: WidgetState = { id: `w${this.idSeq++}`, type: moved.type, props: moved.props };
+        let idx = this.state.widgets.length;
+        if (targetPath) {
+            const t = this.topIndexOf(targetPath);
+            if (t >= 0) idx = t + (after ? 1 : 0);
+        }
+        this.state.widgets.splice(idx, 0, w);
+        this.ui.selectedId = w.id;
+        this.markStructureChanged(true);
+    }
+
+    // Insert src into a LIST container before/after the target child (the "inside
+    // group reorder / move-in" case). The parent list reference and the target
+    // object identity are captured before extraction so the insert index is
+    // correct even when src was removed from the same list ahead of it.
+    private moveNodeBeforeListSibling(srcPath: string, targetPath: string, after: boolean) {
+        if (targetPath === srcPath || targetPath.startsWith(srcPath + '/')) return;
+        const targetRef = this.resolveNode(targetPath);
+        if (!targetRef || targetRef.parent?.shape !== 'list') return;
+        const arr = targetRef.parent.arr;
+        const targetObj = arr[targetRef.parent.index];
+        const moved = this.extractNode(srcPath);
+        if (!moved) return;
+        let idx = arr.indexOf(targetObj);
+        idx = idx < 0 ? arr.length : idx + (after ? 1 : 0);
+        arr.splice(idx, 0, { type: moved.type, props: moved.props });
+        this.ui.selectedId = null;
+        this.markStructureChanged(true);
+    }
+
+    // Insert src into a MAP container (grid areas) before/after the target child.
+    // Areas are positional (order = sorted keys a, b, c, …), so any insert means
+    // renumbering: read the ordered children, splice src in at the target (by
+    // identity, recomputed after extraction), then rewrite the keys a, b, c, ….
+    private moveNodeBeforeMapSibling(srcPath: string, targetPath: string, after: boolean) {
+        if (targetPath === srcPath || targetPath.startsWith(srcPath + '/')) return;
+        const targetRef = this.resolveNode(targetPath);
+        if (!targetRef || targetRef.parent?.shape !== 'map') return;
+        const map = targetRef.parent.map;
+        const targetObj = map[targetRef.parent.key];
+        const moved = this.extractNode(srcPath); // may remove a key from this same map
+        if (!moved) return;
+
+        const ordered = Object.keys(map).sort().map((k) => map[k]);
+        let at = ordered.indexOf(targetObj);
+        at = at < 0 ? ordered.length : at + (after ? 1 : 0);
+        ordered.splice(at, 0, { type: moved.type, props: moved.props } as WidgetNode);
+
+        for (const k of Object.keys(map)) delete map[k];
+        ordered.forEach((obj, i) => { map[this.areaNameForIndex(i)] = obj; });
+
+        this.ui.selectedId = null;
+        this.markStructureChanged(true);
     }
 
     private topIndexOf(path: string): number {
@@ -698,8 +822,7 @@ class Editor {
         // Paths are index/key based and the tree just changed shape; drop the
         // selection rather than risk pointing it at the wrong node.
         this.ui.selectedId = null;
-        this.pushHistory();
-        this.scheduleInspector();
+        this.markStructureChanged(true);
     }
 
     // Remove the node at `path` from its parent and return a plain (de-proxied,
@@ -727,27 +850,36 @@ class Editor {
         return b;
     }
 
+    // Commit a structural change (add/remove/move): snapshot history and rebuild
+    // the inspector; the tree repaints reactively from the changed state. Pass
+    // refreshPreview when a container's children changed so its preview card
+    // re-renders (bumps buildRev).
+    private markStructureChanged(refreshPreview = false) {
+        if (refreshPreview) this.ui.buildRev++;
+        this.pushHistory();
+        this.scheduleInspector();
+    }
+
     private addWidget(type: string) {
         if (!type || !this.formModel?.widgets[type]) return;
         const w: WidgetState = {id: `w${this.idSeq++}`, type, props: deepClone(this.formModel.widgets[type].defaults)};
         this.state.widgets.push(w);
         this.ui.selectedId = w.id;
-        this.pushHistory();
+        this.markStructureChanged();
     }
 
     private deleteWidget(id: string) {
         this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
         // Clear the selection when it is this widget or any node nested inside it.
         if (this.topIdOf(this.ui.selectedId) === id) this.ui.selectedId = null;
-        this.pushHistory();
+        this.markStructureChanged();
     }
 
     // ---- child (nested widget) mutations ----------------------------------
     // parentPath addresses the CONTAINER node (whose props hold `fieldName`).
-    // All three commit (pushHistory) and rebuild the inspector so its children
-    // list reflects the change; the tree repaints reactively. None bump buildRev
-    // — like adding a top-level widget, the container card re-renders on the next
-    // Build/Apply, so an added-but-unconfigured child never fires a query.
+    // Each commits via markStructureChanged(true): the tree repaints reactively
+    // and the container's preview card re-renders (buildRev) so the added/removed/
+    // reordered child shows immediately.
 
     private addChild(parentPath: string, fieldName: string, shape: 'list' | 'map', type: string, areaName?: string) {
         if (!type || !this.formModel?.widgets[type]) return;
@@ -764,18 +896,23 @@ class Editor {
         } else {
             (this.ensureContainer(ref.node.props, fieldName, 'list') as WidgetNode[]).push(child);
         }
-        this.pushHistory();
-        this.scheduleInspector();
+        this.markStructureChanged(true);
     }
 
-    // The next positional area name for a map container: the first of a, b, c, …
-    // not already used (so 1st child → "a", 2nd → "b"; a gap left by a deletion
-    // is reused before spilling past "z" to two-letter names).
+    // The i-th positional area name: a, b, …, z, aa, ab, … (grid areas are
+    // positional; render/marshal order is the sorted key order, and this scheme
+    // sorts the same as the sequence for the common < 26 case).
+    private areaNameForIndex(i: number): string {
+        return i < 26
+            ? String.fromCharCode(97 + i)
+            : String.fromCharCode(97 + Math.floor(i / 26) - 1) + String.fromCharCode(97 + (i % 26));
+    }
+
+    // The next area name not already used (1st child → "a", 2nd → "b"; a gap
+    // left by a deletion is reused before spilling past "z").
     private nextAreaName(map: Record<string, unknown>): string {
         for (let i = 0; ; i++) {
-            const name = i < 26
-                ? String.fromCharCode(97 + i)
-                : String.fromCharCode(97 + Math.floor(i / 26) - 1) + String.fromCharCode(97 + (i % 26));
+            const name = this.areaNameForIndex(i);
             if (!(name in map)) return name;
         }
     }
@@ -787,8 +924,7 @@ class Editor {
         if (shape === 'list' && Array.isArray(container)) container.splice(parseInt(key, 10), 1);
         else if (shape === 'map' && container && typeof container === 'object') delete container[key];
         this.reselectToContainer(parentPath, fieldName);
-        this.pushHistory();
-        this.scheduleInspector();
+        this.markStructureChanged(true);
     }
 
     private moveChild(parentPath: string, fieldName: string, index: number, delta: number) {
@@ -801,8 +937,7 @@ class Editor {
         const [item] = arr.splice(index, 1);
         arr.splice(to, 0, item);
         this.reselectToContainer(parentPath, fieldName);
-        this.pushHistory();
-        this.scheduleInspector();
+        this.markStructureChanged(true);
     }
 
     private ensureContainer(props: any, name: string, shape: 'list' | 'map'): any {
@@ -821,17 +956,6 @@ class Editor {
     private reselectToContainer(parentPath: string, fieldName: string) {
         const sel = this.ui.selectedId;
         if (sel && sel.startsWith(`${parentPath}/${fieldName}/`)) this.ui.selectedId = parentPath;
-    }
-
-    // Move the widget at `from` to just before the widget currently at `to`
-    // (drag-and-drop reorder). Splices the reactive array in place so the tree +
-    // preview effects repaint without refetching (cards look up by id).
-    private moveWidget(from: number, to: number) {
-        const arr = this.state.widgets;
-        if (from < 0 || from >= arr.length || to < 0 || to >= arr.length || from === to) return;
-        const [item] = arr.splice(from, 1);
-        arr.splice(to > from ? to - 1 : to, 0, item);
-        this.pushHistory();
     }
 
     // Duplicate a widget: a deep copy of its props with a fresh id, inserted right
@@ -1201,20 +1325,6 @@ class Editor {
     }
 
     // ---- drawer (Go code / JSON / SQL) ------------------------------------
-
-    // The preview strip's "filters" button toggles the SQL-filter textarea
-    // (server-rendered inside the searchBar-scoped controls). Kept out of Alpine
-    // to avoid CSP expression limits — plain DOM toggle of the [hidden] panel.
-    private wireFilterToggle() {
-        const btn = this.root.querySelector<HTMLElement>('[data-explore="filters-toggle"]');
-        const panel = this.root.querySelector<HTMLElement>('[data-explore="filters"]');
-        if (!btn || !panel) return;
-        btn.addEventListener('click', () => {
-            const show = panel.hasAttribute('hidden');
-            panel.toggleAttribute('hidden', !show);
-            btn.classList.toggle('is-active', show);
-        });
-    }
 
     private buildJsonTab(content: HTMLElement) {
         const status = html`<div class="explore-json__status"></div>` as HTMLElement;

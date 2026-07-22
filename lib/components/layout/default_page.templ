@@ -25,13 +25,15 @@ templ MainApplication(renderingContext rendering.DashboardContext, searchBar ren
 				@PageMenu(renderingContext)
 			</aside>
 			<div data-dock-panel="searchbar" class="dashboard-searchbar">
-				if renderingContext.ExploreBaseURL != nil && *renderingContext.ExploreBaseURL != "" {
+				if searchBar.IsVisible {
+					// SearchBar renders the "Open in Explore" link itself, in its top
+					// row next to the filter toggle (no separate leading line).
+					@SearchBar(renderingContext, searchBar)
+				} else if renderingContext.ExploreBaseURL != nil && *renderingContext.ExploreBaseURL != "" {
+					// No search bar on this page — keep the standalone link.
 					<div class="application__explore-link">
 						<a href={ templ.SafeURL(renderingContext.CurrentHandlerUrl + "/open-in-explore") }>Open in Explore ↗</a>
 					</div>
-				}
-				if searchBar.IsVisible {
-					@SearchBar(searchBar)
 				}
 			</div>
 			<main data-dock-panel="content" class="dashboard-content prose max-w-none">

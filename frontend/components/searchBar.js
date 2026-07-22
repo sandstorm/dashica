@@ -21,6 +21,11 @@ export default () => ({
     // as opposed to the global $store.timeState (time range / refresh / log).
     _scope: null,
 
+    // Whether the SQL-filter panel (SqlFilterPanel) is expanded. Bound reactively
+    // via x-show / @click in the shared SqlFilterToggle/SqlFilterPanel templ
+    // components — used identically by the dashboard bar and Explore's strip.
+    filtersOpen: false,
+
     init() {
         this._scope = resolveScope(this.$el);
         this.initFlatpickr();

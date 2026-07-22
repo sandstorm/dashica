@@ -5,45 +5,17 @@ import (
     "github.com/sandstorm/dashica/lib/util"
 )
 
-templ SearchBar(searchBar rendering.SearchBarOption) {
+templ SearchBar(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption) {
 
     <div x-data="searchBar" x-init="init()" class="bg-base-100 border-b border-base-300 shadow-lg sticky top-0 z-2">
         <div class="mx-auto px-4 sm:px-6 lg:px-8 py-4">
 
-            <!-- Row 1: SQL Filter with Form Control -->
-            <div class="form-control mb-4">
-                <label class="label">
-                    <span class="label-text flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                        </svg>
-                        <strong>Additional SQL Filters</strong>
-                        <span x-show="sqlFilter" class="badge badge-primary badge-sm">active</span>
-                    </span>
-                </label>
-                <div class="relative">
-                    <textarea
-                            id="sqlFilter"
-                            :value="sqlFilter"
-                            @input="setSqlFilter($event.target.value)"
-                            class="textarea textarea-bordered textarea-primary w-full font-mono text-sm auto-grow focus:textarea-primary"
-                            placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
-                            rows="1"
-                    ></textarea>
-                    <button
-                            x-show="sqlFilter"
-                            @click="clearSqlFilter()"
-                            class="btn btn-ghost btn-circle btn-sm absolute right-2 top-2"
-                            title="Clear filter"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Row 2: Time Range Selector + Auto-refresh -->
+            <!-- Row 1: Time Range + Auto-refresh, with the SQL-filter toggle pushed
+                 to the right edge — the exact same filter markup as Explore's
+                 preview strip, emitted from the shared SqlFilterToggle/SqlFilterPanel
+                 components below. A flex spacer separates the controls from the
+                 "filters" toggle; the textarea drops into a hidden panel under the
+                 row (reactive filtersOpen flag on the searchBar component). -->
             <div class="flex flex-nowrap items-center gap-3">
 
                 <!-- Time Range Presets with Join -->
@@ -134,7 +106,24 @@ templ SearchBar(searchBar rendering.SearchBarOption) {
                         </button>
                     </div>
                 </div>
+
+                <!-- push the right-hand cluster to the edge (Explore parity): the
+                     SQL-filter toggle on top, the Open-in-Explore link stacked
+                     directly below it so no separate leading line is wasted. -->
+                <div class="flex-1"></div>
+                <div class="flex flex-col items-end gap-1">
+                    <div class="flex items-center gap-2">
+                        @SqlFilterToggle()
+                    </div>
+                    if renderingContext.ExploreBaseURL != nil && *renderingContext.ExploreBaseURL != "" {
+                        <a
+                                href={ templ.SafeURL(renderingContext.CurrentHandlerUrl + "/open-in-explore") }
+                                class="link link-hover text-xs whitespace-nowrap"
+                        >Open in Explore ↗</a>
+                    }
+                </div>
             </div>
+            @SqlFilterPanel()
 
             <!-- Row 3: Custom filters -->
             <div class="flex flex-nowrap items-center gap-3">
@@ -149,5 +138,33 @@ templ SearchBar(searchBar rendering.SearchBarOption) {
                 </div>
             </div>
         </div>
+    </div>
+}
+
+// SqlFilterToggle + SqlFilterPanel are the SINGLE source of the SQL-filter UI,
+// shared verbatim by the dashboard search bar and Explore's preview strip
+// (lib/explore/editor.templ) so both look and behave identically. They must sit
+// inside a [x-data="searchBar"] scope, which supplies the reactive filtersOpen
+// flag plus sqlFilter / setSqlFilter — the toggle and panel bind to it directly
+// via @click / x-show (no per-page wiring).
+templ SqlFilterToggle() {
+    <button
+        type="button"
+        @click="filtersOpen = !filtersOpen"
+        :class="filtersOpen ? 'is-active' : ''"
+        class="explore-btn explore-btn--sm"
+    >filters</button>
+    <span x-show="sqlFilter" x-cloak class="badge badge-primary badge-xs">active</span>
+}
+
+templ SqlFilterPanel() {
+    <div x-show="filtersOpen" x-cloak class="explore-preview__filters">
+        <textarea
+            :value="sqlFilter"
+            @input="setSqlFilter($event.target.value)"
+            class="textarea textarea-bordered textarea-xs w-full font-mono"
+            placeholder="e.g., AND status = 'active' AND region IN ('us-east', 'eu-west')"
+            rows="2"
+        ></textarea>
     </div>
 }
