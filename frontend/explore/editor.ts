@@ -1,17 +1,36 @@
-// editor.ts — the Explore editor.
+// editor.ts — the Explore editor, built on a reactive dataflow.
 //
-// Design (per the code review): this is a plain manual-DOM application, NOT
-// idiomatic Alpine, and deliberately so — the CSP Alpine build forbids
-// expressions with arguments, and a recursive schema-driven form cannot be
-// expressed in Alpine templates. Alpine is demoted to a thin boundary: it only
-// registers the component and hands us the shared urlState store. All editor
-// state lives in the plain `Editor` class below (not in an Alpine proxy).
+// Design (per docs §"Frontend architecture revision — reactive dataflow"):
+// this is a plain manual-DOM application, NOT idiomatic Alpine — the CSP Alpine
+// build forbids expressions with arguments, and a recursive schema-driven form
+// cannot be expressed in Alpine templates. But we DO reuse Alpine's reactive
+// *engine* (`Alpine.reactive` / `Alpine.effect` / `Alpine.release` — @vue/reactivity
+// underneath) headlessly.
 //
-// Data flow is one-directional and explicit:
-//   • structural change (add/select/move/delete/JSON-apply)  → update() → save() + render()
-//   • value edit inside a control (typing a field)           → onEdit() → save() + refresh selected preview + JSON drawer
-// render() redraws every pane from state; previews are keyed by widget id so a
-// re-render re-orders/re-highlights without re-fetching unchanged widgets.
+// Two reactive objects are the single source of truth:
+//   • `state` — the dashboard being built (title, layout, widgets[])
+//   • `ui`    — transient editor state (selectedId, drawerTab)
+// Every derived surface (localStorage, the tree, the inspector, each preview
+// card, the JSON drawer) is an *effect* that subscribes to exactly the parts of
+// state it reads. Mutations are just mutations; effects notice. There is no
+// update()/onEdit() split and controls no longer plumb an onChange callback —
+// they write into the (reactive) props object and the relevant effects react.
+//
+// The classic reactive traps, and how each is handled (see doc guardrails):
+//  1. The inspector must depend only on (selectedId, widget.type), never on
+//     props values — otherwise typing rebuilds the form under the cursor (the
+//     defocus bug reborn). The effect tracks only (selectedId, type) and defers
+//     the actual form build to a microtask, which runs with NO active effect, so
+//     the controls' reads of props are untracked. Controls stay imperative
+//     islands; reactivity coordinates *between* panes, not inside a control.
+//  2. Text inputs (title, JSON textarea) are written by their effect only when
+//     not focused (`document.activeElement !== el`).
+//  3. Preview deps are coarse on purpose: one effect per card tracks
+//     `JSON.stringify(widget.props)`, debounced — correct-by-default.
+//  4. Effect lifecycle is explicit: per-widget effects are kept on the preview
+//     entry and `Alpine.release`d on widget removal.
+//  5. One effect per pane/widget with a name comment; no nested effects except
+//     the deliberate per-card effect created once at mount (commented below).
 
 import Alpine from '@alpinejs/csp';
 import {ControlCtx, SchemaResponse} from "./controls";
@@ -23,6 +42,16 @@ interface DashboardState { title: string; layout: string; widgets: WidgetState[]
 interface WidgetFormModel extends WidgetDescriptor { defaults: Record<string, any>; }
 interface FormModel { widgets: Record<string, WidgetFormModel>; layouts: string[]; }
 
+type DrawerTab = 'gocode' | 'json' | 'sql';
+interface UiState { selectedId: string | null; drawerTab: DrawerTab; }
+
+interface PreviewEntry {
+    card: HTMLElement;
+    controller: PreviewController;
+    eff: any;         // the per-widget preview effect (released on teardown)
+    first: boolean;   // render immediately on the effect's first run, debounce after
+}
+
 const LS_KEY = 'dashica-explore-state';
 
 function debounce<T extends (...a: any[]) => void>(fn: T, ms = 400): T {
@@ -31,6 +60,10 @@ function debounce<T extends (...a: any[]) => void>(fn: T, ms = 400): T {
 }
 
 function deepClone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
+
+// raw returns the non-reactive target of a reactive proxy, so a read does not
+// register a dependency; writes must still go through the proxy to trigger.
+function raw<T>(v: T): T { return (Alpine as any).raw ? (Alpine as any).raw(v) : v; }
 
 // validateState turns arbitrary JSON (share link, JSON tab) into a well-formed
 // DashboardState or throws — so garbage produces an inline error, never a
@@ -52,21 +85,32 @@ function validateState(o: any): DashboardState {
 class Editor {
     private formModel: FormModel | null = null;
     private schema: SchemaResponse | null = null;
-    private state: DashboardState = {title: 'Untitled', layout: 'defaultPage', widgets: []};
-    private selectedId: string | null = null;
-    private drawerTab: 'gocode' | 'json' | 'sql' = 'json';
+
+    // The two reactive roots (assigned in start(), once Alpine's engine is live).
+    private state!: DashboardState;
+    private ui!: UiState;
     private idSeq = 0;
 
-    // Non-UI state — kept out of any reactive proxy on purpose.
-    private previews: Record<string, {card: HTMLElement; controller: PreviewController}> = {};
+    // Non-reactive bookkeeping — one entry per mounted preview card.
+    private previews: Record<string, PreviewEntry> = {};
 
+    // Effects, kept only so a future teardown could release them.
+    private effects: any[] = [];
+
+    // Cached DOM refs into the templ shell + built-once controls.
     private elToolbar: HTMLElement;
     private elTree: HTMLElement;
     private elPreview: HTMLElement;
     private elInspector: HTMLElement;
     private elDrawer: HTMLElement;
+    private titleInput!: HTMLInputElement;
+    private layoutSel!: HTMLSelectElement;
+    private elTreeList!: HTMLElement;
+    private elDrawerTabs!: HTMLElement;
+    private elDrawerContent!: HTMLElement;
+    private jsonTextarea: HTMLTextAreaElement | null = null;
 
-    private onEditDebounced = debounce(() => this.onEdit());
+    private inspectorScheduled = false;
 
     constructor(private root: HTMLElement, private baseUrl: string, private urlState: any) {
         this.elToolbar = root.querySelector('[data-explore="toolbar"]')!;
@@ -77,57 +121,47 @@ class Editor {
     }
 
     async start() {
-        this.loadState();
-        const [fm, sc] = await Promise.all([
-            fetch(`${this.baseUrl}/api/formmodel`).then((r) => r.json()),
-            fetch(`${this.baseUrl}/api/schema`).then((r) => r.json()).catch(() => null),
-        ]);
-        this.formModel = fm;
-        this.schema = sc;
-        this.render();
+        this.ui = Alpine.reactive({selectedId: null, drawerTab: 'json'} as UiState);
+        this.state = Alpine.reactive(this.loadState());
+        this.reseedIdSeq();
+
+        try {
+            const [fm, sc] = await Promise.all([
+                fetch(`${this.baseUrl}/api/formmodel`).then((r) => { if (!r.ok) throw new Error(`formmodel ${r.status}`); return r.json(); }),
+                fetch(`${this.baseUrl}/api/schema`).then((r) => r.ok ? r.json() : null).catch(() => null),
+            ]);
+            this.formModel = fm;
+            this.schema = sc;
+        } catch (e: any) {
+            this.root.innerHTML = '';
+            const msg = document.createElement('div');
+            msg.className = 'explore-empty';
+            msg.textContent = `Explore API unavailable (${e.message}). Reload to retry.`;
+            this.root.appendChild(msg);
+            return;
+        }
+
+        // Build the static shells once, then wire the effects that keep the
+        // dynamic parts in sync. Effect first-runs paint the initial state.
+        this.buildToolbar();
+        this.buildTreeShell();
+        this.buildDrawerShell();
+        this.wireEffects();
     }
 
-    // ---- pipelines ---------------------------------------------------------
+    // ---- initial state -----------------------------------------------------
 
-    /** Structural change: mutate state, persist, redraw everything. */
-    private update(mutate: () => void) {
-        mutate();
-        this.save();
-        this.render();
-    }
-
-    /** Value edit from a control: state was already mutated in place; persist,
-     *  refresh only the edited widget's preview and the JSON drawer. The
-     *  inspector is NOT rebuilt, so the focused input keeps focus. */
-    private onEdit() {
-        this.save();
-        if (this.selectedId) this.refreshPreview(this.selectedId);
-        if (this.drawerTab === 'json') this.renderDrawer();
-    }
-
-    private render() {
-        this.renderToolbar();
-        this.renderTree();
-        this.renderInspector();
-        this.renderPreview();
-        this.renderDrawer();
-    }
-
-    // ---- state persistence -------------------------------------------------
-
-    private loadState() {
+    private loadState(): DashboardState {
         const hash = new URLSearchParams(window.location.hash.slice(1)).get('s');
         if (hash) {
-            try {
-                this.state = validateState(JSON.parse(decodeURIComponent(escape(atob(hash)))));
-                this.reseedIdSeq();
-                return;
-            } catch (e) { console.warn('Explore: ignoring invalid share link', e); }
+            try { return validateState(JSON.parse(decodeURIComponent(escape(atob(hash))))); }
+            catch (e) { console.warn('Explore: ignoring invalid share link', e); }
         }
         const stored = localStorage.getItem(LS_KEY);
         if (stored) {
-            try { this.state = validateState(JSON.parse(stored)); this.reseedIdSeq(); } catch { /* ignore */ }
+            try { return validateState(JSON.parse(stored)); } catch { /* ignore */ }
         }
+        return {title: 'Untitled', layout: 'defaultPage', widgets: []};
     }
 
     private reseedIdSeq() {
@@ -137,32 +171,97 @@ class Editor {
         }
     }
 
-    private save() { localStorage.setItem(LS_KEY, JSON.stringify(this.state)); }
+    // Replace the reactive state in place (never reassign — effects hold the
+    // reference). Used by the JSON tab and share-link apply. Previews are torn
+    // down first so the reconcile effect rebuilds each card + per-widget effect
+    // against the NEW widget objects (fixes stale JSON-tab previews).
+    private applyState(ns: DashboardState) {
+        for (const id of Object.keys(this.previews)) this.teardownPreview(id);
+        this.state.title = ns.title;
+        this.state.layout = ns.layout;
+        this.state.widgets.splice(0, this.state.widgets.length, ...ns.widgets);
+        this.reseedIdSeq();
+    }
 
-    private shareUrl(): string {
-        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.state))));
-        return `${window.location.origin}${window.location.pathname}#s=${encoded}`;
+    // ---- effects (one per pane/concern; named) -----------------------------
+
+    private wireEffects() {
+        // persist: localStorage follows state.
+        const persist = debounce((json: string) => localStorage.setItem(LS_KEY, json));
+        this.effects.push(Alpine.effect(() => { persist(JSON.stringify(this.state)); }));
+
+        // toolbar sync: title/layout inputs reflect state when not focused.
+        this.effects.push(Alpine.effect(() => {
+            const t = this.state.title, l = this.state.layout;
+            if (document.activeElement !== this.titleInput) this.titleInput.value = t;
+            if (document.activeElement !== this.layoutSel) this.layoutSel.value = l;
+        }));
+
+        // tree: follows widget structure + selection.
+        this.effects.push(Alpine.effect(() => {
+            const widgets = this.state.widgets;
+            const items = widgets.map((w) => ({id: w.id, type: w.type})); // structural dep
+            const sel = this.ui.selectedId;                                // selection dep
+            this.renderTreeList(items, sel);
+        }));
+
+        // inspector: depends ONLY on (selectedId, widget.type). The actual form
+        // build is deferred to a microtask so control reads of props are
+        // untracked (guardrail 1 — no defocus).
+        this.effects.push(Alpine.effect(() => {
+            const id = this.ui.selectedId;
+            const w = id ? this.state.widgets.find((x) => x.id === id) : null;
+            void (w ? w.type : null); // track type; ignore the value here
+            this.scheduleInspector();
+        }));
+
+        // preview reconcile: create/destroy/reorder cards + selection outline.
+        this.effects.push(Alpine.effect(() => {
+            const widgets = this.state.widgets;
+            const ids = widgets.map((w) => w.id); // structural dep
+            const sel = this.ui.selectedId;        // selection dep
+            this.reconcilePreviews(widgets, ids, sel);
+        }));
+
+        // drawer chrome: tab bar + content pane follow the active tab (and, for
+        // the sql tab, the selection). Reads no props.
+        this.effects.push(Alpine.effect(() => {
+            const tab = this.ui.drawerTab;
+            this.updateDrawerTabs(tab);
+            this.elDrawerContent.innerHTML = '';
+            this.jsonTextarea = null;
+            if (tab === 'json') this.buildJsonTab(this.elDrawerContent);
+            else if (tab === 'gocode') this.buildGocodeTab(this.elDrawerContent);
+            else this.buildSqlTab(this.elDrawerContent, this.ui.selectedId); // sql: selection dep
+        }));
+
+        // json live sync: the textarea reflects state when the json tab is open
+        // and unfocused — this is what fixes stale JSON-tab content for free.
+        this.effects.push(Alpine.effect(() => {
+            const json = JSON.stringify(this.state, null, 2); // deep dep on state
+            const ta = this.jsonTextarea;
+            if (this.ui.drawerTab === 'json' && ta && document.activeElement !== ta) ta.value = json;
+        }));
     }
 
     // ---- toolbar -----------------------------------------------------------
 
-    private renderToolbar() {
+    private buildToolbar() {
         this.elToolbar.innerHTML = '';
 
-        const titleInput = document.createElement('input');
-        titleInput.className = 'explore-input explore-toolbar__title';
-        titleInput.value = this.state.title;
-        titleInput.addEventListener('input', () => { this.state.title = titleInput.value; this.save(); });
-        this.elToolbar.appendChild(titleInput);
+        this.titleInput = document.createElement('input');
+        this.titleInput.className = 'explore-input explore-toolbar__title';
+        this.titleInput.placeholder = 'Dashboard title';
+        this.titleInput.addEventListener('input', () => { this.state.title = this.titleInput.value; });
+        this.elToolbar.appendChild(this.titleInput);
 
-        const layoutSel = document.createElement('select');
-        layoutSel.className = 'explore-input';
+        this.layoutSel = document.createElement('select');
+        this.layoutSel.className = 'explore-input';
         for (const l of this.formModel?.layouts ?? []) {
-            const o = document.createElement('option'); o.value = l; o.textContent = l; layoutSel.appendChild(o);
+            const o = document.createElement('option'); o.value = l; o.textContent = l; this.layoutSel.appendChild(o);
         }
-        layoutSel.value = this.state.layout;
-        layoutSel.addEventListener('change', () => { this.state.layout = layoutSel.value; this.save(); });
-        this.elToolbar.appendChild(layoutSel);
+        this.layoutSel.addEventListener('change', () => { this.state.layout = this.layoutSel.value; });
+        this.elToolbar.appendChild(this.layoutSel);
 
         const share = document.createElement('button');
         share.className = 'explore-btn';
@@ -175,11 +274,15 @@ class Editor {
         this.elToolbar.appendChild(share);
     }
 
+    private shareUrl(): string {
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.state))));
+        return `${window.location.origin}${window.location.pathname}#s=${encoded}`;
+    }
+
     // ---- tree --------------------------------------------------------------
 
-    private renderTree() {
-        const tree = this.elTree;
-        tree.innerHTML = '';
+    private buildTreeShell() {
+        this.elTree.innerHTML = '';
 
         const addRow = document.createElement('div');
         addRow.className = 'explore-tree__add';
@@ -196,26 +299,31 @@ class Editor {
         add.textContent = '+ add';
         add.addEventListener('click', () => this.addWidget(sel.value));
         addRow.append(sel, add);
-        tree.appendChild(addRow);
+        this.elTree.appendChild(addRow);
 
-        const list = document.createElement('ul');
-        list.className = 'explore-tree__list';
-        this.state.widgets.forEach((w, i) => {
+        this.elTreeList = document.createElement('ul');
+        this.elTreeList.className = 'explore-tree__list';
+        this.elTree.appendChild(this.elTreeList);
+    }
+
+    private renderTreeList(items: {id: string; type: string}[], sel: string | null) {
+        const list = this.elTreeList;
+        list.innerHTML = '';
+        items.forEach((w, i) => {
             const li = document.createElement('li');
-            li.className = 'explore-tree__item' + (w.id === this.selectedId ? ' is-selected' : '');
+            li.className = 'explore-tree__item' + (w.id === sel ? ' is-selected' : '');
             const name = document.createElement('span');
             name.className = 'explore-tree__name';
             name.textContent = this.formModel?.widgets[w.type]?.title ?? w.type;
-            name.addEventListener('click', () => this.update(() => { this.selectedId = w.id; }));
+            name.addEventListener('click', () => { this.ui.selectedId = w.id; });
             li.appendChild(name);
 
             const up = this.iconBtn('↑', i === 0, () => this.move(i, -1));
-            const down = this.iconBtn('↓', i === this.state.widgets.length - 1, () => this.move(i, 1));
+            const down = this.iconBtn('↓', i === items.length - 1, () => this.move(i, 1));
             const del = this.iconBtn('×', false, () => this.deleteWidget(w.id));
             li.append(up, down, del);
             list.appendChild(li);
         });
-        tree.appendChild(list);
     }
 
     private iconBtn(label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
@@ -229,35 +337,38 @@ class Editor {
 
     private addWidget(type: string) {
         if (!type || !this.formModel?.widgets[type]) return;
-        this.update(() => {
-            const w: WidgetState = {id: `w${this.idSeq++}`, type, props: deepClone(this.formModel!.widgets[type].defaults)};
-            this.state.widgets.push(w);
-            this.selectedId = w.id;
-        });
+        const w: WidgetState = {id: `w${this.idSeq++}`, type, props: deepClone(this.formModel.widgets[type].defaults)};
+        this.state.widgets.push(w);
+        this.ui.selectedId = w.id;
     }
 
     private deleteWidget(id: string) {
-        this.update(() => {
-            this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
-            if (this.selectedId === id) this.selectedId = null;
-        });
+        this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
+        if (this.ui.selectedId === id) this.ui.selectedId = null;
     }
 
     private move(index: number, dir: number) {
         const j = index + dir;
-        if (j < 0 || j >= this.state.widgets.length) return;
-        this.update(() => {
-            const arr = this.state.widgets;
-            [arr[index], arr[j]] = [arr[j], arr[index]];
-        });
+        const arr = this.state.widgets;
+        if (j < 0 || j >= arr.length) return;
+        [arr[index], arr[j]] = [arr[j], arr[index]];
     }
 
     // ---- inspector ---------------------------------------------------------
 
-    private renderInspector() {
+    // Coalesce the effect's (possibly repeated) requests into one build that
+    // runs OUTSIDE any active effect — so control reads of props do not become
+    // dependencies of the inspector effect.
+    private scheduleInspector() {
+        if (this.inspectorScheduled) return;
+        this.inspectorScheduled = true;
+        queueMicrotask(() => { this.inspectorScheduled = false; this.buildInspector(); });
+    }
+
+    private buildInspector() {
         const insp = this.elInspector;
         insp.innerHTML = '';
-        const w = this.state.widgets.find((x) => x.id === this.selectedId);
+        const w = this.state.widgets.find((x) => x.id === this.ui.selectedId);
         if (!w) {
             insp.innerHTML = '<div class="explore-empty">Select a widget to edit its options.</div>';
             return;
@@ -269,6 +380,8 @@ class Editor {
         insp.appendChild(heading);
 
         const queryKey = descriptor.queryKey;
+        // Controls write into w.props (the reactive proxy) — the per-widget
+        // preview effect and the persist effect react. No onChange plumbing.
         const ctx: ControlCtx = {
             baseUrl: this.baseUrl,
             schema: this.schema,
@@ -276,126 +389,138 @@ class Editor {
                 const q = queryKey ? w.props[queryKey] : null;
                 return q && q.kind === 'table' ? q.table : null;
             },
-            onChange: this.onEditDebounced,
         };
         const form = document.createElement('div');
         renderForm(form, descriptor, w.props, ctx);
         insp.appendChild(form);
     }
 
-    // ---- preview (keyed reconcile: no refetch on select/move) --------------
+    // ---- preview (reconcile + one effect per card) -------------------------
 
-    private renderPreview() {
+    private reconcilePreviews(widgets: WidgetState[], ids: string[], sel: string | null) {
         const pv = this.elPreview;
 
-        // Drop previews for widgets that no longer exist.
         for (const id of Object.keys(this.previews)) {
-            if (!this.state.widgets.some((w) => w.id === id)) {
-                this.previews[id].controller.destroy();
-                this.previews[id].card.remove();
-                delete this.previews[id];
-            }
+            if (!ids.includes(id)) this.teardownPreview(id);
         }
 
-        if (this.state.widgets.length === 0) {
-            pv.innerHTML = '<div class="explore-empty">Add a widget to start building.</div>';
+        if (widgets.length === 0) {
+            if (!pv.querySelector('.explore-empty')) {
+                pv.innerHTML = '';
+                const d = document.createElement('div');
+                d.className = 'explore-empty';
+                d.textContent = 'Add a widget to start building.';
+                pv.appendChild(d);
+            }
             return;
         }
-        // Clear any placeholder text node without touching existing cards.
         pv.querySelectorAll('.explore-empty').forEach((n) => n.remove());
 
-        for (const w of this.state.widgets) {
+        for (const w of widgets) {
             let entry = this.previews[w.id];
-            if (!entry) {
-                const card = document.createElement('div');
-                card.className = 'explore-card';
-                card.addEventListener('click', () => this.update(() => { this.selectedId = w.id; }));
-                const body = document.createElement('div');
-                body.className = 'explore-card__body';
-                card.appendChild(body);
-                entry = {card, controller: mountPreview(body, this.baseUrl)};
-                this.previews[w.id] = entry;
-                entry.controller.render(this.envelope(w)); // only new cards fetch
-            }
-            entry.card.classList.toggle('is-selected', w.id === this.selectedId);
+            if (!entry) entry = this.mountWidgetPreview(w);
+            entry.card.classList.toggle('is-selected', w.id === sel);
             pv.appendChild(entry.card); // re-append = reorder, keeps the node (no refetch)
         }
     }
 
-    private envelope(w: WidgetState): WidgetEnvelope { return {type: w.type, props: w.props}; }
+    private mountWidgetPreview(w: WidgetState): PreviewEntry {
+        const card = document.createElement('div');
+        card.className = 'explore-card';
+        card.addEventListener('click', () => { this.ui.selectedId = w.id; });
+        const body = document.createElement('div');
+        body.className = 'explore-card__body';
+        card.appendChild(body);
 
-    private refreshPreview(id: string) {
-        const w = this.state.widgets.find((x) => x.id === id);
-        const entry = this.previews[id];
-        if (w && entry) entry.controller.render(this.envelope(w));
+        const entry: PreviewEntry = {card, controller: mountPreview(body, this.baseUrl), eff: null, first: true};
+        this.previews[w.id] = entry;
+
+        const render = () => entry.controller.render(this.envelope(w));
+        const debounced = debounce(render);
+        // Deliberate per-card effect, created once at mount (guardrail 5): it
+        // tracks this widget's props coarsely (JSON.stringify) and re-renders
+        // the preview, debounced. Released in teardownPreview.
+        entry.eff = Alpine.effect(() => {
+            JSON.stringify(w.props); // deep dep on this widget's props only
+            if (entry.first) { entry.first = false; render(); }
+            else debounced();
+        });
+        return entry;
+    }
+
+    private envelope(w: WidgetState): WidgetEnvelope { return {type: w.type, props: raw(w.props)}; }
+
+    private teardownPreview(id: string) {
+        const e = this.previews[id];
+        if (!e) return;
+        if (e.eff) Alpine.release(e.eff);
+        e.controller.destroy();
+        e.card.remove();
+        delete this.previews[id];
     }
 
     // ---- drawer (Go code / JSON / SQL) ------------------------------------
 
-    private renderDrawer() {
-        const drawer = this.elDrawer;
-        drawer.innerHTML = '';
-
-        const tabs = document.createElement('div');
-        tabs.className = 'explore-drawer__tabs';
-        const tabDefs: [typeof this.drawerTab, string][] = [
-            ['gocode', 'Go code'], ['json', 'JSON'], ['sql', 'SQL / debug'],
-        ];
+    private buildDrawerShell() {
+        this.elDrawer.innerHTML = '';
+        this.elDrawerTabs = document.createElement('div');
+        this.elDrawerTabs.className = 'explore-drawer__tabs';
+        const tabDefs: [DrawerTab, string][] = [['gocode', 'Go code'], ['json', 'JSON'], ['sql', 'SQL / debug']];
         for (const [key, label] of tabDefs) {
             const b = document.createElement('button');
-            b.className = 'explore-tab' + (this.drawerTab === key ? ' is-active' : '');
+            b.className = 'explore-tab';
+            b.dataset.tab = key;
             b.textContent = label;
-            b.addEventListener('click', () => { this.drawerTab = key; this.renderDrawer(); });
-            tabs.appendChild(b);
+            b.addEventListener('click', () => { this.ui.drawerTab = key; });
+            this.elDrawerTabs.appendChild(b);
         }
-        drawer.appendChild(tabs);
+        this.elDrawer.appendChild(this.elDrawerTabs);
 
-        const content = document.createElement('div');
-        content.className = 'explore-drawer__content';
-        drawer.appendChild(content);
-
-        if (this.drawerTab === 'json') this.renderJsonTab(content);
-        else if (this.drawerTab === 'gocode') this.renderGocodeTab(content);
-        else this.renderSqlTab(content);
+        this.elDrawerContent = document.createElement('div');
+        this.elDrawerContent.className = 'explore-drawer__content';
+        this.elDrawer.appendChild(this.elDrawerContent);
     }
 
-    private renderJsonTab(content: HTMLElement) {
+    private updateDrawerTabs(active: DrawerTab) {
+        this.elDrawerTabs.querySelectorAll<HTMLElement>('.explore-tab').forEach((b) => {
+            b.classList.toggle('is-active', b.dataset.tab === active);
+        });
+    }
+
+    private buildJsonTab(content: HTMLElement) {
         const ta = document.createElement('textarea');
         ta.className = 'explore-input explore-textarea explore-json';
         ta.spellcheck = false;
-        ta.value = JSON.stringify(this.state, null, 2);
         const status = document.createElement('div');
         status.className = 'explore-json__status';
         ta.addEventListener('input', () => {
             try {
-                this.state = validateState(JSON.parse(ta.value));
-                this.reseedIdSeq();
+                const ns = validateState(JSON.parse(ta.value));
+                this.applyState(ns);
                 status.textContent = 'valid — applied';
                 status.className = 'explore-json__status is-ok';
-                this.save();
-                // Full redraw, but keep this textarea focused: rebuild the other
-                // panes, not the drawer (which would replace this element).
-                this.renderToolbar();
-                this.renderTree();
-                this.renderInspector();
-                this.renderPreview();
             } catch (e: any) {
                 status.textContent = e.message;
                 status.className = 'explore-json__status is-err';
             }
         });
         content.append(ta, status);
+        this.jsonTextarea = ta;
+        // Seed the initial value now; the json-sync effect keeps it fresh after.
+        // Read via raw(): this runs inside the drawer effect, and tracking state
+        // here would rebuild the textarea on every keystroke (defocus).
+        ta.value = JSON.stringify(raw(this.state), null, 2);
     }
 
-    private renderGocodeTab(content: HTMLElement) {
+    private buildGocodeTab(content: HTMLElement) {
         // Go code generation is Phase 4 (POST /api/gocode). Until then, show the
         // graduate-to-code path as pending rather than fabricating source.
         content.innerHTML = '<div class="explore-empty">Go code generation ships in Phase 4 ' +
             '(the <code>/api/gocode</code> endpoint). The JSON tab is the source of truth meanwhile.</div>';
     }
 
-    private renderSqlTab(content: HTMLElement) {
-        const w = this.state.widgets.find((x) => x.id === this.selectedId);
+    private buildSqlTab(content: HTMLElement, selectedId: string | null) {
+        const w = this.state.widgets.find((x) => x.id === selectedId);
         if (!w) {
             content.innerHTML = '<div class="explore-empty">Select a widget to see its SQL / EXPLAIN.</div>';
             return;

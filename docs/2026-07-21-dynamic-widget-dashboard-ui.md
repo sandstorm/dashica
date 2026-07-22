@@ -1343,7 +1343,28 @@ violation (3 — the only finding to survive two rounds unfixed; do it next),
 and cheap robustness/readability wins (6–9, with 7 = adopt `htl` as the
 answer to the doc's "can we use html`` for this?" note).
 
-### Frontend architecture revision — reactive dataflow (2026-07-22, proposed, not implemented)
+### Frontend architecture revision — reactive dataflow (2026-07-22, IMPLEMENTED — not yet built/E2E'd)
+
+**Implemented 2026-07-22** exactly as proposed below. `editor.ts` rewritten
+around two reactive roots (`state`, `ui`) with named effects (persist /
+toolbar-sync / tree / inspector / preview-reconcile / drawer-chrome / json-sync);
+`update()`/`onEdit()` deleted. All five guardrails applied — the inspector effect
+tracks only `(selectedId, widget.type)` and defers the form build to a microtask
+(untracked prop reads → no defocus); focused text inputs are never overwritten;
+per-card preview effects track `JSON.stringify(props)` coarsely and are
+`Alpine.release`d on removal. `controls.ts` had `ControlCtx.onChange` and all its
+call sites removed (controls write straight into the reactive props proxy) and its
+build-once `columnDatalist` replaced by a focus-repopulating `attachColumnCompletion`
+— so the stale-datalist finding (#4) and the stale-JSON-tab-preview finding (#2)
+are both closed by construction. `preview.ts`, `formRenderer.ts`, the server API
+and the wire format were left untouched, as planned. Still deferred to the next
+steps (unchanged by this rewrite): the semantic findings (seed() duplication #3,
+keyValue commit #5) and the markdown-`file` backend blocker, which must land before
+untrusted render. The build (esbuild + browser E2E) is the user's to run.
+
+Original proposal (kept for rationale):
+
+
 
 Question: would rebuilding the Explore UI as a reactive dataflow reduce
 complexity and bugs? **Yes — with eyes open about which bugs.** Look at the

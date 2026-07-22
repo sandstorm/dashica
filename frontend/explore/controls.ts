@@ -1,8 +1,11 @@
 // controls.ts — the fixed set of form controls, one per editor kind
 // (docs section 4.4). Each factory builds a plain DOM control that reads and
-// writes a value on a target object and calls ctx.onChange() on every edit.
-// The set is finite and stable; a new widget *option* needs no new control,
-// only a genuinely new *type of value* would.
+// writes a value on a *reactive* target object (the widget's props proxy).
+// There is no onChange callback: a write into the reactive props is itself the
+// notification — the editor's per-widget preview effect and persist effect
+// react to it (see docs §"reactive dataflow"). The set is finite and stable; a
+// new widget *option* needs no new control, only a genuinely new *type of
+// value* would.
 //
 // SQL-ish inputs (whereClause / rawSql / the "expr" field mode) use
 // <input>+<datalist> for column completion in this slice; CodeMirror is
@@ -32,7 +35,6 @@ export interface ControlCtx {
     // The table currently selected in the query section, so field pickers can
     // offer that table's columns for autocomplete.
     getTable: () => string | null;
-    onChange: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,18 +66,30 @@ function humanize(name: string): string {
 }
 
 let datalistSeq = 0;
-function columnDatalist(ctx: ControlCtx, timestampedOnly: boolean): HTMLDataListElement {
+// Wire an <input> to a column-name datalist that (re)populates on focus, so its
+// options are always a derived view of the *current* table — even after the
+// table is switched without rebuilding the form. This is what makes the
+// stale-datalist bug impossible by construction (populating on focus, not once
+// at build time, also avoids ever rebuilding the input and stealing focus).
+// Returns the datalist so the caller can append it near the input.
+function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, timestampedOnly: boolean): HTMLDataListElement {
     const dl = el('datalist');
     dl.id = `explore-cols-${datalistSeq++}`;
-    const table = ctx.getTable();
-    const cols = (table && ctx.schema?.columns[table]) || [];
-    for (const c of cols) {
-        if (timestampedOnly && !/date|time/i.test(c.type)) continue;
-        const opt = el('option');
-        opt.value = c.name;
-        opt.label = c.type;
-        dl.appendChild(opt);
-    }
+    input.setAttribute('list', dl.id);
+    const populate = () => {
+        dl.innerHTML = '';
+        const table = ctx.getTable();
+        const cols = (table && ctx.schema?.columns[table]) || [];
+        for (const c of cols) {
+            if (timestampedOnly && !/date|time/i.test(c.type)) continue;
+            const opt = el('option');
+            opt.value = c.name;
+            opt.label = c.type;
+            dl.appendChild(opt);
+        }
+    };
+    input.addEventListener('focus', populate);
+    populate();
     return dl;
 }
 
@@ -87,7 +101,7 @@ function textControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEle
     const input = el('input', 'explore-input');
     input.type = 'text';
     input.value = obj[field.name] ?? '';
-    input.addEventListener('input', () => { obj[field.name] = input.value; ctx.onChange(); });
+    input.addEventListener('input', () => { obj[field.name] = input.value; });
     return input;
 }
 
@@ -98,7 +112,6 @@ function intControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElem
     input.value = v == null ? '' : String(v);
     input.addEventListener('input', () => {
         obj[field.name] = input.value === '' ? null : Number(input.value);
-        ctx.onChange();
     });
     return input;
 }
@@ -107,7 +120,7 @@ function boolControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEle
     const input = el('input');
     input.type = 'checkbox';
     input.checked = !!obj[field.name];
-    input.addEventListener('change', () => { obj[field.name] = input.checked; ctx.onChange(); });
+    input.addEventListener('change', () => { obj[field.name] = input.checked; });
     const wrap = el('div', 'explore-inline');
     wrap.appendChild(input);
     return wrap;
@@ -124,7 +137,7 @@ function selectControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLE
         sel.appendChild(opt);
     }
     sel.value = obj[field.name] ?? '';
-    sel.addEventListener('change', () => { obj[field.name] = sel.value; ctx.onChange(); });
+    sel.addEventListener('change', () => { obj[field.name] = sel.value; });
     return sel;
 }
 
@@ -139,17 +152,17 @@ function stringListControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): H
             const row = el('div', 'explore-row');
             const input = el('input', 'explore-input');
             input.value = val;
-            input.addEventListener('input', () => { list[i] = input.value; ctx.onChange(); });
+            input.addEventListener('input', () => { list[i] = input.value; });
             const del = el('button', 'explore-btn explore-btn--icon', '×');
             del.type = 'button';
-            del.addEventListener('click', () => { list.splice(i, 1); ctx.onChange(); redraw(); });
+            del.addEventListener('click', () => { list.splice(i, 1); redraw(); });
             row.appendChild(input);
             row.appendChild(del);
             container.appendChild(row);
         });
         const add = el('button', 'explore-btn explore-btn--sm', '+ add');
         add.type = 'button';
-        add.addEventListener('click', () => { list.push(''); ctx.onChange(); redraw(); });
+        add.addEventListener('click', () => { list.push(''); redraw(); });
         container.appendChild(add);
     }
     redraw();
@@ -174,19 +187,18 @@ function keyValueControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTM
             const commit = (newK: string) => {
                 delete map[k];
                 map[newK] = vIn.value;
-                ctx.onChange();
             };
             kIn.addEventListener('change', () => { commit(kIn.value); redraw(); });
-            vIn.addEventListener('input', () => { map[kIn.value] = vIn.value; ctx.onChange(); });
+            vIn.addEventListener('input', () => { map[kIn.value] = vIn.value; });
             const del = el('button', 'explore-btn explore-btn--icon', '×');
             del.type = 'button';
-            del.addEventListener('click', () => { delete map[k]; ctx.onChange(); redraw(); });
+            del.addEventListener('click', () => { delete map[k]; redraw(); });
             row.append(kIn, vIn, del);
             container.appendChild(row);
         });
         const add = el('button', 'explore-btn explore-btn--sm', '+ add');
         add.type = 'button';
-        add.addEventListener('click', () => { map[''] = ''; ctx.onChange(); redraw(); });
+        add.addEventListener('click', () => { map[''] = ''; redraw(); });
         container.appendChild(add);
     }
     redraw();
@@ -234,7 +246,6 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
         kindSel.value = currentKind();
         kindSel.addEventListener('change', () => {
             obj[field.name] = seed(kindSel.value);
-            ctx.onChange();
             redraw();
         });
         container.appendChild(kindSel);
@@ -243,37 +254,27 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
         if (!v || typeof v !== 'object') return;
 
         if (v.kind === 'autoBucket') {
-            const dl = columnDatalist(ctx, !!field.timestamped);
-            container.appendChild(dl);
             const col = el('input', 'explore-input');
             col.placeholder = 'column';
-            col.setAttribute('list', dl.id);
             col.value = v.column ?? '';
-            col.addEventListener('input', () => { v.column = col.value; ctx.onChange(); });
-            container.appendChild(col);
+            col.addEventListener('input', () => { v.column = col.value; });
+            container.append(attachColumnCompletion(col, ctx, !!field.timestamped), col);
         } else if (v.kind === 'enum') {
-            const dl = columnDatalist(ctx, false);
-            container.appendChild(dl);
             const col = el('input', 'explore-input');
             col.placeholder = 'column';
-            col.setAttribute('list', dl.id);
             // Present the underlying column; store the ::String cast expression.
             col.value = (v.definition ?? '').replace(/::String$/, '');
             col.addEventListener('input', () => {
                 v.definition = col.value ? `${col.value}::String` : '';
                 if (!v.alias) v.alias = col.value;
-                ctx.onChange();
             });
-            container.appendChild(col);
+            container.append(attachColumnCompletion(col, ctx, false), col);
         } else if (v.kind === 'expr') {
-            const dl = columnDatalist(ctx, false);
-            container.appendChild(dl);
             const def = el('input', 'explore-input');
             def.placeholder = 'SQL expression';
-            def.setAttribute('list', dl.id);
             def.value = v.definition ?? '';
-            def.addEventListener('input', () => { v.definition = def.value; ctx.onChange(); });
-            container.appendChild(def);
+            def.addEventListener('input', () => { v.definition = def.value; });
+            container.append(attachColumnCompletion(def, ctx, false), def);
         }
         // count: no extra input besides alias.
 
@@ -281,7 +282,7 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
             const alias = el('input', 'explore-input');
             alias.placeholder = 'alias (column name in result)';
             alias.value = v.alias ?? '';
-            alias.addEventListener('input', () => { v.alias = alias.value; ctx.onChange(); });
+            alias.addEventListener('input', () => { v.alias = alias.value; });
             container.appendChild(alias);
         }
     }
@@ -306,7 +307,6 @@ function colorScaleControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): H
         toggle.checked = enabled;
         toggle.addEventListener('change', () => {
             obj[field.name] = toggle.checked ? {legend: false, domain: [], range: [], unknown: '#8E44AD'} : null;
-            ctx.onChange();
             redraw();
         });
         toggleRow.append(toggle, el('span', undefined, 'custom color scale'));
@@ -319,7 +319,7 @@ function colorScaleControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): H
         const legend = el('input');
         legend.type = 'checkbox';
         legend.checked = !!cs.legend;
-        legend.addEventListener('change', () => { cs.legend = legend.checked; ctx.onChange(); });
+        legend.addEventListener('change', () => { cs.legend = legend.checked; });
         legendRow.append(legend, el('span', undefined, 'show legend'));
         container.appendChild(legendRow);
 
@@ -331,22 +331,22 @@ function colorScaleControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): H
             const valIn = el('input', 'explore-input');
             valIn.placeholder = 'value';
             valIn.value = dv;
-            valIn.addEventListener('input', () => { cs.domain[i] = valIn.value; ctx.onChange(); });
+            valIn.addEventListener('input', () => { cs.domain[i] = valIn.value; });
             const colIn = el('input');
             colIn.type = 'color';
             colIn.value = cs.range[i] || '#888888';
-            colIn.addEventListener('input', () => { cs.range[i] = colIn.value; ctx.onChange(); });
+            colIn.addEventListener('input', () => { cs.range[i] = colIn.value; });
             const del = el('button', 'explore-btn explore-btn--icon', '×');
             del.type = 'button';
             del.addEventListener('click', () => {
-                cs.domain.splice(i, 1); cs.range.splice(i, 1); ctx.onChange(); redraw();
+                cs.domain.splice(i, 1); cs.range.splice(i, 1); redraw();
             });
             row.append(valIn, colIn, del);
             container.appendChild(row);
         });
         const add = el('button', 'explore-btn explore-btn--sm', '+ mapping');
         add.type = 'button';
-        add.addEventListener('click', () => { cs.domain.push(''); cs.range.push('#888888'); ctx.onChange(); redraw(); });
+        add.addEventListener('click', () => { cs.domain.push(''); cs.range.push('#888888'); redraw(); });
         container.appendChild(add);
     }
     redraw();
@@ -397,7 +397,6 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
             props[queryKey] = kindSel.value === 'raw'
                 ? {kind: 'raw', sql: 'SELECT * FROM ... WHERE {{DASHICA_FILTERS}}'}
                 : {kind: 'table', table: '', where: []};
-            ctx.onChange();
             rebuild();
         });
         body.appendChild(labelled({name: 'source', editor: 'select'}, kindSel));
@@ -406,7 +405,7 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
             const ta = el('textarea', 'explore-input explore-textarea');
             ta.value = q.sql ?? '';
             ta.rows = 6;
-            ta.addEventListener('input', () => { q.sql = ta.value; ctx.onChange(); });
+            ta.addEventListener('input', () => { q.sql = ta.value; });
             body.appendChild(labelled({name: 'sql', editor: 'rawSql', help: 'Must contain {{DASHICA_FILTERS}}.'}, ta));
         } else {
             const dl = el('datalist');
@@ -418,7 +417,7 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
             tbl.setAttribute('list', dl.id);
             tbl.value = q.table ?? '';
             // No re-render on input — just mutate, so focus is kept while typing.
-            tbl.addEventListener('input', () => { q.table = tbl.value; ctx.onChange(); });
+            tbl.addEventListener('input', () => { q.table = tbl.value; });
             body.append(dl, labelled({name: 'table', editor: 'text'}, tbl));
 
             // where clause list
@@ -428,21 +427,20 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
                 whereWrap.innerHTML = '';
                 (q.where as string[]).forEach((w, i) => {
                     const row = el('div', 'explore-row');
-                    const cdl = columnDatalist(ctx, false);
                     const input = el('input', 'explore-input');
-                    input.setAttribute('list', cdl.id);
                     input.placeholder = "e.g. level = 'error'";
                     input.value = w;
-                    input.addEventListener('input', () => { q.where[i] = input.value; ctx.onChange(); });
+                    input.addEventListener('input', () => { q.where[i] = input.value; });
+                    const cdl = attachColumnCompletion(input, ctx, false);
                     const del = el('button', 'explore-btn explore-btn--icon', '×');
                     del.type = 'button';
-                    del.addEventListener('click', () => { q.where.splice(i, 1); ctx.onChange(); drawWhere(); });
+                    del.addEventListener('click', () => { q.where.splice(i, 1); drawWhere(); });
                     row.append(cdl, input, del);
                     whereWrap.appendChild(row);
                 });
                 const add = el('button', 'explore-btn explore-btn--sm', '+ WHERE');
                 add.type = 'button';
-                add.addEventListener('click', () => { q.where.push(''); ctx.onChange(); drawWhere(); });
+                add.addEventListener('click', () => { q.where.push(''); drawWhere(); });
                 whereWrap.appendChild(add);
             };
             drawWhere();
