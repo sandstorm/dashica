@@ -33,6 +33,7 @@
 //     the deliberate per-card effect created once at mount (commented below).
 
 import Alpine from '@alpinejs/csp';
+import {html} from "htl";
 import {classBadge, Column, ControlCtx, FieldKind, SchemaResponse} from "./controls";
 import {renderForm, WidgetDescriptor} from "./formRenderer";
 import {mountPreview, PreviewController, WidgetEnvelope} from "./preview";
@@ -138,11 +139,8 @@ class Editor {
             this.formModel = fm;
             this.schema = sc;
         } catch (e: any) {
-            this.root.innerHTML = '';
-            const msg = document.createElement('div');
-            msg.className = 'explore-empty';
-            msg.textContent = `Explore API unavailable (${e.message}). Reload to retry.`;
-            this.root.appendChild(msg);
+            this.root.replaceChildren(
+                html`<div class="explore-empty">${`Explore API unavailable (${e.message}). Reload to retry.`}</div>`);
             return;
         }
 
@@ -257,31 +255,19 @@ class Editor {
     // ---- toolbar -----------------------------------------------------------
 
     private buildToolbar() {
-        this.elToolbar.innerHTML = '';
+        this.titleInput = html`<input class="explore-input explore-toolbar__title" placeholder="Dashboard title"
+            oninput=${() => { this.state.title = this.titleInput.value; }}>` as HTMLInputElement;
 
-        this.titleInput = document.createElement('input');
-        this.titleInput.className = 'explore-input explore-toolbar__title';
-        this.titleInput.placeholder = 'Dashboard title';
-        this.titleInput.addEventListener('input', () => { this.state.title = this.titleInput.value; });
-        this.elToolbar.appendChild(this.titleInput);
+        this.layoutSel = html`<select class="explore-input" onchange=${() => { this.state.layout = this.layoutSel.value; }}>${
+            (this.formModel?.layouts ?? []).map((l) => html`<option value=${l}>${l}</option>`)}</select>` as HTMLSelectElement;
 
-        this.layoutSel = document.createElement('select');
-        this.layoutSel.className = 'explore-input';
-        for (const l of this.formModel?.layouts ?? []) {
-            const o = document.createElement('option'); o.value = l; o.textContent = l; this.layoutSel.appendChild(o);
-        }
-        this.layoutSel.addEventListener('change', () => { this.state.layout = this.layoutSel.value; });
-        this.elToolbar.appendChild(this.layoutSel);
-
-        const share = document.createElement('button');
-        share.className = 'explore-btn';
-        share.textContent = 'Copy share link';
-        share.addEventListener('click', () => {
+        const share = html`<button class="explore-btn" onclick=${() => {
             navigator.clipboard.writeText(this.shareUrl());
             share.textContent = 'Copied!';
             setTimeout(() => { share.textContent = 'Copy share link'; }, 1500);
-        });
-        this.elToolbar.appendChild(share);
+        }}>Copy share link</button>` as HTMLButtonElement;
+
+        this.elToolbar.replaceChildren(this.titleInput, this.layoutSel, share);
     }
 
     private shareUrl(): string {
@@ -292,12 +278,6 @@ class Editor {
     // ---- tree --------------------------------------------------------------
 
     private buildTreeShell() {
-        this.elTree.innerHTML = '';
-
-        const addRow = document.createElement('div');
-        addRow.className = 'explore-tree__add';
-        const sel = document.createElement('select');
-        sel.className = 'explore-input';
         // Only chart widgets are addable here. Parameter widgets (Text Input,
         // Checkbox Group) render an input bound to a {name:String} query param that
         // only does anything when ANOTHER widget's query references it — standing
@@ -305,51 +285,34 @@ class Editor {
         // Collapsible Group) are not yet buildable in the flat tree. Both stay
         // registered/serializable so compiled dashboards and "Open in Explore"
         // round-trip them; they are just hidden from the add list (see docs UX note).
-        for (const type of Object.keys(this.formModel?.widgets ?? {})) {
-            if (this.formModel!.widgets[type].category !== 'chart') continue;
-            const o = document.createElement('option');
-            o.value = type;
-            o.textContent = this.formModel!.widgets[type].title;
-            sel.appendChild(o);
-        }
-        const add = document.createElement('button');
-        add.className = 'explore-btn explore-btn--sm';
-        add.textContent = '+ add';
-        add.addEventListener('click', () => this.addWidget(sel.value));
-        addRow.append(sel, add);
-        this.elTree.appendChild(addRow);
+        const chartTypes = Object.keys(this.formModel?.widgets ?? {})
+            .filter((type) => this.formModel!.widgets[type].category === 'chart');
+        const sel = html`<select class="explore-input">${
+            chartTypes.map((type) => html`<option value=${type}>${this.formModel!.widgets[type].title}</option>`)}</select>` as HTMLSelectElement;
+        const add = html`<button class="explore-btn explore-btn--sm" onclick=${() => this.addWidget(sel.value)}>+ add</button>`;
 
-        this.elTreeList = document.createElement('ul');
-        this.elTreeList.className = 'explore-tree__list';
-        this.elTree.appendChild(this.elTreeList);
+        this.elTreeList = html`<ul class="explore-tree__list"></ul>` as HTMLElement;
+        this.elTree.replaceChildren(
+            html`<div class="explore-tree__add">${sel}${add}</div>`,
+            this.elTreeList);
     }
 
     private renderTreeList(items: {id: string; type: string}[], sel: string | null) {
-        const list = this.elTreeList;
-        list.innerHTML = '';
-        items.forEach((w, i) => {
-            const li = document.createElement('li');
-            li.className = 'explore-tree__item' + (w.id === sel ? ' is-selected' : '');
-            const name = document.createElement('span');
-            name.className = 'explore-tree__name';
-            name.textContent = this.formModel?.widgets[w.type]?.title ?? w.type;
-            name.addEventListener('click', () => { this.ui.selectedId = w.id; });
-            li.appendChild(name);
-
-            const up = this.iconBtn('↑', i === 0, () => this.move(i, -1));
-            const down = this.iconBtn('↓', i === items.length - 1, () => this.move(i, 1));
-            const del = this.iconBtn('×', false, () => this.deleteWidget(w.id));
-            li.append(up, down, del);
-            list.appendChild(li);
-        });
+        this.elTreeList.replaceChildren(...items.map((w, i) => {
+            const name = html`<span class="explore-tree__name"
+                onclick=${() => { this.ui.selectedId = w.id; }}>${this.formModel?.widgets[w.type]?.title ?? w.type}</span>`;
+            return html`<li class=${'explore-tree__item' + (w.id === sel ? ' is-selected' : '')}>
+                ${name}
+                ${this.iconBtn('↑', i === 0, () => this.move(i, -1))}
+                ${this.iconBtn('↓', i === items.length - 1, () => this.move(i, 1))}
+                ${this.iconBtn('×', false, () => this.deleteWidget(w.id))}
+            </li>`;
+        }));
     }
 
     private iconBtn(label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
-        const b = document.createElement('button');
-        b.className = 'explore-btn explore-btn--icon';
-        b.textContent = label;
+        const b = html`<button class="explore-btn explore-btn--icon" onclick=${onClick}>${label}</button>` as HTMLButtonElement;
         b.disabled = disabled;
-        b.addEventListener('click', onClick);
         return b;
     }
 
@@ -392,10 +355,7 @@ class Editor {
             return;
         }
         const descriptor = this.formModel!.widgets[w.type];
-        const heading = document.createElement('div');
-        heading.className = 'explore-inspector__title';
-        heading.textContent = descriptor.title;
-        insp.appendChild(heading);
+        insp.appendChild(html`<div class="explore-inspector__title">${descriptor.title}</div>`);
 
         const queryKey = descriptor.queryKey;
         // Controls write into w.props (the reactive proxy) — the per-widget
@@ -425,11 +385,7 @@ class Editor {
 
         if (widgets.length === 0) {
             if (!pv.querySelector('.explore-empty')) {
-                pv.innerHTML = '';
-                const d = document.createElement('div');
-                d.className = 'explore-empty';
-                d.textContent = 'Add a widget to start building.';
-                pv.appendChild(d);
+                pv.replaceChildren(html`<div class="explore-empty">Add a widget to start building.</div>`);
             }
             return;
         }
@@ -444,12 +400,8 @@ class Editor {
     }
 
     private mountWidgetPreview(w: WidgetState): PreviewEntry {
-        const card = document.createElement('div');
-        card.className = 'explore-card';
-        card.addEventListener('click', () => { this.ui.selectedId = w.id; });
-        const body = document.createElement('div');
-        body.className = 'explore-card__body';
-        card.appendChild(body);
+        const body = html`<div class="explore-card__body"></div>` as HTMLElement;
+        const card = html`<div class="explore-card" onclick=${() => { this.ui.selectedId = w.id; }}>${body}</div>` as HTMLElement;
 
         const entry: PreviewEntry = {card, controller: mountPreview(body, this.baseUrl), eff: null, first: true};
         this.previews[w.id] = entry;
@@ -481,46 +433,31 @@ class Editor {
     // ---- drawer (Go code / JSON / SQL) ------------------------------------
 
     private buildDrawerShell() {
-        this.elDrawer.innerHTML = '';
-
         // Drag handle along the drawer's top edge → resize its height.
-        const resize = document.createElement('div');
-        resize.className = 'explore-drawer__resize';
-        resize.title = 'Drag to resize';
+        const resize = html`<div class="explore-drawer__resize" title="Drag to resize"></div>` as HTMLElement;
         this.wireDrawerResize(resize);
-        this.elDrawer.appendChild(resize);
 
-        this.elDrawerTabs = document.createElement('div');
-        this.elDrawerTabs.className = 'explore-drawer__tabs';
         const tabDefs: [DrawerTab, string][] = [['data', 'Data'], ['gocode', 'Go code'], ['json', 'JSON']];
-        for (const [key, label] of tabDefs) {
-            const b = document.createElement('button');
-            b.className = 'explore-tab';
-            b.dataset.tab = key;
-            b.textContent = label;
+        const tabs = tabDefs.map(([key, label]) =>
             // Clicking the active tab while expanded collapses; otherwise select + expand.
-            b.addEventListener('click', () => {
+            html`<button class="explore-tab" data-tab=${key} onclick=${() => {
                 if (this.ui.drawerTab === key && !this.ui.drawerCollapsed) { this.ui.drawerCollapsed = true; return; }
                 this.ui.drawerTab = key;
                 this.ui.drawerCollapsed = false;
-            });
-            this.elDrawerTabs.appendChild(b);
-        }
+            }}>${label}</button>`);
 
-        const spacer = document.createElement('div');
-        spacer.className = 'explore-drawer__tabs-spacer';
-        this.elDrawerTabs.appendChild(spacer);
+        this.elDrawerCollapse = html`<button class="explore-btn explore-btn--sm explore-drawer__collapse"
+            onclick=${() => { this.ui.drawerCollapsed = !this.ui.drawerCollapsed; }}></button>` as HTMLButtonElement;
 
-        this.elDrawerCollapse = document.createElement('button');
-        this.elDrawerCollapse.className = 'explore-btn explore-btn--sm explore-drawer__collapse';
-        this.elDrawerCollapse.addEventListener('click', () => { this.ui.drawerCollapsed = !this.ui.drawerCollapsed; });
-        this.elDrawerTabs.appendChild(this.elDrawerCollapse);
+        this.elDrawerTabs = html`<div class="explore-drawer__tabs">
+            ${tabs}
+            <div class="explore-drawer__tabs-spacer"></div>
+            ${this.elDrawerCollapse}
+        </div>` as HTMLElement;
 
-        this.elDrawer.appendChild(this.elDrawerTabs);
+        this.elDrawerContent = html`<div class="explore-drawer__content"></div>` as HTMLElement;
 
-        this.elDrawerContent = document.createElement('div');
-        this.elDrawerContent.className = 'explore-drawer__content';
-        this.elDrawer.appendChild(this.elDrawerContent);
+        this.elDrawer.replaceChildren(resize, this.elDrawerTabs, this.elDrawerContent);
     }
 
     private updateDrawerTabs(active: DrawerTab, collapsed: boolean) {
@@ -570,22 +507,19 @@ class Editor {
     }
 
     private buildJsonTab(content: HTMLElement) {
-        const ta = document.createElement('textarea');
-        ta.className = 'explore-input explore-textarea explore-json';
-        ta.spellcheck = false;
-        const status = document.createElement('div');
-        status.className = 'explore-json__status';
-        ta.addEventListener('input', () => {
-            try {
-                const ns = validateState(JSON.parse(ta.value));
-                this.applyState(ns);
-                status.textContent = 'valid — applied';
-                status.className = 'explore-json__status is-ok';
-            } catch (e: any) {
-                status.textContent = e.message;
-                status.className = 'explore-json__status is-err';
-            }
-        });
+        const status = html`<div class="explore-json__status"></div>` as HTMLElement;
+        const ta = html`<textarea class="explore-input explore-textarea explore-json" spellcheck="false"
+            oninput=${() => {
+                try {
+                    const ns = validateState(JSON.parse(ta.value));
+                    this.applyState(ns);
+                    status.textContent = 'valid — applied';
+                    status.className = 'explore-json__status is-ok';
+                } catch (e: any) {
+                    status.textContent = e.message;
+                    status.className = 'explore-json__status is-err';
+                }
+            }}></textarea>` as HTMLTextAreaElement;
         content.append(ta, status);
         this.jsonTextarea = ta;
         // Seed the initial value now; the json-sync effect keeps it fresh after.
@@ -626,31 +560,21 @@ class Editor {
             return;
         }
 
-        const wrap = document.createElement('div');
-        wrap.className = 'explore-data';
-
         // columns pane
-        const colsPane = document.createElement('div');
-        colsPane.className = 'explore-data__cols';
-        colsPane.appendChild(this.dataPaneTitle(`Columns · ${table}`));
         const cols: Column[] = this.schema?.columns[table] ?? [];
-        if (cols.length === 0) {
-            colsPane.appendChild(this.emptyNote('No columns found for this table.'));
-        } else {
-            for (const c of cols) colsPane.appendChild(this.columnRow(table, c));
-        }
-        wrap.appendChild(colsPane);
+        const colsPane = html`<div class="explore-data__cols">
+            ${this.dataPaneTitle(`Columns · ${table}`)}
+            ${cols.length === 0 ? this.emptyNote('No columns found for this table.') : cols.map((c) => this.columnRow(table, c))}
+        </div>`;
 
         // sample rows pane — synthetic table widget through the preview path.
-        const samplePane = document.createElement('div');
-        samplePane.className = 'explore-data__sample';
-        samplePane.appendChild(this.dataPaneTitle('Sample rows'));
-        const sampleBody = document.createElement('div');
-        sampleBody.className = 'explore-data__sample-body';
-        samplePane.appendChild(sampleBody);
-        wrap.appendChild(samplePane);
+        const sampleBody = html`<div class="explore-data__sample-body"></div>` as HTMLElement;
+        const samplePane = html`<div class="explore-data__sample">
+            ${this.dataPaneTitle('Sample rows')}
+            ${sampleBody}
+        </div>`;
 
-        content.appendChild(wrap);
+        content.appendChild(html`<div class="explore-data">${colsPane}${samplePane}</div>`);
 
         this.dataPreview = mountPreview(sampleBody, this.baseUrl);
         // Plain SELECT * over the table. ClickHouse cannot serialize its JSON /
@@ -662,17 +586,11 @@ class Editor {
     }
 
     private dataPaneTitle(text: string): HTMLElement {
-        const t = document.createElement('div');
-        t.className = 'explore-section-title';
-        t.textContent = text;
-        return t;
+        return html`<div class="explore-section-title">${text}</div>` as HTMLElement;
     }
 
     private emptyNote(text: string): HTMLElement {
-        const d = document.createElement('div');
-        d.className = 'explore-field__help';
-        d.textContent = text;
-        return d;
+        return html`<div class="explore-field__help">${text}</div>` as HTMLElement;
     }
 
     // Resolve the selected widget's base-query table (reactively reads the query
@@ -690,54 +608,27 @@ class Editor {
     // meaningless/expensive on continuous columns, so it is offered only for
     // categorical ones (docs UX plan (3)).
     private columnRow(table: string, c: Column): HTMLElement {
-        const row = document.createElement('div');
-        row.className = 'explore-data__col';
-
-        const head = document.createElement('div');
-        head.className = 'explore-data__col-head';
         const badge = classBadge(c.class);
-        if (badge) {
-            const b = document.createElement('span');
-            b.className = 'explore-badge';
-            b.textContent = badge;
-            b.title = c.class ?? '';
-            head.appendChild(b);
-        }
-        const name = document.createElement('span');
-        name.className = 'explore-data__col-name';
-        name.textContent = c.name;
-        head.appendChild(name);
-        const type = document.createElement('span');
-        type.className = 'explore-data__col-type';
-        type.textContent = c.type;
-        head.appendChild(type);
+        const head = html`<div class="explore-data__col-head">
+            ${badge ? html`<span class="explore-badge" title=${c.class ?? ''}>${badge}</span>` : ''}
+            <span class="explore-data__col-name">${c.name}</span>
+            <span class="explore-data__col-type">${c.type}</span>
+        </div>` as HTMLElement;
 
+        const parts: (Node | string)[] = [head];
         if (c.class === 'categorical') {
-            const btn = document.createElement('button');
-            btn.className = 'explore-btn explore-btn--sm explore-data__values-btn';
-            btn.type = 'button';
-            btn.textContent = 'values';
-            const valuesBox = document.createElement('div');
-            valuesBox.className = 'explore-data__values';
-            valuesBox.hidden = true;
+            const valuesBox = html`<div class="explore-data__values" hidden></div>` as HTMLElement;
             let loaded = false;
-            btn.addEventListener('click', () => {
-                valuesBox.hidden = !valuesBox.hidden;
-                if (!valuesBox.hidden && !loaded) { loaded = true; this.loadColumnValues(table, c.name, valuesBox); }
-            });
-            head.appendChild(btn);
-            row.append(head, valuesBox);
-        } else {
-            row.appendChild(head);
+            head.appendChild(html`<button type="button" class="explore-btn explore-btn--sm explore-data__values-btn"
+                onclick=${() => {
+                    valuesBox.hidden = !valuesBox.hidden;
+                    if (!valuesBox.hidden && !loaded) { loaded = true; this.loadColumnValues(table, c.name, valuesBox); }
+                }}>values</button>`);
+            parts.push(valuesBox);
         }
+        if (c.comment) parts.push(html`<div class="explore-data__col-comment">${c.comment}</div>`);
 
-        if (c.comment) {
-            const cm = document.createElement('div');
-            cm.className = 'explore-data__col-comment';
-            cm.textContent = c.comment;
-            row.appendChild(cm);
-        }
-        return row;
+        return html`<div class="explore-data__col">${parts}</div>` as HTMLElement;
     }
 
     private loadColumnValues(table: string, column: string, box: HTMLElement) {
@@ -746,20 +637,11 @@ class Editor {
         fetch(url)
             .then((r) => r.ok ? r.json() : r.text().then((t) => { throw new Error(t); }))
             .then((rows: {value: string; count: number}[]) => {
-                box.textContent = '';
-                if (!rows || rows.length === 0) { box.appendChild(this.emptyNote('No values.')); return; }
-                for (const rv of rows) {
-                    const line = document.createElement('div');
-                    line.className = 'explore-data__value';
-                    const v = document.createElement('span');
-                    v.className = 'explore-data__value-val';
-                    v.textContent = rv.value === '' ? '(empty)' : rv.value;
-                    const n = document.createElement('span');
-                    n.className = 'explore-data__value-count';
-                    n.textContent = String(rv.count);
-                    line.append(v, n);
-                    box.appendChild(line);
-                }
+                if (!rows || rows.length === 0) { box.replaceChildren(this.emptyNote('No values.')); return; }
+                box.replaceChildren(...rows.map((rv) => html`<div class="explore-data__value">
+                    <span class="explore-data__value-val">${rv.value === '' ? '(empty)' : rv.value}</span>
+                    <span class="explore-data__value-count">${String(rv.count)}</span>
+                </div>`));
             })
             .catch((e) => { box.textContent = ''; box.appendChild(this.emptyNote(`Error: ${e.message}`)); });
     }

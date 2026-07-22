@@ -7,6 +7,14 @@
 // new widget *option* needs no new control, only a genuinely new *type of
 // value* would.
 //
+// DOM is assembled with htl's `html` tag (the same one chart/table.ts uses):
+// structure + one-shot event handlers (`oninput=${…}` becomes a property
+// listener) live in the template; the returned node is captured in a `const`
+// the handler closes over. Where a value depends on children already existing
+// (a <select>'s `.value`, a checkbox's `.checked`) or where an element needs a
+// *second* listener beyond what htl assigns (column completion adds a `focus`
+// listener via addEventListener), that is set imperatively after the build.
+//
 // The field pickers teach *intent*, not the serializer vocabulary (docs UX plan
 // (3)): kind labels ("Time bucket (automatic)", "Row count", …) and per-slot
 // column classes (temporal / categorical / continuous) come from the formmodel
@@ -17,6 +25,8 @@
 // SQL-ish inputs (whereClause / rawSql / the "expr" field mode) use
 // <input>+<datalist> for column completion in this slice; CodeMirror is
 // deferred to Phase 4 (see docs 4.4).
+
+import {html} from "htl";
 
 export type ColumnClass = 'temporal' | 'categorical' | 'continuous' | '';
 
@@ -78,28 +88,26 @@ export function classBadge(cls?: string): string {
 // small DOM helpers
 // ---------------------------------------------------------------------------
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
-}
-
 function labelled(field: FieldDescriptor, control: HTMLElement): HTMLElement {
-    const wrap = el('div', 'explore-field');
-    const label = el('label', 'explore-field__label', humanize(field.name));
-    if (field.required) label.appendChild(el('span', 'explore-field__req', ' *'));
-    wrap.appendChild(label);
-    if (field.help) {
-        const help = el('div', 'explore-field__help', field.help);
-        wrap.appendChild(help);
-    }
-    wrap.appendChild(control);
-    return wrap;
+    return html`<div class="explore-field">
+        <label class="explore-field__label">${humanize(field.name)}${
+            field.required ? html`<span class="explore-field__req"> *</span>` : ''}</label>
+        ${field.help ? html`<div class="explore-field__help">${field.help}</div>` : ''}
+        ${control}
+    </div>` as HTMLElement;
 }
 
 function humanize(name: string): string {
     return name.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()).trim();
+}
+
+// A "× remove" / "+ add" style button — the recurring row-list affordance.
+function iconButton(label: string, onClick: () => void): HTMLButtonElement {
+    return html`<button type="button" class="explore-btn explore-btn--icon" onclick=${onClick}>${label}</button>` as HTMLButtonElement;
+}
+
+function addButton(label: string, onClick: () => void): HTMLButtonElement {
+    return html`<button type="button" class="explore-btn explore-btn--sm" onclick=${onClick}>${label}</button>` as HTMLButtonElement;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,23 +154,19 @@ let datalistSeq = 0;
 // (3)). Returns the datalist so the caller can append it near the input.
 function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, preferred: ColumnClass | null): HTMLDataListElement {
     trackSqlFocus(input);
-    const dl = el('datalist');
-    dl.id = `explore-cols-${datalistSeq++}`;
-    input.setAttribute('list', dl.id);
+    const id = `explore-cols-${datalistSeq++}`;
+    const dl = html`<datalist id=${id}></datalist>` as HTMLDataListElement;
+    input.setAttribute('list', id);
     const populate = () => {
-        dl.innerHTML = '';
         const table = ctx.getTable();
         const cols = (table && ctx.schema?.columns[table]) || [];
         const ordered = preferred
             ? [...cols].sort((a, b) => Number(b.class === preferred) - Number(a.class === preferred))
             : cols;
-        for (const c of ordered) {
-            const opt = el('option');
-            opt.value = c.name;
+        dl.replaceChildren(...ordered.map((c) => {
             const badge = classBadge(c.class);
-            opt.label = badge ? `${badge} ${c.type}` : c.type;
-            dl.appendChild(opt);
-        }
+            return html`<option value=${c.name} label=${badge ? `${badge} ${c.type}` : c.type}></option>`;
+        }));
     };
     input.addEventListener('focus', populate);
     populate();
@@ -174,72 +178,44 @@ function attachColumnCompletion(input: HTMLInputElement, ctx: ControlCtx, prefer
 // ---------------------------------------------------------------------------
 
 function textControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
-    const input = el('input', 'explore-input');
-    input.type = 'text';
-    input.value = obj[field.name] ?? '';
-    input.addEventListener('input', () => { obj[field.name] = input.value; });
+    const input = html`<input class="explore-input" type="text" value=${obj[field.name] ?? ''}
+        oninput=${() => { obj[field.name] = input.value; }}>` as HTMLInputElement;
     return input;
 }
 
 function intControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
-    const input = el('input', 'explore-input');
-    input.type = 'number';
     const v = obj[field.name];
-    input.value = v == null ? '' : String(v);
-    input.addEventListener('input', () => {
-        obj[field.name] = input.value === '' ? null : Number(input.value);
-    });
+    const input = html`<input class="explore-input" type="number" value=${v == null ? '' : String(v)}
+        oninput=${() => { obj[field.name] = input.value === '' ? null : Number(input.value); }}>` as HTMLInputElement;
     return input;
 }
 
 function boolControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
-    const input = el('input');
-    input.type = 'checkbox';
+    const input = html`<input type="checkbox" onchange=${() => { obj[field.name] = input.checked; }}>` as HTMLInputElement;
     input.checked = !!obj[field.name];
-    input.addEventListener('change', () => { obj[field.name] = input.checked; });
-    const wrap = el('div', 'explore-inline');
-    wrap.appendChild(input);
-    return wrap;
+    return html`<div class="explore-inline">${input}</div>` as HTMLElement;
 }
 
 function selectControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
-    const sel = el('select', 'explore-input');
     // Enum zero value is the empty string (Plot default) — offer it explicitly.
-    const opts = ['', ...(field.options ?? [])];
-    for (const o of opts) {
-        const opt = el('option');
-        opt.value = o;
-        opt.textContent = o === '' ? '(default)' : o;
-        sel.appendChild(opt);
-    }
+    const opts = ['', ...(field.options ?? [])].map((o) =>
+        html`<option value=${o}>${o === '' ? '(default)' : o}</option>`);
+    const sel = html`<select class="explore-input" onchange=${() => { obj[field.name] = sel.value; }}>${opts}</select>` as HTMLSelectElement;
     sel.value = obj[field.name] ?? '';
-    sel.addEventListener('change', () => { obj[field.name] = sel.value; });
     return sel;
 }
 
 function stringListControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
     if (!Array.isArray(obj[field.name])) obj[field.name] = obj[field.name] ?? [];
     const list: string[] = obj[field.name];
-    const container = el('div', 'explore-rowlist');
+    const container = html`<div class="explore-rowlist"></div>` as HTMLElement;
 
     function redraw() {
-        container.innerHTML = '';
-        list.forEach((val, i) => {
-            const row = el('div', 'explore-row');
-            const input = el('input', 'explore-input');
-            input.value = val;
-            input.addEventListener('input', () => { list[i] = input.value; });
-            const del = el('button', 'explore-btn explore-btn--icon', '×');
-            del.type = 'button';
-            del.addEventListener('click', () => { list.splice(i, 1); redraw(); });
-            row.appendChild(input);
-            row.appendChild(del);
-            container.appendChild(row);
+        const rows = list.map((val, i) => {
+            const input = html`<input class="explore-input" value=${val} oninput=${() => { list[i] = input.value; }}>` as HTMLInputElement;
+            return html`<div class="explore-row">${input}${iconButton('×', () => { list.splice(i, 1); redraw(); })}</div>`;
         });
-        const add = el('button', 'explore-btn explore-btn--sm', '+ add');
-        add.type = 'button';
-        add.addEventListener('click', () => { list.push(''); redraw(); });
-        container.appendChild(add);
+        container.replaceChildren(...rows, addButton('+ add', () => { list.push(''); redraw(); }));
     }
     redraw();
     return container;
@@ -248,34 +224,17 @@ function stringListControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): H
 function keyValueControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
     if (obj[field.name] == null || typeof obj[field.name] !== 'object') obj[field.name] = obj[field.name] ?? {};
     const map: Record<string, string> = obj[field.name];
-    const container = el('div', 'explore-rowlist');
+    const container = html`<div class="explore-rowlist"></div>` as HTMLElement;
 
     function redraw() {
-        container.innerHTML = '';
-        Object.entries(map).forEach(([k, v]) => {
-            const row = el('div', 'explore-row');
-            const kIn = el('input', 'explore-input');
-            kIn.placeholder = 'key';
-            kIn.value = k;
-            const vIn = el('input', 'explore-input');
-            vIn.placeholder = 'value';
-            vIn.value = v;
-            const commit = (newK: string) => {
-                delete map[k];
-                map[newK] = vIn.value;
-            };
-            kIn.addEventListener('change', () => { commit(kIn.value); redraw(); });
-            vIn.addEventListener('input', () => { map[kIn.value] = vIn.value; });
-            const del = el('button', 'explore-btn explore-btn--icon', '×');
-            del.type = 'button';
-            del.addEventListener('click', () => { delete map[k]; redraw(); });
-            row.append(kIn, vIn, del);
-            container.appendChild(row);
+        const rows = Object.entries(map).map(([k, v]) => {
+            const kIn = html`<input class="explore-input" placeholder="key" value=${k}>` as HTMLInputElement;
+            const vIn = html`<input class="explore-input" placeholder="value" value=${v}>` as HTMLInputElement;
+            kIn.onchange = () => { delete map[k]; map[kIn.value] = vIn.value; redraw(); };
+            vIn.oninput = () => { map[kIn.value] = vIn.value; };
+            return html`<div class="explore-row">${kIn}${vIn}${iconButton('×', () => { delete map[k]; redraw(); })}</div>`;
         });
-        const add = el('button', 'explore-btn explore-btn--sm', '+ add');
-        add.type = 'button';
-        add.addEventListener('click', () => { map[''] = ''; redraw(); });
-        container.appendChild(add);
+        container.replaceChildren(...rows, addButton('+ add', () => { map[''] = ''; redraw(); }));
     }
     redraw();
     return container;
@@ -306,7 +265,7 @@ function seedKind(kind: string): any {
 }
 
 function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
-    const container = el('div', 'explore-field-picker');
+    const container = html`<div class="explore-field-picker"></div>` as HTMLElement;
 
     const slotKinds = kindsForSlot(field);
     const info = (k: string): FieldKind =>
@@ -331,60 +290,47 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
     })();
 
     function redraw() {
-        container.innerHTML = '';
+        const parts: (Node | string)[] = [];
 
         // kind dropdown — human labels, advanced kinds gated by the toggle.
-        const kindSel = el('select', 'explore-input');
         const shown = advanced ? slotKinds : slotKinds.filter((k) => !info(k).advanced);
-        const opts = field.required ? shown : ['', ...shown];
-        for (const k of opts) {
-            const opt = el('option');
-            opt.value = k;
-            opt.textContent = k === '' ? '(none)' : info(k).label;
-            kindSel.appendChild(opt);
-        }
-        kindSel.value = currentKind();
-        kindSel.addEventListener('change', () => {
+        const opts = (field.required ? shown : ['', ...shown]).map((k) =>
+            html`<option value=${k}>${k === '' ? '(none)' : info(k).label}</option>`);
+        const kindSel = html`<select class="explore-input" onchange=${() => {
             obj[field.name] = seedKind(kindSel.value);
             redraw();
-        });
-        container.appendChild(kindSel);
+        }}>${opts}</select>` as HTMLSelectElement;
+        kindSel.value = currentKind();
+        parts.push(kindSel);
 
         const v = obj[field.name];
         if (v && typeof v === 'object') {
             const preferred = (info(v.kind).columnClass ?? '') as ColumnClass;
 
             if (v.kind === 'autoBucket') {
-                const col = el('input', 'explore-input');
-                col.placeholder = 'column';
-                col.value = v.column ?? '';
-                col.addEventListener('input', () => { v.column = col.value; });
-                container.append(attachColumnCompletion(col, ctx, preferred || 'temporal'), col);
+                const col = html`<input class="explore-input" placeholder="column" value=${v.column ?? ''}
+                    oninput=${() => { v.column = col.value; }}>` as HTMLInputElement;
+                parts.push(attachColumnCompletion(col, ctx, preferred || 'temporal'), col);
             } else if (v.kind === 'enum') {
-                const col = el('input', 'explore-input');
-                col.placeholder = 'column';
                 // Present the underlying column; store the ::String cast expression.
-                col.value = (v.definition ?? '').replace(/::String$/, '');
-                col.addEventListener('input', () => {
-                    v.definition = col.value ? `${col.value}::String` : '';
-                    if (!v.alias) v.alias = col.value;
-                });
-                container.append(attachColumnCompletion(col, ctx, preferred || 'categorical'), col);
+                const col = html`<input class="explore-input" placeholder="column"
+                    value=${(v.definition ?? '').replace(/::String$/, '')}
+                    oninput=${() => {
+                        v.definition = col.value ? `${col.value}::String` : '';
+                        if (!v.alias) v.alias = col.value;
+                    }}>` as HTMLInputElement;
+                parts.push(attachColumnCompletion(col, ctx, preferred || 'categorical'), col);
             } else if (v.kind === 'expr') {
-                const def = el('input', 'explore-input');
-                def.placeholder = 'SQL expression';
-                def.value = v.definition ?? '';
-                def.addEventListener('input', () => { v.definition = def.value; });
-                container.append(attachColumnCompletion(def, ctx, null), def);
+                const def = html`<input class="explore-input" placeholder="SQL expression" value=${v.definition ?? ''}
+                    oninput=${() => { v.definition = def.value; }}>` as HTMLInputElement;
+                parts.push(attachColumnCompletion(def, ctx, null), def);
             }
             // count: no extra input besides the (advanced) alias.
 
             if (advanced) {
-                const alias = el('input', 'explore-input');
-                alias.placeholder = 'alias (column name in result)';
-                alias.value = v.alias ?? '';
-                alias.addEventListener('input', () => { v.alias = alias.value; });
-                container.appendChild(alias);
+                const alias = html`<input class="explore-input" placeholder="alias (column name in result)"
+                    value=${v.alias ?? ''} oninput=${() => { v.alias = alias.value; }}>` as HTMLInputElement;
+                parts.push(alias);
             }
         }
 
@@ -392,14 +338,12 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
         // (a custom-expression kind, or the alias input on a chosen kind).
         const hasAdvancedKind = slotKinds.some((k) => info(k).advanced);
         if (hasAdvancedKind || (v && typeof v === 'object')) {
-            const adv = el('label', 'explore-advanced-toggle');
-            const cb = el('input');
-            cb.type = 'checkbox';
+            const cb = html`<input type="checkbox" onchange=${() => { advanced = cb.checked; redraw(); }}>` as HTMLInputElement;
             cb.checked = advanced;
-            cb.addEventListener('change', () => { advanced = cb.checked; redraw(); });
-            adv.append(cb, el('span', undefined, 'Advanced (custom expression, alias)'));
-            container.appendChild(adv);
+            parts.push(html`<label class="explore-advanced-toggle">${cb}<span>Advanced (custom expression, alias)</span></label>`);
         }
+
+        container.replaceChildren(...parts);
     }
     redraw();
     return container;
@@ -410,59 +354,40 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
 // ---------------------------------------------------------------------------
 
 function colorScaleControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
-    const container = el('div', 'explore-colorscale');
+    const container = html`<div class="explore-colorscale"></div>` as HTMLElement;
 
     function redraw() {
-        container.innerHTML = '';
         const enabled = obj[field.name] != null && typeof obj[field.name] === 'object';
 
-        const toggleRow = el('div', 'explore-inline');
-        const toggle = el('input');
-        toggle.type = 'checkbox';
-        toggle.checked = enabled;
-        toggle.addEventListener('change', () => {
+        const toggle = html`<input type="checkbox" onchange=${() => {
             obj[field.name] = toggle.checked ? {legend: false, domain: [], range: [], unknown: '#8E44AD'} : null;
             redraw();
-        });
-        toggleRow.append(toggle, el('span', undefined, 'custom color scale'));
-        container.appendChild(toggleRow);
-        if (!enabled) return;
+        }}>` as HTMLInputElement;
+        toggle.checked = enabled;
+        const parts: (Node | string)[] = [html`<div class="explore-inline">${toggle}<span>custom color scale</span></div>`];
 
-        const cs = obj[field.name];
+        if (enabled) {
+            const cs = obj[field.name];
 
-        const legendRow = el('div', 'explore-inline');
-        const legend = el('input');
-        legend.type = 'checkbox';
-        legend.checked = !!cs.legend;
-        legend.addEventListener('change', () => { cs.legend = legend.checked; });
-        legendRow.append(legend, el('span', undefined, 'show legend'));
-        container.appendChild(legendRow);
+            const legend = html`<input type="checkbox" onchange=${() => { cs.legend = legend.checked; }}>` as HTMLInputElement;
+            legend.checked = !!cs.legend;
+            parts.push(html`<div class="explore-inline">${legend}<span>show legend</span></div>`);
 
-        // value -> color mappings (domain[i] -> range[i])
-        cs.domain = cs.domain ?? [];
-        cs.range = cs.range ?? [];
-        cs.domain.forEach((dv: string, i: number) => {
-            const row = el('div', 'explore-row');
-            const valIn = el('input', 'explore-input');
-            valIn.placeholder = 'value';
-            valIn.value = dv;
-            valIn.addEventListener('input', () => { cs.domain[i] = valIn.value; });
-            const colIn = el('input');
-            colIn.type = 'color';
-            colIn.value = cs.range[i] || '#888888';
-            colIn.addEventListener('input', () => { cs.range[i] = colIn.value; });
-            const del = el('button', 'explore-btn explore-btn--icon', '×');
-            del.type = 'button';
-            del.addEventListener('click', () => {
-                cs.domain.splice(i, 1); cs.range.splice(i, 1); redraw();
+            // value -> color mappings (domain[i] -> range[i])
+            cs.domain = cs.domain ?? [];
+            cs.range = cs.range ?? [];
+            cs.domain.forEach((dv: string, i: number) => {
+                const valIn = html`<input class="explore-input" placeholder="value" value=${dv}
+                    oninput=${() => { cs.domain[i] = valIn.value; }}>` as HTMLInputElement;
+                const colIn = html`<input type="color" value=${cs.range[i] || '#888888'}
+                    oninput=${() => { cs.range[i] = colIn.value; }}>` as HTMLInputElement;
+                parts.push(html`<div class="explore-row">${valIn}${colIn}${
+                    iconButton('×', () => { cs.domain.splice(i, 1); cs.range.splice(i, 1); redraw(); })}</div>`);
             });
-            row.append(valIn, colIn, del);
-            container.appendChild(row);
-        });
-        const add = el('button', 'explore-btn explore-btn--sm', '+ mapping');
-        add.type = 'button';
-        add.addEventListener('click', () => { cs.domain.push(''); cs.range.push('#888888'); redraw(); });
-        container.appendChild(add);
+            parts.push(addButton('+ mapping', () => { cs.domain.push(''); cs.range.push('#888888'); redraw(); }));
+        }
+
+        container.replaceChildren(...parts);
     }
     redraw();
     return container;
@@ -475,11 +400,7 @@ function colorScaleControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): H
 function groupControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
     if (obj[field.name] == null || typeof obj[field.name] !== 'object') obj[field.name] = obj[field.name] ?? {};
     const inner = obj[field.name];
-    const container = el('div', 'explore-group');
-    for (const sub of field.fields ?? []) {
-        container.appendChild(makeControl(sub, inner, ctx));
-    }
-    return container;
+    return html`<div class="explore-group">${(field.fields ?? []).map((sub) => makeControl(sub, inner, ctx))}</div>` as HTMLElement;
 }
 
 // ---------------------------------------------------------------------------
@@ -490,97 +411,73 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
     if (props[queryKey] == null || typeof props[queryKey] !== 'object') {
         props[queryKey] = {kind: 'table', table: '', where: []};
     }
-    const container = el('div', 'explore-query');
-    container.appendChild(el('div', 'explore-section-title', 'Query'));
+    const body = html`<div></div>` as HTMLElement;
+    const container = html`<div class="explore-query">
+        <div class="explore-section-title">Query</div>
+        ${body}
+    </div>` as HTMLElement;
 
     // Only the source *kind* switch rebuilds the body (it swaps which inputs
     // exist). Individual inputs mutate in place and never re-render, so typing
     // in the table / where fields never loses focus.
-    function redraw() {
-        const body = el('div');
+    function rebuild() {
         const q = props[queryKey];
 
-        const kindSel = el('select', 'explore-input');
-        for (const k of ['table', 'raw']) {
-            const opt = el('option');
-            opt.value = k;
-            opt.textContent = k === 'table' ? 'Table' : 'Raw SQL';
-            kindSel.appendChild(opt);
-        }
-        kindSel.value = q.kind === 'raw' ? 'raw' : 'table';
-        kindSel.addEventListener('change', () => {
+        const kindSel = html`<select class="explore-input" onchange=${() => {
             props[queryKey] = kindSel.value === 'raw'
                 ? {kind: 'raw', sql: 'SELECT * FROM ... WHERE {{DASHICA_FILTERS}}'}
                 : {kind: 'table', table: '', where: []};
             rebuild();
-        });
-        body.appendChild(labelled({name: 'source', editor: 'select'}, kindSel));
+        }}>
+            <option value="table">Table</option>
+            <option value="raw">Raw SQL</option>
+        </select>` as HTMLSelectElement;
+        kindSel.value = q.kind === 'raw' ? 'raw' : 'table';
+        const parts: (Node | string)[] = [labelled({name: 'source', editor: 'select'}, kindSel)];
 
         if (q.kind === 'raw') {
-            const ta = el('textarea', 'explore-input explore-textarea');
+            const ta = html`<textarea class="explore-input explore-textarea" rows="6"
+                oninput=${() => { q.sql = ta.value; }}></textarea>` as HTMLTextAreaElement;
             ta.value = q.sql ?? '';
-            ta.rows = 6;
             trackSqlFocus(ta);
-            ta.addEventListener('input', () => { q.sql = ta.value; });
-            body.appendChild(labelled({name: 'sql', editor: 'rawSql', help: 'Must contain {{DASHICA_FILTERS}}.'}, ta));
+            parts.push(labelled({name: 'sql', editor: 'rawSql', help: 'Must contain {{DASHICA_FILTERS}}.'}, ta));
         } else {
-            const dl = el('datalist');
-            dl.id = `explore-tables-${datalistSeq++}`;
-            for (const t of ctx.schema?.tables ?? []) {
-                const opt = el('option'); opt.value = t; dl.appendChild(opt);
-            }
-            const tbl = el('input', 'explore-input');
-            tbl.setAttribute('list', dl.id);
-            tbl.value = q.table ?? '';
+            const id = `explore-tables-${datalistSeq++}`;
+            const dl = html`<datalist id=${id}>${
+                (ctx.schema?.tables ?? []).map((t) => html`<option value=${t}></option>`)}</datalist>`;
             // No re-render on input — just mutate, so focus is kept while typing.
             // Chosen a table? let the form seed required-but-empty pickers so
             // "pick a table = a rendering chart" (docs UX plan (3)). The seeder
             // rebuilds only the options section, never this focused input.
-            tbl.addEventListener('input', () => {
-                q.table = tbl.value;
-                if (tbl.value && ctx.onTableChosen) ctx.onTableChosen(tbl.value);
-            });
-            body.append(dl, labelled({name: 'table', editor: 'text'}, tbl));
+            const tbl = html`<input class="explore-input" list=${id} value=${q.table ?? ''}
+                oninput=${() => {
+                    q.table = tbl.value;
+                    if (tbl.value && ctx.onTableChosen) ctx.onTableChosen(tbl.value);
+                }}>` as HTMLInputElement;
+            parts.push(dl, labelled({name: 'table', editor: 'text'}, tbl));
 
             // collapsible column reference for the chosen table — badge + name +
             // type; clicking a column inserts its name into the last-focused
             // WHERE / expression input (docs UX plan (2)).
-            body.appendChild(columnReference(ctx));
+            parts.push(columnReference(ctx));
 
             // where clause list
             q.where = q.where ?? [];
-            const whereWrap = el('div', 'explore-rowlist');
+            const whereWrap = html`<div class="explore-rowlist"></div>` as HTMLElement;
             const drawWhere = () => {
-                whereWrap.innerHTML = '';
-                (q.where as string[]).forEach((w, i) => {
-                    const row = el('div', 'explore-row');
-                    const input = el('input', 'explore-input');
-                    input.placeholder = "e.g. level = 'error'";
-                    input.value = w;
-                    input.addEventListener('input', () => { q.where[i] = input.value; });
+                const rows = (q.where as string[]).map((w, i) => {
+                    const input = html`<input class="explore-input" placeholder="e.g. level = 'error'" value=${w}
+                        oninput=${() => { q.where[i] = input.value; }}>` as HTMLInputElement;
                     const cdl = attachColumnCompletion(input, ctx, null);
-                    const del = el('button', 'explore-btn explore-btn--icon', '×');
-                    del.type = 'button';
-                    del.addEventListener('click', () => { q.where.splice(i, 1); drawWhere(); });
-                    row.append(cdl, input, del);
-                    whereWrap.appendChild(row);
+                    return html`<div class="explore-row">${cdl}${input}${
+                        iconButton('×', () => { q.where.splice(i, 1); drawWhere(); })}</div>`;
                 });
-                const add = el('button', 'explore-btn explore-btn--sm', '+ WHERE');
-                add.type = 'button';
-                add.addEventListener('click', () => { q.where.push(''); drawWhere(); });
-                whereWrap.appendChild(add);
+                whereWrap.replaceChildren(...rows, addButton('+ WHERE', () => { q.where.push(''); drawWhere(); }));
             };
             drawWhere();
-            body.appendChild(labelled({name: 'where', editor: 'whereClause'}, whereWrap));
+            parts.push(labelled({name: 'where', editor: 'whereClause'}, whereWrap));
         }
-        return body;
-    }
-
-    let current: HTMLElement;
-    function rebuild() {
-        const next = redraw();
-        if (current) current.replaceWith(next); else container.appendChild(next);
-        current = next;
+        body.replaceChildren(...parts);
     }
     rebuild();
     return container;
@@ -591,33 +488,31 @@ export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx):
 // reflects the current table. Clicking a column inserts its name at the cursor
 // in the last-focused WHERE / expression input.
 function columnReference(ctx: ControlCtx): HTMLElement {
-    const details = el('details', 'explore-colref');
-    const summary = el('summary', undefined, 'Columns');
-    details.appendChild(summary);
-    const list = el('div', 'explore-colref__list');
-    details.appendChild(list);
+    const list = html`<div class="explore-colref__list"></div>` as HTMLElement;
+    const details = html`<details class="explore-colref">
+        <summary>Columns</summary>
+        ${list}
+    </details>` as HTMLElement;
 
     const populate = () => {
-        list.innerHTML = '';
         const table = ctx.getTable();
         const cols = (table && ctx.schema?.columns[table]) || [];
         if (cols.length === 0) {
-            list.appendChild(el('div', 'explore-field__help', table ? 'No columns.' : 'Pick a table first.'));
+            list.replaceChildren(html`<div class="explore-field__help">${table ? 'No columns.' : 'Pick a table first.'}</div>`);
             return;
         }
-        for (const c of cols) {
-            const row = el('button', 'explore-colref__col');
-            row.type = 'button';
-            row.title = `${c.type}${c.comment ? ` — ${c.comment}` : ''} (click to insert)`;
+        list.replaceChildren(...cols.map((c) => {
             const badge = classBadge(c.class);
-            if (badge) row.appendChild(el('span', 'explore-badge', badge));
-            row.appendChild(el('span', 'explore-colref__name', c.name));
-            row.appendChild(el('span', 'explore-colref__type', c.type));
-            row.addEventListener('click', () => insertIntoLastSqlInput(c.name));
-            list.appendChild(row);
-        }
+            return html`<button type="button" class="explore-colref__col"
+                title=${`${c.type}${c.comment ? ` — ${c.comment}` : ''} (click to insert)`}
+                onclick=${() => insertIntoLastSqlInput(c.name)}>
+                ${badge ? html`<span class="explore-badge">${badge}</span>` : ''}
+                <span class="explore-colref__name">${c.name}</span>
+                <span class="explore-colref__type">${c.type}</span>
+            </button>`;
+        }));
     };
-    details.addEventListener('toggle', () => { if (details.open) populate(); });
+    details.addEventListener('toggle', () => { if ((details as HTMLDetailsElement).open) populate(); });
     return details;
 }
 
@@ -673,13 +568,9 @@ export function makeControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): 
         case 'keyValue': return labelled(field, keyValueControl(field, obj, ctx));
         case 'stringList': return labelled(field, stringListControl(field, obj, ctx));
         case 'group': return labelled(field, groupControl(field, obj, ctx));
-        case 'children': {
-            const note = el('div', 'explore-field__help', 'Nested widgets (grid/group) are edited in a later phase.');
-            return labelled(field, note);
-        }
-        default: {
-            const note = el('div', 'explore-field__help', `Unsupported editor: ${field.editor}`);
-            return labelled(field, note);
-        }
+        case 'children':
+            return labelled(field, html`<div class="explore-field__help">Nested widgets (grid/group) are edited in a later phase.</div>` as HTMLElement);
+        default:
+            return labelled(field, html`<div class="explore-field__help">Unsupported editor: ${field.editor}</div>` as HTMLElement);
     }
 }

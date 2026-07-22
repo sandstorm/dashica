@@ -3,6 +3,7 @@
 // derived by dashica-gen from the Go struct) and instantiates one control per
 // field. No per-widget code: a new widget option appears here automatically.
 
+import {html} from "htl";
 import {ControlCtx, FieldDescriptor, makeControl, makeQuerySection, seedRequiredFields} from "./controls";
 
 export interface WidgetDescriptor {
@@ -44,17 +45,10 @@ export function renderForm(
     container.appendChild(optsWrap);
 
     function buildOptions() {
-        optsWrap.innerHTML = '';
-        const opts = document.createElement('div');
-        opts.className = 'explore-options';
-        const title = document.createElement('div');
-        title.className = 'explore-section-title';
-        title.textContent = 'Options';
-        opts.appendChild(title);
-        for (const field of descriptor.fields) {
-            opts.appendChild(makeControl(field, props, ctx));
-        }
-        optsWrap.appendChild(opts);
+        optsWrap.replaceChildren(html`<div class="explore-options">
+            <div class="explore-section-title">Options</div>
+            ${descriptor.fields.map((field) => makeControl(field, props, ctx))}
+        </div>`);
     }
 
     buildOptions();

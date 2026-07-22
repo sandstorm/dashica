@@ -7,6 +7,7 @@
 - consolidate all developer information into the README.md, OR into separate concepts in the docs/ folder.
 - TRY implemented features E2E - maybe via a Chrome or Firefox Browser via Playwright or MCP or ...?
 - DO NOT GUESS but investigate the root cause of problems! LET ME KNOW IF YOU DO NOT KNOW.
+- if working on a TODO described in a docs .md file, after the TODO is done record the current state (i.e. check-off the todo)
 
 # Tools
 

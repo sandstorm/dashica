@@ -281,8 +281,15 @@ round trip.
   toolbar; tree rows show `props.title`; icon contrast; Fill/Fx/Fy collapsed
   into "Series & faceting"; friendly empty states instead of raw 500 text.
 - keyValue control: commit key+value atomically on blur (phantom-key bug).
-- Adopt `htl` for DOM assembly (already a dependency; ~halves
-  controls/editor boilerplate).
+- ✅ **DONE 2026-07-22** — Adopt `htl` for DOM assembly (already a dependency;
+  ~halves controls/editor boilerplate). `controls.ts`/`editor.ts`/
+  `formRenderer.ts` DOM assembly swapped from `document.createElement` +
+  `el()`/append chains to htl `html` templates (same idiom as
+  `chart/table.ts`); `el()` helper dropped, row-list redraws use
+  `replaceChildren`. ~230 lines cut. Reactive guardrails preserved (column
+  completion keeps `addEventListener('focus')`; select/checkbox `.value`/
+  `.checked` set after build; textarea value via property). Not yet
+  built/browser-E2E'd.
 - values endpoint: time-bound the scan (schema knows the timestamp column)
   — currently full-table GROUP BY per autocomplete call; add continuous-column
   min/max/quantiles as the class-appropriate alternative.
