@@ -2,10 +2,9 @@ package widget
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
@@ -153,19 +152,16 @@ func TestMarkdown_Title(t *testing.T) {
 }
 
 func TestMarkdown_File(t *testing.T) {
-	// Create a temporary markdown file
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.md")
+	// File() resolves against the project filesystem (Deps.FileSystem), never the
+	// host filesystem — see markdown.go BuildComponents.
 	testContent := "# Test File\n\nThis is from a file."
-
-	err := os.WriteFile(testFile, []byte(testContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+	ctx := createTestContext()
+	ctx.Deps.FileSystem = fstest.MapFS{
+		"docs/test.md": {Data: []byte(testContent)},
 	}
 
-	widget := NewMarkdown().File(testFile)
+	widget := NewMarkdown().File("docs/test.md")
 
-	ctx := createTestContext()
 	component, err := widget.BuildComponents(ctx)
 	if err != nil {
 		t.Fatalf("BuildComponents failed: %v", err)
@@ -193,9 +189,10 @@ func TestMarkdown_File(t *testing.T) {
 }
 
 func TestMarkdown_FileNotFound(t *testing.T) {
-	widget := NewMarkdown().File("/nonexistent/file.md")
-
 	ctx := createTestContext()
+	ctx.Deps.FileSystem = fstest.MapFS{}
+	widget := NewMarkdown().File("nonexistent.md")
+
 	_, err := widget.BuildComponents(ctx)
 	if err == nil {
 		t.Error("Expected error for nonexistent file, got nil")
@@ -203,6 +200,46 @@ func TestMarkdown_FileNotFound(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "reading markdown file") {
 		t.Errorf("Expected error message about reading file, got: %v", err)
+	}
+}
+
+// TestMarkdown_FileRejectedForUntrustedContent verifies the arbitrary-file-read
+// vector is closed: Markdown.file is settable from author-controlled widget JSON,
+// so File() must be refused when the render is untrusted (Explore-authored),
+// regardless of the path. See docs Phase-2 finding 1.
+func TestMarkdown_FileRejectedForUntrustedContent(t *testing.T) {
+	ctx := createTestContext()
+	ctx.UntrustedContent = true
+	ctx.Deps.FileSystem = fstest.MapFS{
+		"secret.md": {Data: []byte("# secret")},
+	}
+
+	widget := NewMarkdown().File("secret.md")
+
+	_, err := widget.BuildComponents(ctx)
+	if err == nil {
+		t.Fatal("Expected File() to be rejected for untrusted content, got nil")
+	}
+	if !strings.Contains(err.Error(), "not permitted for untrusted content") {
+		t.Errorf("Expected untrusted-content rejection error, got: %v", err)
+	}
+}
+
+// TestMarkdown_FileRejectsHostAbsolutePath verifies the host filesystem is
+// unreachable even for trusted content: an absolute path is not a valid
+// project-relative path and must be refused rather than read via the host FS.
+func TestMarkdown_FileRejectsHostAbsolutePath(t *testing.T) {
+	ctx := createTestContext()
+	ctx.Deps.FileSystem = fstest.MapFS{}
+
+	widget := NewMarkdown().File("/etc/passwd")
+
+	_, err := widget.BuildComponents(ctx)
+	if err == nil {
+		t.Fatal("Expected absolute path to be rejected, got nil")
+	}
+	if !strings.Contains(err.Error(), "not a valid project-relative path") {
+		t.Errorf("Expected invalid-path error, got: %v", err)
 	}
 }
 

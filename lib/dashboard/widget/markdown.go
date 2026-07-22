@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -77,9 +76,26 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 
 	// Determine the markdown source: file or inline content
 	if m.file != "" {
-		markdownSource, err = os.ReadFile(m.file)
+		// File() reads from the project filesystem, never the host filesystem, and
+		// is forbidden entirely for untrusted content. Markdown.file is serialized
+		// and settable from author-controlled widget JSON; reading it with
+		// os.ReadFile on the host FS would be an arbitrary-file-read primitive once
+		// Explore renders untrusted widgets (e.g. {"file":"/etc/passwd"}). See
+		// docs/2026-07-21-dynamic-widget-dashboard-ui.md Phase-2 finding 1.
+		if ctx.UntrustedContent {
+			return nil, fmt.Errorf("markdown: File() is not permitted for untrusted content; use inline Content()")
+		}
+		fsys := ctx.Deps.FileSystem
+		if fsys == nil {
+			return nil, fmt.Errorf("markdown: File(%q) requires a project filesystem", m.file)
+		}
+		cleaned := path.Clean(strings.TrimPrefix(m.file, "./"))
+		if !fs.ValidPath(cleaned) {
+			return nil, fmt.Errorf("markdown: File(%q) is not a valid project-relative path", m.file)
+		}
+		markdownSource, err = fs.ReadFile(fsys, cleaned)
 		if err != nil {
-			return nil, fmt.Errorf("reading markdown file %s: %w", m.file, err)
+			return nil, fmt.Errorf("reading markdown file %s: %w", cleaned, err)
 		}
 	} else if m.content != "" {
 		markdownSource = []byte(m.content)

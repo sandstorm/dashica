@@ -1159,19 +1159,28 @@ Review of `lib/explore/*` plus the core adjustments of this slice
 `dashica-gen/descriptors.go`, `widget/formmodel.go`, markdown
 `UntrustedContent`). Findings ordered by severity; none fixed yet.
 
-1. `lib/dashboard/widget/markdown.go:80` ✋ blocker — **Server-side file read
+1. `lib/dashboard/widget/markdown.go:80` ✅ FIXED — **Server-side file read
    reachable from untrusted widget JSON**
    `Markdown.file` is serialized, deserializable, and even offered by the
    generated descriptor as a plain text editor field (`{Name: "file", Editor:
-   "text"}`) — while `BuildComponents` does `os.ReadFile(m.file)` on the **host
+   "text"}`) — while `BuildComponents` did `os.ReadFile(m.file)` on the **host
    filesystem** (not projectFS). Not exploitable in Phase 2 (preview only
    dispatches query handlers; markdown has none), but the moment Phase 3/6
-   renders untrusted widgets, this is an arbitrary-file-read-and-display
-   primitive (`{"type":"markdown","props":{"file":"/etc/passwd"}}`). Fix before
-   Phase 3: skip `file` for serialization (`dashica-gen:"skip"` + non-zero-skip
-   guard from Phase-1 finding 2), or resolve it against projectFS and refuse it
-   when `ctx.UntrustedContent`. Same sweep: audit all widget fields for other
-   host-FS/ambient-authority values before render-of-untrusted lands.
+   renders untrusted widgets, this was an arbitrary-file-read-and-display
+   primitive (`{"type":"markdown","props":{"file":"/etc/passwd"}}`).
+   - Fix (option b): `BuildComponents` now (1) **refuses `File()` entirely when
+   `ctx.UntrustedContent`** (Explore-authored markdown may only use inline
+   `Content()`), and (2) for trusted content resolves the path against
+   `ctx.Deps.FileSystem` (projectFS) via `fs.ReadFile` with an `fs.ValidPath`
+   check — the host filesystem is no longer reachable at all; absolute/`..`
+   paths are refused. `os` import dropped.
+   - Tests: `markdown_test.go` — `TestMarkdown_File` (projectFS via `fstest.MapFS`),
+   `TestMarkdown_FileRejectedForUntrustedContent`, `TestMarkdown_FileRejectsHostAbsolutePath`.
+   - Left as-is: `file` still serializes (round-trip preserved, now safe) and the
+   descriptor still lists `file` as an editor field — a UX nicety to hide/disable
+   for untrusted widgets later, not a security boundary. Same sweep still open:
+   audit other widget fields for host-FS/ambient-authority values before
+   render-of-untrusted lands.
 
 2. `lib/dashboard/rendering/rendering_context.go:31` ⚠ should-fix — **Fail-open
    trust default (define errors out of existence)**
@@ -1416,7 +1425,11 @@ slot-aware pickers and the time-strip-in-preview all multiply derived state
 them on manual orchestration will reproduce the same stale-state findings a
 third time. Order: markdown-file blocker → reactive core → UX plan.
 
-### UX plan — full-screen editor + visible data model (2026-07-22, not implemented)
+### UX plan — full-screen editor + visible data model (2026-07-22)
+
+**Status: (1) DONE (prior session); (2) + (3) DONE (2026-07-22, this session) —
+not yet built/E2E'd. (4) polish still open.** Implementation notes below each
+part.
 
 The screenshot review shows the structure is right (tree / preview / inspector)
 but the editor neither owns the screen nor teaches the data. Plan, in priority
@@ -1508,4 +1521,162 @@ make sense".) The kind dropdown currently exposes serializer vocabulary
 
 Order: (1) is a prerequisite for (2) (the drawer must be visible to be useful);
 (3) is the biggest comprehension win per line of code; (4) is cheap and can ride
-along. Review finding 1 (markdown file read) goes before all of it. 
+along. Review finding 1 (markdown file read) goes before all of it.
+
+**Implementation notes — (2) + (3), 2026-07-22 (this session), not yet built/E2E'd.**
+
+Backend (Go, tests green):
+- **Column classes** (`lib/clickhouse/introspect_schema.go`): `Column` gains
+  `Class string` (`"temporal"|"categorical"|"continuous"|""`); `ClassifyColumnType`
+  is the single home for the ClickHouse-type→class mapping (unwraps
+  `Nullable`/`LowCardinality`; `Date*`→temporal, `Int/UInt/Float/Decimal`→
+  continuous, `String/FixedString/Enum/UUID/IPv*/Bool`→categorical, else `""`).
+  Returned per column in `/api/schema`. Unit test `introspect_schema_test.go`.
+- **Field-kind intent vocabulary** (`lib/explore/formmodel.go`): `/api/formmodel`
+  now also returns `fieldKinds` — `{kind,label,requiresColumn,columnClass,advanced}`
+  per sql field kind (autoBucket="Time bucket (automatic)"/temporal,
+  count="Row count", enum="Column (as category)"/categorical,
+  expr="Custom SQL expression"/advanced). Labels + slot metadata live in Go, so
+  the client speaks *intent* while Go stays source of truth. `formmodel_test.go`
+  extended.
+
+Frontend (not built/E2E'd — user runs frontendBuild + browser):
+- **Field picker teaches intent** (`controls.ts fieldControl`): kind dropdown uses
+  the served labels (not `autoBucket`/`expr`); a required-but-empty picker
+  auto-selects its default kind (X→Time bucket, Y→Row count) so intent shows
+  before a column is picked; custom-expression + alias hidden behind an
+  **Advanced** toggle. Column completion is now **class-aware**
+  (`attachColumnCompletion(input, ctx, preferredClass)`): preferred-class columns
+  sort first, wrong-class demoted (not hidden), every option badged
+  (⏱/🏷/#) + type in its label.
+- **Golden path** (`formRenderer.ts` + `controls.ts seedRequiredFields`): choosing
+  a table seeds required-empty pickers (X=auto-bucket on first temporal column,
+  Y=row count) and rebuilds **only** the options section (query section keeps
+  focus) — "pick a table = a rendering chart". `ctx.onTableChosen` is the single
+  hook; it never clobbers user-set values.
+- **Column reference** (`controls.ts columnReference`): collapsible `<details>`
+  under the table input listing badge+name+type; clicking a column inserts its
+  name at the cursor of the last-focused WHERE/expression input
+  (module-level `lastSqlInput`).
+- **Data tab** (`editor.ts buildDataTab`): first/default drawer tab. Left =
+  columns pane (badge/name/type/comment from the already-loaded `/api/schema`;
+  categorical columns get a class-appropriate **values** button →
+  `/api/values`). Right = live **sample rows** via a synthetic
+  `{type:"table", props:{sql:{kind:"table",table}, limit:50}}` envelope pushed
+  through the existing `mountPreview` (preview/render + preview/query) — zero new
+  backend, respects time range + filters. The drawer effect reads only the
+  selected widget's query *table* reactively, so it refreshes on table change but
+  not on unrelated prop edits; the sample preview is torn down on every drawer
+  rebuild.
+- CSS: badges, advanced toggle, column reference, Data-tab two-pane grid + values
+  list (`explore.css`).
+
+Still open (unchanged by this session): review finding 1 (markdown `file`
+`os.ReadFile` via `/api/preview/render`) — must land before any untrusted
+render; (2)/(3) do not render untrusted markdown (Data tab = synthetic table
+widget; pickers = pure UI) so they were not gated on it. Frontend review #3
+(`seed()` duplicates Go constructor SQL text — `count(*)`, `::String`) survives:
+this session kept the existing wire behavior rather than widening scope; fix via
+semantic wire kinds when touched. Continuous-column min/max/quantiles affordance
+(doc's alternative to top-values) not built — only categorical values offered.
+UX plan (4) polish (persistent labels, "Series & faceting" grouping, friendly
+empty states) still open.
+
+### Proposal — Arrow-incompatible ClickHouse types, handled Go-side (2026-07-22, not implemented)
+
+**Problem.** ClickHouse cannot serialize its `JSON` / `Object('json')` /
+`Dynamic` / `Variant` column types into Arrow — Dashica's wire format for all
+chart data. Any query whose *result* contains such a column fails
+(`DB::Exception: The type 'JSON' of a column 'event_original' is not supported
+for conversion into Arrow`). `full_logs.event_original` is exactly such a
+column, so every `SELECT *` over the main log table breaks.
+
+**Why the current fix is wrong.** The stop-gap lives in
+`frontend/explore/editor.ts` (`sampleQuery()`): the *client* reads column types
+from `/api/schema` and assembles a `SELECT * REPLACE(toString(col) AS col, …)`
+SQL expression into the wire format. Three layering violations at once —
+SQL text generated in TypeScript (violates "kinds on the wire, SQL text only
+in Go"), schema knowledge duplicated client-side, and Arrow (a *transport*
+detail) leaking into UI code. And it only fixes the Data tab: a user-built
+table widget, a compiled dashboard's `SELECT *`, or any raw/.sql query over a
+JSON column still errors.
+
+**Options considered.**
+
+| Option | Verdict |
+|---|---|
+| Client-side REPLACE from schema (current stop-gap) | Rejected — layering (above), covers one call site of many. |
+| ClickHouse output setting | Does not exist — CH has no Arrow serializer for these types at all. |
+| Table widget injects REPLACE at build time (schema-aware widget) | Rejected — widgets/SqlBuilder are deliberately DB-blind; and raw/.sql queries stay broken. |
+| Different transport format (JSON) for affected queries | Rejected — bifurcates the frontend decode path (everything consumes Arrow). |
+| **Transport-level rewrite in `lib/clickhouse` (chosen)** | Arrow is this layer's concern; fixes every caller — compiled, dynamic, Data tab, raw SQL — with zero widget/frontend knowledge. |
+
+**Chosen design: DESCRIBE + wrap, inside the ClickHouse client.**
+`DESCRIBE (<query>)` returns the *result* columns and types of an arbitrary
+query without executing it. In `Client.QueryToHandler` (the only Arrow path),
+before sending the real query:
+
+```go
+// lib/clickhouse/arrow_compat.go
+// ensureArrowCompatible rewrites a query whose result contains columns that
+// ClickHouse cannot serialize to Arrow (JSON/Object/Dynamic/Variant), by
+// wrapping it and casting exactly those columns to String in place:
+//   SELECT * REPLACE(toString(`c1`) AS `c1`, ...) FROM ( <original query> )
+// All other columns keep their native types. No-op when Format != Arrow or
+// no such column is present.
+func (c *Client) ensureArrowCompatible(ctx context.Context, sql string, opts QueryOptions) (string, error) {
+    if opts.Format != "Arrow" { return sql, nil }
+    cols, err := c.describeQuery(ctx, sql, opts) // DESCRIBE (<sql>), same params/settings, TSV
+    // ... filter cols whose type matches (?i)\b(JSON|Object|Dynamic|Variant)\b
+    // ... none → return sql; some → build the REPLACE wrap, return
+}
+```
+
+Details:
+- **Trigger**: `Format == "Arrow"` only — JSON/debug/alerting paths untouched.
+- **Detection**: on the query *result* (DESCRIBE of the built SQL, after
+  filter/placeholder substitution) — works uniformly for `SqlQuery`, `SqlFile`
+  and `SqlString`; no SQL parsing anywhere.
+- **Rewrite**: `* REPLACE(...)` preserves column names, order and all
+  non-affected types (numbers stay numbers for charts). Backtick-escape column
+  names.
+- **Cost**: one DESCRIBE round-trip per query execution (~ms, no data read) —
+  negligible next to the actual query. No caching: simpler, and never stale.
+  Add one only if profiling ever shows the DESCRIBE mattering.
+- **Params**: DESCRIBE receives the same `{param:Type}` parameters as the real
+  query — parameterized queries describe fine.
+
+**Must-test risk: row order through the wrap.** An outer `SELECT … FROM
+(subquery)` has no ORDER BY of its own; ClickHouse preserves the subquery's
+order in practice for a plain pass-through, but it is not contractually
+guaranteed. The e2e test must cover an ORDER BY + `WITH FILL` query over a
+JSON-column table. Contingency if order is ever lost: apply
+`SETTINGS max_threads=1` to wrapped queries only (they are the exception, not
+the rule).
+
+**Cleanup**: revert `sampleQuery()` in `editor.ts` to the plain
+`{kind: 'table', table}` envelope — the transport layer now owns the concern.
+*Tests*: unit (detection regex, wrap SQL, cache); e2e against the dev
+ClickHouse: table widget + Data-tab sample over `full_logs`
+(`event_original JSON`), plus the ORDER BY/WITH FILL ordering check above.
+
+### UX note — parameter widgets do not belong in the add-widget list (2026-07-22)
+
+"Text Input" and "Checkbox Group" currently appear in Explore's add-widget
+dropdown. They are *dashboard parameter* widgets — they render an input bound
+to `$store.urlState.widgetParams[name]`, which only does anything when some
+*other* widget's query references `{name:String}`. Standing alone in Explore
+they produce a lone input that affects nothing — justified confusion.
+
+They must stay **registered/serializable** (compiled dashboards use them, and
+"Open in Explore" must round-trip them), but the editor should treat them as a
+separate category:
+- descriptor gains a `category: "chart" | "parameter" | "container"` field
+  (emitted by dashica-gen from a per-widget registry hint — one line per
+  widget, next to `Register(...)`);
+- the add-widget dropdown groups them under "Parameters" with help text
+  ("provides a `{name:String}` query parameter for other widgets"), or hides
+  them entirely until a later phase that also teaches the query section to
+  *reference* parameters — hiding is the honest v1 (recommended);
+- same mechanism sorts the container widgets (grid, collapsibleGroup — already
+  stubbed in the inspector) out of the flat "chart" list. 
