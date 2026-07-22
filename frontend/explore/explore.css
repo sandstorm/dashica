@@ -83,7 +83,10 @@
     cursor: pointer;
 }
 .explore-tree__item.is-selected { background: var(--color-primary, #3b82f6); color: var(--color-primary-content, #fff); }
-.explore-tree__item.is-drop-target { box-shadow: inset 0 2px 0 0 var(--color-primary, #3b82f6); }
+/* Drop indicators show exactly where the drop lands: a line at the row's top
+   (insert before) or bottom (insert after), or a box (drop inside a container).*/
+.explore-tree__item.is-drop-before { box-shadow: inset 0 2px 0 0 var(--color-primary, #3b82f6); }
+.explore-tree__item.is-drop-after { box-shadow: inset 0 -2px 0 0 var(--color-primary, #3b82f6); }
 .explore-tree__grip { cursor: grab; opacity: 0.4; font-size: 0.8rem; user-select: none; }
 .explore-tree__item:hover .explore-tree__grip { opacity: 0.7; }
 .explore-tree__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -98,10 +101,10 @@
     border-bottom-left-radius: 0;
 }
 
-/* container rows (grid / group) — a valid drop-into target; the drop highlight
-   frames the whole row rather than the top-edge bar used for reorder. */
+/* container rows (grid / group) — a valid drop-into target; dropping here nests
+   the widget inside, so the indicator frames the whole row. */
 .explore-tree__item.is-container > .explore-tree__name { font-weight: 600; }
-.explore-tree__item.is-container.is-drop-target {
+.explore-tree__item.is-drop-into {
     box-shadow: inset 0 0 0 2px var(--color-primary, #3b82f6);
     background: color-mix(in srgb, var(--color-primary, #3b82f6) 12%, transparent);
 }
