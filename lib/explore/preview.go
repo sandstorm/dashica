@@ -86,6 +86,47 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 	return nil
 }
 
+// handlePreviewRender renders a JSON-described widget's own component to HTML
+// and returns it. This is how the browser obtains the widget's chartType and
+// chartProps: it is the widget's real BuildComponents output (the exact Chart
+// element a compiled dashboard emits, with data-chart-type / data-chart-props
+// attributes), so there is no parallel chartProps logic to drift. The frontend
+// reads those attributes off the parsed DOM node (native HTML unescaping) and
+// fetches the data separately from preview/query.
+//
+// Body: one widget envelope. UntrustedContent is set (docs §6) because the
+// widget arrived from the browser and BuildComponents may render markdown.
+func (e *exploreImpl) handlePreviewRender(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != http.MethodPost {
+		return fmt.Errorf("preview render: method %s not allowed, use POST", r.Method)
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("reading request body: %w", err)
+	}
+	wd, err := widget.UnmarshalWidget(body)
+	if err != nil {
+		return fmt.Errorf("deserializing widget: %w", err)
+	}
+	if wd == nil {
+		return fmt.Errorf("preview render: empty widget")
+	}
+
+	childCtx := &rendering.DashboardContext{
+		MainMenu:          e.mainMenu,
+		CurrentHandlerUrl: e.baseURL + "/api/preview",
+		Deps:              e.deps,
+		UntrustedContent:  true,
+	}
+	comp, err := wd.BuildComponents(childCtx)
+	if err != nil {
+		return fmt.Errorf("building widget component: %w", err)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	return comp.Render(r.Context(), w)
+}
+
 // capturingCollector is an in-memory HandlerCollector: it records the handlers a
 // widget's CollectHandlers registers (keyed by full path) instead of mounting
 // them on a live mux, so the preview endpoint can invoke them directly.

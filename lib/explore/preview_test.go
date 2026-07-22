@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/a-h/templ"
+	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -42,9 +43,24 @@ func (n *nonInteractiveWidget) BuildComponents(*rendering.DashboardContext) (tem
 	return templ.NopComponent, nil
 }
 
+// chartEchoWidget renders a real Chart component so the render endpoint has a
+// data-chart-props attribute to hand back — the mechanism the frontend uses to
+// obtain chartProps without a ClickHouse connection.
+type chartEchoWidget struct{}
+
+func (c *chartEchoWidget) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
+	return widget_component.Chart("/base", "timeBar", `{"x":"time","y":"count"}`, 150), nil
+}
+
+func (c *chartEchoWidget) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
+	id := ctx.NextWidgetId()
+	return collector.Handle(id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+}
+
 func init() {
 	widget.Register("exploreTestEcho", func() widget.WidgetDefinition { return &echoWidget{} })
 	widget.Register("exploreTestNonInteractive", func() widget.WidgetDefinition { return &nonInteractiveWidget{} })
+	widget.Register("exploreTestChart", func() widget.WidgetDefinition { return &chartEchoWidget{} })
 }
 
 func newTestExplore() *exploreImpl {
@@ -118,6 +134,36 @@ func TestDispatchPreview_RejectsEmptyWidget(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/explore/api/preview/query", strings.NewReader(`null`))
 	if err := e.handlePreviewQuery(httptest.NewRecorder(), req); err == nil {
 		t.Fatal("expected error for null widget")
+	}
+}
+
+func TestPreviewRender_ReturnsWidgetMarkupWithChartProps(t *testing.T) {
+	e := newTestExplore()
+	req := httptest.NewRequest(http.MethodPost, "/explore/api/preview/render", strings.NewReader(`{"type":"exploreTestChart"}`))
+	rec := httptest.NewRecorder()
+
+	if err := e.handlePreviewRender(rec, req); err != nil {
+		t.Fatalf("handlePreviewRender: %v", err)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-chart-type="timeBar"`) {
+		t.Errorf("missing data-chart-type: %q", body)
+	}
+	// The chartProps JSON must be present (HTML-escaped by templ); the browser
+	// reads it off the DOM node's dataset.
+	if !strings.Contains(body, "data-chart-props") || !strings.Contains(body, "count") {
+		t.Errorf("missing data-chart-props: %q", body)
+	}
+}
+
+func TestPreviewRender_RejectsNonPost(t *testing.T) {
+	e := newTestExplore()
+	req := httptest.NewRequest(http.MethodGet, "/explore/api/preview/render", nil)
+	if err := e.handlePreviewRender(httptest.NewRecorder(), req); err == nil {
+		t.Fatal("expected error for GET")
 	}
 }
 

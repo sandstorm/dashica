@@ -46,6 +46,10 @@ type WidgetDescriptor struct {
 	// HasQuery is true when the widget has a base query (its SqlQueryable field),
 	// which the editor renders as a dedicated query section rather than a field.
 	HasQuery bool `json:"hasQuery"`
+	// QueryKey is the JSON wire key of that SqlQueryable field (the Go field
+	// name, e.g. "sql"). The editor writes the base query under this key so it
+	// matches the generated serializer exactly. Empty when HasQuery is false.
+	QueryKey string `json:"queryKey,omitempty"`
 	// Fields are the editable options, in struct order (the query field excluded;
 	// see HasQuery).
 	Fields []FieldDescriptor `json:"fields"`

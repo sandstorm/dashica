@@ -11,7 +11,9 @@ import {table} from '../chart/table'
 import {alertOverview} from '../chart/alertOverview'
 import {query} from "./util/clickhouse-new";
 
-const charts = {
+// Exported so the Explore preview (frontend/explore) can render a widget from a
+// POST'd JSON envelope through the exact same renderers as compiled dashboards.
+export const charts = {
     timeBar,
     timeLine,
     barVertical,

@@ -1,0 +1,19 @@
+package explore
+
+// EditorShell is the static DOM scaffold the frontend `exploreEditor` Alpine
+// component (frontend/explore/editor.ts) populates. The data-explore attributes
+// name the panes it fills; data-base-url tells the frontend where the API lives.
+// All dynamic behaviour is client-side — this template only lays out the mount
+// points (Neos-style: tree left, live preview centre, inspector right, plus a
+// bottom drawer for Go code / JSON / SQL).
+templ EditorShell(baseURL string) {
+	<div x-data="exploreEditor" class="explore-editor" data-base-url={ baseURL }>
+		<div class="explore-toolbar" data-explore="toolbar"></div>
+		<div class="explore-body">
+			<aside class="explore-tree" data-explore="tree"></aside>
+			<section class="explore-preview" data-explore="preview"></section>
+			<aside class="explore-inspector" data-explore="inspector"></aside>
+		</div>
+		<div class="explore-drawer" data-explore="drawer"></div>
+	</div>
+}

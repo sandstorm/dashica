@@ -26,6 +26,7 @@ func TestCollectHandlers_RegistersAllRoutes(t *testing.T) {
 		"/explore",
 		"/explore/api/preview/query",
 		"/explore/api/preview/debug",
+		"/explore/api/preview/render",
 		"/explore/api/formmodel",
 		"/explore/api/schema",
 		"/explore/api/values",
@@ -38,9 +39,15 @@ func TestCollectHandlers_RegistersAllRoutes(t *testing.T) {
 }
 
 func TestEditorPage_ServesHTML(t *testing.T) {
-	e := newTestExplore()
+	mux := http.NewServeMux()
+	collector := handler_collector.NewValidatingCollector(mux, zerolog.Nop())
+	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/explore", MainMenu: &[]rendering.MenuGroup{}}
+	if err := New().CollectHandlers(ctx, collector.Nested("/explore")); err != nil {
+		t.Fatalf("CollectHandlers: %v", err)
+	}
+
 	rec := httptest.NewRecorder()
-	e.handleEditorPage(rec, httptest.NewRequest(http.MethodGet, "/explore", nil))
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/explore", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
@@ -48,7 +55,9 @@ func TestEditorPage_ServesHTML(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("Content-Type = %q, want text/html", ct)
 	}
-	if !strings.Contains(rec.Body.String(), "Dashica Explore") {
-		t.Errorf("body missing title: %q", rec.Body.String())
+	// The editor shell mounts the exploreEditor Alpine component; its presence
+	// proves the page rendered through the shared layout.
+	if !strings.Contains(rec.Body.String(), `x-data="exploreEditor"`) {
+		t.Errorf("body missing editor shell: %q", rec.Body.String())
 	}
 }

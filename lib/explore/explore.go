@@ -57,7 +57,7 @@ func (e *exploreImpl) CollectHandlers(ctx *rendering.DashboardContext, collector
 	e.deps = ctx.Deps
 	e.baseURL = ctx.CurrentHandlerUrl
 	e.mainMenu = ctx.MainMenu
-	return e.registerHandlers(collector)
+	return e.registerHandlers(ctx, collector)
 }
 
 var _ dashboard.Dashboard = (*exploreImpl)(nil)
