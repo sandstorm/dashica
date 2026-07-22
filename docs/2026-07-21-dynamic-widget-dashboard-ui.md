@@ -993,6 +993,59 @@ Form renderer + control set (4.4); widget tree; preview wiring through the exist
 *Tests:* browser e2e (Playwright/Chrome MCP per CLAUDE.md): build a timeBar via
 forms, see preview, see generated Go, share-link round-trip.
 
+Progress (updated 2026-07-21) — **chart-first vertical slice shipped** (scope
+chosen with the user: single chart widgets, flat widget list; grid designer =
+Phase 7, Go-code tab = Phase 4; SQL inputs via `<input>`+`<datalist>`, CodeMirror
+deferred to Phase 4):
+
+- [x] **Editor page** (`lib/explore/editor.templ` → `EditorShell(baseURL)`;
+  `handlers.go` renders it via `layout.DefaultPage.Fn` with the search bar
+  visible so its time range drives the preview). Replaces the Phase-2
+  placeholder. Real templ (compiled), not `templ.Raw`.
+- [x] **`preview/render` endpoint** (`preview.go`): POST widget JSON → the
+  widget's own `BuildComponents` HTML. This is how the browser gets chartType +
+  chartProps — it reads the `data-chart-*` attributes off the parsed DOM node
+  (native HTML unescaping), so there is **no server-side attribute scraping and
+  no parallel chartProps logic**. `UntrustedContent` set. DB-free test asserts
+  the markup carries `data-chart-props`.
+- [x] **Frontend `frontend/explore/`** (imperative DOM — the CSP Alpine build
+  forbids inline expressions; Alpine provides only the component lifecycle +
+  urlState store):
+    - `editor.ts` — `exploreEditor` Alpine component: loads formmodel + schema,
+      owns the dashboard JSON model, three panes (tree / preview / inspector) +
+      bottom drawer (Go code / JSON / SQL). localStorage autosave +
+      base64-hash share link. Widget add / select / reorder / delete (flat list).
+      Editable JSON power-user tab (applies live). SQL/debug tab hits
+      `preview/debug`.
+    - `formRenderer.ts` — generic: walks the descriptor, one control per field,
+      query section on top.
+    - `controls.ts` — control set: text/int/bool/select, field picker
+      (autoBucket/count/enum/expr composite), query section (table + WHERE list /
+      raw SQL), colorScale, keyValue, stringList, group. Column/table/value
+      autocomplete via `<datalist>` from `/api/schema`.
+    - `preview.ts` — POST-based preview: `preview/render` for props+type,
+      `preview/query` for data, renders through the **exact** compiled `charts`
+      renderers (now exported from `components/chart.ts`). Non-chart widgets fall
+      back to their static server-rendered markup. Per-widget abortable refetch;
+      debounced re-query on edit; re-query all on time-range change.
+    - `explore.css` — Neos-style three-pane layout, theme-aware (daisyUI vars).
+    - wired into `frontend/index.js` (`Alpine.data('exploreEditor', …)` + css).
+- [x] **Wired into `main.go`** — both build variants (`register_sandstorm.go`,
+  `register_solarwatt.go`) and the dev-server, as an "Explore" group at
+  `/explore` (pure builder, no persistence). Both app tags + dev-server build.
+- [x] **Pre-existing Phase-2 regression fixed:** the interface shrink (Dashboard
+  = Title+CollectHandlers) had left the root app's ~35 dashboard factories
+  returning `dashboard.Dashboard` while `register_*.go` calls `.WithTitle(...)`
+  (now only on `*Builder`) — the whole app failed to compile. Changed those
+  factories to return `*dashboard.Builder`.
+- Go: `go vet ./...` clean; `lib/explore` + `lib/dashboard` tests green; both app
+  build tags + dev-server compile.
+- NOT yet done (deferred within Phase 3 / to later phases): whole-dashboard
+  multi-widget preview polish, nested grid/group children editing (tree +
+  designer, Phase 7), Go-code tab content (Phase 4), CodeMirror, browser e2e.
+  **Frontend not bundled/tested in-browser** — user runs the frontend build
+  (`node frontendBuild.mjs`) + `mise r watch`, then E2E.
+
 **Phase 4 — Go code generation.**
 `gocode.go`; golden tests; CI compile check; `/api/gocode`.
 
@@ -1098,3 +1151,210 @@ and layout packages are tidy. The dominant theme is **silent lossiness at the
 edges** — findings 1–3 are all "data vanishes without an error" in different
 places; fixing them establishes the invariant the whole Explore feature rests on:
 *serialization either round-trips faithfully or fails loudly.*
+
+### Code review findings — Phase 2 slice (`lib/explore` runtime, 2026-07-21, unfixed)
+
+Review of `lib/explore/*` plus the core adjustments of this slice
+(`dashboard.go` interface shrink, `introspect_schema.go` columns,
+`dashica-gen/descriptors.go`, `widget/formmodel.go`, markdown
+`UntrustedContent`). Findings ordered by severity; none fixed yet.
+
+1. `lib/dashboard/widget/markdown.go:80` ✋ blocker — **Server-side file read
+   reachable from untrusted widget JSON**
+   `Markdown.file` is serialized, deserializable, and even offered by the
+   generated descriptor as a plain text editor field (`{Name: "file", Editor:
+   "text"}`) — while `BuildComponents` does `os.ReadFile(m.file)` on the **host
+   filesystem** (not projectFS). Not exploitable in Phase 2 (preview only
+   dispatches query handlers; markdown has none), but the moment Phase 3/6
+   renders untrusted widgets, this is an arbitrary-file-read-and-display
+   primitive (`{"type":"markdown","props":{"file":"/etc/passwd"}}`). Fix before
+   Phase 3: skip `file` for serialization (`dashica-gen:"skip"` + non-zero-skip
+   guard from Phase-1 finding 2), or resolve it against projectFS and refuse it
+   when `ctx.UntrustedContent`. Same sweep: audit all widget fields for other
+   host-FS/ambient-authority values before render-of-untrusted lands.
+
+2. `lib/dashboard/rendering/rendering_context.go:31` ⚠ should-fix — **Fail-open
+   trust default (define errors out of existence)**
+   `UntrustedContent bool` means the *zero value is trusted*: any future Explore
+   code path that forgets to set the flag renders untrusted markdown with raw
+   HTML — the documented invariant is enforced by convention only. Compiled
+   dashboards construct their context in exactly one place (`dashica.go`
+   `RegisterDashboard`), so inverting the flag (`TrustedContent`, zero value =
+   untrusted, set `true` at that single site) makes forgetting fail safe instead
+   of fail open. Cheap now, painful after more call sites exist.
+
+3. `lib/explore/preview.go:124` ⚠ should-fix — **Interface that lies
+   (nondeterminism)**
+   `findBySuffix` iterates a Go map — random order — but the comment claims the
+   first match is "deterministically enough". A container widget (Grid *is* an
+   `InteractiveWidget`) registers several `/query` handlers, so previewing one
+   returns a random child's data per request. Fix: error when more than one
+   handler matches ("preview accepts a single leaf widget"), or dispatch by
+   explicit widget id; delete the comment's claim either way.
+
+4. `lib/explore/values.go:47` ⚠ should-fix — **Doc/contract mismatch, unbounded
+   scan**
+   §4.3 promises values are "`LIMIT`ed, **time-bounded**"; the implementation
+   scans the entire table (`GROUP BY` over all rows, no time predicate) — on the
+   big log tables this is an expensive full-column scan fired by autocomplete.
+   Fix: bound it (e.g. `WHERE timestamp > now() - INTERVAL 7 DAY` when the table
+   has a `timestamp` column — the schema introspection knows) and/or cache per
+   (table, column).
+
+5. `lib/clickhouse/introspect_schema.go:15` ⚠ should-fix — **Special-purpose
+   policy inside the general-purpose layer** (pre-existing, now user-facing)
+   `tableListQuery` hardcodes Sandstorm's table-name prefixes (`full_%`, `mv_%`,
+   `proapp_%`, `temp_%`) inside the generic library. Until now this only fed the
+   search-bar sidebar; with Explore it decides **which tables the table picker
+   offers at all** — silently incomplete for any project with other names. Fix:
+   make the filter configurable (dashica_config or an option), defaulting to the
+   current list.
+
+6. `lib/explore/handlers.go:42` 💡 suggestion — **Error semantics**
+   `apiHandler.asHTTP` maps every error to 500 — including wrong method (405),
+   malformed widget JSON, and missing query args (400). Matches the compiled
+   widget endpoints' style, but the Phase 3 editor will want to distinguish
+   "your input is invalid" (show inline) from "server broke" (show toast);
+   a typed client-error return now is cheaper than retrofitting.
+
+7. `lib/explore/schema.go:14` / `values.go:42` 💡 suggestion — **`"default"`
+   server hardcoded**
+   Queries can target other ClickHouse servers (`sql.OnDatabase`), but schema and
+   values autocomplete only ever describe `default` — the editor cannot offer
+   pickers for widgets on another database. Plan a `?database=` parameter for
+   both endpoints (validated against the configured client names).
+
+8. `lib/clickhouse/introspect_schema.go:111` 💡 suggestion — **Pre-existing
+   oddities newly load-bearing**
+   (a) The common-columns condition `columnsPerTable[column] == nil` indexes a
+   map keyed by *table* with a *column* name — likely a long-standing accident
+   that only excludes columns sharing a table's name; worth a deliberate look
+   now that Explore consumes this data. (b) `introspectedSchemaCached` never
+   invalidates, so the editor's pickers go stale after any `ALTER TABLE` until
+   process restart — consider a TTL.
+
+9. Docs/comments 💡 suggestion — **Phase-number drift**
+   The doc renumbered phases (editor UI = Phase 3, gocode = Phase 4), but
+   `explore.go`/`handlers.go` comments still say "Phase 4 editor" / "Phase 3
+   preview", and the Phase-2 promised DB-backed preview-vs-compiled e2e is
+   honestly marked open in the checklist but easy to lose — carry it into the
+   Phase 3 test list explicitly.
+
+**Summary:** the runtime slice is architecturally sound — the
+capturing-collector replay in `preview.go` is the standout: previews run the
+*identical* compiled query path instead of a parallel engine, which is exactly
+what the design demanded. The theme this round is **trust seams**: findings 1–2
+are both "untrusted content meets ambient authority with a fail-open default",
+and they must be closed before any phase that renders untrusted widgets.
+Tackle 1 and 2 together (one trust sweep), then 3–4 before the editor makes
+preview and autocomplete hot paths.
+
+### Code review findings — Explore frontend TS (`frontend/explore/`, 2026-07-21, unfixed)
+
+Review of `editor.ts`, `controls.ts`, `formRenderer.ts`, `preview.ts` — with the
+explicit question: *is this idiomatic Alpine, and how does it get simpler and
+more explicit?*
+
+**Architectural answer first: it is not idiomatic Alpine, and it should not try
+to become idiomatic Alpine.** The code is a manual-DOM application inside an
+Alpine shell. That is partly forced — the CSP build forbids expressions with
+arguments (`@click="remove(w.id)"` is illegal), and a *recursive, schema-driven*
+form cannot reasonably be expressed in Alpine templates at all — so the
+imperative approach is right. What is wrong is the **half-and-half**: Alpine
+deep-proxies `this.state` (cost) while nothing renders reactively from it
+(no benefit), and every mutation must hand-maintain its own list of
+`_renderTree()/_renderInspector()/_renderPreview()/_renderDrawer()` calls.
+The simplification direction is *less* Alpine, not more.
+
+1. `frontend/explore/preview.ts:71` ✋ blocker — **XSS via share-link state**
+   `setMessage(...)` assigns `innerHTML` with `envelope.type` interpolated
+   *unescaped* ("Live preview for `<code>${envelope.type}</code>`"). The type
+   comes from editor state, which is attacker-controllable through the share
+   URL (`#s=<base64 state>`) and the JSON tab — a crafted share link executes
+   script in the victim's Dashica origin. `escapeHtml` exists in the same file
+   and is used for error messages, just not here. Fix: escape it (or build the
+   message with `textContent`); sweep every `innerHTML` assignment for
+   state-derived values.
+
+2. `frontend/explore/editor.ts:195` ✋ blocker — **Change amplification in the
+   render plumbing**
+   Each of `_addWidget`/`_delete`/`_move`/`_select`/JSON-tab-apply calls its own
+   hand-picked subset of the four `_render*` methods — and the subsets are
+   already wrong: `_select` skips `_renderPreview`, so clicking a widget in the
+   tree leaves the preview card's `is-selected` highlight stale; `_move` skips
+   `_renderDrawer`, so the JSON tab shows the old order. Every future mutation
+   re-decides this. Fix: one explicit pipeline — `update(mutate: () => void)`
+   that runs the mutation, `_save()`, and a single `render()` re-drawing all
+   panes from state (at 4 panes / <50 widgets this is trivially fast; preview
+   can keep per-widget controllers keyed by id to avoid re-fetching, as
+   `_renderPreview` already does).
+
+3. `frontend/explore/editor.ts:29` ⚠ should-fix — **Two half-used frameworks
+   (obvious design)**
+   Alpine's role is only: component registration, `$store.urlState`, one
+   `Alpine.effect` whose body reads values purely to establish dependency
+   tracking (`JSON.stringify(this.$store.urlState.widgetParams)` — obscure).
+   Meanwhile the whole editor state sits inside Alpine's deep proxy, including
+   non-UI objects (`_previews` controllers, DOM element references). Fix: make
+   the editor a plain TS class/module with explicit state; keep Alpine only at
+   the boundary (register the component; subscribe to urlState changes via one
+   clearly-commented effect that calls `editor.onFiltersChanged()`). Non-UI
+   state lives in the class, not in reactive data. Combined with finding 2 this
+   makes the data flow one-directional and fully explicit:
+   `event → update() → save() + render()`.
+
+4. `frontend/explore/controls.ts:212` ⚠ should-fix — **Server constructor
+   knowledge duplicated in the client (information leakage)**
+   `seed()` re-implements the Go `sql` constructors: `count(*)` (with alias
+   `count` where Go's `sql.Count()` uses `cnt`), the `::String` cast of
+   `sql.Enum` (also string-stripped back off for display at line 259), and
+   autoBucket's `alias: 'time'`. When a constructor changes, the client
+   silently drifts. Fix: make the wire format semantic instead — `kind:"enum"`
+   carries `column`, and `sql.UnmarshalField` builds the definition via the
+   real `Enum()` constructor (same for count defaults); alternatively serve
+   per-kind seed objects in the formmodel response. The client should know
+   *kinds*, never SQL text.
+
+5. `frontend/explore/editor.ts:347` 💡 suggestion — **Unvalidated state
+   swallow**
+   The JSON tab and the `#s=` hash `JSON.parse` straight into `this.state` with
+   no shape check — `{"widgets": null}` applies "successfully" and crashes the
+   next render. A 10-line validator (title string, widgets array of
+   {id,type,props}, known type names) turns garbage into an inline error
+   instead of a broken editor.
+
+6. `frontend/explore/editor.ts:81` 💡 suggestion — **Deprecated encoding trick,
+   no size guard**
+   `atob/btoa` + deprecated `escape`/`unescape` for the share URL; large
+   dashboards overflow practical URL length silently. The plan (§4.4) says
+   `lz-string` — adopt it when persistence matters, and cap/warn on URL length.
+
+7. `frontend/explore/controls.ts` 💡 suggestion — **createElement noise**
+   The `el()` helper is good; still, ~60 % of `controls.ts`/`editor.ts` lines
+   are DOM assembly and per-control `redraw()` bookkeeping. If this grows in
+   Phase 3 (grid designer, CodeMirror mounts), consider `lit-html` (~3 KB,
+   CSP-compatible, no framework): declarative templates + keyed re-render would
+   delete most `redraw()` functions and make finding 2's single `render()`
+   nearly free. Not worth it for the current size alone — decide when the grid
+   designer lands.
+
+    CAN WE USE html` for this??? ALREADXY IN HERE.
+
+8. Cross-check with plan 💡 — `controls.ts` deliberately ships
+   `<input>+<datalist>` instead of CodeMirror (documented deviation, fine) and
+   `children` editors are stubbed ("later phase") — both honestly labeled; carry
+   them as explicit Phase-3 items so the stubs don't fossilize.
+
+**Summary:** control set and preview controller are the right shape (one control
+per editor kind, per-widget abortable fetches — matches §4.4), and skipping
+idiomatic-Alpine for a schema-recursive form is the correct call. The two
+things to fix before Phase 3 builds on this: the share-link XSS (1) and the
+render plumbing (2+3) — collapse it to `event → update() → save() + render()`
+with Alpine demoted to a thin boundary. Finding 4 is the frontend twin of the
+Phase-1 "one source of truth" rule: kinds on the wire, SQL text only in Go.
+
+WHEN CHANGING TABLE IN QUERY SOURCE, INPUT EL DEFOCUSES (REDRAW MANUAL?)
+
+FIELD SELECT "autoBucket" DOES NOT REALLY MAKE SENSE???
+
+ERROR: deserializing widget: widget "barHorizontal": unmarshal props: barHorizontal: unknown field "query" 
