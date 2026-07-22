@@ -1277,15 +1277,6 @@ work builds on preview/render).
 
 Open findings:
 
-1. `frontend/explore/editor.ts:118` ⚠ should-fix — **No stored-state migration**
-   (explains the observed `barHorizontal: unknown field "query"` error: the old
-   client wrote `props.query`, the wire key is `sql`, and the strict server now
-   rejects the stale localStorage state on every preview until storage is
-   cleared by hand). `validateState` checks shape, not prop keys. Fix: version
-   the localStorage key (`…-state-v2`) and, after the formmodel loads, drop
-   unknown prop keys per widget against its descriptor (console warning).
-   Rule: the client tolerates old states; only the server is strict.
-
 2. `frontend/explore/editor.ts:371` ⚠ should-fix — **JSON-tab edits never
    refresh existing previews.** `renderPreview()` fetches only *new* cards
    (correct for select/move), and the JSON-apply path calls no
@@ -1351,6 +1342,76 @@ remains is edge-behavior (1, 2, 4, 5), the one recurring one-source-of-truth
 violation (3 — the only finding to survive two rounds unfixed; do it next),
 and cheap robustness/readability wins (6–9, with 7 = adopt `htl` as the
 answer to the doc's "can we use html`` for this?" note).
+
+### Frontend architecture revision — reactive dataflow (2026-07-22, proposed, not implemented)
+
+Question: would rebuilding the Explore UI as a reactive dataflow reduce
+complexity and bugs? **Yes — with eyes open about which bugs.** Look at the
+review history: stale selection highlight, stale JSON-tab previews, stale
+column datalists, forgotten persist calls, the update()/onEdit() dual pipeline
+itself. Every one is the same disease — *derived state (DOM, previews,
+storage) drifting from source state because a human had to remember what
+depends on what*. That is precisely the class of bug a reactive dataflow
+eliminates by construction. It does NOT help with the semantic findings
+(seed() duplication, state migration, commit semantics of the keyValue
+control) — those stay.
+
+**Key fact: no new framework is needed.** The CSP constraint only rules out
+Alpine *templates*. Alpine's reactive *engine* (`Alpine.reactive`,
+`Alpine.effect`, `Alpine.release` — it is @vue/reactivity underneath) is
+importable and usable headlessly from plain TS. The editor keeps its
+manual-DOM rendering, but re-rendering becomes *subscription* instead of
+*orchestration*:
+
+```ts
+const state = Alpine.reactive(loadState());          // single source of truth
+const ui    = Alpine.reactive({selectedId: null, drawerTab: 'data'});
+
+Alpine.effect(() => persistDebounced(JSON.stringify(state)));      // storage follows state
+Alpine.effect(() => renderTree(state.widgets, ui.selectedId));     // tree follows structure
+Alpine.effect(() => renderInspector(ui.selectedId, selectedType())); // see guardrail 1
+// one effect PER preview card, created when the widget mounts:
+Alpine.effect(() => { const body = JSON.stringify(widget.props);   // coarse dep tracking
+                      previewDebounced(widget.id, body); });
+```
+
+What this deletes:
+- the `update()` / `onEdit()` split and every judgment call about which panes
+  to redraw — mutations are just mutations, effects notice;
+- **`ControlCtx.onChange` and all ~30 call sites in `controls.ts`** — controls
+  simply write into the (reactive) props object; the per-widget preview effect
+  and the persist effect react. This is the single biggest simplification;
+- the JSON-tab staleness bug and the stale-datalist bug *as a category*
+  (datalist contents become a derived computation over `query.table`).
+
+Guardrails — the classic reactive traps, named up front:
+1. **The inspector effect must depend only on `(selectedId, widget.type)`**,
+   never on props values — otherwise typing rebuilds the form under the cursor
+   (the defocus bug, reborn reactively). Read props inside controls via
+   `Alpine.raw(...)`/untracked access. Controls remain imperative islands;
+   reactivity coordinates *between* panes, not inside a control.
+2. **Text inputs are written only when not focused** (JSON textarea, title
+   input): `if (document.activeElement !== ta) ta.value = ...`.
+3. **Coarse-grained preview deps on purpose**: `JSON.stringify(widget.props)`
+   tracks everything, debounced — correct-by-default beats clever partial
+   tracking here.
+4. **Effect lifecycle is explicit**: effects created per widget are kept in the
+   per-widget entry and `Alpine.release`d on widget removal — same place the
+   preview controller is destroyed today.
+5. Debugging shifts from "read the call chain" to "know what an effect
+   tracked" — mitigate by keeping ONE effect per pane/widget with a name
+   comment, never nested effects.
+
+Cost: a focused rewrite of `editor.ts` (the pane orchestration, ~1–2 days) and
+a mechanical simplification of `controls.ts` (delete onChange plumbing).
+`preview.ts`, `formRenderer.ts`, the server API and the wire format are
+untouched.
+
+**Recommendation: do it, and do it BEFORE the UX plan below.** The Data tab,
+slot-aware pickers and the time-strip-in-preview all multiply derived state
+(selected table → columns → classes → picker contents → sample rows); building
+them on manual orchestration will reproduce the same stale-state findings a
+third time. Order: markdown-file blocker → reactive core → UX plan.
 
 ### UX plan — full-screen editor + visible data model (2026-07-22, not implemented)
 
