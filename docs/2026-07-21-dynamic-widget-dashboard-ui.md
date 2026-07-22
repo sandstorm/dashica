@@ -1256,37 +1256,33 @@ preview-mode additions to `frontend/components/chart.ts`.
 
 **Architecture verdict (settled).** Not idiomatic Alpine — deliberately and
 correctly: the CSP Alpine build forbids expressions with arguments, and a
-recursive schema-driven form does not fit Alpine templates. The earlier
-review's demands are implemented: plain `Editor` class owns all state (no
-Alpine proxy), one-directional pipelines (`update() → save() + render()` for
-structure, `onEdit()` for value edits that must not steal input focus),
-`validateState` on JSON/hash input, XSS-safe `textContent` messaging, previews
-reconciled keyed-by-id. The preview design is the standout and is the pattern
-to protect: `/api/preview/render` returns the widget's **own server-rendered
-markup** and the real `chart` Alpine component takes over via
-`data-preview-base`/`data-preview-body` — chartProps, debug drawer and
-time-range reactivity all have exactly one implementation, shared with
-compiled dashboards.
+recursive schema-driven form does not fit Alpine templates. Since 2026-07-22 the
+editor runs on Alpine's reactive *engine* headlessly (`Alpine.reactive`/`effect`/
+`release`/`raw`): two reactive roots (`state`, `ui`) with named effects for each
+derived surface; the `update()`/`onEdit()` pipelines are gone — controls write
+into the reactive props proxy and effects react (see the reactive-dataflow section
+below). `validateState` on JSON/hash input and XSS-safe `textContent` messaging
+remain. The preview design is the standout and is the pattern to protect:
+`/api/preview/render` returns the widget's **own server-rendered markup** and the
+real `chart` Alpine component takes over via `data-preview-base`/`data-preview-body`
+— chartProps, debug drawer and time-range reactivity all have exactly one
+implementation, shared with compiled dashboards.
 
-Resolved from earlier rounds (verified in current code): share-link XSS ·
-render-plumbing change amplification · half-Alpine state · unvalidated state
-swallow · client-side chartProps assembly. Cross-reference, tracked in the
-Phase-2 backend list, not here: the markdown `file` `os.ReadFile` is **live**
-via `/api/preview/render` (backend finding; fix before any further frontend
-work builds on preview/render).
+Resolved (verified in current code): share-link XSS · render-plumbing change
+amplification · half-Alpine state · unvalidated state swallow · client-side
+chartProps assembly · **stale JSON-tab previews** (former #2 — `applyState` tears
+previews down so reconcile rebuilds them against the new widget objects) · **stale
+column datalists** (former #4 — `attachColumnCompletion` repopulates on input
+`focus`) · **`start()` failure mode** (former #6 — now try/catch → inline "Explore
+API unavailable" message). Cross-reference, tracked in the Phase-2 backend list,
+not here: the markdown `file` `os.ReadFile` is **live** via `/api/preview/render`
+(backend finding; fix before any further frontend work builds on preview/render).
 
 Open findings:
 
-2. `frontend/explore/editor.ts:371` ⚠ should-fix — **JSON-tab edits never
-   refresh existing previews.** `renderPreview()` fetches only *new* cards
-   (correct for select/move), and the JSON-apply path calls no
-   `refreshPreview` — so editing a widget's props in the JSON tab leaves its
-   chart showing the old query until the widget is touched via the inspector.
-   Fix: after a successful JSON apply, `refreshPreview` every widget (or diff
-   old/new props per id and refresh the changed ones).
-
-3. `frontend/explore/controls.ts:214` ⚠ should-fix — **`seed()` duplicates Go
-   constructor internals** (unchanged through two rounds): `count(*)` with
+3. `frontend/explore/controls.ts` (seed()) ⚠ should-fix — **`seed()` duplicates Go
+   constructor internals** (the one finding to survive every round; the reactive
+   rewrite does NOT touch it — semantic, not derived-state): `count(*)` with
    alias `count` where Go's `sql.Count()` uses `cnt`; the `::String` cast of
    `sql.Enum` built on write *and* stripped for display; `alias: 'time'`.
    When a constructor changes, the client silently drifts. Fix: semantic wire
@@ -1294,28 +1290,12 @@ Open findings:
    constructor) or per-kind seed objects served in the formmodel. The client
    should know *kinds*, never SQL text.
 
-4. `frontend/explore/controls.ts:67` ⚠ should-fix — **Column datalists go stale
-   when the table changes.** `columnDatalist` reads `ctx.getTable()` once at
-   build time; after the user switches the table, every already-rendered field
-   picker / WHERE row still completes against the *old* table's columns until
-   the inspector is rebuilt. (Related user report: typing in the table input
-   defocuses — the *current* source no longer rebuilds on input
-   (`controls.ts:420` comment), so if this still reproduces it is a stale
-   bundle; verify after a rebuild.) Fix without refocus problems: populate the
-   datalist's options lazily on the input's `focus` event instead of at build
-   time — always current, never rebuilds the input.
-
-5. `frontend/explore/controls.ts:174` 💡 suggestion — **keyValue control writes
-   phantom keys.** The value input writes `map[kIn.value]` *live* while the old
-   key is only deleted on the key input's `change` (blur). Editing a key and
-   then typing a value before blurring leaves both old and new keys in the map
-   — saved and previewed. Commit key+value atomically on blur/change instead of
+5. `frontend/explore/controls.ts` (keyValueControl) 💡 suggestion — **keyValue
+   control writes phantom keys.** The value input writes `map[kIn.value]` *live*
+   while the old key is only deleted on the key input's `change` (blur). Editing a
+   key and then typing a value before blurring leaves both old and new keys in the
+   map — saved and previewed. Commit key+value atomically on blur/change instead of
    value-writes-through-current-key-text.
-
-6. `frontend/explore/editor.ts:79` 💡 suggestion — **`start()` has no failure
-   mode.** If the formmodel fetch fails (server restart, 500), the editor
-   renders permanently empty panes with an unhandled rejection in the console.
-   Wrap in try/catch → inline "Explore API unavailable — retry" message.
 
 7. `frontend/explore/controls.ts:42` 💡 suggestion — **DOM assembly noise:
    use the `htl` `html` tag already in the bundle.** ~60 % of
@@ -1333,15 +1313,17 @@ Open findings:
    node) so an Alpine upgrade degrades to a small leak-free re-mount instead of
    breaking previews.
 
-9. `frontend/explore/editor.ts:143` 💡 suggestion — share-link codec still uses
-   deprecated `escape`/`unescape` + `btoa`, with no URL-length guard; move to
-   `lz-string` (per §4.4) and warn when the link exceeds ~2 kB.
+9. `frontend/explore/editor.ts` (shareUrl/loadState) 💡 suggestion — share-link
+   codec still uses deprecated `escape`/`unescape` + `btoa`, with no URL-length
+   guard; move to `lz-string` (per §4.4) and warn when the link exceeds ~2 kB.
 
-**Summary:** the architectural debt from the first round is paid off; what
-remains is edge-behavior (1, 2, 4, 5), the one recurring one-source-of-truth
-violation (3 — the only finding to survive two rounds unfixed; do it next),
-and cheap robustness/readability wins (6–9, with 7 = adopt `htl` as the
-answer to the doc's "can we use html`` for this?" note).
+**Summary:** the reactive-dataflow rewrite (below) closed the whole derived-state
+drift class — stale previews and stale datalists (former #2/#4) are gone by
+construction, and `start()` now fails visibly (#6). What remains: the one recurring
+one-source-of-truth violation (#3 — semantic, not derived-state, so the rewrite
+did NOT touch it; do it next), the keyValue commit semantics (#5), and cheap
+robustness/readability wins (#7 adopt `htl`, #8 `destroyTree` fallback, #9
+`lz-string` share links).
 
 ### Frontend architecture revision — reactive dataflow (2026-07-22, IMPLEMENTED — not yet built/E2E'd)
 
