@@ -1249,112 +1249,199 @@ and they must be closed before any phase that renders untrusted widgets.
 Tackle 1 and 2 together (one trust sweep), then 3–4 before the editor makes
 preview and autocomplete hot paths.
 
-### Code review findings — Explore frontend TS (`frontend/explore/`, 2026-07-21, unfixed)
+### Code review — Explore frontend (consolidated, 2026-07-22; supersedes the two earlier frontend review rounds)
 
-Review of `editor.ts`, `controls.ts`, `formRenderer.ts`, `preview.ts` — with the
-explicit question: *is this idiomatic Alpine, and how does it get simpler and
-more explicit?*
+Scope: `frontend/explore/{editor,controls,formRenderer,preview}.ts` + the
+preview-mode additions to `frontend/components/chart.ts`.
 
-**Architectural answer first: it is not idiomatic Alpine, and it should not try
-to become idiomatic Alpine.** The code is a manual-DOM application inside an
-Alpine shell. That is partly forced — the CSP build forbids expressions with
-arguments (`@click="remove(w.id)"` is illegal), and a *recursive, schema-driven*
-form cannot reasonably be expressed in Alpine templates at all — so the
-imperative approach is right. What is wrong is the **half-and-half**: Alpine
-deep-proxies `this.state` (cost) while nothing renders reactively from it
-(no benefit), and every mutation must hand-maintain its own list of
-`_renderTree()/_renderInspector()/_renderPreview()/_renderDrawer()` calls.
-The simplification direction is *less* Alpine, not more.
+**Architecture verdict (settled).** Not idiomatic Alpine — deliberately and
+correctly: the CSP Alpine build forbids expressions with arguments, and a
+recursive schema-driven form does not fit Alpine templates. The earlier
+review's demands are implemented: plain `Editor` class owns all state (no
+Alpine proxy), one-directional pipelines (`update() → save() + render()` for
+structure, `onEdit()` for value edits that must not steal input focus),
+`validateState` on JSON/hash input, XSS-safe `textContent` messaging, previews
+reconciled keyed-by-id. The preview design is the standout and is the pattern
+to protect: `/api/preview/render` returns the widget's **own server-rendered
+markup** and the real `chart` Alpine component takes over via
+`data-preview-base`/`data-preview-body` — chartProps, debug drawer and
+time-range reactivity all have exactly one implementation, shared with
+compiled dashboards.
 
-1. `frontend/explore/preview.ts:71` ✋ blocker — **XSS via share-link state**
-   `setMessage(...)` assigns `innerHTML` with `envelope.type` interpolated
-   *unescaped* ("Live preview for `<code>${envelope.type}</code>`"). The type
-   comes from editor state, which is attacker-controllable through the share
-   URL (`#s=<base64 state>`) and the JSON tab — a crafted share link executes
-   script in the victim's Dashica origin. `escapeHtml` exists in the same file
-   and is used for error messages, just not here. Fix: escape it (or build the
-   message with `textContent`); sweep every `innerHTML` assignment for
-   state-derived values.
+Resolved from earlier rounds (verified in current code): share-link XSS ·
+render-plumbing change amplification · half-Alpine state · unvalidated state
+swallow · client-side chartProps assembly. Cross-reference, tracked in the
+Phase-2 backend list, not here: the markdown `file` `os.ReadFile` is **live**
+via `/api/preview/render` (backend finding; fix before any further frontend
+work builds on preview/render).
 
-2. `frontend/explore/editor.ts:195` ✋ blocker — **Change amplification in the
-   render plumbing**
-   Each of `_addWidget`/`_delete`/`_move`/`_select`/JSON-tab-apply calls its own
-   hand-picked subset of the four `_render*` methods — and the subsets are
-   already wrong: `_select` skips `_renderPreview`, so clicking a widget in the
-   tree leaves the preview card's `is-selected` highlight stale; `_move` skips
-   `_renderDrawer`, so the JSON tab shows the old order. Every future mutation
-   re-decides this. Fix: one explicit pipeline — `update(mutate: () => void)`
-   that runs the mutation, `_save()`, and a single `render()` re-drawing all
-   panes from state (at 4 panes / <50 widgets this is trivially fast; preview
-   can keep per-widget controllers keyed by id to avoid re-fetching, as
-   `_renderPreview` already does).
+Open findings:
 
-3. `frontend/explore/editor.ts:29` ⚠ should-fix — **Two half-used frameworks
-   (obvious design)**
-   Alpine's role is only: component registration, `$store.urlState`, one
-   `Alpine.effect` whose body reads values purely to establish dependency
-   tracking (`JSON.stringify(this.$store.urlState.widgetParams)` — obscure).
-   Meanwhile the whole editor state sits inside Alpine's deep proxy, including
-   non-UI objects (`_previews` controllers, DOM element references). Fix: make
-   the editor a plain TS class/module with explicit state; keep Alpine only at
-   the boundary (register the component; subscribe to urlState changes via one
-   clearly-commented effect that calls `editor.onFiltersChanged()`). Non-UI
-   state lives in the class, not in reactive data. Combined with finding 2 this
-   makes the data flow one-directional and fully explicit:
-   `event → update() → save() + render()`.
+1. `frontend/explore/editor.ts:118` ⚠ should-fix — **No stored-state migration**
+   (explains the observed `barHorizontal: unknown field "query"` error: the old
+   client wrote `props.query`, the wire key is `sql`, and the strict server now
+   rejects the stale localStorage state on every preview until storage is
+   cleared by hand). `validateState` checks shape, not prop keys. Fix: version
+   the localStorage key (`…-state-v2`) and, after the formmodel loads, drop
+   unknown prop keys per widget against its descriptor (console warning).
+   Rule: the client tolerates old states; only the server is strict.
 
-4. `frontend/explore/controls.ts:212` ⚠ should-fix — **Server constructor
-   knowledge duplicated in the client (information leakage)**
-   `seed()` re-implements the Go `sql` constructors: `count(*)` (with alias
-   `count` where Go's `sql.Count()` uses `cnt`), the `::String` cast of
-   `sql.Enum` (also string-stripped back off for display at line 259), and
-   autoBucket's `alias: 'time'`. When a constructor changes, the client
-   silently drifts. Fix: make the wire format semantic instead — `kind:"enum"`
-   carries `column`, and `sql.UnmarshalField` builds the definition via the
-   real `Enum()` constructor (same for count defaults); alternatively serve
-   per-kind seed objects in the formmodel response. The client should know
-   *kinds*, never SQL text.
+2. `frontend/explore/editor.ts:371` ⚠ should-fix — **JSON-tab edits never
+   refresh existing previews.** `renderPreview()` fetches only *new* cards
+   (correct for select/move), and the JSON-apply path calls no
+   `refreshPreview` — so editing a widget's props in the JSON tab leaves its
+   chart showing the old query until the widget is touched via the inspector.
+   Fix: after a successful JSON apply, `refreshPreview` every widget (or diff
+   old/new props per id and refresh the changed ones).
 
-5. `frontend/explore/editor.ts:347` 💡 suggestion — **Unvalidated state
-   swallow**
-   The JSON tab and the `#s=` hash `JSON.parse` straight into `this.state` with
-   no shape check — `{"widgets": null}` applies "successfully" and crashes the
-   next render. A 10-line validator (title string, widgets array of
-   {id,type,props}, known type names) turns garbage into an inline error
-   instead of a broken editor.
+3. `frontend/explore/controls.ts:214` ⚠ should-fix — **`seed()` duplicates Go
+   constructor internals** (unchanged through two rounds): `count(*)` with
+   alias `count` where Go's `sql.Count()` uses `cnt`; the `::String` cast of
+   `sql.Enum` built on write *and* stripped for display; `alias: 'time'`.
+   When a constructor changes, the client silently drifts. Fix: semantic wire
+   kinds (`enum` carries `column`; `sql.UnmarshalField` calls the real
+   constructor) or per-kind seed objects served in the formmodel. The client
+   should know *kinds*, never SQL text.
 
-6. `frontend/explore/editor.ts:81` 💡 suggestion — **Deprecated encoding trick,
-   no size guard**
-   `atob/btoa` + deprecated `escape`/`unescape` for the share URL; large
-   dashboards overflow practical URL length silently. The plan (§4.4) says
-   `lz-string` — adopt it when persistence matters, and cap/warn on URL length.
+4. `frontend/explore/controls.ts:67` ⚠ should-fix — **Column datalists go stale
+   when the table changes.** `columnDatalist` reads `ctx.getTable()` once at
+   build time; after the user switches the table, every already-rendered field
+   picker / WHERE row still completes against the *old* table's columns until
+   the inspector is rebuilt. (Related user report: typing in the table input
+   defocuses — the *current* source no longer rebuilds on input
+   (`controls.ts:420` comment), so if this still reproduces it is a stale
+   bundle; verify after a rebuild.) Fix without refocus problems: populate the
+   datalist's options lazily on the input's `focus` event instead of at build
+   time — always current, never rebuilds the input.
 
-7. `frontend/explore/controls.ts` 💡 suggestion — **createElement noise**
-   The `el()` helper is good; still, ~60 % of `controls.ts`/`editor.ts` lines
-   are DOM assembly and per-control `redraw()` bookkeeping. If this grows in
-   Phase 3 (grid designer, CodeMirror mounts), consider `lit-html` (~3 KB,
-   CSP-compatible, no framework): declarative templates + keyed re-render would
-   delete most `redraw()` functions and make finding 2's single `render()`
-   nearly free. Not worth it for the current size alone — decide when the grid
-   designer lands.
+5. `frontend/explore/controls.ts:174` 💡 suggestion — **keyValue control writes
+   phantom keys.** The value input writes `map[kIn.value]` *live* while the old
+   key is only deleted on the key input's `change` (blur). Editing a key and
+   then typing a value before blurring leaves both old and new keys in the map
+   — saved and previewed. Commit key+value atomically on blur/change instead of
+   value-writes-through-current-key-text.
 
-    CAN WE USE html` for this??? ALREADXY IN HERE.
+6. `frontend/explore/editor.ts:79` 💡 suggestion — **`start()` has no failure
+   mode.** If the formmodel fetch fails (server restart, 500), the editor
+   renders permanently empty panes with an unhandled rejection in the console.
+   Wrap in try/catch → inline "Explore API unavailable — retry" message.
 
-8. Cross-check with plan 💡 — `controls.ts` deliberately ships
-   `<input>+<datalist>` instead of CodeMirror (documented deviation, fine) and
-   `children` editors are stubbed ("later phase") — both honestly labeled; carry
-   them as explicit Phase-3 items so the stubs don't fossilize.
+7. `frontend/explore/controls.ts:42` 💡 suggestion — **DOM assembly noise:
+   use the `htl` `html` tag already in the bundle.** ~60 % of
+   `controls.ts`/`editor.ts` is `createElement`/`append` boilerplate. The
+   codebase already depends on `htl` (Observable's Hypertext Literal —
+   `import {html} from "htl"`, used by `chart/table.ts` and `chart/stats.ts`):
+   auto-escaping tagged templates that return real DOM nodes and accept inline
+   event handlers (`<button onclick=${fn}>`), CSP-compatible, zero new
+   dependency. Adopting it for controls/toolbar/tree would roughly halve those
+   files. Note its limit: no keyed re-render, so the `redraw()` closures stay —
+   fine, they are small. (This replaces the earlier lit-html suggestion.)
 
-**Summary:** control set and preview controller are the right shape (one control
-per editor kind, per-widget abortable fetches — matches §4.4), and skipping
-idiomatic-Alpine for a schema-recursive form is the correct call. The two
-things to fix before Phase 3 builds on this: the share-link XSS (1) and the
-render plumbing (2+3) — collapse it to `event → update() → save() + render()`
-with Alpine demoted to a thin boundary. Finding 4 is the frontend twin of the
-Phase-1 "one source of truth" rule: kinds on the wire, SQL text only in Go.
+8. `frontend/explore/preview.ts:17` 💡 suggestion — `(Alpine as any)
+   .destroyTree` is a private API; add a graceful fallback (swap the container
+   node) so an Alpine upgrade degrades to a small leak-free re-mount instead of
+   breaking previews.
 
-WHEN CHANGING TABLE IN QUERY SOURCE, INPUT EL DEFOCUSES (REDRAW MANUAL?)
+9. `frontend/explore/editor.ts:143` 💡 suggestion — share-link codec still uses
+   deprecated `escape`/`unescape` + `btoa`, with no URL-length guard; move to
+   `lz-string` (per §4.4) and warn when the link exceeds ~2 kB.
 
-FIELD SELECT "autoBucket" DOES NOT REALLY MAKE SENSE???
+**Summary:** the architectural debt from the first round is paid off; what
+remains is edge-behavior (1, 2, 4, 5), the one recurring one-source-of-truth
+violation (3 — the only finding to survive two rounds unfixed; do it next),
+and cheap robustness/readability wins (6–9, with 7 = adopt `htl` as the
+answer to the doc's "can we use html`` for this?" note).
 
-ERROR: deserializing widget: widget "barHorizontal": unmarshal props: barHorizontal: unknown field "query" 
+### UX plan — full-screen editor + visible data model (2026-07-22, not implemented)
+
+The screenshot review shows the structure is right (tree / preview / inspector)
+but the editor neither owns the screen nor teaches the data. Plan, in priority
+order:
+
+**(1) Full-screen editor layout.** `editorPage` currently wraps `EditorShell`
+in `layout.DefaultPage`, so the dashboard sidebar, the search-dashboards box and
+the huge "Additional SQL Filters" textarea consume ~40 % of the viewport before
+the editor starts — and push the bottom drawer below the fold. Fix: a dedicated
+`layout.ExplorePage` (registered layout, name `"explorePage"`):
+- full-viewport CSS grid `toolbar / (tree | preview | inspector) / drawer`;
+  the page never scrolls, each pane scrolls itself;
+- no dashboard sidebar (a small "← Dashica" home link in the toolbar);
+- the time-range strip moves **inside the preview pane**, as its sticky header —
+  NOT into the global toolbar. Rationale: the time range (+ log scale + SQL
+  filter) is part of the *previewed dashboard's* state — it is exactly what the
+  search bar renders on a real dashboard page — so it belongs where its effect
+  is, above the widgets it re-queries. The editor toolbar stays editor-only
+  (title, layout, share). Compact form: range buttons + custom picker +
+  log-scale in one row, SQL filter collapsed behind a "filters" toggle. This
+  also makes the preview pane a truthful miniature of the final dashboard page;
+- drawer becomes a proper bottom sheet: tab bar always visible, content
+  collapsible, height draggable;
+- drawer tabs become **Data / Go code / JSON** — the "SQL / debug" tab is
+  **dropped**: since the preview rework, every preview chart is the real
+  `chart` component, whose wrench button already opens the standard debug
+  drawer (SQL + EXPLAIN via `preview/debug`); a second SQL surface is
+  redundant. `renderSqlTab` and its fetch go away.
+
+**(2) Make the data model visible.** Adopted idea: the drawer gets a **"Data"
+tab (first tab, default)** showing the *selected widget's* table:
+- **columns pane**: name / type / comment straight from the already-loaded
+  `/api/schema` response — no new endpoint;
+- **sample rows pane**: live data via a *synthetic table-widget envelope* —
+  `{type:"table", props:{sql:{kind:"table",table:<t>}, limit:50}}` POSTed
+  through the existing preview/render + preview/query path. Zero new backend;
+  the sample respects the current time range and filters by construction;
+- **per-column top values** on click (the `/api/values` endpoint exists) — which
+  doubles as a value picker for WHERE clauses and color mappings.
+Additionally, inspector-side: once a table is chosen, a collapsible column
+reference under the table input (name + type, click inserts the column into the
+focused where/expression input).
+
+**(3) Field picker teaches intent, not wire kinds.** (This answers the note
+previously at the end of this doc: "field select `autoBucket` does not really
+make sense".) The kind dropdown currently exposes serializer vocabulary
+(`autoBucket`/`count`/`enum`/`expr`). Plan:
+- human labels: "Time bucket (automatic)", "Row count", "Column (as category)",
+  "Custom SQL expression" — labels come from the formmodel so Go stays the
+  source of truth;
+- for the timestamped X field there is usually **no choice to make**: default
+  to auto-bucket on the table's first DateTime column the moment a table is
+  picked; show the column picker, tuck "custom expression" behind an
+  "advanced" toggle;
+- same golden path for Y: default "Row count". Net effect: *add widget + pick
+  table = a rendering chart*, instead of today's empty-chart error;
+- alias inputs move under the advanced toggle (auto-derived otherwise);
+- **introduce the column-class vocabulary: temporal / categorical (ordinal) /
+  continuous (numeric).** Classify every column server-side from its ClickHouse
+  type in `/api/schema` (one home for the mapping: `DateTime*/Date*` →
+  temporal; `String/Enum*/LowCardinality/Bool/UUID/IP` → categorical; numeric →
+  continuous), returned as `class` per column. The whole editor then speaks
+  this vocabulary instead of raw types:
+    - **slot-aware column pickers**: X (time widgets) offers temporal columns;
+      Fill / Fx / Fy and the "Column (as category)" mode offer categorical
+      ones; Y aggregations offer continuous ones (count needs none). Wrong-class
+      columns are not hidden but demoted + badged, so escape hatches remain;
+    - **badges everywhere a column appears** (pickers, Data-tab column list,
+      WHERE completion): small ⏱/🏷/# markers with the class in the tooltip;
+    - **class-appropriate affordances**: top-values autocomplete
+      (`/api/values`) only for categorical columns (it is meaningless and
+      expensive for continuous ones — offer min/max/quantiles there instead);
+      color mappings only for categorical fills;
+    - matches Observable Plot's own scale semantics (ordinal vs. linear vs.
+      time), so the editor's language and the chart's behavior agree.
+
+**(4) Small but visible polish** (from the screenshot):
+- every input gets a persistent label — placeholder-only labeling fails the
+  moment a value is set (X currently shows two anonymous filled inputs);
+- toolbar: title input needs a label/placeholder ("Dashboard title" — it
+  currently renders as an unlabeled mystery box), layout select gets a label
+  and compact width;
+- tree rows: show the widget's user title (`props.title`) when set, type name
+  otherwise; fix the icon-button glyph contrast on the selected row
+  (currently invisible white squares);
+- Fill/Fx/Fy group into a collapsed "Series & faceting" section;
+- friendly empty states: "Pick a table to see data" instead of a raw 500 body
+  in the preview card.
+
+Order: (1) is a prerequisite for (2) (the drawer must be visible to be useful);
+(3) is the biggest comprehension win per line of code; (4) is cheap and can ride
+along. Review finding 1 (markdown file read) goes before all of it. 
