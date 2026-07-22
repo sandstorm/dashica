@@ -197,10 +197,12 @@ function keyValueControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTM
 // field picker (composite) — SqlField / TimestampedField
 // ---------------------------------------------------------------------------
 
-const FIELD_KINDS = ['autoBucket', 'count', 'enum', 'expr'];
-
 function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
     const container = el('div', 'explore-field-picker');
+
+    // autoBucket only makes sense on the timestamped X axis (it buckets a
+    // DateTime column); a plain value/measure field is count / enum / custom.
+    const kindsForField = field.timestamped ? ['autoBucket', 'expr'] : ['count', 'enum', 'expr'];
 
     function currentKind(): string {
         const v = obj[field.name];
@@ -222,7 +224,7 @@ function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
     function redraw() {
         container.innerHTML = '';
         const kindSel = el('select', 'explore-input');
-        const kinds = field.required ? FIELD_KINDS : ['', ...FIELD_KINDS];
+        const kinds = field.required ? kindsForField : ['', ...kindsForField];
         for (const k of kinds) {
             const opt = el('option');
             opt.value = k;
@@ -369,16 +371,19 @@ function groupControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLEl
 // query section — SqlQueryable envelope (table | file | raw)
 // ---------------------------------------------------------------------------
 
-export function makeQuerySection(props: any, ctx: ControlCtx): HTMLElement {
-    if (props.query == null || typeof props.query !== 'object') {
-        props.query = {kind: 'table', table: '', where: []};
+export function makeQuerySection(props: any, queryKey: string, ctx: ControlCtx): HTMLElement {
+    if (props[queryKey] == null || typeof props[queryKey] !== 'object') {
+        props[queryKey] = {kind: 'table', table: '', where: []};
     }
     const container = el('div', 'explore-query');
     container.appendChild(el('div', 'explore-section-title', 'Query'));
 
+    // Only the source *kind* switch rebuilds the body (it swaps which inputs
+    // exist). Individual inputs mutate in place and never re-render, so typing
+    // in the table / where fields never loses focus.
     function redraw() {
         const body = el('div');
-        const q = props.query;
+        const q = props[queryKey];
 
         const kindSel = el('select', 'explore-input');
         for (const k of ['table', 'raw']) {
@@ -389,7 +394,7 @@ export function makeQuerySection(props: any, ctx: ControlCtx): HTMLElement {
         }
         kindSel.value = q.kind === 'raw' ? 'raw' : 'table';
         kindSel.addEventListener('change', () => {
-            props.query = kindSel.value === 'raw'
+            props[queryKey] = kindSel.value === 'raw'
                 ? {kind: 'raw', sql: 'SELECT * FROM ... WHERE {{DASHICA_FILTERS}}'}
                 : {kind: 'table', table: '', where: []};
             ctx.onChange();
@@ -412,7 +417,8 @@ export function makeQuerySection(props: any, ctx: ControlCtx): HTMLElement {
             const tbl = el('input', 'explore-input');
             tbl.setAttribute('list', dl.id);
             tbl.value = q.table ?? '';
-            tbl.addEventListener('input', () => { q.table = tbl.value; ctx.onChange(); rebuild(); });
+            // No re-render on input — just mutate, so focus is kept while typing.
+            tbl.addEventListener('input', () => { q.table = tbl.value; ctx.onChange(); });
             body.append(dl, labelled({name: 'table', editor: 'text'}, tbl));
 
             // where clause list

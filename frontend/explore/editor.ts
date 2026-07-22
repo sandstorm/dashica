@@ -1,11 +1,17 @@
-// editor.ts — the Explore editor Alpine component. It owns the dashboard-in-
-// progress (a client-side JSON model), loads the form model + schema, and wires
-// the three panes (tree / preview / inspector) plus the bottom drawer.
+// editor.ts — the Explore editor.
 //
-// The dynamic UI is built imperatively in TypeScript rather than via Alpine
-// directives, because the CSP Alpine build (@alpinejs/csp) forbids inline
-// expressions. Alpine provides only the component lifecycle (init) and the
-// shared urlState store (time range / filters) that drives preview re-queries.
+// Design (per the code review): this is a plain manual-DOM application, NOT
+// idiomatic Alpine, and deliberately so — the CSP Alpine build forbids
+// expressions with arguments, and a recursive schema-driven form cannot be
+// expressed in Alpine templates. Alpine is demoted to a thin boundary: it only
+// registers the component and hands us the shared urlState store. All editor
+// state lives in the plain `Editor` class below (not in an Alpine proxy).
+//
+// Data flow is one-directional and explicit:
+//   • structural change (add/select/move/delete/JSON-apply)  → update() → save() + render()
+//   • value edit inside a control (typing a field)           → onEdit() → save() + refresh selected preview + JSON drawer
+// render() redraws every pane from state; previews are keyed by widget id so a
+// re-render re-orders/re-highlights without re-fetching unchanged widgets.
 
 import Alpine from '@alpinejs/csp';
 import {ControlCtx, SchemaResponse} from "./controls";
@@ -26,97 +32,128 @@ function debounce<T extends (...a: any[]) => void>(fn: T, ms = 400): T {
 
 function deepClone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
 
-export default () => ({
-    baseUrl: '',
-    formModel: null as FormModel | null,
-    schema: null as SchemaResponse | null,
-    state: {title: 'Untitled', layout: 'defaultPage', widgets: []} as DashboardState,
-    selectedId: null as string | null,
-    drawerTab: 'json' as 'gocode' | 'json' | 'sql',
-    _idSeq: 0,
-    _previews: {} as Record<string, PreviewController>,
+// validateState turns arbitrary JSON (share link, JSON tab) into a well-formed
+// DashboardState or throws — so garbage produces an inline error, never a
+// half-applied state that crashes the next render.
+function validateState(o: any): DashboardState {
+    if (!o || typeof o !== 'object') throw new Error('state must be an object');
+    if (o.title != null && typeof o.title !== 'string') throw new Error('title must be a string');
+    if (o.layout != null && typeof o.layout !== 'string') throw new Error('layout must be a string');
+    if (!Array.isArray(o.widgets)) throw new Error('widgets must be an array');
+    const widgets: WidgetState[] = o.widgets.map((w: any, i: number) => {
+        if (!w || typeof w !== 'object') throw new Error(`widget ${i} must be an object`);
+        if (typeof w.type !== 'string') throw new Error(`widget ${i} missing string "type"`);
+        if (!w.props || typeof w.props !== 'object') throw new Error(`widget ${i} missing object "props"`);
+        return {id: typeof w.id === 'string' && w.id ? w.id : `w${i}`, type: w.type, props: w.props};
+    });
+    return {title: o.title ?? 'Untitled', layout: o.layout ?? 'defaultPage', widgets};
+}
 
-    // pane containers (resolved from the templ shell in init)
-    _elTree: null as HTMLElement | null,
-    _elPreview: null as HTMLElement | null,
-    _elInspector: null as HTMLElement | null,
-    _elDrawer: null as HTMLElement | null,
+class Editor {
+    private formModel: FormModel | null = null;
+    private schema: SchemaResponse | null = null;
+    private state: DashboardState = {title: 'Untitled', layout: 'defaultPage', widgets: []};
+    private selectedId: string | null = null;
+    private drawerTab: 'gocode' | 'json' | 'sql' = 'json';
+    private idSeq = 0;
 
-    async init() {
-        this.baseUrl = this.$el.dataset.baseUrl || '';
-        this._elTree = this.$el.querySelector('[data-explore="tree"]');
-        this._elPreview = this.$el.querySelector('[data-explore="preview"]');
-        this._elInspector = this.$el.querySelector('[data-explore="inspector"]');
-        this._elDrawer = this.$el.querySelector('[data-explore="drawer"]');
+    // Non-UI state — kept out of any reactive proxy on purpose.
+    private previews: Record<string, {card: HTMLElement; controller: PreviewController}> = {};
 
-        this._loadState();
+    private elToolbar: HTMLElement;
+    private elTree: HTMLElement;
+    private elPreview: HTMLElement;
+    private elInspector: HTMLElement;
+    private elDrawer: HTMLElement;
 
+    private onEditDebounced = debounce(() => this.onEdit());
+
+    constructor(private root: HTMLElement, private baseUrl: string, private urlState: any) {
+        this.elToolbar = root.querySelector('[data-explore="toolbar"]')!;
+        this.elTree = root.querySelector('[data-explore="tree"]')!;
+        this.elPreview = root.querySelector('[data-explore="preview"]')!;
+        this.elInspector = root.querySelector('[data-explore="inspector"]')!;
+        this.elDrawer = root.querySelector('[data-explore="drawer"]')!;
+    }
+
+    async start() {
+        this.loadState();
         const [fm, sc] = await Promise.all([
             fetch(`${this.baseUrl}/api/formmodel`).then((r) => r.json()),
             fetch(`${this.baseUrl}/api/schema`).then((r) => r.json()).catch(() => null),
         ]);
         this.formModel = fm;
         this.schema = sc;
+        this.render();
+    }
 
-        this._buildToolbar();
-        this._renderTree();
-        this._renderInspector();
-        this._renderPreview();
-        this._renderDrawer();
+    // ---- pipelines ---------------------------------------------------------
 
-        // Re-query all previews when the time range / global filter changes.
-        Alpine.effect(() => {
-            this.$store.urlState.getCombinedFilter();
-            JSON.stringify(this.$store.urlState.widgetParams);
-            this._refreshAllPreviews();
-        });
-    },
+    /** Structural change: mutate state, persist, redraw everything. */
+    private update(mutate: () => void) {
+        mutate();
+        this.save();
+        this.render();
+    }
+
+    /** Value edit from a control: state was already mutated in place; persist,
+     *  refresh only the edited widget's preview and the JSON drawer. The
+     *  inspector is NOT rebuilt, so the focused input keeps focus. */
+    private onEdit() {
+        this.save();
+        if (this.selectedId) this.refreshPreview(this.selectedId);
+        if (this.drawerTab === 'json') this.renderDrawer();
+    }
+
+    private render() {
+        this.renderToolbar();
+        this.renderTree();
+        this.renderInspector();
+        this.renderPreview();
+        this.renderDrawer();
+    }
 
     // ---- state persistence -------------------------------------------------
 
-    _loadState() {
+    private loadState() {
         const hash = new URLSearchParams(window.location.hash.slice(1)).get('s');
         if (hash) {
             try {
-                this.state = JSON.parse(decodeURIComponent(escape(atob(hash))));
-                this._reseedIdSeq();
+                this.state = validateState(JSON.parse(decodeURIComponent(escape(atob(hash)))));
+                this.reseedIdSeq();
                 return;
-            } catch { /* fall through */ }
+            } catch (e) { console.warn('Explore: ignoring invalid share link', e); }
         }
         const stored = localStorage.getItem(LS_KEY);
         if (stored) {
-            try { this.state = JSON.parse(stored); this._reseedIdSeq(); return; } catch { /* ignore */ }
+            try { this.state = validateState(JSON.parse(stored)); this.reseedIdSeq(); } catch { /* ignore */ }
         }
-    },
+    }
 
-    _reseedIdSeq() {
+    private reseedIdSeq() {
         for (const w of this.state.widgets) {
             const n = parseInt((w.id || '').replace(/\D/g, ''), 10);
-            if (!isNaN(n) && n >= this._idSeq) this._idSeq = n + 1;
+            if (!isNaN(n) && n >= this.idSeq) this.idSeq = n + 1;
         }
-    },
+    }
 
-    _save() {
-        localStorage.setItem(LS_KEY, JSON.stringify(this.state));
-    },
+    private save() { localStorage.setItem(LS_KEY, JSON.stringify(this.state)); }
 
-    _shareUrl(): string {
+    private shareUrl(): string {
         const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(this.state))));
         return `${window.location.origin}${window.location.pathname}#s=${encoded}`;
-    },
+    }
 
     // ---- toolbar -----------------------------------------------------------
 
-    _buildToolbar() {
-        const bar = this.$el.querySelector('[data-explore="toolbar"]') as HTMLElement;
-        if (!bar) return;
-        bar.innerHTML = '';
+    private renderToolbar() {
+        this.elToolbar.innerHTML = '';
 
         const titleInput = document.createElement('input');
         titleInput.className = 'explore-input explore-toolbar__title';
         titleInput.value = this.state.title;
-        titleInput.addEventListener('input', () => { this.state.title = titleInput.value; this._onChange(); });
-        bar.appendChild(titleInput);
+        titleInput.addEventListener('input', () => { this.state.title = titleInput.value; this.save(); });
+        this.elToolbar.appendChild(titleInput);
 
         const layoutSel = document.createElement('select');
         layoutSel.className = 'explore-input';
@@ -124,24 +161,24 @@ export default () => ({
             const o = document.createElement('option'); o.value = l; o.textContent = l; layoutSel.appendChild(o);
         }
         layoutSel.value = this.state.layout;
-        layoutSel.addEventListener('change', () => { this.state.layout = layoutSel.value; this._onChange(); });
-        bar.appendChild(layoutSel);
+        layoutSel.addEventListener('change', () => { this.state.layout = layoutSel.value; this.save(); });
+        this.elToolbar.appendChild(layoutSel);
 
         const share = document.createElement('button');
         share.className = 'explore-btn';
         share.textContent = 'Copy share link';
         share.addEventListener('click', () => {
-            navigator.clipboard.writeText(this._shareUrl());
+            navigator.clipboard.writeText(this.shareUrl());
             share.textContent = 'Copied!';
             setTimeout(() => { share.textContent = 'Copy share link'; }, 1500);
         });
-        bar.appendChild(share);
-    },
+        this.elToolbar.appendChild(share);
+    }
 
     // ---- tree --------------------------------------------------------------
 
-    _renderTree() {
-        const tree = this._elTree!;
+    private renderTree() {
+        const tree = this.elTree;
         tree.innerHTML = '';
 
         const addRow = document.createElement('div');
@@ -157,7 +194,7 @@ export default () => ({
         const add = document.createElement('button');
         add.className = 'explore-btn explore-btn--sm';
         add.textContent = '+ add';
-        add.addEventListener('click', () => this._addWidget(sel.value));
+        add.addEventListener('click', () => this.addWidget(sel.value));
         addRow.append(sel, add);
         tree.appendChild(addRow);
 
@@ -168,76 +205,57 @@ export default () => ({
             li.className = 'explore-tree__item' + (w.id === this.selectedId ? ' is-selected' : '');
             const name = document.createElement('span');
             name.className = 'explore-tree__name';
-            name.textContent = `${this.formModel?.widgets[w.type]?.title ?? w.type}`;
-            name.addEventListener('click', () => this._select(w.id));
+            name.textContent = this.formModel?.widgets[w.type]?.title ?? w.type;
+            name.addEventListener('click', () => this.update(() => { this.selectedId = w.id; }));
             li.appendChild(name);
 
-            const up = document.createElement('button');
-            up.className = 'explore-btn explore-btn--icon';
-            up.textContent = '↑';
-            up.disabled = i === 0;
-            up.addEventListener('click', () => this._move(i, -1));
-            const down = document.createElement('button');
-            down.className = 'explore-btn explore-btn--icon';
-            down.textContent = '↓';
-            down.disabled = i === this.state.widgets.length - 1;
-            down.addEventListener('click', () => this._move(i, 1));
-            const del = document.createElement('button');
-            del.className = 'explore-btn explore-btn--icon';
-            del.textContent = '×';
-            del.addEventListener('click', () => this._delete(w.id));
+            const up = this.iconBtn('↑', i === 0, () => this.move(i, -1));
+            const down = this.iconBtn('↓', i === this.state.widgets.length - 1, () => this.move(i, 1));
+            const del = this.iconBtn('×', false, () => this.deleteWidget(w.id));
             li.append(up, down, del);
             list.appendChild(li);
         });
         tree.appendChild(list);
-    },
+    }
 
-    _addWidget(type: string) {
+    private iconBtn(label: string, disabled: boolean, onClick: () => void): HTMLButtonElement {
+        const b = document.createElement('button');
+        b.className = 'explore-btn explore-btn--icon';
+        b.textContent = label;
+        b.disabled = disabled;
+        b.addEventListener('click', onClick);
+        return b;
+    }
+
+    private addWidget(type: string) {
         if (!type || !this.formModel?.widgets[type]) return;
-        const w: WidgetState = {
-            id: `w${this._idSeq++}`,
-            type,
-            props: deepClone(this.formModel.widgets[type].defaults),
-        };
-        this.state.widgets.push(w);
-        this.selectedId = w.id;
-        this._onChange();
-        this._renderTree();
-        this._renderInspector();
-        this._renderPreview();
-    },
+        this.update(() => {
+            const w: WidgetState = {id: `w${this.idSeq++}`, type, props: deepClone(this.formModel!.widgets[type].defaults)};
+            this.state.widgets.push(w);
+            this.selectedId = w.id;
+        });
+    }
 
-    _delete(id: string) {
-        this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
-        if (this.selectedId === id) this.selectedId = null;
-        this._previews[id]?.destroy();
-        delete this._previews[id];
-        this._onChange();
-        this._renderTree();
-        this._renderInspector();
-        this._renderPreview();
-    },
+    private deleteWidget(id: string) {
+        this.update(() => {
+            this.state.widgets = this.state.widgets.filter((w) => w.id !== id);
+            if (this.selectedId === id) this.selectedId = null;
+        });
+    }
 
-    _move(index: number, dir: number) {
+    private move(index: number, dir: number) {
         const j = index + dir;
         if (j < 0 || j >= this.state.widgets.length) return;
-        const arr = this.state.widgets;
-        [arr[index], arr[j]] = [arr[j], arr[index]];
-        this._onChange();
-        this._renderTree();
-        this._renderPreview();
-    },
-
-    _select(id: string) {
-        this.selectedId = id;
-        this._renderTree();
-        this._renderInspector();
-    },
+        this.update(() => {
+            const arr = this.state.widgets;
+            [arr[index], arr[j]] = [arr[j], arr[index]];
+        });
+    }
 
     // ---- inspector ---------------------------------------------------------
 
-    _renderInspector() {
-        const insp = this._elInspector!;
+    private renderInspector() {
+        const insp = this.elInspector;
         insp.innerHTML = '';
         const w = this.state.widgets.find((x) => x.id === this.selectedId);
         if (!w) {
@@ -250,67 +268,72 @@ export default () => ({
         heading.textContent = descriptor.title;
         insp.appendChild(heading);
 
+        const queryKey = descriptor.queryKey;
         const ctx: ControlCtx = {
             baseUrl: this.baseUrl,
             schema: this.schema,
-            getTable: () => (w.props.query && w.props.query.kind === 'table' ? w.props.query.table : null),
-            onChange: debounce(() => {
-                this._onChange();
-                this._refreshPreview(w.id);
-                this._renderDrawer();
-            }),
+            getTable: () => {
+                const q = queryKey ? w.props[queryKey] : null;
+                return q && q.kind === 'table' ? q.table : null;
+            },
+            onChange: this.onEditDebounced,
         };
         const form = document.createElement('div');
         renderForm(form, descriptor, w.props, ctx);
         insp.appendChild(form);
-    },
+    }
 
-    // ---- preview -----------------------------------------------------------
+    // ---- preview (keyed reconcile: no refetch on select/move) --------------
 
-    _renderPreview() {
-        const pv = this._elPreview!;
-        // Destroy controllers for widgets that no longer exist.
-        for (const id of Object.keys(this._previews)) {
+    private renderPreview() {
+        const pv = this.elPreview;
+
+        // Drop previews for widgets that no longer exist.
+        for (const id of Object.keys(this.previews)) {
             if (!this.state.widgets.some((w) => w.id === id)) {
-                this._previews[id].destroy();
-                delete this._previews[id];
+                this.previews[id].controller.destroy();
+                this.previews[id].card.remove();
+                delete this.previews[id];
             }
         }
-        pv.innerHTML = '';
+
         if (this.state.widgets.length === 0) {
             pv.innerHTML = '<div class="explore-empty">Add a widget to start building.</div>';
             return;
         }
+        // Clear any placeholder text node without touching existing cards.
+        pv.querySelectorAll('.explore-empty').forEach((n) => n.remove());
+
         for (const w of this.state.widgets) {
-            const card = document.createElement('div');
-            card.className = 'explore-card' + (w.id === this.selectedId ? ' is-selected' : '');
-            card.addEventListener('click', () => this._select(w.id));
-            const body = document.createElement('div');
-            body.className = 'explore-card__body';
-            card.appendChild(body);
-            pv.appendChild(card);
-
-            this._previews[w.id] = mountPreview(body, this.baseUrl);
-            this._refreshPreview(w.id);
+            let entry = this.previews[w.id];
+            if (!entry) {
+                const card = document.createElement('div');
+                card.className = 'explore-card';
+                card.addEventListener('click', () => this.update(() => { this.selectedId = w.id; }));
+                const body = document.createElement('div');
+                body.className = 'explore-card__body';
+                card.appendChild(body);
+                entry = {card, controller: mountPreview(body, this.baseUrl)};
+                this.previews[w.id] = entry;
+                entry.controller.render(this.envelope(w)); // only new cards fetch
+            }
+            entry.card.classList.toggle('is-selected', w.id === this.selectedId);
+            pv.appendChild(entry.card); // re-append = reorder, keeps the node (no refetch)
         }
-    },
+    }
 
-    _refreshPreview(id: string) {
+    private envelope(w: WidgetState): WidgetEnvelope { return {type: w.type, props: w.props}; }
+
+    private refreshPreview(id: string) {
         const w = this.state.widgets.find((x) => x.id === id);
-        const ctrl = this._previews[id];
-        if (!w || !ctrl) return;
-        const envelope: WidgetEnvelope = {type: w.type, props: w.props};
-        ctrl.render(envelope, this.$store.urlState.getCombinedFilter(), this.$store.urlState.widgetParams);
-    },
-
-    _refreshAllPreviews() {
-        for (const w of this.state.widgets) this._refreshPreview(w.id);
-    },
+        const entry = this.previews[id];
+        if (w && entry) entry.controller.render(this.envelope(w));
+    }
 
     // ---- drawer (Go code / JSON / SQL) ------------------------------------
 
-    _renderDrawer() {
-        const drawer = this._elDrawer!;
+    private renderDrawer() {
+        const drawer = this.elDrawer;
         drawer.innerHTML = '';
 
         const tabs = document.createElement('div');
@@ -322,7 +345,7 @@ export default () => ({
             const b = document.createElement('button');
             b.className = 'explore-tab' + (this.drawerTab === key ? ' is-active' : '');
             b.textContent = label;
-            b.addEventListener('click', () => { this.drawerTab = key; this._renderDrawer(); });
+            b.addEventListener('click', () => { this.drawerTab = key; this.renderDrawer(); });
             tabs.appendChild(b);
         }
         drawer.appendChild(tabs);
@@ -331,12 +354,12 @@ export default () => ({
         content.className = 'explore-drawer__content';
         drawer.appendChild(content);
 
-        if (this.drawerTab === 'json') this._renderJsonTab(content);
-        else if (this.drawerTab === 'gocode') this._renderGocodeTab(content);
-        else this._renderSqlTab(content);
-    },
+        if (this.drawerTab === 'json') this.renderJsonTab(content);
+        else if (this.drawerTab === 'gocode') this.renderGocodeTab(content);
+        else this.renderSqlTab(content);
+    }
 
-    _renderJsonTab(content: HTMLElement) {
+    private renderJsonTab(content: HTMLElement) {
         const ta = document.createElement('textarea');
         ta.className = 'explore-input explore-textarea explore-json';
         ta.spellcheck = false;
@@ -345,32 +368,33 @@ export default () => ({
         status.className = 'explore-json__status';
         ta.addEventListener('input', () => {
             try {
-                const parsed = JSON.parse(ta.value);
-                this.state = parsed;
-                this._reseedIdSeq();
+                this.state = validateState(JSON.parse(ta.value));
+                this.reseedIdSeq();
                 status.textContent = 'valid — applied';
                 status.className = 'explore-json__status is-ok';
-                this._save();
-                this._buildToolbar();
-                this._renderTree();
-                this._renderInspector();
-                this._renderPreview();
+                this.save();
+                // Full redraw, but keep this textarea focused: rebuild the other
+                // panes, not the drawer (which would replace this element).
+                this.renderToolbar();
+                this.renderTree();
+                this.renderInspector();
+                this.renderPreview();
             } catch (e: any) {
                 status.textContent = e.message;
                 status.className = 'explore-json__status is-err';
             }
         });
         content.append(ta, status);
-    },
+    }
 
-    _renderGocodeTab(content: HTMLElement) {
+    private renderGocodeTab(content: HTMLElement) {
         // Go code generation is Phase 4 (POST /api/gocode). Until then, show the
         // graduate-to-code path as pending rather than fabricating source.
         content.innerHTML = '<div class="explore-empty">Go code generation ships in Phase 4 ' +
             '(the <code>/api/gocode</code> endpoint). The JSON tab is the source of truth meanwhile.</div>';
-    },
+    }
 
-    _renderSqlTab(content: HTMLElement) {
+    private renderSqlTab(content: HTMLElement) {
         const w = this.state.widgets.find((x) => x.id === this.selectedId);
         if (!w) {
             content.innerHTML = '<div class="explore-empty">Select a widget to see its SQL / EXPLAIN.</div>';
@@ -381,20 +405,24 @@ export default () => ({
         pre.textContent = 'Loading…';
         content.appendChild(pre);
         const params = new URLSearchParams();
-        params.append('filters', JSON.stringify(this.$store.urlState.getCombinedFilter()));
+        params.append('filters', JSON.stringify(this.urlState.getCombinedFilter()));
         fetch(`${this.baseUrl}/api/preview/debug?${params.toString()}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({type: w.type, props: w.props}),
+            body: JSON.stringify(this.envelope(w)),
         })
             .then((r) => r.ok ? r.json() : r.text().then((t) => { throw new Error(t); }))
             .then((info) => { pre.textContent = JSON.stringify(info, null, 2); })
             .catch((e) => { pre.textContent = `ERROR: ${e.message}`; });
-    },
+    }
+}
 
-    // ---- change plumbing ---------------------------------------------------
-
-    _onChange() {
-        this._save();
+// Alpine boundary: register the component, construct the plain Editor, start it.
+// Preview charts subscribe to $store.urlState themselves, so the time range
+// re-queries them automatically — the editor needs no filter effect.
+export default () => ({
+    init() {
+        const editor = new Editor(this.$el, this.$el.dataset.baseUrl || '', this.$store.urlState);
+        editor.start();
     },
 });

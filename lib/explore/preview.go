@@ -33,7 +33,13 @@ func (e *exploreImpl) handlePreviewDebug(w http.ResponseWriter, r *http.Request)
 // handler, then hands the request to that handler. This reuses the *exact*
 // compiled query path (widget_common.RegisterQueryHandlers → QueryHandler) — no
 // parallel execution logic to drift.
-func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, endpoint string) error {
+func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, endpoint string) (err error) {
+	// The widget arrives from the browser and is often incomplete (e.g. a
+	// freshly-added chart with no x/y yet); its buildQuery/buildChartProps then
+	// dereference nil fields and panic. Turn that into a normal error so an
+	// unfinished widget shows a preview error instead of crashing the server.
+	defer recoverToError("preview "+endpoint, &err)
+
 	if r.Method != http.MethodPost {
 		return fmt.Errorf("preview %s: method %s not allowed, use POST", endpoint, r.Method)
 	}
@@ -86,6 +92,17 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 	return nil
 }
 
+// recoverToError converts a panic during preview handling into an error on
+// *errp. Preview widgets come from the browser and are frequently incomplete
+// (missing required fields), which makes the widgets' own build code nil-deref;
+// a builder-time panic must degrade to a 500 for that one request, never take
+// the whole server down. Deferred with a named return so the error propagates.
+func recoverToError(context string, errp *error) {
+	if r := recover(); r != nil {
+		*errp = fmt.Errorf("%s: widget is incomplete or invalid (%v)", context, r)
+	}
+}
+
 // handlePreviewRender renders a JSON-described widget's own component to HTML
 // and returns it. This is how the browser obtains the widget's chartType and
 // chartProps: it is the widget's real BuildComponents output (the exact Chart
@@ -96,7 +113,13 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 //
 // Body: one widget envelope. UntrustedContent is set (docs §6) because the
 // widget arrived from the browser and BuildComponents may render markdown.
-func (e *exploreImpl) handlePreviewRender(w http.ResponseWriter, r *http.Request) error {
+func (e *exploreImpl) handlePreviewRender(w http.ResponseWriter, r *http.Request) (err error) {
+	// See dispatchPreview: an incomplete widget's buildChartProps derefs nil
+	// fields and panics. Recover into an error so the preview shows it instead
+	// of crashing the server. BuildComponents runs before any bytes are written,
+	// so the error still becomes a clean 500.
+	defer recoverToError("preview render", &err)
+
 	if r.Method != http.MethodPost {
 		return fmt.Errorf("preview render: method %s not allowed, use POST", r.Method)
 	}

@@ -8,6 +8,8 @@ import {ControlCtx, FieldDescriptor, makeControl, makeQuerySection} from "./cont
 export interface WidgetDescriptor {
     title: string;
     hasQuery: boolean;
+    // JSON wire key of the query field (e.g. "sql"); provided when hasQuery.
+    queryKey?: string;
     fields: FieldDescriptor[];
 }
 
@@ -21,8 +23,8 @@ export function renderForm(
 ): void {
     container.innerHTML = '';
 
-    if (descriptor.hasQuery) {
-        container.appendChild(makeQuerySection(props, ctx));
+    if (descriptor.hasQuery && descriptor.queryKey) {
+        container.appendChild(makeQuerySection(props, descriptor.queryKey, ctx));
     }
 
     const opts = document.createElement('div');

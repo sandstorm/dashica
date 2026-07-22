@@ -1,6 +1,4 @@
-import * as Arrow from 'apache-arrow';
-import type {QueryResult} from "../types";
-import {charts} from "../components/chart";
+import Alpine from '@alpinejs/csp';
 
 // A widget envelope as stored in the editor state and sent to the preview API.
 export interface WidgetEnvelope {
@@ -8,138 +6,75 @@ export interface WidgetEnvelope {
     props: Record<string, any>;
 }
 
-// previewRender POSTs a widget envelope to /api/preview/render and returns the
-// widget's own rendered markup — the exact Chart element a compiled dashboard
-// emits. The browser parses it and reads chartType + chartProps off the DOM
-// node's dataset (native HTML unescaping), so there is no server-side attribute
-// scraping and no parallel chartProps logic to drift.
-async function previewRender(baseUrl: string, envelope: WidgetEnvelope, signal: AbortSignal): Promise<{
-    chartType: string | null;
-    chartProps: Record<string, any> | null;
-    // The raw rendered markup, used as a static fallback for non-chart widgets.
-    html: string;
-}> {
-    const response = await fetch(`${baseUrl}/api/preview/render`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(envelope),
-        signal,
-    });
-    if (response.status !== 200) throw new Error(await response.text());
-    const html = await response.text();
-
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    const chartEl = tmp.querySelector<HTMLElement>('[data-chart-props]');
-    if (!chartEl) return {chartType: null, chartProps: null, html};
-    return {
-        chartType: chartEl.dataset.chartType ?? null,
-        chartProps: JSON.parse(chartEl.dataset.chartProps ?? '{}'),
-        html,
-    };
-}
-
-// previewQuery POSTs a widget envelope to /api/preview/query and returns the
-// decoded Arrow result — the mirror of clickhouse-new.ts query(), except the
-// widget is described in the POST body. The server replays the widget's own
-// query handler, so the response is byte-identical to a compiled /query.
-async function previewQuery(
-    baseUrl: string,
-    envelope: WidgetEnvelope,
-    filters: any,
-    widgetParams: Record<string, string> | undefined,
-    signal: AbortSignal,
-): Promise<QueryResult> {
-    const params = new URLSearchParams();
-    if (filters) params.append("filters", JSON.stringify(filters));
-    if (widgetParams && Object.keys(widgetParams).length > 0) {
-        params.append("params", JSON.stringify(widgetParams));
-    }
-
-    const response = await fetch(`${baseUrl}/api/preview/query?${params.toString()}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(envelope),
-        signal,
-    });
-    if (response.status !== 200) throw new Error(await response.text());
-
-    const result: QueryResult = await Arrow.tableFromIPC(response);
-    result.dashicaResolvedTimeRange = JSON.parse(response.headers.get("X-Dashica-Resolved-Time-Range") || "null");
-    const xBucketSize = response.headers.get("X-Dashica-Bucket-Size");
-    if (xBucketSize != null) result.dashicaBucketSize = parseInt(xBucketSize);
-    result.clickhouseSummary = JSON.parse(response.headers.get("X-Clickhouse-Summary") || "null");
-    result.dashicaAlertIf = JSON.parse(response.headers.get("X-Dashica-Alert-If") || "null");
-    return result;
-}
-
-// PreviewController owns one mounted preview: it can be re-run (render) with new
-// state and torn down (destroy), aborting any in-flight fetch.
+// PreviewController owns one mounted preview; render() (re)mounts it, destroy()
+// tears it down.
 export interface PreviewController {
-    render(envelope: WidgetEnvelope, filters: any, widgetParams?: Record<string, string>): void;
+    render(envelope: WidgetEnvelope): void;
     destroy(): void;
 }
 
-// mountPreview renders a widget preview into `container` and returns a controller
-// that re-renders on demand. Chart widgets fetch data and render through the
-// same renderers as compiled dashboards; non-chart widgets fall back to their
-// static server-rendered markup. Each render() aborts the previous fetch, so
-// rapid edits don't stack requests.
+function destroyTree(el: HTMLElement) {
+    const d = (Alpine as any).destroyTree;
+    if (typeof d === 'function') d(el);
+}
+
+// mountPreview renders a widget preview into `container`. It asks the server to
+// render the widget's OWN component (POST /api/preview/render) and injects that
+// markup verbatim — the exact Chart element a compiled dashboard emits. For a
+// chart widget it then points that element at the preview endpoint (two data
+// attributes) and lets the real `chart` Alpine component take over: the chart
+// reads its own data-chart-props, fetches data by POSTing the envelope, reacts
+// to the time range, and drives the debug drawer — all reused, nothing parsed.
+// Non-chart widgets (markdown, …) render as their static server markup.
 export function mountPreview(container: HTMLElement, baseUrl: string): PreviewController {
     let abort: AbortController | null = null;
-    const colorSchemeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-    function setMessage(html: string, cls = "") {
-        container.innerHTML = `<div class="explore-preview-msg ${cls}">${html}</div>`;
+    function setMessage(text: string, cls = "") {
+        destroyTree(container);
+        container.textContent = '';
+        const d = document.createElement('div');
+        d.className = `explore-preview-msg ${cls}`;
+        d.textContent = text; // textContent, never innerHTML — no injection from state
+        container.appendChild(d);
     }
 
     return {
-        render(envelope, filters, widgetParams) {
+        render(envelope) {
             if (abort) abort.abort();
             abort = new AbortController();
             const signal = abort.signal;
 
-            previewRender(baseUrl, envelope, signal)
-                .then(async ({chartType, chartProps, html}) => {
+            fetch(`${baseUrl}/api/preview/render`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(envelope),
+                signal,
+            })
+                .then((r) => r.ok ? r.text() : r.text().then((t) => { throw new Error(t); }))
+                .then((html) => {
                     if (signal.aborted) return;
-
-                    // Non-chart widget (markdown, ...): show its static markup.
-                    if (!chartType || !chartProps) {
-                        container.innerHTML = html;
-                        return;
+                    // Tear down the previous render's Alpine components first.
+                    destroyTree(container);
+                    // Server-rendered widget markup (templ-escaped), not free text.
+                    container.innerHTML = html;
+                    const chartEl = container.querySelector<HTMLElement>('[x-data="chart"]');
+                    if (chartEl) {
+                        chartEl.dataset.previewBase = `${baseUrl}/api/preview`;
+                        chartEl.dataset.previewBody = JSON.stringify(envelope);
                     }
-                    const renderer = (charts as Record<string, any>)[chartType];
-                    if (!renderer) {
-                        setMessage(`Live preview for <code>${chartType}</code> is not available in this build yet.`);
-                        return;
-                    }
-
-                    const data = await previewQuery(baseUrl, envelope, filters, widgetParams, signal);
-                    if (signal.aborted) return;
-                    const el = await renderer(data, {
-                        ...chartProps,
-                        width: container.clientWidth || 600,
-                        colorSchemeDark,
-                        viewOptions: [],
-                    });
-                    if (signal.aborted) return;
-                    container.innerHTML = '';
-                    container.appendChild(el);
+                    // Activate the injected component(s) — the chart (or any
+                    // static widget's Alpine bits).
+                    Alpine.initTree(container);
                 })
                 .catch((e) => {
                     if (signal.aborted || e.name === 'AbortError') return;
-                    setMessage(`<b>ERROR:</b> ${escapeHtml(e.message)}`, "explore-preview-msg--error");
+                    setMessage(`ERROR: ${e.message}`, "explore-preview-msg--error");
                 });
         },
         destroy() {
             if (abort) abort.abort();
+            destroyTree(container);
             container.innerHTML = '';
         },
     };
-}
-
-function escapeHtml(s: string): string {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
 }

@@ -13,7 +13,7 @@ export type ClickhouseSchema = {
 }
 
 
-export async function query(baseUrl: string, filters: any, widgetParams?: Record<string, string>): Promise<QueryResult> {
+function filterParams(filters: any, widgetParams?: Record<string, string>): string {
     const params = new URLSearchParams();
     if (filters) {
         params.append("filters", JSON.stringify(filters));
@@ -21,15 +21,12 @@ export async function query(baseUrl: string, filters: any, widgetParams?: Record
     if (widgetParams && Object.keys(widgetParams).length > 0) {
         params.append("params", JSON.stringify(widgetParams));
     }
+    return params.toString();
+}
 
-    let abortController = new AbortController();
-    const response = await fetch(baseUrl + "?" + params.toString(), {
-        signal: abortController.signal,
-    });
-
+async function parseQueryResponse(response: Response): Promise<QueryResult> {
     if (response.status !== 200) {
-        const errorContents = await response.text();
-        throw new Error(errorContents);
+        throw new Error(await response.text());
     }
     const result: QueryResult = await Arrow.tableFromIPC(response);
     result.dashicaResolvedTimeRange = JSON.parse(response.headers.get("X-Dashica-Resolved-Time-Range") || "null");
@@ -40,9 +37,23 @@ export async function query(baseUrl: string, filters: any, widgetParams?: Record
     result.clickhouseSummary = JSON.parse(response.headers.get("X-Clickhouse-Summary") || "null");
     result.dashicaAlertIf = JSON.parse(response.headers.get("X-Dashica-Alert-If") || "null");
     return result;
+}
 
-    // Add metadata
-    // TODO: data.query = query;
+export async function query(baseUrl: string, filters: any, widgetParams?: Record<string, string>): Promise<QueryResult> {
+    const response = await fetch(baseUrl + "?" + filterParams(filters, widgetParams));
+    return parseQueryResponse(response);
+}
+
+// queryPost is query() for the Explore preview: the widget is described in the
+// POST body (a widget envelope) instead of being baked into a compiled /query
+// endpoint. Response format is identical, so the same chart renderer consumes it.
+export async function queryPost(baseUrl: string, body: string, filters: any, widgetParams?: Record<string, string>): Promise<QueryResult> {
+    const response = await fetch(baseUrl + "?" + filterParams(filters, widgetParams), {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body,
+    });
+    return parseQueryResponse(response);
 }
 
 

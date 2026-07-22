@@ -9,7 +9,7 @@ import {timeHeatmapOrdinal} from '../chart/timeHeatmapOrdinal'
 import {stats} from '../chart/stats'
 import {table} from '../chart/table'
 import {alertOverview} from '../chart/alertOverview'
-import {query} from "./util/clickhouse-new";
+import {query, queryPost} from "./util/clickhouse-new";
 
 // Exported so the Explore preview (frontend/explore) can render a widget from a
 // POST'd JSON envelope through the exact same renderers as compiled dashboards.
@@ -36,6 +36,13 @@ Alpine.data('chart', () => ({
     _chartType: '',
     _isLoading: false,
     _initialLoad: true,
+    // Explore preview mode: when set, the widget is not a compiled endpoint but
+    // a JSON envelope. Data is fetched by POSTing _previewBody to
+    // <_previewBase>/query instead of GETting <widgetBaseUrl>/query. Everything
+    // else (chartProps, rendering, debug) is identical — so the preview reuses
+    // this component unchanged, per docs §4.4.
+    _previewBase: '',
+    _previewBody: '',
 
     init() {
 
@@ -46,6 +53,8 @@ Alpine.data('chart', () => ({
         // Store for later use
         this._widgetBaseUrl = widgetBaseUrl;
         this._chartType = chartType;
+        this._previewBase = this.$el.dataset.previewBase || '';
+        this._previewBody = this.$el.dataset.previewBody || '';
 
         // Render the title immediately as a placeholder so loading dashboards
         // are not a wall of anonymous boxes. Observable Plot renders its own
@@ -71,7 +80,11 @@ Alpine.data('chart', () => ({
             if (!this._visible) return;
             this._isLoading = true;
             try {
-                this._queryResult = await query(widgetBaseUrl + "/query", this.$store.urlState.getCombinedFilter(), this.$store.urlState.widgetParams)
+                const filter = this.$store.urlState.getCombinedFilter();
+                const wp = this.$store.urlState.widgetParams;
+                this._queryResult = this._previewBase
+                    ? await queryPost(this._previewBase + "/query", this._previewBody, filter, wp)
+                    : await query(widgetBaseUrl + "/query", filter, wp)
             } catch (e) {
                 this.$refs.chartContainer.innerHTML = `<b>ERROR: ${e.message} (chart type: ${chartType})</b>`;
                 throw e
@@ -103,9 +116,16 @@ Alpine.data('chart', () => ({
 
     async toggleDebug() {
         try {
-            const response = await fetch(this._widgetBaseUrl + "/debug?" + new URLSearchParams({
+            const qs = "?" + new URLSearchParams({
                 filters: JSON.stringify(this.$store.urlState.getCombinedFilter())
-            }));
+            });
+            const response = this._previewBase
+                ? await fetch(this._previewBase + "/debug" + qs, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: this._previewBody,
+                })
+                : await fetch(this._widgetBaseUrl + "/debug" + qs);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

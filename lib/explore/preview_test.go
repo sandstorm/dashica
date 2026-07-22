@@ -159,6 +159,21 @@ func TestPreviewRender_ReturnsWidgetMarkupWithChartProps(t *testing.T) {
 	}
 }
 
+func TestPreviewRender_IncompleteWidgetErrorsNotPanics(t *testing.T) {
+	// A real chart widget with no x/y (as a freshly-added widget has): its
+	// buildChartProps derefs nil fields and panics. The handler must recover
+	// into an error, not crash the server.
+	e := newTestExplore()
+	body := `{"type":"barHorizontal","props":{"height":200,"sql":{"kind":"table","table":"","where":[]}}}`
+	req := httptest.NewRequest(http.MethodPost, "/explore/api/preview/render", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	err := e.handlePreviewRender(rec, req) // must not panic
+	if err == nil || !strings.Contains(err.Error(), "incomplete or invalid") {
+		t.Fatalf("expected recovered incomplete-widget error, got %v", err)
+	}
+}
+
 func TestPreviewRender_RejectsNonPost(t *testing.T) {
 	e := newTestExplore()
 	req := httptest.NewRequest(http.MethodGet, "/explore/api/preview/render", nil)
