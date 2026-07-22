@@ -255,24 +255,6 @@ The invariant everything rests on: *round-trips faithfully or fails loudly.*
   drop unknown prop keys against descriptors on load (client tolerant,
   server strict).
 
-**✅ Step 3 — Arrow-incompatible ClickHouse types, Go-side (DONE 2026-07-22).**
-CH cannot serialize `JSON`/`Object`/`Dynamic`/`Variant` to Arrow → any
-`SELECT *` over `full_logs` (`event_original JSON`) failed.
-Built: `lib/clickhouse/arrow_compat.go` — `ensureArrowCompatible` in
-`QueryToHandler` (the only Arrow path). No-op unless `Format=="Arrow"`;
-`DESCRIBE (<query>)` (same params, no cache) → if the *result* has affected
-columns, wrap `SELECT * REPLACE(toString(`c`) AS `c`, …) FROM (<query>)`.
-Names/order/other types preserved; works for table/file/raw, compiled +
-dynamic, no SQL parsing. Trailing `;` stripped before wrapping
-(`trimTrailingSemicolons` — a real bug hit on first run: `DESCRIBE (…;)` is a
-syntax error). FE stop-gap removed: `sampleQuery()` reverted to the plain
-`{kind:'table', table}` envelope. Tests: unit (detection regex, wrap SQL,
-trim) green; e2e (`clickhouse_e2e_test.go`: `SELECT *` over `full_logs`
-through `QueryToHandler` succeeds where raw Arrow errors; ORDER BY row-order
-survives the wrap) — **needs dev ClickHouse; blocked in the sandbox
-(`connect: operation not permitted`), user must run**. Contingency if order
-ever lost: `SETTINGS max_threads=1` on wrapped queries only (not needed yet).
-
 **Step 4 — Go code generation (the missing core requirement #1).**
 `lib/explore/gocode.go` + `POST /api/gocode` + live Go-code drawer tab.
 Emitter: `dashica-gen`'s gocode tables (field↔builder-method verified at
