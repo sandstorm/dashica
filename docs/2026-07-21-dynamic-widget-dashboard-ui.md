@@ -234,42 +234,6 @@ stays as a regression test. Still to run once installed.
 From driving the real editor on `127.0.0.1:8081` (dev ClickHouse,
 `mv_agent_metrics`). B1–B4 have `test.fail` e2e tests.
 
-**B1 — Preview fires before the widget is buildable.** Adding a widget
-immediately shows a raw ClickHouse error (`toStartOfFiveMinutes()` with empty
-column, no FROM). Fix: client-side readiness gate — no preview until required
-fields are satisfiable (table + required pickers non-empty); show "Pick a
-table to see data" instead.
-
-**B2 — "+ WHERE" breaks the query.** The new row is empty and the preview
-fires instantly; the empty clause serializes into `WHERE tuple() AND (…)` →
-`ILLEGAL_TYPE_OF_ARGUMENT`. Fix in BOTH layers: client drops empty/whitespace
-clauses from the envelope; `sql` builder skips blank `where` entries too
-(compiled-API robustness — an empty `Where("")` should never emit `()`).
-
-**B3 — Typing a WHERE clause fights the user.** Every debounce tick mid-typing
-replaces the whole chart with a full-panel raw SQL syntax error
-(`host_name =` → SYNTAX_ERROR wall). Fix: keep the last good chart rendered
-and show errors as a compact overlay/badge on the card; additionally consider
-apply-on-Enter/blur for SQL-ish inputs (they are the only inputs where
-intermediate states are *expected* to be invalid).
-
-**B4 — Field slots lack roles; column classes not reflected in widgets.**
-BarVertical's X offers "Row count" — nonsense — because the kind list is
-derived from a single bit (`timestamped?`): X, Y, Fill, Fx, Fy all get
-`[count, enum, expr]`. The missing concept is the **slot role**:
-- **dimension** — what you group by; lands in `GROUP BY` (X of bar charts,
-  Fill, Fx, Fy). Valid kinds: column-as-category, custom expr. A time-widget X
-  is a *temporal* dimension (auto-bucket).
-- **measure** — the aggregation per group (Y). Valid kinds: count (later
-  sum/avg/…), custom expr. A bare category column is equally wrong here — the
-  same bug mirrored.
-The widget's Go code already knows each field's role (`buildQuery` puts
-x/fill/fx/fy into `GroupBy`), but the descriptor doesn't carry it. Fix:
-`role=dimension|measure` per field via `dashica-gen` struct tag → descriptor →
-`fieldKinds` declare which roles they serve → the picker shows only matching
-kinds; column *classes* then filter columns within the slot (categorical for
-Fill, temporal for time-X — completing what the class vocabulary started).
-
 **B5 — WHERE needs a scope explanation** (user request). Add help text on the
 Where section: *"Applies only to this widget's query — combined with the
 dashboard-wide time range and filters (top of the preview), which apply to

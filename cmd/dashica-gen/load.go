@@ -337,6 +337,23 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 	fi.EnumOptions = sub.enumOptions
 	fi.Required = cat == catQueryable || cat == catField || cat == catTsField
 
+	// Query role (dimension | measure) for field slots, driving the editor's
+	// kind picker (docs B4). Only meaningful on field categories; a
+	// TimestampedField is always a temporal dimension so it defaults to one.
+	role := dashicaTag["role"]
+	isFieldCat := cat == catField || cat == catTsField || cat == catOptField
+	switch {
+	case role == "":
+		if cat == catTsField {
+			role = "dimension"
+		}
+	case role != "dimension" && role != "measure":
+		return nil, false, fmt.Errorf("role tag must be \"dimension\" or \"measure\", got %q", role)
+	case !isFieldCat:
+		return nil, false, fmt.Errorf("role tag only valid on SqlField/TimestampedField slots, not %s", cat)
+	}
+	fi.Role = role
+
 	// gocode mapping (consumed in Phase 3): identity title-case unless overridden.
 	fi.IsCtorArg = cat == catQueryable
 	if !fi.IsCtorArg {

@@ -14,8 +14,8 @@ import (
 
 type Stats struct {
 	sql        sql.SqlQueryable
-	titleField *sql.SqlField
-	fillField  *sql.SqlField
+	titleField *sql.SqlField `dashica-gen:"role=dimension"`
+	fillField  *sql.SqlField `dashica-gen:"role=measure"`
 	id         string
 }
 

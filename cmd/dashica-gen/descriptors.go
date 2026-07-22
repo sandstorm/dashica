@@ -93,6 +93,9 @@ func fieldDescriptorLiteral(f fieldInfo) string {
 	if f.Category == catTsField {
 		parts = append(parts, "Timestamped: true")
 	}
+	if f.Role != "" {
+		parts = append(parts, fmt.Sprintf("Role: %q", f.Role))
+	}
 	if f.Doc != "" {
 		parts = append(parts, fmt.Sprintf("Help: %q", f.Doc))
 	}

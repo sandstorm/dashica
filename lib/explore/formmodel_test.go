@@ -64,6 +64,14 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 	if x.Editor != "field" || !x.Required || !x.Timestamped {
 		t.Errorf("x = %+v, want editor=field required timestamped", x)
 	}
+	// Slot roles (B4): timeBar X is a temporal dimension, Y a measure. The role
+	// drives which field kinds the picker offers (dimension never shows count).
+	if x.Role != "dimension" {
+		t.Errorf("timeBar x role = %q, want dimension", x.Role)
+	}
+	if y := fieldByName(tb.Fields, "y"); y == nil || y.Role != "measure" {
+		t.Errorf("timeBar y = %+v, want role=measure", y)
+	}
 	if f := fieldByName(tb.Fields, "sql"); f != nil {
 		t.Errorf("query field leaked into Fields: %+v", f)
 	}
@@ -97,15 +105,28 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 	for _, fk := range resp.FieldKinds {
 		byKind[fk.Kind] = fk
 	}
-	if ab, ok := byKind["autoBucket"]; !ok || ab.Label == "" || !ab.RequiresColumn || ab.ColumnClass != "temporal" {
-		t.Errorf("autoBucket fieldKind = %+v, want labelled, requiresColumn, temporal", ab)
+	if ab, ok := byKind["autoBucket"]; !ok || ab.Label == "" || !ab.RequiresColumn || ab.ColumnClass != "temporal" || !hasRole(ab, "dimension") {
+		t.Errorf("autoBucket fieldKind = %+v, want labelled, requiresColumn, temporal, dimension", ab)
 	}
-	if cnt, ok := byKind["count"]; !ok || cnt.Label == "" || cnt.RequiresColumn {
-		t.Errorf("count fieldKind = %+v, want labelled, no column", cnt)
+	if cnt, ok := byKind["count"]; !ok || cnt.Label == "" || cnt.RequiresColumn || !hasRole(cnt, "measure") {
+		t.Errorf("count fieldKind = %+v, want labelled, no column, measure", cnt)
 	}
-	if ex, ok := byKind["expr"]; !ok || !ex.Advanced {
-		t.Errorf("expr fieldKind = %+v, want advanced", ex)
+	if en, ok := byKind["enum"]; !ok || !hasRole(en, "dimension") || en.ColumnClass != "categorical" {
+		t.Errorf("enum fieldKind = %+v, want dimension, categorical", en)
 	}
+	// expr is the escape hatch: advanced and valid in every slot role.
+	if ex, ok := byKind["expr"]; !ok || !ex.Advanced || !hasRole(ex, "dimension") || !hasRole(ex, "measure") {
+		t.Errorf("expr fieldKind = %+v, want advanced, dimension+measure", ex)
+	}
+}
+
+func hasRole(fk fieldKind, role string) bool {
+	for _, r := range fk.Roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
 
 func fieldByName(fields []widget.FieldDescriptor, name string) *widget.FieldDescriptor {

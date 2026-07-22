@@ -112,11 +112,10 @@ test('B1: freshly added widget must not show a raw ClickHouse error', async ({pa
     await expect(previewError(page)).toHaveCount(0);
 });
 
-// KNOWN BUG (B4): field slots have no roles — BarVertical's X (a dimension,
-// it lands in GROUP BY) offers "Row count" (a measure). Once role filtering
-// lands, X of barVertical must not offer measure kinds.
+// B4 (FIXED): field slots carry a role (dimension | measure) from the Go
+// struct tag; the picker offers only the kinds serving that role. BarVertical's
+// X is a dimension (GROUP BY), so it must not offer "Row count" (a measure).
 test('B4: BarVertical X (dimension slot) must not offer "Row count"', async ({page}) => {
-    test.fail(true, 'known bug B4 — slot roles missing; all non-temporal pickers share one kind list');
     await addWidget(page, 'barVertical');
     const xField = inspector(page).locator('.explore-field', {hasText: 'X'}).first();
     const kinds = await xField.locator('select').first().locator('option').allTextContents();

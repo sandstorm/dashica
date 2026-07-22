@@ -15,9 +15,9 @@ import (
 // BarHorizontal: bars go from left to right. x is the value axis, y is the category axis.
 type BarHorizontal struct {
 	sql          sql.SqlQueryable
-	x            sql.SqlField
-	y            sql.SqlField
-	fill         *sql.SqlField
+	x            sql.SqlField  `dashica-gen:"role=measure"`
+	y            sql.SqlField  `dashica-gen:"role=dimension"`
+	fill         *sql.SqlField `dashica-gen:"role=dimension"`
 	title        string
 	id           string
 	height       int

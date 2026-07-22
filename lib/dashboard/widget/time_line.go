@@ -16,12 +16,12 @@ import (
 type TimeLine struct {
 	sql          sql.SqlQueryable
 	x            sql.TimestampedField
-	y            sql.SqlField
+	y            sql.SqlField `dashica-gen:"role=measure"`
 	stroke       string
-	strokeField  *sql.SqlField
-	zField       *sql.SqlField
-	fx           *sql.SqlField
-	fy           *sql.SqlField
+	strokeField  *sql.SqlField `dashica-gen:"role=dimension"`
+	zField       *sql.SqlField `dashica-gen:"role=dimension"`
+	fx           *sql.SqlField `dashica-gen:"role=dimension"`
+	fy           *sql.SqlField `dashica-gen:"role=dimension"`
 	title        string
 	id           string
 	height       int

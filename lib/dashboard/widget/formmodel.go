@@ -24,6 +24,11 @@ type FieldDescriptor struct {
 	// Timestamped restricts a field picker to DateTime columns (the X axis of
 	// time-series widgets).
 	Timestamped bool `json:"timestamped,omitempty"`
+	// Role is the query role of the slot ("dimension" | "measure"), from the Go
+	// struct tag. A dimension groups (bar X, fill, fx/fy, heatmap y); a measure
+	// aggregates per group (bar Y, heatmap fill). The editor offers only the
+	// field kinds valid for the role — a dimension never shows "Row count".
+	Role string `json:"role,omitempty"`
 	// Help is the Go doc comment of the field, shown as a tooltip/help text.
 	Help string `json:"help,omitempty"`
 	// Options are the allowed values of a select editor (enum fields).

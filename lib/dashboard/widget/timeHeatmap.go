@@ -15,8 +15,8 @@ import (
 type TimeHeatmap struct {
 	sql         sql.SqlQueryable
 	x           sql.TimestampedField
-	y           sql.SqlField
-	fill        *sql.SqlField
+	y           sql.SqlField  `dashica-gen:"role=dimension"`
+	fill        *sql.SqlField `dashica-gen:"role=measure"`
 	title       string
 	id          string
 	height      *int

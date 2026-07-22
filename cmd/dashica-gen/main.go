@@ -110,6 +110,13 @@ type fieldInfo struct {
 	Category fieldCategory //
 	Doc      string        // trimmed doc comment (help text)
 	Required bool          //
+	// Role is the query role of a field slot ("dimension" | "measure"), from the
+	// `dashica-gen:"role=..."` struct tag. A dimension lands in GROUP BY (bar X,
+	// fill, fx, fy, heatmap y); a measure is the per-group aggregation (bar Y,
+	// heatmap fill). It drives which field *kinds* the editor picker offers, so a
+	// dimension slot never shows "Row count" (a measure) and vice versa. Only
+	// set on field categories; a TimestampedField defaults to "dimension".
+	Role string
 	// group only:
 	Group     []fieldInfo
 	GroupType string // named struct type, e.g. "StackOptions"

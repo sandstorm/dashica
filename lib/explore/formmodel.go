@@ -47,6 +47,11 @@ type fieldKind struct {
 	Kind string `json:"kind"`
 	// Label is the intent-teaching display text, e.g. "Time bucket (automatic)".
 	Label string `json:"label"`
+	// Roles are the slot roles this kind serves ("dimension" | "measure"). The
+	// picker offers a kind only when the slot's role (from the widget descriptor)
+	// is in this list, so a dimension slot never shows a measure kind (B4). A
+	// custom expression serves both.
+	Roles []string `json:"roles"`
 	// RequiresColumn is true when the kind needs a column picked (autoBucket,
 	// enum); false for count (needs none) and expr (free SQL).
 	RequiresColumn bool `json:"requiresColumn,omitempty"`
@@ -62,10 +67,10 @@ type fieldKind struct {
 // the golden-path order: the first non-advanced kind valid for a slot is its
 // default (autoBucket for the timestamped X, count for a value/Y field).
 var fieldKinds = []fieldKind{
-	{Kind: "autoBucket", Label: "Time bucket (automatic)", RequiresColumn: true, ColumnClass: clickhouse.ColumnClassTemporal},
-	{Kind: "count", Label: "Row count"},
-	{Kind: "enum", Label: "Column (as category)", RequiresColumn: true, ColumnClass: clickhouse.ColumnClassCategorical},
-	{Kind: "expr", Label: "Custom SQL expression", Advanced: true},
+	{Kind: "autoBucket", Label: "Time bucket (automatic)", Roles: []string{"dimension"}, RequiresColumn: true, ColumnClass: clickhouse.ColumnClassTemporal},
+	{Kind: "count", Label: "Row count", Roles: []string{"measure"}},
+	{Kind: "enum", Label: "Column (as category)", Roles: []string{"dimension"}, RequiresColumn: true, ColumnClass: clickhouse.ColumnClassCategorical},
+	{Kind: "expr", Label: "Custom SQL expression", Roles: []string{"dimension", "measure"}, Advanced: true},
 }
 
 // widgetFormModel is a widget's generated descriptor plus its runtime-derived

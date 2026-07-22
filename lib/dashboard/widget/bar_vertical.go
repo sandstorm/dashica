@@ -15,11 +15,11 @@ import (
 
 type BarVertical struct {
 	sql          sql.SqlQueryable
-	x            sql.SqlField
-	y            sql.SqlField
-	fill         *sql.SqlField
-	fx           *sql.SqlField
-	fy           *sql.SqlField
+	x            sql.SqlField  `dashica-gen:"role=dimension"`
+	y            sql.SqlField  `dashica-gen:"role=measure"`
+	fill         *sql.SqlField `dashica-gen:"role=dimension"`
+	fx           *sql.SqlField `dashica-gen:"role=dimension"`
+	fy           *sql.SqlField `dashica-gen:"role=dimension"`
 	title        string
 	id           string
 	height       int

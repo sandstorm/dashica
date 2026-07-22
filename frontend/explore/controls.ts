@@ -42,6 +42,9 @@ export interface SchemaResponse {
 export interface FieldKind {
     kind: string;
     label: string;
+    // Slot roles this kind serves ('dimension' | 'measure'). A picker offers a
+    // kind only when the slot's role is listed here (B4).
+    roles?: string[];
     requiresColumn?: boolean;
     columnClass?: ColumnClass;
     advanced?: boolean;
@@ -53,6 +56,9 @@ export interface FieldDescriptor {
     editor: string;
     required?: boolean;
     timestamped?: boolean;
+    // Query role of the slot ('dimension' | 'measure'), from the Go struct tag.
+    // Drives which field kinds the picker offers (B4).
+    role?: string;
     help?: string;
     options?: string[];
     fields?: FieldDescriptor[];
@@ -244,12 +250,27 @@ function keyValueControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTM
 // field picker (composite) — SqlField / TimestampedField
 // ---------------------------------------------------------------------------
 
-// The wire "kinds" that apply to a slot. autoBucket only makes sense on a
-// timestamped axis (it buckets a DateTime column); a plain value/measure field
-// is count / enum / custom. (This slot rule is structural — the labels and
-// column classes come from the served fieldKinds.)
-function kindsForSlot(field: FieldDescriptor): string[] {
-    return field.timestamped ? ['autoBucket', 'expr'] : ['count', 'enum', 'expr'];
+// The preferred column class of a slot: a timestamped dimension buckets a
+// temporal column (autoBucket), a plain dimension groups a categorical one
+// (enum). Measures pick no column class.
+function slotColumnClass(field: FieldDescriptor): ColumnClass {
+    return field.timestamped ? 'temporal' : 'categorical';
+}
+
+// The wire "kinds" that apply to a slot, derived from its role (dimension |
+// measure) and column class — not a single timestamped bit (B4). A kind is
+// offered when it serves the slot's role AND (it is class-agnostic, e.g.
+// count/expr, or its class matches the slot's). So a bar-chart X (dimension,
+// categorical) offers enum + expr but never "Row count" (a measure); a time X
+// (dimension, temporal) offers autoBucket; a Y (measure) offers count + expr.
+// Order follows the served fieldKinds (golden-path first).
+function kindsForSlot(field: FieldDescriptor, fieldKinds: FieldKind[]): string[] {
+    const role = field.role;
+    const slotClass = slotColumnClass(field);
+    return fieldKinds
+        .filter((k) => !role || (k.roles ?? []).includes(role))
+        .filter((k) => !k.columnClass || k.columnClass === slotClass)
+        .map((k) => k.kind);
 }
 
 // Build the wire DTO for a chosen kind with sensible defaults, letting the
@@ -267,7 +288,7 @@ function seedKind(kind: string): any {
 function fieldControl(field: FieldDescriptor, obj: any, ctx: ControlCtx): HTMLElement {
     const container = html`<div class="explore-field-picker"></div>` as HTMLElement;
 
-    const slotKinds = kindsForSlot(field);
+    const slotKinds = kindsForSlot(field, ctx.fieldKinds);
     const info = (k: string): FieldKind =>
         ctx.fieldKinds.find((f) => f.kind === k) ?? {kind: k, label: k};
     const defaultKind = slotKinds.find((k) => !info(k).advanced) ?? slotKinds[0];
@@ -535,6 +556,7 @@ export function seedRequiredFields(fields: FieldDescriptor[], props: any, ctx: C
         const v = props[f.name];
 
         if (f.timestamped) {
+            // Temporal dimension: auto-bucket the first temporal column.
             const col = firstOfClass('temporal');
             if (!v || typeof v !== 'object' || v.kind !== 'autoBucket') {
                 props[f.name] = {kind: 'autoBucket', column: col ?? '', alias: 'time'};
@@ -543,8 +565,21 @@ export function seedRequiredFields(fields: FieldDescriptor[], props: any, ctx: C
                 v.column = col;
                 changed = true;
             }
+        } else if (f.role === 'dimension') {
+            // Categorical dimension: group by the first categorical column.
+            const col = firstOfClass('categorical');
+            if (!v || typeof v !== 'object' || v.kind !== 'enum') {
+                props[f.name] = col
+                    ? {kind: 'enum', definition: `${col}::String`, alias: col}
+                    : seedKind('enum');
+                changed = true;
+            } else if (!v.definition && col) {
+                v.definition = `${col}::String`;
+                if (!v.alias) v.alias = col;
+                changed = true;
+            }
         } else if (!v || typeof v !== 'object' || !v.kind) {
-            // A value field with nothing chosen defaults to row count (renders
+            // A measure with nothing chosen defaults to row count (renders
             // without needing a column).
             props[f.name] = seedKind('count');
             changed = true;
