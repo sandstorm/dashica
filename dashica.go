@@ -129,6 +129,11 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertManager:            alertManager,
 	}
 
+	return newDashicaImpl(cfg, logger, mux, deps)
+}
+
+// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json and no dashboards yet.
+func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
 	d := &DashicaImpl{
 		cfg:              cfg,
 		log:              logger,
