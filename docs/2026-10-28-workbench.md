@@ -336,7 +336,8 @@ interface WidgetsApi {
 }
 ```
 
-Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug), `widget/selection` (the floating bar
+Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
+expects one. Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug), `widget/selection` (the floating bar
 on a chart selection: zoom, filter, show rows, actions), `table/row` (a row's menu),
 `dashboards/entry` (a menu entry: favorite).
 

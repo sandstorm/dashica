@@ -5,8 +5,8 @@ import type { Extension, ExtensionContext } from '../../hosts/extension-host/ext
 
 /**
  * Puts the parts of the server-rendered page (`[data-workbench-part]`, staged hidden by the templ layout) into the
- * workbench: the dashboards menu as the left panel "Dashboards" (a dashboard's entry has the menu `dashboards/entry` on a
- * right click), the search bar into the filter bar, the debug drawer as the bottom panel "Debug" (shown on a chart's
+ * workbench: the dashboards menu as the left panel "Dashboards" (a dashboard's entry has a "…" button for the menu
+ * `dashboards/entry`), the search bar into the filter bar, the debug drawer as the bottom panel "Debug" (shown on a chart's
  * wrench). Runs before Alpine starts, so the parts are in place when
  * Alpine walks them.
  */
@@ -47,20 +47,20 @@ export function legacyPage(doc: Document): Extension {
   };
 }
 
-/** The menu `dashboards/entry` on a right click of a dashboard's entry in `menu`: context `{ url, title }`, argument the URL. */
+/** A "…" button on each dashboard's entry in `menu` for the menu `dashboards/entry`: context `{ url, title }`, argument the URL. */
 function entryMenu(menu: HTMLElement, { ui, commands }: Pick<ExtensionContext, 'ui' | 'commands'>): Disposable[] {
   const browserWindow = menu.ownerDocument.defaultView!;
-  const oncontextmenu = (event: MouseEvent) => {
-    const link = (event.target as Element).closest<HTMLAnchorElement>('[data-menu-entry] a[href]');
-    if (!link) return;
-    event.preventDefault();
+  const buttons = [...menu.querySelectorAll<HTMLAnchorElement>('[data-menu-entry] > a[href]')].map((link) => {
     const url = link.href;
     const title = link.textContent ?? url;
-    ui.showContextMenu('dashboards/entry', { anchor: { x: event.clientX, y: event.clientY }, title, context: { url, title }, args: [url] });
-  };
-  menu.addEventListener('contextmenu', oncontextmenu);
+    const onclick = (event: MouseEvent) =>
+      ui.showContextMenu('dashboards/entry', { anchor: event.currentTarget as HTMLElement, title, context: { url, title }, args: [url] });
+    const button = html`<button type="button" class="entry-menu-btn" aria-label=${`More for ${title}`} title="More" aria-haspopup="menu" onclick=${onclick}>…</button>`;
+    link.after(button);
+    return button;
+  });
   return [
-    new Disposable(() => menu.removeEventListener('contextmenu', oncontextmenu)),
+    new Disposable(() => buttons.forEach((button) => button.remove())),
     commands.registerCommand('dashboards.openInNewTab', (url: string) => void browserWindow.open(url, '_blank', 'noopener')),
     commands.registerCommand('dashboards.copyLink', (url: string) => browserWindow.navigator.clipboard.writeText(url)),
     ui.registerMenuItem('dashboards/entry', { command: 'dashboards.openInNewTab', title: 'Open in new tab', group: 'navigation', order: 1 }),

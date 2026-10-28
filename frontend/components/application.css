@@ -23,7 +23,31 @@
 }
 
 .application__sidebar ul.menu li a {
-    padding-right: 1.5rem;
+    padding-right: 3rem;
+}
+
+/* The "…" button left of the star, for the entry's menu (extensions/legacy-page). */
+.entry-menu-btn {
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.application__sidebar ul.menu li:hover .entry-menu-btn,
+.entry-menu-btn:focus-visible {
+    opacity: 1;
+}
+
+a.menu-active ~ .entry-menu-btn {
+    color: white;
 }
 
 .star-btn {
@@ -46,7 +70,7 @@
     opacity: 1;
 }
 
-a.menu-active + .star-btn {
+a.menu-active ~ .star-btn {
     color: white;
     opacity: 1;
 }
