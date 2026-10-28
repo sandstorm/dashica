@@ -93,8 +93,7 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 	// "Open in Explore": redirect to the Explore editor pre-loaded with this
 	// dashboard's state (via the same #s= share-link the editor already reads).
 	// Registered unconditionally; it 404s at request time when Explore is not
-	// wired up. The button that links here is rendered by the page layout only
-	// when ctx.ExploreBaseURL is set.
+	// wired up. No page links here while Explore is rebuilt (DEPRECATED (workbench)).
 	if err := handlerCollector.Handle("open-in-explore", d.openInExploreHandler(ctx)); err != nil {
 		return fmt.Errorf("registering open-in-explore handler: %w", err)
 	}
@@ -106,6 +105,8 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 // and redirects to the Explore editor with the state in the URL fragment. The
 // fragment value is query-escaped: the editor reads it via URLSearchParams,
 // which would otherwise turn base64 '+' into a space before atob.
+//
+// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 func (d *Builder) openInExploreHandler(ctx *rendering.DashboardContext) http.Handler {
 	exploreBaseURL := ctx.ExploreBaseURL
 	logger := ctx.Deps.Logger

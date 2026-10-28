@@ -1,94 +1,11 @@
 package explore
 
-import "github.com/sandstorm/dashica/lib/components/layout"
+// DEPRECATED (workbench): Explore's Go API, kept for its rebuild on the workbench; its UI is gone. Port into the rebuild or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 
-// EditorShell is the static DOM scaffold the frontend `exploreEditor` Alpine
-// component (frontend/explore/editor.ts) populates. The data-explore attributes
-// name the panes it fills; data-base-url tells the frontend where the API lives.
-// All dynamic behaviour is client-side — this template only lays out the mount
-// points: a full-viewport grid (toolbar / (tree | preview | inspector) / drawer).
-// The preview pane carries its own sticky time-range strip (explorePreviewControls),
-// because the time range is part of the *previewed dashboard's* state — it belongs
-// above the widgets it re-queries, exactly as on a real dashboard page.
-// The toolbar stays as fixed chrome above the dock; everything below it is owned
-// by dockview (geometry). The panes live in an inert [data-dock-staging] block as
-// [data-dock-panel="…"] elements — the dock's `adopt` renderer MOVES each into its
-// panel before Alpine.start() (frontend/components/dock.ts, editor.ts
-// initExploreDock). The data-explore attributes stay on the inner elements so
-// editor.ts's mount lookups and the e2e suite are unaffected by the move.
-// The drawer's Data / Go code / JSON tabs are now three dockview panels in one
-// group (replacing the hand-rolled tab strip); dockview renders the tab bar.
-templ EditorShell(baseURL string) {
-	<div x-data="exploreEditor" class="explore-editor" data-base-url={ baseURL } data-filter-scope>
-		<div class="explore-toolbar">
-			<a class="explore-home" href="/">← Dashica</a>
-			<div class="explore-toolbar__editor" data-explore="toolbar"></div>
-		</div>
-		<div id="explore-dock" class="explore-dock"></div>
-		<div data-dock-staging hidden>
-			<aside data-dock-panel="tree" class="explore-tree" data-explore="tree"></aside>
-			<div data-dock-panel="preview-controls">
-				@explorePreviewControls()
-			</div>
-			<div data-dock-panel="preview" class="explore-preview__cards" data-explore="preview"></div>
-			<aside data-dock-panel="inspector" class="explore-inspector" data-explore="inspector"></aside>
-			<div data-dock-panel="drawer-data" class="explore-drawer__content" data-explore="drawer-data"></div>
-			<div data-dock-panel="drawer-gocode" class="explore-drawer__content" data-explore="drawer-gocode"></div>
-			<div data-dock-panel="drawer-json" class="explore-drawer__content" data-explore="drawer-json"></div>
-			<div data-dock-panel="debug">
-				@layout.DebugDrawerPanel()
-			</div>
-		</div>
-	</div>
-}
-
-// explorePreviewControls is the compact time-range strip pinned above the
-// preview cards. It reuses the standard `searchBar` Alpine component: the global
-// `$store.timeState` (range/log-scale) plus this page's filter scope (SQL filter,
-// resolved by containment — the editor root carries data-filter-scope) drive the
-// preview charts identically to a real dashboard's search bar — just laid out compactly:
-// range presets + custom picker + log-scale in one row, the SQL filter tucked
-// behind a "filters" toggle (wired by editor.ts). Auto-refresh and per-dashboard
-// filter buttons are intentionally omitted to keep the strip small.
-templ explorePreviewControls() {
-	<div x-data="searchBar" x-init="init()" class="explore-preview__controls" data-explore="preview-controls">
-		<div class="explore-preview__controls-row">
-			<div class="join">
-				<template x-for="preset in timePresets" :key="preset.value">
-					<button
-						@click="$store.timeState.setTimePreset(preset.value)"
-						:class="$store.timeState.timeRange === preset.value ? 'btn-active' : ''"
-						class="btn btn-xs join-item"
-						x-text="preset.label"
-					></button>
-				</template>
-				<button
-					@click="openCustomDatePicker()"
-					:class="$store.timeState.timeRange === 'custom' ? 'btn-active' : ''"
-					class="btn btn-xs join-item"
-				>Custom</button>
-			</div>
-			<div x-show="$store.timeState.timeRange === 'custom'" x-cloak class="form-control">
-				<input
-					x-ref="datePicker"
-					type="text"
-					class="input input-xs input-bordered w-72 font-mono"
-					placeholder="Select date range"
-					readonly
-				/>
-			</div>
-			<label class="label cursor-pointer gap-2">
-				<span class="label-text text-xs font-medium">Log scale</span>
-				<input
-					type="checkbox"
-					:checked="$store.timeState.logScale"
-					@change="$store.timeState.toggleLogScale()"
-					class="toggle toggle-xs"
-				/>
-			</label>
-			<div class="explore-preview__controls-spacer"></div>
-			@layout.SqlFilterToggle()
-		</div>
-		@layout.SqlFilterPanel()
+// RebuildNotice is what /explore shows until Explore is rebuilt on the workbench.
+templ RebuildNotice() {
+	<div class="p-8">
+		<h1>Explore is being rebuilt</h1>
+		<p>Explore moves onto the new workbench. Until it is back, use the dashboards.</p>
 	</div>
 }

@@ -21,9 +21,10 @@ type DashboardContext struct {
 	// ExploreBaseURL points at the registration URL of the Explore view (e.g.
 	// "/explore"), or is nil / empty when Explore is not registered. It is a
 	// pointer shared across every dashboard context so it resolves at request
-	// time regardless of dashboard/Explore registration order: the page layout
-	// renders the "Open in Explore" link only when it is set, and each
-	// dashboard's own open-in-explore handler redirects to it.
+	// time regardless of dashboard/Explore registration order: each dashboard's
+	// own open-in-explore handler redirects to it.
+	//
+	// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 	ExploreBaseURL *string
 
 	Deps Dependencies

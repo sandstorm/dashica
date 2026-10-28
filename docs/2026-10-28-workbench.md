@@ -475,11 +475,18 @@ document in the same commit.
 rewrites or deliberately deletes a file's content removes the marker (or the file) in the same commit, and says in the
 commit message where the content went. Before the merge, `grep -rl UNMIGRATED frontend` must be empty.
 
+**Explore's Go API is kept, marked deprecated:** its UI is gone with step 3a; its Go code (`lib/explore`, the form
+model, the Go-code emitter, open-in-explore, the generator parts for both) stays for the rebuild (§6). Whole files start
+with `// DEPRECATED (workbench): …`; Explore-only symbols in shared files carry Go's `Deprecated: (workbench) …`
+paragraph, so editors and linters flag their use. These may outlive the merge; the Explore rebuild ports or deletes
+each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Explore is being rebuilt" meanwhile.
+
 | Step | Change | Works afterwards |
 |---|---|---|
 | 1 ✅ | Core: `Disposable`, `Event` / `EventEmitter` (from Zwiebelfisch), vitest (`npm test`) | everything; nothing visible |
 | 2 ✅ | Commands + extension host: `registerCommand` / `executeCommand`, contributions, `activate`, mementos (`dashica:global:<ext>:` / `dashica:session:<ext>:`); not wired into the page yet | everything |
-| 3 | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content; **Explore removed** | dashboards (old content inside the new chrome) |
+| 3a ✅ | **Explore UI removed** (`frontend/explore`, editor page, Explore links); its Go API kept and marked deprecated; `/explore` shows a rebuild notice | dashboards (unchanged) |
+| 3b | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content | dashboards (old content inside the new chrome) |
 | 4 | Menus + palette: `registerMenuItem` / `showContextMenu`; search everywhere replaces `sidebarSearch` | dashboards |
 | 5a | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |
 | 5b | Client rendering: widget host, one extension per widget type (wrapping the existing `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |

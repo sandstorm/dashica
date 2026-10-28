@@ -1,3 +1,5 @@
+// DEPRECATED (workbench): Explore's Go API, kept for its rebuild on the workbench; its UI is gone. Port into the rebuild or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
+
 package explore
 
 import (
@@ -55,9 +57,7 @@ func TestEditorPage_ServesHTML(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 		t.Errorf("Content-Type = %q, want text/html", ct)
 	}
-	// The editor shell mounts the exploreEditor Alpine component; its presence
-	// proves the page rendered through the shared layout.
-	if !strings.Contains(rec.Body.String(), `x-data="exploreEditor"`) {
-		t.Errorf("body missing editor shell: %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "Explore is being rebuilt") {
+		t.Errorf("body missing the rebuild notice: %q", rec.Body.String())
 	}
 }

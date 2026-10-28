@@ -19,9 +19,7 @@ import "./components/debugDrawer";
 import "./components/sidebar";
 import favorites from './components/favorites';
 import sidebarSearch from './components/sidebarSearch';
-import exploreEditor, { initExploreDock } from './explore/editor';
 import { initDashboardDock } from './components/dashboardDock';
-import './explore/explore.css';
 
 Alpine.plugin(intersect);
 Alpine.plugin(resize);
@@ -34,7 +32,6 @@ Alpine.data('checkboxGroup', checkboxGroup);
 Alpine.data('speedscopeLink', speedscopeLink);
 Alpine.data('favorites', favorites);
 Alpine.data('sidebarSearch', sidebarSearch);
-Alpine.data('exploreEditor', exploreEditor);
 
 
 window.Alpine = Alpine
@@ -43,5 +40,4 @@ window.Alpine = Alpine
 // see frontend/components/dock.ts). Pages that use a dock call the matching
 // initializer in their inline script ahead of Alpine.start().
 window.Dashica = window.Dashica || {};
-window.Dashica.initExploreDock = initExploreDock;
 window.Dashica.initDashboardDock = initDashboardDock;

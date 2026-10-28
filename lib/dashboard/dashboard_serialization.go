@@ -72,6 +72,8 @@ func MarshalDashboard(d Dashboard) ([]byte, error) {
 //
 // The strict MarshalJSON is unchanged; the round-trip invariant still fails
 // loudly. This is the deliberate lenient path for opening compiled dashboards.
+//
+// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 func (d *Builder) MarshalForExplore() ([]byte, []string, error) {
 	notes, done := widget.BeginLenientMarshal()
 	defer done()

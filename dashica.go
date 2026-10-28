@@ -149,12 +149,16 @@ type DashicaImpl struct {
 	// registered (empty otherwise). Every DashboardContext carries a pointer to
 	// this field, so the "Open in Explore" affordance appears regardless of
 	// whether Explore is registered before or after the dashboards.
+	//
+	// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 	exploreBaseURL string
 }
 
 // exploreView is the marker a dashboard implements to identify itself as the
 // Explore editor. It is structural (Explore need not import this package); the
 // method name doubles as documentation of intent.
+//
+// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 type exploreView interface {
 	IsExploreView() bool
 }

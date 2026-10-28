@@ -1,3 +1,5 @@
+// DEPRECATED (workbench): Explore's Go API, kept for its rebuild on the workbench; its UI is gone. Port into the rebuild or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
+
 // Package explore implements the on-demand Dashica query/widget builder — the
 // "Explore" view described in docs/2026-07-21-dynamic-widget-dashboard-ui.md.
 //
@@ -10,6 +12,8 @@
 // Phase 2 (this file + handlers.go, preview.go, schema.go, values.go) is the
 // server-side runtime: it executes a JSON-described widget and serves the raw
 // material the (Phase 4) editor UI needs. Persistence (WithFileStore) is Phase 6.
+//
+// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 package explore
 
 import (

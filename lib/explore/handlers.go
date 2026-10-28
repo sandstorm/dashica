@@ -1,3 +1,5 @@
+// DEPRECATED (workbench): Explore's Go API, kept for its rebuild on the workbench; its UI is gone. Port into the rebuild or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
+
 package explore
 
 import (
@@ -81,13 +83,7 @@ func (h apiHandler) asHTTP() http.Handler {
 	})
 }
 
-// editorPage renders the editor UI on the full-viewport ExplorePage layout: no
-// dashboard sidebar and no global search bar — the editor owns the screen. The
-// time range lives inside the preview pane (EditorShell's own compact strip),
-// so the layout's searchBar option is unused here. All dynamic behaviour lives
-// in the frontend `exploreEditor` Alpine component (frontend/explore/editor.ts):
-// the shell is just the mount points it fills. Rendered via the shared layout
-// so it links the same JS/CSS bundle as any dashboard.
+// editorPage is the page /explore shows: the rebuild notice, inside the dashboard chrome.
 func (e *exploreImpl) editorPage(ctx *rendering.DashboardContext) templ.Component {
-	return layout.ExplorePage.Fn(*ctx, rendering.SearchBarOption{}, EditorShell(e.baseURL))
+	return layout.DefaultPage.Fn(*ctx, rendering.SearchBarOption{}, RebuildNotice())
 }
