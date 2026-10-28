@@ -5,21 +5,10 @@ import (
 )
 
 templ PageMenu(renderingContext rendering.DashboardContext) {
-    <div
-        x-data="sidebarSearch"
-        @keydown.window.cmd.k.prevent="focus"
-        @keydown.window.ctrl.k.prevent="focus">
-        <input
-            type="search"
-            x-ref="searchInput"
-            x-model="query"
-            @input="filter"
-            @keydown.escape="clear"
-            placeholder="Search dashboards (⌘K)"
-            class="input input-bordered input-sm w-full sidebar-search"/>
+    <div>
         <div x-data="favorites">
             <ul class="menu">
-                <li x-show="items.length > 0 && query === ''" style="display:none">
+                <li x-show="items.length > 0" style="display:none">
                     <h2 class="menu-title">Favorites</h2>
                     <ul>
                         <template x-for="fav in items" :key="fav.url">
@@ -51,6 +40,5 @@ templ PageMenu(renderingContext rendering.DashboardContext) {
                 }
             </ul>
         </div>
-        <p x-ref="noResults" hidden class="sidebar-search__empty">No dashboards match.</p>
     </div>
 }

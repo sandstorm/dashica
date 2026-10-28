@@ -18,7 +18,6 @@ import "./components/chart";
 import "./components/debugDrawer";
 import "./components/sidebar";
 import favorites from './components/favorites';
-import sidebarSearch from './components/sidebarSearch';
 import { createWorkbench } from './workbench/workbench';
 import { legacyPage } from './extensions/legacy-page/legacy-page';
 import { searchEverywhere } from './extensions/search-everywhere/search-everywhere';
@@ -33,7 +32,6 @@ Alpine.data('textInput', textInput);
 Alpine.data('checkboxGroup', checkboxGroup);
 Alpine.data('speedscopeLink', speedscopeLink);
 Alpine.data('favorites', favorites);
-Alpine.data('sidebarSearch', sidebarSearch);
 
 
 window.Alpine = Alpine
