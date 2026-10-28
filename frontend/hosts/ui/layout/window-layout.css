@@ -1,5 +1,6 @@
 /* The workbench's regions (see WindowLayout in window-layout.ts): the title and filter bars, the two sides (rail,
-   resizable panel; the left one an overlay when narrow), the content with the bottom panel, the status bar. Colors are
+   resizable panel; the left one an overlay when narrow), between them the filter bar, the content and the bottom panel,
+   the status bar. Colors are
    daisyUI's tokens, so the themes (light / dark) apply. */
 .dashica-wb {
   --wb-bg: var(--color-base-100, #fff);
@@ -13,16 +14,15 @@
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(min(20rem, 25%), 1fr) var(--wb-right-side, auto);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;
   background: var(--wb-bg);
   color: var(--wb-text);
 }
 
-/* Above everything: the title bar, then the filter bar; each hidden while it has no item. */
+/* Above everything the title bar; above the content the filter bar. Each is hidden while it has no item. */
 .dashica-wb__title-bar,
 .dashica-wb__filter-bar {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -31,8 +31,8 @@
   border-bottom: 1px solid var(--wb-border);
   background: var(--wb-subtle);
 }
-.dashica-wb__title-bar { grid-row: 1; min-height: 36px; font-size: 13px; }
-.dashica-wb__filter-bar { grid-row: 2; }
+.dashica-wb__title-bar { grid-column: 1 / -1; grid-row: 1; min-height: 36px; font-size: 13px; }
+.dashica-wb__filter-bar { flex: none; }
 .dashica-wb__title-bar[hidden],
 .dashica-wb__filter-bar[hidden],
 .dashica-wb__status-bar[hidden] { display: none; }
@@ -46,7 +46,7 @@
 
 /* The sides: a rail of buttons and the shown panel. */
 .dashica-wb__side {
-  grid-row: 3;
+  grid-row: 2;
   position: relative;
   display: flex;
   min-width: 0;
@@ -122,10 +122,10 @@
   box-shadow: 4px 0 16px rgba(0, 0, 0, 0.16);
 }
 
-/* The centre column: the content (it scrolls), and the bottom panel below it. */
+/* The centre column: the filter bar, the content (it scrolls), the bottom panel. */
 .dashica-wb__center {
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -186,7 +186,7 @@
 /* Below everything: the status bar. */
 .dashica-wb__status-bar {
   grid-column: 1 / -1;
-  grid-row: 4;
+  grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 24px;

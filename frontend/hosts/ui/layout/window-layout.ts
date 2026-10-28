@@ -7,8 +7,8 @@ import { html } from 'htl';
 import { restoreSideBarState, SideBar, type PanelCommands, type Side } from './side-bar';
 
 /**
- * The workbench's regions in one grid: the title bar and the filter bar above everything; the left side (a rail with a
- * button per side panel and the shown panel); the content with the bottom panel below it; the right side (the shown
+ * The workbench's regions in one grid: the title bar above everything; the left side (a rail with a button per side
+ * panel and the shown panel); in the middle the filter bar, the content and the bottom panel; the right side (the shown
  * panel and its rail, on the outer edge); the status bar below everything. Each side shows one panel at a time; clicking
  * the shown one's rail button hides the side and the content takes the room. Sizes and the panels picked are
  * remembered for the session.
@@ -43,10 +43,10 @@ export class WindowLayout {
     this.titleBar = html`<div class="dashica-wb__title-bar" data-testid="wb-title-bar"></div>`;
     this.filterBar = html`<div class="dashica-wb__filter-bar" data-testid="wb-filter-bar"></div>`;
     this.content = html`<div class="dashica-wb__content"></div>`;
-    this.#center = html`<div class="dashica-wb__center">${this.content}${this.#bottom.element}</div>`;
+    this.#center = html`<div class="dashica-wb__center">${this.filterBar}${this.content}${this.#bottom.element}</div>`;
     this.statusBar = html`<div class="dashica-wb__status-bar"></div>`;
     host.classList.add('dashica-wb');
-    host.append(this.titleBar, this.filterBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
+    host.append(this.titleBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
     this.#watchWidth();
   }
 
@@ -80,7 +80,6 @@ export class WindowLayout {
     this.#sides.right.dispose();
     this.#bottom.dispose();
     this.titleBar.remove();
-    this.filterBar.remove();
     this.#center.remove();
     this.statusBar.remove();
     this.host.classList.remove('dashica-wb', 'dashica-wb--narrow');

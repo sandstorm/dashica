@@ -55,17 +55,16 @@ afterEach(() => {
 });
 
 describe('WindowLayout', () => {
-  it('puts the title bar, the filter bar, the left side, the content with the bottom panel, the right side and the status bar into the host', () => {
+  it('puts the title bar, the left side, the filter bar, content and bottom panel between the sides, the right side and the status bar into the host', () => {
     const { host, layout } = setup();
     expect([...host.children].map((c) => c.className)).toEqual([
       'dashica-wb__title-bar',
-      'dashica-wb__filter-bar',
       'dashica-wb__side dashica-wb__side--left',
       'dashica-wb__center',
       'dashica-wb__side dashica-wb__side--right',
       'dashica-wb__status-bar',
     ]);
-    expect([...host.querySelector('.dashica-wb__center')!.children].map((c) => c.className)).toEqual(['dashica-wb__content', 'dashica-wb__bottom']);
+    expect([...host.querySelector('.dashica-wb__center')!.children].map((c) => c.className)).toEqual(['dashica-wb__filter-bar', 'dashica-wb__content', 'dashica-wb__bottom']);
     expect(layout.content.className).toBe('dashica-wb__content');
   });
 

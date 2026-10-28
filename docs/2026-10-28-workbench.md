@@ -79,16 +79,16 @@ JSON fixtures, TS tests read them, so drift fails a test on both sides.
 
 ```
 ┌─ Dashica › Wetell ──── [⌘K search] ── [Last 1h ▾][⟳ 30s][log] ┐   title bar
-├─ filters: [Status = 500 ×] [Host = a ×]  [Only errors][Bots]  ✎ SQL ┤   filter bar
-│▐menu▌ content (scrolls)                         │▐inspector▌│   left · content · right
-├────┴─ bottom panel: Debug │ Details ────────────────┴──────────┤   bottom panel
+│▐menu▌ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐inspector▌│   filter bar (above the content)
+│▐    ▌ content (scrolls)                          │▐         ▌│   left · content · right
+│▐    ▌ bottom panel: Debug │ Details              │▐         ▌│   bottom panel (below the content)
 └─ status: 12 queries · 2 loading · 1 failed · 340 ms ──────────┘   status bar
 ```
 
 | Region | Holds |
 |---|---|
 | Title bar | breadcrumb, search everywhere, time range, refresh, log scale; always visible |
-| Filter bar | active filters as removable chips, the page's filter buttons as toggles, "edit SQL" |
+| Filter bar | above the content, between the side panels: active filters as removable chips, the page's filter buttons as toggles, "edit SQL" |
 | Left side panel | "Dashboards" (menu groups, favorites, search); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Bottom panel | Debug (query, EXPLAIN); later row details |
