@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 // controls.ts — the fixed set of form controls, one per editor kind
 // (docs section 4.4). Each factory builds a plain DOM control that reads and
 // writes a value on a *reactive* target object (the widget's props proxy).

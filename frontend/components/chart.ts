@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 import Alpine from '@alpinejs/csp';
 
 import {timeBar} from '../chart/timeBar'

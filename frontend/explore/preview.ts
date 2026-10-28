@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 import Alpine from '@alpinejs/csp';
 
 // A widget envelope as stored in the editor state and sent to the preview API.

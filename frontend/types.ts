@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 import type {TipPointer as _TipPointer, Data as _Data} from "@observablehq/plot/src/mark";
 
 import type {TipOptions as _TipOptions} from "@observablehq/plot/src/marks/tip";

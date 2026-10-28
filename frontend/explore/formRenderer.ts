@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 // formRenderer.ts — the generic inspector form for one selected widget. It
 // walks the widget's form-model descriptor (served by /explore/api/formmodel,
 // derived by dashica-gen from the Go struct) and instantiates one control per

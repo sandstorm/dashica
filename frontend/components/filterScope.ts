@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 import { createFilterScope } from '../store';
 
 // filterScope is the Alpine boundary for the single page-level filter scope.

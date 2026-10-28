@@ -459,6 +459,11 @@ or a part of one), so deviations from this concept, problems and naming issues a
 deviation found while implementing is raised before committing, not decided silently; agreed changes go into this
 document in the same commit.
 
+**Nothing gets lost:** every frontend file from before the workbench (`frontend/**/*.ts`, `*.js`, outside
+`frontend/core`, `frontend/hosts`, `frontend/extensions`) starts with `// UNMIGRATED (workbench): …`. A step that ports,
+rewrites or deliberately deletes a file's content removes the marker (or the file) in the same commit, and says in the
+commit message where the content went. Before the merge, `grep -rl UNMIGRATED frontend` must be empty.
+
 | Step | Change | Works afterwards |
 |---|---|---|
 | 1 ✅ | Core: `Disposable`, `Event` / `EventEmitter` (from Zwiebelfisch), vitest (`npm test`) | everything; nothing visible |

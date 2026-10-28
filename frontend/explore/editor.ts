@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 // editor.ts — the Explore editor, built on a reactive dataflow.
 //
 // Design (per docs §"Frontend architecture revision — reactive dataflow"):

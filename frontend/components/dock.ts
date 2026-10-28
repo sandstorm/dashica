@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 // The ONLY module importing dockview-core (docs/2026-07-22-dockview-rewrite.md
 // §4.1/§4.2). Dockview owns GEOMETRY (pane sizes, docking, tabs, popouts); templ
 // still owns MARKUP and Alpine still owns BEHAVIOR. Panels are declared in templ

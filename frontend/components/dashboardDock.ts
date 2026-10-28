@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 // dashboardDock.ts — the dockview shell for compiled dashboards (defaultPage),
 // docs/2026-07-22-dockview-rewrite.md Slice D. Mirrors the Explore editor's
 // edge-group shape (frontend/explore/editor.ts):

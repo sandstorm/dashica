@@ -1,3 +1,4 @@
+// UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 
 // BRUSHING:
 // Brushing taken from https://github.com/observablehq/plot/issues/5#issuecomment-2094321721, and minimally adjusted.
