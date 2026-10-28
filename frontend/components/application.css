@@ -75,73 +75,26 @@ a.menu-active + .star-btn {
 }
 
 /* ---------------------------------------------------------------------------
-   Dashboard dock (Slice D). The CSS-grid `.application` layout is replaced by a
-   dockview shell: a full-viewport flex column whose dock fills the remaining
-   space. Dockview owns the pane geometry; the page itself never scrolls — each
-   panel scrolls its own adopted content (the `.dock-adopt` fill rules are at the
-   end of this file). The single [data-filter-scope] on the shell
-   contains every panel (Slice A).
+   The server-rendered parts inside the workbench (frontend/extensions/legacy-page):
+   the menu scrolls inside its side panel, the content inside the content region.
    --------------------------------------------------------------------------- */
-.dashboard-shell {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-.dashboard-dock {
+.dashica-wb__panel-body > .application__sidebar {
     flex: 1;
     min-height: 0;
-    position: relative;
+    padding: 1rem;
 }
-
-/* The dashboard content panel scrolls internally (the `.dock-adopt` wrapper is
-   overflow:hidden). Keep the reading width + top spacing the old grid had. */
 .dashboard-content {
-    overflow-y: auto;
     padding: 1rem 1.25rem;
 }
-
-/* The search-bar strip panel: fixed-height, locked, header-less. Its adopted
-   SearchBar keeps its own sticky/scroll behaviour inside. */
-.dashboard-searchbar {
-    overflow-y: auto;
+.dashica-wb__legacy-search-bar {
+    flex: 1;
+    min-width: 0;
 }
-
-/* Right-header maximize/restore action (dock.ts maximizeAction), shared by the
-   dashboard and Explore docks. */
-.dv-dashica-actions {
-    display: flex;
-    align-items: center;
-    height: 100%;
+.dashica-wb__brand {
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
 }
-.dv-dashica-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    padding: 0 0.5rem;
-    border: 0;
-    background: transparent;
-    color: var(--color-base-content, #1f2937);
-    opacity: 0.6;
-    cursor: pointer;
-    font-size: 0.9rem;
-    line-height: 1;
-}
-.dv-dashica-action:hover {
-    opacity: 1;
-    background: var(--color-base-300, #ddd);
-}
-
-/* ---------------------------------------------------------------------------
-   Carried over from explore.css (deleted with the Explore UI): still used by the
-   dashboard dock (dock.ts) and SearchBar.templ until the workbench replaces them.
-   --------------------------------------------------------------------------- */
-/* dockview gives every panel a .dock-adopt wrapper; the adopted element fills it
-   and scrolls internally */
-.dock-adopt { height: 100%; min-height: 0; overflow: hidden; }
-.dock-adopt > * { height: 100%; min-height: 0; box-sizing: border-box; }
 
 /* buttons */
 .explore-btn {
@@ -158,26 +111,3 @@ a.menu-active + .star-btn {
 .explore-btn:disabled { opacity: 0.4; cursor: default; }
 .explore-btn--sm { padding: 0.15rem 0.4rem; }
 .explore-preview__filters { margin-top: 0.4rem; }
-
-.dockview-theme-dashica {
-    --dv-group-view-background-color: var(--color-base-100, #fff);
-    --dv-tabs-and-actions-container-background-color: var(--color-base-200, #f4f4f5);
-    --dv-activegroup-visiblepanel-tab-background-color: var(--color-base-100, #fff);
-    --dv-activegroup-hiddenpanel-tab-background-color: var(--color-base-200, #f4f4f5);
-    --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-base-100, #fff);
-    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--color-base-200, #f4f4f5);
-    --dv-tab-divider-color: var(--color-base-300, #ddd);
-    --dv-separator-border: var(--color-base-300, #ddd);
-    --dv-paneview-active-outline-color: var(--color-primary, #3b82f6);
-    --dv-activegroup-visiblepanel-tab-color: var(--color-base-content, #1f2937);
-    --dv-inactivegroup-visiblepanel-tab-color: var(--color-base-content, #1f2937);
-    --dv-activegroup-hiddenpanel-tab-color: var(--color-base-content, #6b7280);
-    --dv-inactivegroup-hiddenpanel-tab-color: var(--color-base-content, #6b7280);
-    --dv-tabs-container-scrollbar-color: var(--color-base-300, #ddd);
-    --dv-icon-hover-background-color: var(--color-base-300, #ddd);
-    --dv-drag-over-background-color: color-mix(in srgb, var(--color-primary, #3b82f6) 20%, transparent);
-    --dv-active-sash-color: var(--color-primary, #3b82f6);
-    height: 100%;
-}
-/* Removability is per-panel: the custom tab renderer (dock.ts) shows the close
-   (×) action only for panels marked `closable` (the tree). */

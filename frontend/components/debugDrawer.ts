@@ -27,13 +27,11 @@ Alpine.data('debugDrawer', () => ({
     },
 
     init() {
-        // The wrench event is dispatched on `window` (chart.ts): the drawer lives
-        // in a dock panel (and may be popped out to another window), unreachable
-        // by DOM bubbling. dockview owns show/hide via a matching toggle
-        // (wireLazyDebugDrawer); `visible` flips in lockstep and gates the
-        // (re)population of the x-refs — both start closed, so they stay aligned.
+        // The wrench event is dispatched on `window` (chart.ts); the workbench's
+        // bottom panel "Debug" shows on it (extensions/legacy-page). Every wrench
+        // click shows that chart's query here.
         window.addEventListener('dashica-debugDrawer-toggle', async (e) => {
-            this.visible = !this.visible
+            this.visible = true
 
             if (this.visible) {
                 // Display debug info (query + explain)

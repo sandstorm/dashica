@@ -19,7 +19,8 @@ import "./components/debugDrawer";
 import "./components/sidebar";
 import favorites from './components/favorites';
 import sidebarSearch from './components/sidebarSearch';
-import { initDashboardDock } from './components/dashboardDock';
+import { createWorkbench } from './workbench/workbench';
+import { legacyPage } from './extensions/legacy-page/legacy-page';
 
 Alpine.plugin(intersect);
 Alpine.plugin(resize);
@@ -36,8 +37,15 @@ Alpine.data('sidebarSearch', sidebarSearch);
 
 window.Alpine = Alpine
 
-// Dock assembly must run BEFORE window.Alpine.start() (dockview owns geometry;
-// see frontend/components/dock.ts). Pages that use a dock call the matching
-// initializer in their inline script ahead of Alpine.start().
+// The workbench must be assembled BEFORE window.Alpine.start(): it moves the
+// server-rendered parts into its regions, and Alpine then walks them in place.
+// The page's inline script calls initWorkbench() ahead of Alpine.start().
 window.Dashica = window.Dashica || {};
-window.Dashica.initDashboardDock = initDashboardDock;
+window.Dashica.initWorkbench = () => {
+    const host = document.getElementById('workbench');
+    if (!host) return;
+    createWorkbench(host, {
+        content: document.querySelector('[data-workbench-part="content"]'),
+        extensions: [legacyPage(document)],
+    });
+};

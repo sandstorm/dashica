@@ -1,18 +1,10 @@
 package layout
 
-// DebugDrawerPanel is the dockview-panel form of the debug drawer — the ONLY
-// form now (defaultPage, docsPage and Explore all assemble a dock). Its
+// DebugDrawerPanel is the content of the workbench's bottom panel "Debug". Its
 // `debugDrawer` Alpine component listens on `window` for the wrench event and
-// populates the x-refs; dockview owns show/hide (the panel is added lazily on
-// the first wrench click, into the left gutter, and closed on the next). The
-// "Pop out" button (wired by wireLazyDebugDrawer in dock.ts) moves the panel
-// into a separate browser window.
+// populates the x-refs; the workbench shows the panel on the same event.
 templ DebugDrawerPanel() {
-	<div x-data="debugDrawer" class="debug-panel bg-base-200 h-full overflow-y-auto p-4">
-		<div class="debug-panel__bar mb-4 flex items-center justify-between gap-4">
-			<h2 class="text-2xl font-bold">Debug Information</h2>
-			<button type="button" class="btn btn-sm btn-ghost" data-debug-popout title="Open the debug drawer in a separate window">Pop out ↗</button>
-		</div>
+	<div x-data="debugDrawer" class="debug-panel bg-base-200 p-4">
 		@debugDrawerContent()
 	</div>
 }

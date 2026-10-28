@@ -4,11 +4,9 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-// docsPageFn is documentation-with-embedded-charts. It shares the dashboard
-// dockview shell (MainApplication): sidebar menu in the left edge group, content
-// in the centre tab group, the debug drawer as a lazy panel in the menu gutter.
-// The only difference from defaultPage is the search bar — docs pages pass a
-// hidden searchBar, so MainApplication skips the top search/filter dock.
+// docsPageFn is documentation-with-embedded-charts. It shares the workbench page
+// (MainApplication) with defaultPage; docs pages pass a hidden searchBar, so the
+// filter bar stays empty.
 templ docsPageFn(renderingContext rendering.DashboardContext, searchBar rendering.SearchBarOption, content templ.Component) {
 	<html>
 		<head>
@@ -23,7 +21,7 @@ templ docsPageFn(renderingContext rendering.DashboardContext, searchBar renderin
 		</head>
 		<body class="bg-base-200">
 			@MainApplication(renderingContext, searchBar, content)
-			<script>window.Dashica.initDashboardDock(); window.Alpine.start();</script>
+			<script>window.Dashica.initWorkbench(); window.Alpine.start();</script>
 		</body>
 	</html>
 }

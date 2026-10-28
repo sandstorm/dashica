@@ -1,0 +1,197 @@
+/* The workbench's regions (see WindowLayout in window-layout.ts): the title and filter bars, the two sides (rail,
+   resizable panel; the left one an overlay when narrow), the content with the bottom panel, the status bar. Colors are
+   daisyUI's tokens, so the themes (light / dark) apply. */
+.dashica-wb {
+  --wb-bg: var(--color-base-100, #fff);
+  --wb-subtle: var(--color-base-200, #f4f4f5);
+  --wb-border: var(--color-base-300, #ddd);
+  --wb-hover: var(--color-base-300, #e4e4e7);
+  --wb-text: var(--color-base-content, #1f2937);
+  --wb-muted: color-mix(in srgb, var(--wb-text) 60%, transparent);
+  --wb-accent: var(--color-primary, #3b82f6);
+  --wb-selected: color-mix(in srgb, var(--wb-accent) 15%, transparent);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(min(20rem, 25%), 1fr) var(--wb-right-side, auto);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: 100vh;
+  background: var(--wb-bg);
+  color: var(--wb-text);
+}
+
+/* Above everything: the title bar, then the filter bar; each hidden while it has no item. */
+.dashica-wb__title-bar,
+.dashica-wb__filter-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--wb-border);
+  background: var(--wb-subtle);
+}
+.dashica-wb__title-bar { grid-row: 1; min-height: 36px; font-size: 13px; }
+.dashica-wb__filter-bar { grid-row: 2; }
+.dashica-wb__title-bar[hidden],
+.dashica-wb__filter-bar[hidden],
+.dashica-wb__status-bar[hidden] { display: none; }
+.dashica-wb__bar-left,
+.dashica-wb__bar-center,
+.dashica-wb__bar-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.dashica-wb__bar-left { flex: 1 1 0; }
+.dashica-wb__bar-center { flex: 0 1 auto; justify-content: center; }
+.dashica-wb__bar-right { flex: 1 1 0; justify-content: flex-end; }
+.dashica-wb__filter-bar .dashica-wb__bar-left { flex: 1 1 auto; }
+
+/* The sides: a rail of buttons and the shown panel. */
+.dashica-wb__side {
+  grid-row: 3;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--wb-subtle);
+}
+.dashica-wb__side--left { grid-column: 1; border-right: 1px solid var(--wb-border); }
+.dashica-wb__side--right { grid-column: 3; border-left: 1px solid var(--wb-border); }
+.dashica-wb__side[hidden] { display: none; }
+.dashica-wb__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+}
+/* the rail's bottom group (side panels with alignment: 'bottom') at its far end */
+.dashica-wb__rail-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: auto; }
+.dashica-wb__rail-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: none;
+  color: var(--wb-muted);
+  cursor: pointer;
+}
+.dashica-wb__rail-button[hidden] { display: none; }
+.dashica-wb__rail-button:hover { background: var(--wb-hover); color: var(--wb-text); }
+.dashica-wb__rail-button[aria-pressed='true'] { background: var(--wb-selected); color: var(--wb-accent); }
+.dashica-wb__rail-button svg { width: 16px; height: 16px; }
+.dashica-wb__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--wb-subtle);
+}
+/* left: as wide as its separator says; right: fills the column (a share of the workbench, --wb-right-side) */
+.dashica-wb__side--left .dashica-wb__panel { max-width: 50vw; border-left: 1px solid var(--wb-border); }
+.dashica-wb__side--right .dashica-wb__panel { flex: 1; border-right: 1px solid var(--wb-border); }
+.dashica-wb__panel[hidden],
+.dashica-wb__panel-body[hidden] { display: none; }
+.dashica-wb__panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+/* the separator on the panel's inner edge */
+.dashica-wb__resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+}
+.dashica-wb__side--left .dashica-wb__resizer { right: -3px; }
+.dashica-wb__side--right .dashica-wb__resizer { left: -3px; }
+.dashica-wb__resizer:hover,
+.dashica-wb__resizer:focus-visible,
+.dashica-wb--resizing .dashica-wb__resizer { background: var(--wb-accent); outline: none; }
+.dashica-wb--resizing { cursor: col-resize; user-select: none; }
+/* Narrow workbench: the left side's open panel lies over the content. */
+.dashica-wb--narrow .dashica-wb__side--left .dashica-wb__panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  z-index: 10;
+  max-width: calc(100vw - 48px);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.16);
+}
+
+/* The centre column: the content (it scrolls), and the bottom panel below it. */
+.dashica-wb__center {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.dashica-wb__content { flex: 1; min-height: 0; overflow: auto; }
+.dashica-wb__bottom {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  max-height: 80%;
+  border-top: 1px solid var(--wb-border);
+  background: var(--wb-bg);
+}
+.dashica-wb__bottom[hidden],
+.dashica-wb__bottom-body[hidden],
+.dashica-wb__bottom-tab[hidden] { display: none; }
+.dashica-wb__bottom-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--wb-border);
+  background: var(--wb-subtle);
+}
+.dashica-wb__bottom-tabs { display: flex; gap: 4px; flex: 1; }
+.dashica-wb__bottom-tab,
+.dashica-wb__bottom-close {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 10px;
+  background: none;
+  color: var(--wb-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.dashica-wb__bottom-tab[aria-selected='true'] { background: var(--wb-bg); border-color: var(--wb-border); }
+.dashica-wb__bottom-tab:hover,
+.dashica-wb__bottom-close:hover { background: var(--wb-hover); }
+.dashica-wb__bottom-body { flex: 1; min-height: 0; overflow: auto; }
+/* the separator on the top edge */
+.dashica-wb__bottom-resizer {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 5;
+  cursor: row-resize;
+}
+.dashica-wb__bottom-resizer:hover,
+.dashica-wb__bottom-resizer:focus-visible,
+.dashica-wb--resizing-rows .dashica-wb__bottom-resizer { background: var(--wb-accent); outline: none; }
+.dashica-wb--resizing-rows { cursor: row-resize; user-select: none; }
+
+/* Below everything: the status bar. */
+.dashica-wb__status-bar {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  display: flex;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  border-top: 1px solid var(--wb-border);
+  background: var(--wb-subtle);
+  font-size: 12px;
+}
