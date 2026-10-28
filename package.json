@@ -2,6 +2,7 @@
   "name": "dashica",
   "scripts": {
     "build": "node frontendBuild.mjs",
+    "test": "vitest run --dir frontend",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui"
   },
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
-    "daisyui": "^5.5.14"
+    "daisyui": "^5.5.14",
+    "vitest": "5.0.3"
   }
 }

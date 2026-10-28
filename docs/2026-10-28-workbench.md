@@ -245,7 +245,7 @@ Pure UI behaviour (palette, keys, panels) stays TS.
 ### 3.11 Sketch: TypeScript extension points
 
 ```ts
-// frontend/workbench/extension-host — what every extension gets
+// frontend/hosts/extension-host — what every extension gets
 interface Extension {
   readonly id: string;
   readonly contributes?: { commands?: CommandContribution[]; keybindings?: KeybindingContribution[] };
@@ -329,7 +329,10 @@ Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug),
 on a chart selection: zoom, filter, show rows, actions), `table/row` (a row's menu),
 `dashboards/entry` (a menu entry: favorite).
 
-Built-in extensions, one folder each under `frontend/extensions/`:
+Folders as in Zwiebelfisch: `frontend/core/<name>/` (primitives), `frontend/hosts/<name>/` (contribution points),
+`frontend/extensions/<name>/` (one folder per built-in extension); tests sit next to the code (`<name>.test.ts`).
+
+Built-in extensions:
 
 | Extension | Contributes |
 |---|---|
@@ -458,7 +461,7 @@ document in the same commit.
 
 | Step | Change | Works afterwards |
 |---|---|---|
-| 1 | Core: `Disposable`, `Event` / `EventEmitter` (from Zwiebelfisch), vitest | everything; nothing visible |
+| 1 ✅ | Core: `Disposable`, `Event` / `EventEmitter` (from Zwiebelfisch), vitest (`npm test`) | everything; nothing visible |
 | 2 | Commands + extension host: `registerCommand` / `executeCommand`, contributions, `activate`, mementos | everything |
 | 3 | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content; **Explore removed** | dashboards (old content inside the new chrome) |
 | 4 | Menus + palette: `registerMenuItem` / `showContextMenu`; search everywhere replaces `sidebarSearch` | dashboards |
