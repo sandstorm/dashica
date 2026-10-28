@@ -467,7 +467,7 @@ commit message where the content went. Before the merge, `grep -rl UNMIGRATED fr
 | Step | Change | Works afterwards |
 |---|---|---|
 | 1 ✅ | Core: `Disposable`, `Event` / `EventEmitter` (from Zwiebelfisch), vitest (`npm test`) | everything; nothing visible |
-| 2 | Commands + extension host: `registerCommand` / `executeCommand`, contributions, `activate`, mementos | everything |
+| 2 ✅ | Commands + extension host: `registerCommand` / `executeCommand`, contributions, `activate`, mementos (`dashica:global:<ext>:` / `dashica:session:<ext>:`); not wired into the page yet | everything |
 | 3 | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content; **Explore removed** | dashboards (old content inside the new chrome) |
 | 4 | Menus + palette: `registerMenuItem` / `showContextMenu`; search everywhere replaces `sidebarSearch` | dashboards |
 | 5a | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |

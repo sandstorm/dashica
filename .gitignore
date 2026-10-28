@@ -13,3 +13,4 @@ node_modules
 /speedscope_viewer/dist/*
 !/speedscope_viewer/dist/.gitkeep
 /lib/**/zz_generated.*.go
+/.vitest/
