@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Tests for window-layout.ts (WindowLayout), its two sides (side-bar.ts) and its bottom panel (bottom-panel.ts).
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandsHost } from '../../commands/commands';
-import css from './window-layout.css?raw';
 import { WindowLayout } from './window-layout';
 
 let resize: (() => void) | null = null;
@@ -104,6 +104,7 @@ describe('WindowLayout', () => {
 
   it('the right side column is a share of the workbench, so an opening left panel narrows only the content column', () => {
     // with `1fr 1fr` the panel's width would come out of both columns and the right side would move
+    const css = readFileSync('frontend/hosts/ui/layout/window-layout.css', 'utf8');
     const columns = /\.dashica-wb \{[^}]*grid-template-columns:\s*([^;]+);/.exec(css)?.[1].trim();
     expect(columns).toBe('auto minmax(min(20rem, 25%), 1fr) var(--wb-right-side, auto)');
   });
