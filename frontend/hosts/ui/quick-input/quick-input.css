@@ -1,0 +1,78 @@
+/* The quick pick (see QuickInput in quick-input.ts): a box at the top in the middle of the workbench, a field, a
+   progress line, the items in groups under headings, the matched characters marked. Colors are daisyUI's tokens. */
+.dashica-wb__quick-pick {
+  position: absolute;
+  z-index: 40;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: min(560px, calc(100% - 16px));
+  padding: 8px;
+  border: 1px solid var(--color-base-300, #ddd);
+  border-radius: 8px;
+  background: var(--color-base-100, #fff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  color: var(--color-base-content, #1f2937);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.dashica-wb__quick-pick-field {
+  padding: 4px 8px;
+  border: 1px solid var(--color-base-300, #ddd);
+  border-radius: 6px;
+  background: var(--color-base-100, #fff);
+  color: inherit;
+  font: inherit;
+}
+.dashica-wb__quick-pick-field:focus { outline: 2px solid var(--color-primary, #3b82f6); outline-offset: -1px; }
+.dashica-wb__quick-pick-list { display: flex; flex-direction: column; max-height: min(420px, 60vh); overflow: auto; }
+.dashica-wb__quick-pick-group { display: flex; flex-direction: column; }
+.dashica-wb__quick-pick-group + .dashica-wb__quick-pick-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--color-base-300, #ddd); }
+.dashica-wb__quick-pick-heading {
+  padding: 2px 8px;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dashica-wb__quick-pick-heading-description { font-weight: normal; letter-spacing: 0; text-transform: none; }
+.dashica-wb__quick-pick-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dashica-wb__quick-pick-item:hover { background: var(--color-base-200, #f4f4f5); }
+.dashica-wb__quick-pick-item[aria-selected='true'] { background: color-mix(in srgb, var(--color-primary, #3b82f6) 15%, transparent); }
+.dashica-wb__quick-pick-description,
+.dashica-wb__quick-pick-detail {
+  overflow: hidden;
+  color: color-mix(in srgb, currentColor 60%, transparent);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashica-wb__quick-pick-detail { flex-basis: 100%; }
+.dashica-wb__quick-pick-keybinding { margin-left: auto; padding-left: 16px; color: color-mix(in srgb, currentColor 60%, transparent); font: inherit; font-size: 12px; white-space: nowrap; }
+.dashica-wb__quick-pick-match { background: none; color: var(--color-primary, #3b82f6); font-weight: 600; }
+.dashica-wb__quick-pick-empty { padding: 4px 8px; color: color-mix(in srgb, currentColor 60%, transparent); }
+.dashica-wb__quick-pick-empty[hidden],
+.dashica-wb__quick-pick-progress[hidden],
+.dashica-wb__quick-pick-hint[hidden] { display: none; }
+.dashica-wb__quick-pick-progress {
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-primary, #3b82f6), transparent) 0 0 / 50% 100% no-repeat;
+  animation: dashica-wb-quick-pick-progress 1s linear infinite;
+}
+@keyframes dashica-wb-quick-pick-progress { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+@media (prefers-reduced-motion: reduce) { .dashica-wb__quick-pick-progress { animation: none; opacity: 0.4; background: var(--color-primary, #3b82f6); } }
+.dashica-wb__quick-pick-hint { padding: 2px 2px 0; border-top: 1px solid var(--color-base-300, #ddd); color: color-mix(in srgb, currentColor 60%, transparent); font-size: 11px; }

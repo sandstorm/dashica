@@ -6,9 +6,11 @@ import { Bar } from './bar/bar';
 import { WindowLayout } from './layout/window-layout';
 import { ContextMenu } from './menus/context-menu';
 import { Menus } from './menus/menus';
-import type { BarPlacement, BottomPanelOptions, ContextMenuOptions, Panel, SidePanelOptions, UiApi } from './ui';
+import { QuickInput } from './quick-input/quick-input';
+import type { BarPlacement, BottomPanelOptions, ContextMenuOptions, Panel, QuickPick, QuickPickItem, SidePanelOptions, UiApi } from './ui';
 import './layout/window-layout.css';
 import './menus/context-menu.css';
+import './quick-input/quick-input.css';
 
 /** The workbench's `UiApi`, laid out in `host`. `content`: the region the shown page goes into. */
 export class UiHost implements UiApi {
@@ -16,6 +18,7 @@ export class UiHost implements UiApi {
   readonly #bars: Record<'title' | 'filter' | 'status', Bar>;
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
+  readonly #quickInput: QuickInput;
   readonly onDidChangeMenu;
 
   constructor(host: HTMLElement, layoutState: Memento, commands: CommandsHost) {
@@ -24,6 +27,7 @@ export class UiHost implements UiApi {
     this.#menus = new Menus(() => commands.getCommands());
     this.#contextMenu = new ContextMenu(host, this.#menus, commands);
     this.onDidChangeMenu = this.#menus.onDidChange;
+    this.#quickInput = new QuickInput(host);
   }
 
   get content(): HTMLElement {
@@ -54,7 +58,12 @@ export class UiHost implements UiApi {
     this.#contextMenu.show(menuId, options);
   }
 
+  createQuickPick<T extends QuickPickItem>(): QuickPick<T> {
+    return this.#quickInput.createQuickPick<T>();
+  }
+
   dispose(): void {
+    this.#quickInput.dispose();
     this.#contextMenu.dispose();
     this.#menus.dispose();
     this.#layout.dispose();

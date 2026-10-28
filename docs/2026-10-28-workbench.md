@@ -297,9 +297,8 @@ interface UiApi {
   registerFloatingBar<C>(o: { id: string; order?: number;
                               anchor: (context: C) => DOMRect | null }): Disposable;   // entries via registerMenuItem(id, …)
 
-  showQuickPick<T>(items: T[] | Promise<T[]>, o?: QuickPickOptions): Promise<T | undefined>;
-  createQuickPick<T>(): QuickPick<T>;
-  showInputBox(o?: InputBoxOptions): Promise<string | undefined>;
+  createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere)
+  // later, with their first user: showQuickPick (a fixed list, filtered by the box), showInputBox
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
   showInformationMessage / showWarningMessage / showErrorMessage(message: string, ...items): Promise<…>;
 }

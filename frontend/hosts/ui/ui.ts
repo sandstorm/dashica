@@ -30,6 +30,11 @@ export interface UiApi {
    * so do Escape and a press elsewhere.
    */
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
+  /**
+   * A quick pick its owner drives: a box at the top in the middle of the workbench with the items the owner sets as
+   * the text changes. Hidden until `show`; one box at a time (a new one hides the open one).
+   */
+  createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
 }
 
 export interface ContextMenuOptions {
@@ -44,6 +49,69 @@ export interface ContextMenuOptions {
 }
 
 export type MenuAnchor = Element | { readonly x: number; readonly y: number };
+
+/** A row of a quick pick. */
+export interface QuickPickItem {
+  /** What the item is called ("Wetell"). */
+  readonly label: string;
+  /** Less prominent, after the label ("Customers"). */
+  readonly description?: string;
+  /** Less prominent, on a line of its own. */
+  readonly detail?: string;
+  /** The characters marked where the typed text matched. */
+  readonly highlights?: QuickPickHighlights;
+  /** The key that does the same, as people read it (`⌘K`), at the row's end. */
+  readonly keybinding?: string;
+}
+
+/** The [start, end) offsets of the characters to mark in an item's texts. */
+export interface QuickPickHighlights {
+  readonly label?: readonly (readonly [number, number])[];
+  readonly description?: readonly (readonly [number, number])[];
+  readonly detail?: readonly (readonly [number, number])[];
+}
+
+/** What `QuickPickSeparator.kind` says. */
+export const QuickPickItemKind = { Separator: -1, Default: 0 } as const;
+
+/** A heading starting a group of a quick pick's items ("Dashboards"), with a note after it ("12 more"). */
+export interface QuickPickSeparator {
+  readonly kind: typeof QuickPickItemKind.Separator;
+  readonly label: string;
+  readonly description?: string;
+}
+
+/**
+ * A quick pick its owner drives: it shows `items` as they are (the owner filters and marks them as `value` changes)
+ * and tells what the viewer does. Picking an item (Enter, a click) fires `onDidAccept` with it in `selectedItems`; the
+ * box stays until `hide`. Escape, a press outside or another box hide it.
+ */
+export interface QuickPick<T extends QuickPickItem> {
+  /** The box's accessible name. */
+  title: string | undefined;
+  /** Shown in the empty field. */
+  placeholder: string | undefined;
+  /** The text in the field; setting it fires `onDidChangeValue`. */
+  value: string;
+  /** A line below the list, e.g. how to narrow the search. */
+  prompt: string | undefined;
+  /** The rows, the first item active; without any item (and text typed) "No results", unless `busy`. */
+  items: readonly (T | QuickPickSeparator)[];
+  /** Items are still coming: a progress line. */
+  busy: boolean;
+  /** The item picked last. */
+  readonly selectedItems: readonly T[];
+  readonly onDidChangeValue: Event<string>;
+  readonly onDidAccept: Event<void>;
+  /** The box is gone, the focus back where it was. */
+  readonly onDidHide: Event<void>;
+  /** Shows the box (hiding an open one) and focuses its field. */
+  show(): void;
+  /** Hides the box; it can be shown again. */
+  hide(): void;
+  /** Hides it for good. */
+  dispose(): void;
+}
 
 export interface SidePanelOptions {
   /** The rail button's tooltip and accessible name. */
