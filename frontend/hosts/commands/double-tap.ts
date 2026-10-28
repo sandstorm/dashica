@@ -1,12 +1,10 @@
-// A key binding of a modifier pressed twice (`Shift Shift`). See CommandsHost in commands-impl.ts.
+// See KeybindingContribution in commands.ts.
 import { Disposable } from '../../core/disposable/disposable';
 
 /**
  * Calls `onDoubleTap` when `modifier` (a `KeyboardEvent.key`: `Shift`, `Control`, `Alt`, `Meta`) is pressed twice on
- * `target`: the second press starting at most 300 ms after the
- * first was released, neither together with another key or a mouse button, nothing pressed in between; it fires when
- * the second press is released (Shift held for a capital letter never counts). Not in a text field (`input`,
- * `textarea`, e.g. an open input box): what is typed there stays. `now` is the clock in milliseconds.
+ * `target`, alone and within `DOUBLE_TAP_INTERVAL`; it fires on the second release, outside text fields.
+ * `now`: the clock in milliseconds.
  */
 export function listenForDoubleTap(target: HTMLElement, modifier: string, onDoubleTap: () => void, now: () => number = Date.now): Disposable {
   /** `down`: pressed alone; `up`: released after such a press (at `releasedAt`); `again`: pressed a second time. */
@@ -34,10 +32,10 @@ export function listenForDoubleTap(target: HTMLElement, modifier: string, onDoub
   });
 }
 
-/** The longest pause between releasing the modifier the first time and pressing it again. */
+/** Milliseconds from releasing the modifier to pressing it again. */
 export const DOUBLE_TAP_INTERVAL = 300;
 
-/** A press of `modifier` without any other modifier, not while composing text (an IME). */
+/** Pressed alone, outside an IME composition. */
 function isAlone(event: KeyboardEvent, modifier: string): boolean {
   const others = { Shift: event.shiftKey, Control: event.ctrlKey, Alt: event.altKey, Meta: event.metaKey };
   return event.key === modifier && !event.isComposing && Object.entries(others).every(([name, pressed]) => name === modifier || !pressed);

@@ -4,10 +4,7 @@ import type { CommandContribution, Commands, KeybindingContribution, Platform } 
 import { DOUBLE_TAP, keyLabel, LABELS, PLATFORM } from './commands-helpers';
 import { listenForDoubleTap } from './double-tap';
 
-/**
- * The `Commands` of the workbench. Keys are handled on `root`; a bound key goes no further.
- * `platform`: whose keys these are (on the Mac Mod is Cmd, labels read ⌘⇧F); default: as the browser says.
- */
+/** The workbench's `Commands`; listens for the bound keys on `root`. `platform`: whose keys apply, default the browser's. */
 export class CommandsHost implements Commands {
   readonly #handlers = new Map<string, CommandHandler>();
   readonly #keybindings: { key: string; matches(event: KeyboardEvent): boolean; command: string; args: unknown[] }[] = [];
@@ -41,7 +38,7 @@ export class CommandsHost implements Commands {
     }
   }
 
-  /** Declares the commands for people (`contributes.commands`), for `getCommands`. */
+  /** Adds the commands extensions declare (`contributes.commands`), for `getCommands`. */
   declareCommands(commands: readonly CommandContribution[] = []): void {
     this.#declared = [...this.#declared, ...commands];
   }
@@ -50,7 +47,7 @@ export class CommandsHost implements Commands {
     return this.#declared.filter(({ command }) => this.#handlers.has(command));
   }
 
-  /** Binds the keys the extensions declare (`contributes.keybindings`), each the platform's own if it has one, for the workbench's life. */
+  /** Binds the keys extensions declare (`contributes.keybindings`), each the platform's own if it has one. */
   declareKeybindings(keybindings: readonly KeybindingContribution[] = []): void {
     for (const keybinding of keybindings) {
       const key = keybinding[this.#platform] ?? keybinding.key;
@@ -80,7 +77,7 @@ export class CommandsHost implements Commands {
   readonly #handleKey = (event: KeyboardEvent): void => {
     for (const binding of this.#keybindings) {
       if (!binding.matches(event) || !this.#handlers.has(binding.command)) continue;
-      // decided now, while the event is dispatched; the command's outcome comes later
+      // prevented now, while the event is dispatched; the command may finish later
       event.preventDefault();
       event.stopPropagation();
       this.#run(binding);
@@ -88,19 +85,18 @@ export class CommandsHost implements Commands {
     }
   };
 
-  /** Runs a bound key's command (if registered); a failure is logged. */
+  /** Logs a failure: for a key press, the console is where it is reported. */
   #run({ command, args }: { command: string; args: unknown[] }): void {
     if (this.#handlers.has(command)) this.executeCommand(command, ...args).catch((error: unknown) => console.error(`Command ${command} failed:`, error));
   }
 }
 
-/** The `KeyboardEvent.key` of a modifier as a binding names it. */
+/** The `KeyboardEvent.key` of a modifier named in a binding. */
 function modifierKey(modifier: string, mac: boolean): string {
   if (modifier === 'Mod') return mac ? 'Meta' : 'Control';
   return modifier === 'Ctrl' ? 'Control' : modifier;
 }
 
-/** A command's handler: the arguments the command documents, any result (a Promise is awaited). */
 type CommandHandler = (...args: any[]) => unknown;
 
 /** `Mod+Alt+KeyM` → a test for the event: that `code`, and exactly the named modifiers pressed. */

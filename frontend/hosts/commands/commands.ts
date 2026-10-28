@@ -1,77 +1,51 @@
 import type { Disposable } from '../../core/disposable/disposable';
 
 /**
- * Commands and key bindings.
- *
- * A command is how one extension offers an action to the others: it registers a handler
- * under an id, and anyone who knows the id runs it, so it's called from:
- * - other extensions
- * - menu entries
- * - key bindings
- *
- * Called synchronously, so f.e. selection and focus are guaranteed to not change between dispatching the command and the command's body.
+ * Commands: named actions an extension offers to the others. Other extensions, menu entries, key bindings and search
+ * everywhere run them by id. The handler runs synchronously inside `executeCommand`, so focus and selection are still
+ * those of the user's click or key.
  */
 export interface Commands {
-  /**
-   * Registers `handler` as command `id` (`<extension>.<name>`, e.g. `timeRange.refresh`) until disposed; an id
-   * registered twice is an error. Other extensions and the host run it by id (`executeCommand`), never by importing it.
-   */
+  /** Registers `handler` as `id` (`<extension>.<name>`, e.g. `timeRange.refresh`) until disposed; throws if `id` is taken. */
   registerCommand(id: string, handler: (...args: any[]) => unknown): Disposable;
-  /**
-   * Runs command `id` with `args` and resolves to its result (awaited if it is a Promise). The handler is called
-   * synchronously, so the user's gesture, the selection and the focus are as now. Rejects for an unknown id and when
-   * the handler throws or rejects.
-   */
+  /** Resolves to the handler's result; rejects for an unknown `id` and when the handler throws or rejects. */
   executeCommand<T = unknown>(id: string, ...args: unknown[]): Promise<T>;
-  /**
-   * The commands declared for people (`contributes.commands`) that are registered now, in declaration order: what
-   * search everywhere lists under "Commands". Each runs without arguments.
-   */
+  /** The declared commands (`contributes.commands`) registered now, in declaration order: what search everywhere lists. */
   getCommands(): readonly CommandContribution[];
-  /** The key that runs command `id`, as people read it (`⌘⇧F`, `Ctrl+Shift+F`): the first bound; undefined: none. */
+  /** The label of the first key bound to `id` (`⌘⇧F` on the Mac, else `Ctrl+Shift+F`); undefined: none. */
   keybindingLabel(id: string): string | undefined;
 }
 
-/**
- * A command's id with its title and category, as an extension declares it in `contributes.commands`; what menus and
- * search everywhere show for it. Part of the extension API, not of any HTTP contract.
- */
+/** A command as an extension declares it in `contributes.commands`, for menus and search everywhere. */
 export interface CommandContribution {
-  /** The command's id (`registerCommand`). */
   readonly command: string;
-  /** What it does, as a menu would say it ("Refresh", "Last 1 hour"). */
+  /** What menus say ("Refresh"). */
   readonly title: string;
-  /** What it belongs to, shown before the title ("Time range: Last 1 hour"). */
+  /** Shown before the title in search everywhere ("Time range: Refresh"). */
   readonly category?: string;
-  /** An SVG icon (markup drawn in `currentColor`), for the menu entries that run it. */
+  /** SVG markup, drawn in `currentColor`. */
   readonly icon?: string;
 }
 
-/**
- * A key that runs a command anywhere in the workbench; a failing command is logged. A platform's own key replaces
- * `key` there; '' is no key there.
- */
+/** A key that runs a command anywhere in the workbench, as an extension declares it in `contributes.keybindings`. */
 export interface KeybindingContribution {
-  /** The command's id. */
   readonly command: string;
   /**
-   * The key: modifiers and a `KeyboardEvent.code`, joined by `+`, e.g. `Mod+Alt+KeyM` (Mod: Cmd on the Mac, else
-   * Ctrl). The modifiers must be exactly those: `Alt+Digit1` is not AltGr+1 (Ctrl+Alt on Windows),
-   * `Ctrl+Minus` not Ctrl+Shift+Minus. A modifier tapped twice is a key, too: `Shift
-   * Shift`, `Alt Alt`, …, not while the user types in a text field.
+   * Modifiers and a `KeyboardEvent.code`, joined by `+` (`Mod+KeyK`; `Mod` is Cmd on the Mac, else Ctrl), or a
+   * modifier tapped twice (`Shift Shift`, outside text fields). The modifiers match exactly: `Ctrl+Minus` fires on
+   * Ctrl and Minus alone.
    */
   readonly key: string;
-  /** The key on the Mac instead. */
+  /** `key` on the Mac; '' unbinds it there. */
   readonly mac?: string;
-  /** The key on Windows instead. */
+  /** `key` on Windows; '' unbinds it there. */
   readonly win?: string;
-  /** The key on Linux (and any other system) instead. */
+  /** `key` on Linux and other systems; '' unbinds it there. */
   readonly linux?: string;
-  /** The command's one argument (none if not given). */
+  /** The one argument the command gets. */
   readonly args?: unknown;
 }
 
-/** The systems whose keys differ. */
 export type Platform = 'mac' | 'win' | 'linux';
 
 export { CommandsHost } from './commands-impl';

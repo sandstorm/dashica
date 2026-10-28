@@ -2,18 +2,13 @@
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension, ExtensionContext, ExtensionContributions, ExtensionHostOptions, Memento } from './extension-host';
 
-/**
- * Runs a list of extensions: declares what each one `contributes` (commands, keys) to the hosts, then activates each
- * once, in list order, with its own `subscriptions` and storage (`globalState`, `workspaceState`, scoped by its id).
- * `dispose` disposes the extensions in reverse list order, each one's subscriptions in reverse order, so whatever was
- * registered later (and may depend on what came before) goes first.
- */
+/** Runs the workbench's extensions: `activate` once, `dispose` with the workbench (the last extension first). */
 export class ExtensionHost {
   readonly #activated: { dispose(): unknown }[][] = [];
 
   constructor(private readonly options: ExtensionHostOptions) {}
 
-  /** Declares the contributions of `extensions`, then activates them (in order). Once. An id listed twice is an error. */
+  /** Throws for an id listed twice. */
   activate(extensions: readonly Extension[]): void {
     const ids = new Set<string>();
     for (const extension of extensions) {
@@ -48,18 +43,13 @@ export class ExtensionHost {
   }
 }
 
-/**
- * Values as JSON in `storage` under `prefix` + key: the extensions' `globalState` (localStorage)
- * and `workspaceState` (sessionStorage), each scoped by the extension's id, and the window layout's sizes and panels.
- * Without storage (blocked, full, no window) `get` gives the default and `update` keeps nothing; neither fails.
- */
+/** A `Memento` in a browser storage, its keys under `prefix`. `storage`: null when there is none (blocked, no window). */
 export class StorageMemento implements Memento {
   constructor(
     private readonly storage: () => Storage | null,
     private readonly prefix: string,
   ) {}
 
-  /** The memento of `doc`'s window's `kind` storage under `prefix` (no window or no access: none). */
   static of(doc: Document, kind: 'localStorage' | 'sessionStorage', prefix: string): StorageMemento {
     return new StorageMemento(() => {
       try {

@@ -241,6 +241,17 @@ Pure UI behaviour (palette, keys, panels) stays TS.
 - **Tests:** vitest (jsdom) for core, hosts and extensions through their public interface; Go golden JSON for the
   contract (§3.3); Go tests for `QueryState` parsing and filter-field collection; Playwright specs for flows (written
   by the agent, run by the maintainer: the sandbox cannot launch browsers).
+- **Comments** (as in Zwiebelfisch, checked by `mise run quality:top-comments` for `frontend/core`, `frontend/hosts`,
+  `frontend/extensions`):
+  - *One "why" comment per concept:* the doc comment of the main element (the first export) of a module's entry file.
+    First line: what it is. Then who uses it and what it guarantees, concretely. Under ~10 lines. No rationale, no
+    neighbours, no "see also", no history, no references to where the design came from (VS Code, Zwiebelfisch).
+  - *Every other file points to it:* first line `See <Name> in <path>`; a test file starts `Tests for X`.
+  - *API doc comments* say what a parameter or result means; never restate the code or the name. No comment is better
+    than one that says nothing.
+  - *Say what it is, not what it is not* ("not part of the HTTP contract", "no editor sees it"): a reader cannot
+    act on a negation.
+  - *Examples are Dashica's* (`timeRange.refresh`, dashboards, charts), never ported ones.
 
 ### 3.11 Sketch: TypeScript extension points
 

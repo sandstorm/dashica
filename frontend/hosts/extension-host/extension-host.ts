@@ -1,59 +1,41 @@
 import type { CommandContribution, Commands, CommandsHost, KeybindingContribution } from '../commands/commands';
 
 /**
- * A feature of the workbench. Built-in only: they live in `frontend/extensions/`; the instances
- * customize through Go.
- *
- * The extension host (`ExtensionHost`) runs it: activated once, in list order, after every extension's `contributes`
- * is known. What it pushes into `context.subscriptions` is disposed with the workbench.
+ * An extension: one feature of the workbench (the time range, the filters, a chart type). All are built in
+ * (`frontend/extensions/`); the instances customize through Go. The `ExtensionHost` declares every extension's
+ * `contributes` first, then activates each once, in list order; what an extension pushes into
+ * `context.subscriptions` is disposed with the workbench, the last first.
  */
 export interface Extension {
-  /** Unique in the list (e.g. `timeRange`). */
+  /** Unique among the extensions (`timeRange`); also scopes its stored values. */
   readonly id: string;
-  /** What the extension declares before any extension is activated: its commands and keys. */
+  /** Declared before any extension is activated. */
   readonly contributes?: ExtensionContributions;
-  /** Registers the extension's contributions; everything it pushes into `context.subscriptions` is disposed with the workbench. */
+  /** Registers everything else, each registration pushed into `context.subscriptions`. */
   activate(context: ExtensionContext): void;
 }
 
-/** What an extension declares up front. */
 export interface ExtensionContributions {
-  /**
-   * Its commands for people: what they are called (`commands.getCommands`, e.g. search everywhere's list, which
-   * runs them without arguments: declare only commands that work without any).
-   */
+  /** The commands people pick in search everywhere, which runs them without arguments: declare only those that need none. */
   readonly commands?: readonly CommandContribution[];
-  /**
-   * The keys of its commands: bound for the workbench's life, and shown wherever
-   * the command is offered (search everywhere, menus).
-   */
+  /** Keys for its commands; menus and search everywhere show them next to the command. */
   readonly keybindings?: readonly KeybindingContribution[];
 }
 
-/**
- * What an extension gets to work with. Grows with the steps of the workbench concept
- * (`window`, `page`, `query`, `widgets`; docs/2026-10-28-workbench.md §3.11).
- */
+/** What `activate` gets. */
 export interface ExtensionContext {
-  /** Disposed when the workbench is disposed, in reverse order (the extensions in reverse list order, too). */
+  /** Disposed with the workbench, the last first. */
   readonly subscriptions: { dispose(): unknown }[];
-  /**
-   * Values the extension keeps for this viewer across visits (the browser's local storage),
-   * apart from other extensions' (by `id`). E.g. favorites.
-   */
+  /** Values kept for this viewer across visits (localStorage), apart from other extensions': favorites. */
   readonly globalState: Memento;
-  /**
-   * Values the extension keeps during the browser session (the session storage), apart
-   * from other extensions'. E.g. which panel is open.
-   */
+  /** Values kept for this browser session (sessionStorage), apart from other extensions': which panel is open. */
   readonly workspaceState: Memento;
-  /** Commands by id and their key bindings. */
   readonly commands: Commands;
 }
 
 /**
- * Values kept by key, as JSON: what `get` gives is what was stored, so read it as data from
- * outside (check its shape). Without storage (blocked, private window) nothing is kept and nothing fails.
+ * Values stored as JSON by key. What `get` gives was stored by an earlier visit, so check its shape. Without storage
+ * (blocked, private window) `get` gives the default and `update` keeps the value nowhere.
  */
 export interface Memento {
   /** The value stored under `key`, else `defaultValue`. */
@@ -63,11 +45,10 @@ export interface Memento {
   update(key: string, value: unknown): Promise<void>;
 }
 
-/** The hosts an extension host gives its extensions, and which take their declarations (`contributes`). */
 export interface ExtensionHostOptions {
-  /** Takes the commands and keys extensions declare. */
+  /** Takes the declared commands and keys. */
   readonly commands: CommandsHost;
-  /** The document whose window's storages keep the extensions' mementos. */
+  /** Whose localStorage and sessionStorage keep the stored values. */
   readonly ownerDocument: Document;
 }
 

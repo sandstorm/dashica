@@ -1,8 +1,8 @@
 import { Disposable } from '../disposable/disposable';
 
 /**
- * One event: the owner keeps the emitter and calls `fire`, everyone else gets `event` to subscribe with.
- * Listeners run in the order they subscribed; one that unsubscribes while the event fires is not called anymore.
+ * One event: the owner keeps the emitter and calls `fire`; everyone else subscribes through `event`. Listeners run in
+ * the order they subscribed; one unsubscribed while the event fires is skipped.
  */
 export class EventEmitter<T> {
   readonly #listeners = new Set<(value: T) => void>();
@@ -18,7 +18,6 @@ export class EventEmitter<T> {
     for (const listener of [...this.#listeners]) if (this.#listeners.has(listener)) listener(value);
   }
 
-  /** Whether anyone listens. */
   get hasListeners(): boolean {
     return this.#listeners.size > 0;
   }
