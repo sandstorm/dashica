@@ -317,4 +317,8 @@ func init() {
 	Register("collapsibleGroup", CategoryContainer, func() WidgetDefinition { return NewCollapsibleGroup() })
 	Register("checkboxGroup", CategoryParameter, func() WidgetDefinition { return NewCheckboxGroup("", "", nil) })
 	Register("textInput", CategoryParameter, func() WidgetDefinition { return NewTextInput("", "") })
+	Register("schemaTable", CategoryChart, func() WidgetDefinition { return NewSchemaTable("") })
+	Register("speedscopeLink", CategoryChart, func() WidgetDefinition { return NewSpeedscopeLink(nil) })
+	Register("alertOverview", CategoryChart, func() WidgetDefinition { return NewAlertOverview("") })
+	Register("alertDetail", CategoryChart, func() WidgetDefinition { return NewAlertDetail("", "") })
 }

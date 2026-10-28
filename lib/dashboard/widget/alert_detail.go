@@ -16,8 +16,9 @@ import (
 )
 
 type AlertDetail struct {
-	// alertId identifies the alert (group + key) whose history this widget renders.
-	alertId alerting.AlertId
+	// alertGroup and alertKey identify the alert whose history this widget renders.
+	alertGroup string
+	alertKey   string
 	// title is the chart title shown above the plot. Defaults to "group#key".
 	title string
 	// id is the stable widget id; assigned automatically when empty.
@@ -26,8 +27,9 @@ type AlertDetail struct {
 
 func NewAlertDetail(alertGroup, alertKey string) *AlertDetail {
 	return &AlertDetail{
-		alertId: alerting.AlertId{Group: alertGroup, Key: alertKey},
-		title:   alertGroup + "#" + alertKey,
+		alertGroup: alertGroup,
+		alertKey:   alertKey,
+		title:      alertGroup + "#" + alertKey,
 	}
 }
 
@@ -62,7 +64,7 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 		a.id = ctx.NextWidgetId()
 	}
 
-	alertId := a.alertId
+	alertId := alerting.AlertId{Group: a.alertGroup, Key: a.alertKey}
 
 	err := registerHandler.Handle(a.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		alertDef := ctx.Deps.AlertManager.GetAlertDefinition(alertId)

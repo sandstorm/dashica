@@ -23,9 +23,9 @@ import (
 // endpoint. The query body is a sql.SqlQueryable just like chart widgets — customer/project
 // constants belong in WHERE clauses, user-driven values flow through $store.urlState.widgetParams.
 type SpeedscopeLink struct {
-	// sqlQuery is the query run when the link is clicked, streamed to the
+	// sql is the query run when the link is clicked, streamed to the
 	// bundled Speedscope viewer as space-delimited CSV.
-	sqlQuery sql.SqlQueryable
+	sql sql.SqlQueryable
 	// title is the link's button label. Zero value: "Open Speedscope".
 	title string
 	// id is the stable widget id; assigned automatically when empty.
@@ -33,7 +33,7 @@ type SpeedscopeLink struct {
 }
 
 func NewSpeedscopeLink(query sql.SqlQueryable) *SpeedscopeLink {
-	return &SpeedscopeLink{sqlQuery: query}
+	return &SpeedscopeLink{sql: query}
 }
 
 func (s *SpeedscopeLink) Title(title string) *SpeedscopeLink {
@@ -80,7 +80,7 @@ func (s *SpeedscopeLink) CollectHandlers(ctx *rendering.DashboardContext, regist
 	}
 
 	deps := ctx.Deps
-	query := s.sqlQuery
+	query := s.sql
 	if err := registerHandler.Handle(s.id+"/speedscope-query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := serveSpeedscope(query, deps, w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

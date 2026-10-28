@@ -106,7 +106,11 @@ func TestRoundTrip_stableJSON(t *testing.T) {
 		"stats": NewStats(baseQuery).
 			TitleField(sql.Field("level")).
 			FillField(sql.Count()),
-		"table": NewTable(baseQuery).Title("Rows").Height(300).Limit(50),
+		"table":          NewTable(baseQuery).Title("Rows").Height(300).Limit(50),
+		"schemaTable":    NewSchemaTable("http_logs").Title("Schema"),
+		"speedscopeLink": NewSpeedscopeLink(baseQuery).Title("Open flame graph"),
+		"alertOverview":  NewAlertOverview("prod-%"),
+		"alertDetail":    NewAlertDetail("wetell", "app_auth_events").Title("App auth events"),
 		"markdown": NewMarkdown().
 			Content("# Hello").Title("Docs"),
 		"grid": NewGrid().
