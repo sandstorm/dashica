@@ -1,4 +1,5 @@
 // UNMIGRATED (workbench): bridge for the server-rendered page until step 5b renders pages on the client; then delete. See docs/2026-10-28-workbench.md §5.
+import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 
@@ -14,10 +15,7 @@ export function legacyPage(doc: Document): Extension {
     activate({ window, subscriptions }) {
       const part = (name: string) => doc.querySelector<HTMLElement>(`[data-workbench-part="${name}"]`);
 
-      const brand = doc.createElement('a');
-      brand.href = '/';
-      brand.className = 'dashica-wb__brand';
-      brand.textContent = 'Dashica';
+      const brand = html`<a href="/" class="dashica-wb__brand">Dashica</a>`;
       subscriptions.push(window.registerBarItem('title', brand, { alignment: 'left' }));
 
       const menu = part('menu');
@@ -38,9 +36,11 @@ export function legacyPage(doc: Document): Extension {
       if (debug) {
         const panel = window.registerBottomPanel('debug', { label: 'Debug' });
         panel.body.append(debug);
+        // a chart's wrench (chart.ts) dispatches this event on the browser window, with the chart's query for the drawer
+        const browserWindow = doc.defaultView!;
         const show = () => panel.show(true);
-        globalThis.addEventListener('dashica-debugDrawer-toggle', show);
-        subscriptions.push(panel, new Disposable(() => globalThis.removeEventListener('dashica-debugDrawer-toggle', show)));
+        browserWindow.addEventListener('dashica-debugDrawer-toggle', show);
+        subscriptions.push(panel, new Disposable(() => browserWindow.removeEventListener('dashica-debugDrawer-toggle', show)));
       }
     },
   };

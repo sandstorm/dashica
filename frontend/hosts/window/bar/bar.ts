@@ -1,4 +1,5 @@
 // See WindowApi in ../window.ts.
+import { html } from 'htl';
 import { Disposable } from '../../../core/disposable/disposable';
 import type { BarPlacement } from '../window';
 
@@ -14,11 +15,7 @@ export class Bar {
   /** Fills `bar`, the layout's region. */
   constructor(bar: HTMLElement) {
     this.#bar = bar;
-    const side = (alignment: string) => {
-      const element = bar.ownerDocument.createElement('div');
-      element.className = `dashica-wb__bar-${alignment}`;
-      return { element, entries: [] as Entry[] };
-    };
+    const side = (alignment: string) => ({ element: html`<div class="dashica-wb__bar-${alignment}"></div>`, entries: [] as Entry[] });
     this.#sides = { left: side('left'), center: side('center'), right: side('right') };
     bar.append(this.#sides.left.element, this.#sides.center.element, this.#sides.right.element);
     this.#update();

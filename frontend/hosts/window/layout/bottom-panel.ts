@@ -3,7 +3,7 @@
 import type { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import type { BottomPanelOptions, Panel } from '../window';
-import { div } from '../../../core/dom/dom';
+import { html } from 'htl';
 import type { SideBarOwner } from './side-bar';
 
 /**
@@ -27,22 +27,16 @@ export class BottomPanel {
     readonly state: BottomPanelState,
     private readonly owner: SideBarOwner,
   ) {
-    const doc = host.ownerDocument;
     this.state.size = clamp(state.size);
-    this.element = div(doc, 'dashica-wb__bottom');
     this.#resizer = this.#createResizer();
-    const header = div(doc, 'dashica-wb__bottom-header');
-    this.#tabs = div(doc, 'dashica-wb__bottom-tabs');
-    this.#tabs.setAttribute('role', 'tablist');
-    const close = doc.createElement('button');
-    close.type = 'button';
-    close.className = 'dashica-wb__bottom-close';
-    close.setAttribute('aria-label', 'Close panel');
-    close.title = 'Close panel';
-    close.textContent = '✕';
-    close.addEventListener('click', () => this.#choose(null));
-    header.append(this.#tabs, close);
-    this.element.append(this.#resizer, header);
+    this.#tabs = html`<div class="dashica-wb__bottom-tabs" role="tablist"></div>`;
+    this.element = html`<div class="dashica-wb__bottom">
+      ${this.#resizer}
+      <div class="dashica-wb__bottom-header">
+        ${this.#tabs}
+        <button type="button" class="dashica-wb__bottom-close" aria-label="Close panel" title="Close panel" onclick=${() => this.#choose(null)}>✕</button>
+      </div>
+    </div>`;
     this.layout();
   }
 
@@ -58,28 +52,16 @@ export class BottomPanel {
   }
 
   addPanel(id: string, options: BottomPanelOptions): Panel {
-    const doc = this.host.ownerDocument;
-    const body = div(doc, 'dashica-wb__bottom-body');
-    body.id = `wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`;
-    body.dataset.panel = id;
-    body.setAttribute('role', 'tabpanel');
-    const tab = doc.createElement('button');
-    tab.type = 'button';
-    tab.className = 'dashica-wb__bottom-tab';
-    tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-controls', body.id);
-    tab.dataset.testid = `wb-panel-toggle-${id}`;
-    tab.textContent = options.label;
     const command = `workbench.view.${id}`;
+    const body = html`<div class="dashica-wb__bottom-body" role="tabpanel" id=${`wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`} data-panel=${id}></div>`;
     // the key may be bound after the panel is added: named anew whenever the tooltip may show
     const describe = () => {
       const key = this.owner.commands.keybindingLabel(command);
       tab.title = key ? `${options.label} (${key})` : options.label;
     };
+    const tab = html<HTMLButtonElement>`<button type="button" class="dashica-wb__bottom-tab" role="tab" aria-controls=${body.id}
+      data-testid=${`wb-panel-toggle-${id}`} onpointerenter=${describe} onfocus=${describe} onclick=${() => this.#choose(id)}>${options.label}</button>`;
     describe();
-    tab.addEventListener('pointerenter', describe);
-    tab.addEventListener('focus', describe);
-    tab.addEventListener('click', () => this.#choose(id));
     this.#orders.set(tab, options.order ?? 0);
     const next = [...this.#tabs.children].find((other) => (this.#orders.get(other) ?? -Infinity) > (options.order ?? 0));
     this.#tabs.insertBefore(tab, next ?? null);
@@ -196,20 +178,13 @@ export class BottomPanel {
 
   /** The top edge: drag (or arrow keys) to size the area; up makes it taller. */
   #createResizer(): HTMLElement {
-    const resizer = div(this.host.ownerDocument, 'dashica-wb__bottom-resizer');
-    resizer.setAttribute('role', 'separator');
-    resizer.setAttribute('aria-orientation', 'horizontal');
-    resizer.setAttribute('aria-label', 'Bottom panel height');
-    resizer.setAttribute('aria-valuemin', String(SIZE.min));
-    resizer.setAttribute('aria-valuemax', String(SIZE.max));
-    resizer.tabIndex = 0;
-    resizer.addEventListener('keydown', (event) => {
-      const direction = { ArrowUp: 1, ArrowDown: -1 }[event.key];
+    const onkeydown = (event: KeyboardEvent) => {
+      const direction = ({ ArrowUp: 1, ArrowDown: -1 } as Record<string, number>)[event.key];
       if (direction === undefined) return;
       event.preventDefault();
       this.#resize(this.state.size + direction * SIZE.step);
-    });
-    resizer.addEventListener('pointerdown', (event) => {
+    };
+    const onpointerdown = (event: PointerEvent) => {
       event.preventDefault();
       const doc = this.host.ownerDocument;
       const start = { y: event.clientY, size: this.state.size };
@@ -222,8 +197,9 @@ export class BottomPanel {
       this.host.classList.add('dashica-wb--resizing-rows');
       doc.addEventListener('pointermove', move);
       doc.addEventListener('pointerup', up);
-    });
-    return resizer;
+    };
+    return html`<div class="dashica-wb__bottom-resizer" role="separator" aria-orientation="horizontal" aria-label="Bottom panel height"
+      aria-valuemin=${SIZE.min} aria-valuemax=${SIZE.max} tabindex="0" onkeydown=${onkeydown} onpointerdown=${onpointerdown}></div>`;
   }
 }
 

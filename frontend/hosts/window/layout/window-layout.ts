@@ -3,7 +3,7 @@
 import type { Panel, SidePanelOptions, BottomPanelOptions } from '../window';
 import type { Memento } from '../../extension-host/extension-host';
 import { BottomPanel } from './bottom-panel';
-import { div } from '../../../core/dom/dom';
+import { html } from 'htl';
 import { restoreSideBarState, SideBar, type PanelCommands, type Side } from './side-bar';
 
 /**
@@ -33,7 +33,6 @@ export class WindowLayout {
     /** Where each panel's command `workbench.view.<id>` goes, and the keys its button names. */
     commands: PanelCommands,
   ) {
-    const doc = host.ownerDocument;
     const saved = memento.get<unknown>('layout');
     const save = () => void memento.update('layout', { left: this.#sides.left.state, right: this.#sides.right.state, bottom: this.#bottom.state });
     this.#sides = {
@@ -41,14 +40,11 @@ export class WindowLayout {
       right: new SideBar(host, 'right', restoreSideBarState(saved, 'right'), { save, commands }),
     };
     this.#bottom = new BottomPanel(host, BottomPanel.restoreState(saved), { save, commands });
-    this.titleBar = div(doc, 'dashica-wb__title-bar');
-    this.titleBar.dataset.testid = 'wb-title-bar';
-    this.filterBar = div(doc, 'dashica-wb__filter-bar');
-    this.filterBar.dataset.testid = 'wb-filter-bar';
-    this.content = div(doc, 'dashica-wb__content');
-    this.#center = div(doc, 'dashica-wb__center');
-    this.#center.append(this.content, this.#bottom.element);
-    this.statusBar = div(doc, 'dashica-wb__status-bar');
+    this.titleBar = html`<div class="dashica-wb__title-bar" data-testid="wb-title-bar"></div>`;
+    this.filterBar = html`<div class="dashica-wb__filter-bar" data-testid="wb-filter-bar"></div>`;
+    this.content = html`<div class="dashica-wb__content"></div>`;
+    this.#center = html`<div class="dashica-wb__center">${this.content}${this.#bottom.element}</div>`;
+    this.statusBar = html`<div class="dashica-wb__status-bar"></div>`;
     host.classList.add('dashica-wb');
     host.append(this.titleBar, this.filterBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
     this.#watchWidth();

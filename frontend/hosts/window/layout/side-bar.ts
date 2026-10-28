@@ -1,8 +1,8 @@
 // See WindowLayout in window-layout.ts.
 
 import type { Disposable } from '../../../core/disposable/disposable';
-import { div } from '../../../core/dom/dom';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
+import { html } from 'htl';
 import type { Panel, SidePanelOptions } from '../window';
 
 /**
@@ -38,27 +38,20 @@ export class SideBar {
     readonly state: SideBarState,
     private readonly owner: SideBarOwner,
   ) {
-    const doc = host.ownerDocument;
     this.#size = SIZES[side];
     this.state.size = this.#clamp(state.size);
-    this.element = div(doc, `dashica-wb__side dashica-wb__side--${side}`);
-    this.#rail = div(doc, 'dashica-wb__rail');
-    this.#rail.setAttribute('role', 'toolbar');
-    this.#rail.setAttribute('aria-label', side === 'left' ? 'Left panels' : 'Right panels');
-    this.#rail.setAttribute('aria-orientation', 'vertical');
-    this.#bottom = div(doc, 'dashica-wb__rail-bottom');
-    this.#rail.append(this.#bottom);
-    this.#panel = div(doc, 'dashica-wb__panel');
+    this.#bottom = html`<div class="dashica-wb__rail-bottom"></div>`;
+    this.#rail = html`<div class="dashica-wb__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.#bottom}</div>`;
     this.#resizer = this.#createResizer();
-    this.#panel.append(this.#resizer);
-    // the rail on the workbench's outer edge
-    if (side === 'left') this.element.append(this.#rail, this.#panel);
-    else this.element.append(this.#panel, this.#rail);
-    this.#listen(doc, 'pointerdown', (event) => {
-      if (this.#overlay && this.#shown && !event.composedPath().includes(this.element)) this.show(null);
-    });
-    this.element.addEventListener('keydown', (event) => {
+    this.#panel = html`<div class="dashica-wb__panel">${this.#resizer}</div>`;
+    const onkeydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && this.#overlay && this.#shown) this.#closeFromKeyboard();
+    };
+    // the rail on the workbench's outer edge
+    const [first, second] = side === 'left' ? [this.#rail, this.#panel] : [this.#panel, this.#rail];
+    this.element = html`<div class="dashica-wb__side dashica-wb__side--${side}" onkeydown=${onkeydown}>${first}${second}</div>`;
+    this.#listen(host.ownerDocument, 'pointerdown', (event) => {
+      if (this.#overlay && this.#shown && !event.composedPath().includes(this.element)) this.show(null);
     });
     this.layout();
   }
@@ -68,27 +61,18 @@ export class SideBar {
   }
 
   addPanel(id: string, options: SidePanelOptions): Panel {
-    const doc = this.host.ownerDocument;
-    const body = div(doc, 'dashica-wb__panel-body');
-    body.id = `wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`;
-    body.dataset.panel = id;
-    const button = doc.createElement('button');
-    button.type = 'button';
-    button.className = 'dashica-wb__rail-button';
     const command = `workbench.view.${id}`;
+    const body = html`<div class="dashica-wb__panel-body" id=${`wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`} data-panel=${id}></div>`;
     // the key may be bound after the panel is added: named anew whenever the tooltip may show
     const describe = () => {
       const key = this.owner.commands.keybindingLabel(command);
       button.title = key ? `${options.label} (${key})` : options.label;
     };
+    const button = html<HTMLButtonElement>`<button type="button" class="dashica-wb__rail-button" aria-label=${options.label}
+      aria-controls=${body.id} data-testid=${`wb-panel-toggle-${id}`} onpointerenter=${describe} onfocus=${describe}
+      onclick=${() => this.#choose(this.#shown === id ? null : id)}></button>`;
     describe();
-    button.addEventListener('pointerenter', describe);
-    button.addEventListener('focus', describe);
-    button.setAttribute('aria-label', options.label);
-    button.setAttribute('aria-controls', body.id);
-    button.dataset.testid = `wb-panel-toggle-${id}`;
     button.insertAdjacentHTML('beforeend', options.icon);
-    button.addEventListener('click', () => this.#choose(this.#shown === id ? null : id));
     this.#place(button, options.order ?? 0, options.alignment === 'bottom');
     this.#panel.insertBefore(body, this.#resizer);
     const registration = this.owner.commands.registerCommand(command, () => this.#toggleFocus(id));
@@ -262,27 +246,21 @@ export class SideBar {
   /** The panel's inner edge: drag (or arrow keys) to size the side; the arrow moves the edge. */
   #createResizer(): HTMLElement {
     const { min, max, step, label } = this.#size;
-    const resizer = div(this.host.ownerDocument, 'dashica-wb__resizer');
-    resizer.setAttribute('role', 'separator');
-    resizer.setAttribute('aria-orientation', 'vertical');
-    resizer.setAttribute('aria-label', label);
-    resizer.setAttribute('aria-valuemin', String(min));
-    resizer.setAttribute('aria-valuemax', String(max));
-    resizer.tabIndex = 0;
     // moving the edge outwards (away from the side's rail) makes the side wider
     const outwards = this.side === 'left' ? 1 : -1;
-    resizer.addEventListener('keydown', (event) => {
-      const direction = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    const onkeydown = (event: KeyboardEvent) => {
+      const direction = ({ ArrowLeft: -1, ArrowRight: 1 } as Record<string, number>)[event.key];
       if (direction === undefined) return;
       event.preventDefault();
       this.#resize(this.state.size + direction * outwards * step);
-    });
-    resizer.addEventListener('pointerdown', (event) => {
+    };
+    const onpointerdown = (event: PointerEvent) => {
       const start = { x: event.clientX, size: this.state.size, width: this.host.getBoundingClientRect().width || 1 };
       const perPixel = this.#size.unit === 'px' ? 1 : 100 / start.width;
       this.#track(event, (e) => this.#resize(start.size + (e.clientX - start.x) * outwards * perPixel));
-    });
-    return resizer;
+    };
+    return html`<div class="dashica-wb__resizer" role="separator" aria-orientation="vertical" aria-label=${label}
+      aria-valuemin=${min} aria-valuemax=${max} tabindex="0" onkeydown=${onkeydown} onpointerdown=${onpointerdown}></div>`;
   }
 
   /** Follows the pointer from `event` until it is released, calling `move` (a resize in progress). */
