@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -81,8 +82,22 @@ func (d *Builder) FilterButton(title string, queryPart string) *Builder {
 
 func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
 	// first: it gives the widgets their ids and URLs, which BuildComponents renders
-	if _, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api")); err != nil {
+	nodes, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api"))
+	if err != nil {
 		return fmt.Errorf("mounting widgets: %w", err)
+	}
+	page, err := json.Marshal(PageJson{
+		Kind:          "dashboard",
+		Title:         d.title,
+		FilterBar:     d.searchBar.IsVisible,
+		FilterButtons: append([]rendering.FilterButton{}, d.searchBar.FilterButtons...),
+		Widgets:       nodes,
+	})
+	if err != nil {
+		return fmt.Errorf("marshalling page.json: %w", err)
+	}
+	if err := handlerCollector.Handle("page.json", jsonHandler(page)); err != nil {
+		return fmt.Errorf("registering page.json handler: %w", err)
 	}
 
 	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(ctx) })

@@ -96,8 +96,9 @@ type MenuGroupEntry struct {
 }
 
 type FilterButton struct {
-	Title     string
-	QueryPart string
+	Title string `json:"title"`
+	// QueryPart is the SQL condition the button adds to the filter ("status >= 500").
+	QueryPart string `json:"queryPart"`
 }
 
 type SearchBarOption struct {
