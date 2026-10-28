@@ -108,7 +108,7 @@ Hosts keep only mechanism.
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `window` | side / bottom panels, title bar and status bar items, `registerMenuItem`, `showContextMenu`, quick pick, messages, search providers |
+| `ui` | side / bottom panels, title bar and status bar items, `registerMenuItem`, `showContextMenu`, quick pick, messages, search providers |
 | `widgets` | `registerWidget` (§3.6) |
 | `page` | the shown page (`page.json`), `onDidChangePage` |
 | `query` | the state every query depends on (§3.7) |
@@ -205,7 +205,7 @@ selection). A chart only reports a *selection*; it does not know what can be don
   brush: the pointer handling lives in a shared time-chart helper.
 
 The selection is one model in the `widgets` host (one selection at a time, Escape clears it). The host shows the
-floating bar `widget/selection` next to it; its entries come from `window.registerMenuItem('widget/selection', …)`
+floating bar `widget/selection` next to it; its entries come from `ui.registerMenuItem('widget/selection', …)`
 with `when(context)` like any menu, so each extension adds its own:
 
 | Entry | Shown when | From extension |
@@ -268,7 +268,7 @@ interface ExtensionContext {
   readonly globalState: Memento;          // per viewer (localStorage), scoped by extension id
   readonly workspaceState: Memento;       // per browser session (sessionStorage)
   readonly commands: Commands;
-  readonly window: WindowApi;
+  readonly ui: UiApi;                     // not `window`: that would hide the browser's
   readonly page: PageApi;
   readonly query: QueryApi;
   readonly widgets: WidgetsApi;
@@ -282,8 +282,8 @@ interface Commands {
   keybindingLabel(id: string): string | undefined;
 }
 
-// window — regions, menus, input, messages
-interface WindowApi {
+// ui — regions, menus, input, messages
+interface UiApi {
   registerSidePanel(id: string, o: { label: string; icon: string; side: 'left' | 'right'; order?: number;
                                      when?: (p: Page) => boolean }): Panel;     // command workbench.view.<id>
   registerBottomPanel(id: string, o: { label: string; order?: number; when?: (p: Page) => boolean }): Panel;

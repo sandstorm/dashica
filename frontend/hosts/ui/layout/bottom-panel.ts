@@ -2,7 +2,7 @@
 
 import type { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
-import type { BottomPanelOptions, Panel } from '../window';
+import type { BottomPanelOptions, Panel } from '../ui';
 import { html } from 'htl';
 import type { SideBarOwner } from './side-bar';
 

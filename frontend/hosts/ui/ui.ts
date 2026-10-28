@@ -7,7 +7,7 @@ import type { Event } from '../../core/event-emitter/event-emitter';
  * focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are remembered for
  * the browser session.
  */
-export interface WindowApi {
+export interface UiApi {
   /** Adds a side panel with its rail button on `options.side`; one panel per side shows at a time. Ids are unique across all panels. */
   registerSidePanel(id: string, options: SidePanelOptions): Panel;
   /** Adds a panel below the content with its tab; one shows at a time. */
@@ -62,4 +62,4 @@ export interface BarPlacement {
   readonly priority?: number;
 }
 
-export { WindowHost } from './window-impl';
+export { UiHost } from './ui-impl';

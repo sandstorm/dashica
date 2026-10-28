@@ -1,6 +1,6 @@
-// See WindowApi in ../window.ts.
+// See UiApi in ../ui.ts.
 
-import type { Panel, SidePanelOptions, BottomPanelOptions } from '../window';
+import type { Panel, SidePanelOptions, BottomPanelOptions } from '../ui';
 import type { Memento } from '../../extension-host/extension-host';
 import { BottomPanel } from './bottom-panel';
 import { html } from 'htl';

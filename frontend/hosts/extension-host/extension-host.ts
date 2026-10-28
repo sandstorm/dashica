@@ -1,5 +1,5 @@
 import type { CommandContribution, Commands, CommandsHost, KeybindingContribution } from '../commands/commands';
-import type { WindowApi } from '../window/window';
+import type { UiApi } from '../ui/ui';
 
 /**
  * An extension: one feature of the workbench (the time range, the filters, a chart type). All are built in
@@ -33,7 +33,7 @@ export interface ExtensionContext {
   readonly workspaceState: Memento;
   readonly commands: Commands;
   /** The workbench's regions: panels and bar items. */
-  readonly window: WindowApi;
+  readonly ui: UiApi;
 }
 
 /**
@@ -51,7 +51,7 @@ export interface Memento {
 export interface ExtensionHostOptions {
   /** Takes the declared commands and keys. */
   readonly commands: CommandsHost;
-  readonly window: WindowApi;
+  readonly ui: UiApi;
   /** Whose localStorage and sessionStorage keep the stored values. */
   readonly ownerDocument: Document;
 }

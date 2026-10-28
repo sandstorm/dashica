@@ -1,7 +1,7 @@
-// See WindowApi in ../window.ts.
+// See UiApi in ../ui.ts.
 import { html } from 'htl';
 import { Disposable } from '../../../core/disposable/disposable';
-import type { BarPlacement } from '../window';
+import type { BarPlacement } from '../ui';
 
 /**
  * The items of one bar (title, filter or status): `left` from its start, `center` in the middle, `right` at its end;

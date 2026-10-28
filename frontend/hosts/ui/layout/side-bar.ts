@@ -3,7 +3,7 @@
 import type { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { html } from 'htl';
-import type { Panel, SidePanelOptions } from '../window';
+import type { Panel, SidePanelOptions } from '../ui';
 
 /**
  * One side of the workbench (left or right): its rail (a button per panel, by `order`, in its top or bottom group) and

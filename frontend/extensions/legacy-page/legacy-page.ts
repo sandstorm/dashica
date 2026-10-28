@@ -12,15 +12,15 @@ import type { Extension } from '../../hosts/extension-host/extension-host';
 export function legacyPage(doc: Document): Extension {
   return {
     id: 'legacyPage',
-    activate({ window, subscriptions }) {
+    activate({ ui, subscriptions }) {
       const part = (name: string) => doc.querySelector<HTMLElement>(`[data-workbench-part="${name}"]`);
 
       const brand = html`<a href="/" class="dashica-wb__brand">Dashica</a>`;
-      subscriptions.push(window.registerBarItem('title', brand, { alignment: 'left' }));
+      subscriptions.push(ui.registerBarItem('title', brand, { alignment: 'left' }));
 
       const menu = part('menu');
       if (menu) {
-        const panel = window.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
+        const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
         panel.body.append(menu);
         panel.setDefault(true);
         subscriptions.push(panel);
@@ -29,12 +29,12 @@ export function legacyPage(doc: Document): Extension {
       const searchBar = part('searchbar');
       if (searchBar && searchBar.childElementCount > 0) {
         searchBar.classList.add('dashica-wb__legacy-search-bar');
-        subscriptions.push(window.registerBarItem('filter', searchBar, { alignment: 'left' }));
+        subscriptions.push(ui.registerBarItem('filter', searchBar, { alignment: 'left' }));
       }
 
       const debug = part('debug');
       if (debug) {
-        const panel = window.registerBottomPanel('debug', { label: 'Debug' });
+        const panel = ui.registerBottomPanel('debug', { label: 'Debug' });
         panel.body.append(debug);
         // a chart's wrench (chart.ts) dispatches this event on the browser window, with the chart's query for the drawer
         const browserWindow = doc.defaultView!;

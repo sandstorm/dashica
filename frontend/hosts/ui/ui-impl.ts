@@ -1,14 +1,14 @@
-// See WindowApi in window.ts.
+// See UiApi in ui.ts.
 import type { Disposable } from '../../core/disposable/disposable';
 import type { Memento } from '../extension-host/extension-host';
 import { Bar } from './bar/bar';
 import { WindowLayout } from './layout/window-layout';
 import type { PanelCommands } from './layout/side-bar';
-import type { BarPlacement, BottomPanelOptions, Panel, SidePanelOptions, WindowApi } from './window';
+import type { BarPlacement, BottomPanelOptions, Panel, SidePanelOptions, UiApi } from './ui';
 import './layout/window-layout.css';
 
-/** The workbench's `WindowApi`, laid out in `host`. `content`: the region the shown page goes into. */
-export class WindowHost implements WindowApi {
+/** The workbench's `UiApi`, laid out in `host`. `content`: the region the shown page goes into. */
+export class UiHost implements UiApi {
   readonly #layout: WindowLayout;
   readonly #bars: Record<'title' | 'filter' | 'status', Bar>;
 
