@@ -50,16 +50,16 @@ describe('CommandsHost', () => {
     await expect(commands.executeCommand('test.rejects')).rejects.toThrow('later');
   });
 
-  it('runs a bound key anywhere inside, before (and instead of) the editors', () => {
+  it('runs a bound key anywhere inside, before (and instead of) the content', () => {
     const { inner, commands } = setup();
     const run = vi.fn();
     commands.registerCommand('test.run', run);
     commands.declareKeybindings([{ key: 'Mod+Alt+KeyM', command: 'test.run' }]);
-    const editor = vi.fn();
-    inner.addEventListener('keydown', editor);
+    const content = vi.fn();
+    inner.addEventListener('keydown', content);
     const event = press(inner, { code: 'KeyM', altKey: true, ctrlKey: true });
     expect(run).toHaveBeenCalledTimes(1);
-    expect(editor).not.toHaveBeenCalled();
+    expect(content).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(true);
   });
 
@@ -88,17 +88,17 @@ describe('CommandsHost', () => {
   it("binds the declared keys, the Mac's on the Mac, and names a command's first key as people read it", () => {
     const declared = [
       { command: 'test.find', key: 'Mod+Shift+KeyF' },
-      { command: 'test.files', key: 'Alt+Digit1', mac: 'Ctrl+Digit1' },
+      { command: 'test.dashboards', key: 'Alt+Digit1', mac: 'Ctrl+Digit1' },
     ];
     const other = setup();
     other.commands.declareKeybindings(declared);
     other.commands.declareKeybindings([{ key: 'F3', command: 'test.find' }]);
-    expect([other.commands.keybindingLabel('test.find'), other.commands.keybindingLabel('test.files'), other.commands.keybindingLabel('test.none')]).toEqual(['Ctrl+Shift+F', 'Alt+1', undefined]);
+    expect([other.commands.keybindingLabel('test.find'), other.commands.keybindingLabel('test.dashboards'), other.commands.keybindingLabel('test.none')]).toEqual(['Ctrl+Shift+F', 'Alt+1', undefined]);
     const mac = setup({ platform: 'mac' });
     mac.commands.declareKeybindings(declared);
-    expect([mac.commands.keybindingLabel('test.find'), mac.commands.keybindingLabel('test.files')]).toEqual(['⌘⇧F', '⌃1']);
+    expect([mac.commands.keybindingLabel('test.find'), mac.commands.keybindingLabel('test.dashboards')]).toEqual(['⌘⇧F', '⌃1']);
     const run = vi.fn();
-    mac.commands.registerCommand('test.files', run);
+    mac.commands.registerCommand('test.dashboards', run);
     press(mac.inner, { code: 'Digit1', altKey: true });
     press(mac.inner, { code: 'Digit1', ctrlKey: true });
     expect(run).toHaveBeenCalledTimes(1);
@@ -106,14 +106,14 @@ describe('CommandsHost', () => {
 
   it("binds a platform's own key, none where it is '', and passes a binding's argument", () => {
     const declared = [
-      { command: 'test.files', key: 'Alt+Digit1', mac: 'Ctrl+Digit1', linux: '' },
+      { command: 'test.dashboards', key: 'Alt+Digit1', mac: 'Ctrl+Digit1', linux: '' },
       { command: 'test.open', key: 'Mod+Shift+KeyO', args: '/' },
     ];
     const run = vi.fn();
     const keysOn = (platform: Platform) => {
       const { commands } = setup({ platform });
       commands.declareKeybindings(declared);
-      return commands.keybindingLabel('test.files');
+      return commands.keybindingLabel('test.dashboards');
     };
     expect([keysOn('mac'), keysOn('win'), keysOn('linux')]).toEqual(['⌃1', 'Alt+1', undefined]);
     const { inner, commands } = setup();
@@ -139,7 +139,7 @@ describe('CommandsHost', () => {
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Command test.fails failed:', expect.objectContaining({ message: 'nope' })));
   });
 
-  it('leaves other keys to the editors, and bound keys once the command is gone', () => {
+  it('leaves other keys to the content, and bound keys once the command is gone', () => {
     const { inner, commands } = setup();
     const run = vi.fn();
     const command = commands.registerCommand('test.run', run);
@@ -173,9 +173,9 @@ describe('CommandsHost', () => {
 
   it('lists the declared commands that are registered now', () => {
     const { commands } = setup();
-    commands.declareCommands([{ command: 'test.count', title: 'Count words', category: 'Test' }, { command: 'test.gone', title: 'Gone' }]);
-    commands.registerCommand('test.count', () => {});
+    commands.declareCommands([{ command: 'test.refresh', title: 'Refresh', category: 'Test' }, { command: 'test.gone', title: 'Gone' }]);
+    commands.registerCommand('test.refresh', () => {});
     commands.registerCommand('test.undeclared', () => {});
-    expect(commands.getCommands()).toEqual([{ command: 'test.count', title: 'Count words', category: 'Test' }]);
+    expect(commands.getCommands()).toEqual([{ command: 'test.refresh', title: 'Refresh', category: 'Test' }]);
   });
 });

@@ -1,7 +1,7 @@
 import type { CommandContribution, Commands, CommandsHost, KeybindingContribution } from '../commands/commands';
 
 /**
- * A feature of the workbench (VS Code's extension). Built-in only: they live in `frontend/extensions/`; the instances
+ * A feature of the workbench. Built-in only: they live in `frontend/extensions/`; the instances
  * customize through Go.
  *
  * The extension host (`ExtensionHost`) runs it: activated once, in list order, after every extension's `contributes`
@@ -10,16 +10,13 @@ import type { CommandContribution, Commands, CommandsHost, KeybindingContributio
 export interface Extension {
   /** Unique in the list (e.g. `timeRange`). */
   readonly id: string;
-  /**
-   * What the extension declares before any extension is activated (VS Code's `contributes` in an extension's
-   * manifest): its commands and keys.
-   */
+  /** What the extension declares before any extension is activated: its commands and keys. */
   readonly contributes?: ExtensionContributions;
   /** Registers the extension's contributions; everything it pushes into `context.subscriptions` is disposed with the workbench. */
   activate(context: ExtensionContext): void;
 }
 
-/** What an extension declares up front (VS Code's `contributes`). */
+/** What an extension declares up front. */
 export interface ExtensionContributions {
   /**
    * Its commands for people: what they are called (`commands.getCommands`, e.g. search everywhere's list, which
@@ -27,35 +24,35 @@ export interface ExtensionContributions {
    */
   readonly commands?: readonly CommandContribution[];
   /**
-   * The keys of its commands (VS Code's `contributes.keybindings`): bound for the workbench's life, and shown wherever
+   * The keys of its commands: bound for the workbench's life, and shown wherever
    * the command is offered (search everywhere, menus).
    */
   readonly keybindings?: readonly KeybindingContribution[];
 }
 
 /**
- * What an extension gets to work with: VS Code's namespaces. Grows with the steps of the workbench concept
+ * What an extension gets to work with. Grows with the steps of the workbench concept
  * (`window`, `page`, `query`, `widgets`; docs/2026-10-28-workbench.md §3.11).
  */
 export interface ExtensionContext {
   /** Disposed when the workbench is disposed, in reverse order (the extensions in reverse list order, too). */
   readonly subscriptions: { dispose(): unknown }[];
   /**
-   * Values the extension keeps for this viewer across visits (VS Code's `globalState`: the browser's local storage),
+   * Values the extension keeps for this viewer across visits (the browser's local storage),
    * apart from other extensions' (by `id`). E.g. favorites.
    */
   readonly globalState: Memento;
   /**
-   * Values the extension keeps during the browser session (VS Code's `workspaceState`: the session storage), apart
+   * Values the extension keeps during the browser session (the session storage), apart
    * from other extensions'. E.g. which panel is open.
    */
   readonly workspaceState: Memento;
-  /** Commands by id and their key bindings (VS Code's `commands` namespace). */
+  /** Commands by id and their key bindings. */
   readonly commands: Commands;
 }
 
 /**
- * Values kept by key (VS Code's Memento), as JSON: what `get` gives is what was stored, so read it as data from
+ * Values kept by key, as JSON: what `get` gives is what was stored, so read it as data from
  * outside (check its shape). Without storage (blocked, private window) nothing is kept and nothing fails.
  */
 export interface Memento {

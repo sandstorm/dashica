@@ -7,15 +7,15 @@ afterEach(() => document.body.replaceChildren());
 
 function setup() {
   const host = document.body.appendChild(document.createElement('div'));
-  // an editor inside that keeps its keys to itself (as CodeMirror, ProseMirror or IronCalc may)
-  const editor = host.appendChild(document.createElement('div'));
-  editor.addEventListener('keydown', (event) => event.stopPropagation());
-  editor.addEventListener('keyup', (event) => event.stopPropagation());
+  // content inside that keeps its keys to itself (as a chart's or table's own key handling may)
+  const content = host.appendChild(document.createElement('div'));
+  content.addEventListener('keydown', (event) => event.stopPropagation());
+  content.addEventListener('keyup', (event) => event.stopPropagation());
   let time = 0;
   const onDoubleShift = vi.fn();
   listenForDoubleTap(host, 'Shift', onDoubleShift, () => time);
   const send = (type: 'keydown' | 'keyup', key: string, init: KeyboardEventInit = {}) =>
-    editor.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, ...init }));
+    content.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, ...init }));
   /** Shift down and up, `wait` ms after the previous step. */
   const tap = (wait = 0, init: KeyboardEventInit = {}) => {
     time += wait;
@@ -27,7 +27,7 @@ function setup() {
 }
 
 describe('listenForDoubleTap', () => {
-  it('fires when Shift is tapped twice quickly, inside an editor too, on the second release', () => {
+  it('fires when Shift is tapped twice quickly, inside the content too, on the second release', () => {
     const { onDoubleShift, tap, send } = setup();
     tap();
     send('keydown', 'Shift', { shiftKey: true });

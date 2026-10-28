@@ -2,7 +2,7 @@
 import type { Platform } from './commands';
 
 /**
- * `key` (modifiers and a key, joined by `+`: a binding's `Mod+Alt+KeyM`, or a toolbar's `Mod+B`) as people read it:
+ * `key` (modifiers and a key, joined by `+`: a binding's `Mod+Alt+KeyM`, or `Mod+B`) as people read it:
  * on the Mac `⌘⌥M`, else `Ctrl+Alt+M`. `mac`: default as the browser says. For tooltips and menus naming a key.
  *
  * @helper Stateless: no registry, no per-workbench state.

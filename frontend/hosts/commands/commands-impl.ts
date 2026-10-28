@@ -100,7 +100,7 @@ function modifierKey(modifier: string, mac: boolean): string {
   return modifier === 'Ctrl' ? 'Control' : modifier;
 }
 
-/** A command's handler (VS Code's shape): the arguments the command documents, any result (a Promise is awaited). */
+/** A command's handler: the arguments the command documents, any result (a Promise is awaited). */
 type CommandHandler = (...args: any[]) => unknown;
 
 /** `Mod+Alt+KeyM` → a test for the event: that `code`, and exactly the named modifiers pressed. */

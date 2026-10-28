@@ -75,23 +75,23 @@ describe('ExtensionHost', () => {
 
 describe('StorageMemento', () => {
   it('keeps values as JSON under its prefix, apart from other prefixes', async () => {
-    const memento = StorageMemento.of(document, 'sessionStorage', 'workbench:files:');
-    expect(memento.get('folders')).toBeUndefined();
-    expect(memento.get('folders', [])).toEqual([]);
-    await memento.update('folders', ['/a']);
-    expect(memento.get('folders')).toEqual(['/a']);
-    expect(StorageMemento.of(document, 'sessionStorage', 'workbench:files:').get('folders')).toEqual(['/a']);
-    expect(StorageMemento.of(document, 'sessionStorage', 'workbench:other:').get('folders')).toBeUndefined();
-    expect(sessionStorage.getItem('workbench:files:folders')).toBe('["/a"]');
+    const memento = StorageMemento.of(document, 'sessionStorage', 'dashica:session:dashboards:');
+    expect(memento.get('openGroups')).toBeUndefined();
+    expect(memento.get('openGroups', [])).toEqual([]);
+    await memento.update('openGroups', ['wetell']);
+    expect(memento.get('openGroups')).toEqual(['wetell']);
+    expect(StorageMemento.of(document, 'sessionStorage', 'dashica:session:dashboards:').get('openGroups')).toEqual(['wetell']);
+    expect(StorageMemento.of(document, 'sessionStorage', 'dashica:session:other:').get('openGroups')).toBeUndefined();
+    expect(sessionStorage.getItem('dashica:session:dashboards:openGroups')).toBe('["wetell"]');
   });
 
   it('forgets a value updated to undefined', async () => {
-    const memento = StorageMemento.of(document, 'localStorage', 'global:sync:');
-    await memento.update('followCursor', false);
-    expect(memento.get('followCursor', true)).toBe(false);
-    await memento.update('followCursor', undefined);
-    expect(memento.get('followCursor', true)).toBe(true);
-    expect(localStorage.getItem('global:sync:followCursor')).toBeNull();
+    const memento = StorageMemento.of(document, 'localStorage', 'dashica:global:logScale:');
+    await memento.update('on', false);
+    expect(memento.get('on', true)).toBe(false);
+    await memento.update('on', undefined);
+    expect(memento.get('on', true)).toBe(true);
+    expect(localStorage.getItem('dashica:global:logScale:on')).toBeNull();
   });
 
   it('gives defaults and keeps nothing without storage', async () => {
