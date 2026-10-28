@@ -3,7 +3,7 @@ import { Disposable } from '../../core/disposable/disposable';
 
 /**
  * Calls `onDoubleTap` when `modifier` (a `KeyboardEvent.key`: `Shift`, `Control`, `Alt`, `Meta`) is pressed twice on
- * `target` (in the capture phase, so before the content inside): the second press starting at most 300 ms after the
+ * `target`: the second press starting at most 300 ms after the
  * first was released, neither together with another key or a mouse button, nothing pressed in between; it fires when
  * the second press is released (Shift held for a capital letter never counts). Not in a text field (`input`,
  * `textarea`, e.g. an open input box): what is typed there stays. `now` is the clock in milliseconds.

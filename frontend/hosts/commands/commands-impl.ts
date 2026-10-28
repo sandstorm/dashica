@@ -5,7 +5,7 @@ import { DOUBLE_TAP, keyLabel, LABELS, PLATFORM } from './commands-helpers';
 import { listenForDoubleTap } from './double-tap';
 
 /**
- * The `Commands` of the workbench. Keys are handled on `root` in the capture phase: the content never sees a bound key.
+ * The `Commands` of the workbench. Keys are handled on `root`; a bound key goes no further.
  * `platform`: whose keys these are (on the Mac Mod is Cmd, labels read ⌘⇧F); default: as the browser says.
  */
 export class CommandsHost implements Commands {

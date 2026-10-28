@@ -32,7 +32,10 @@ export interface Commands {
   keybindingLabel(id: string): string | undefined;
 }
 
-/** A command as people see it. */
+/**
+ * A command's id with its title and category, as an extension declares it in `contributes.commands`; what menus and
+ * search everywhere show for it. Part of the extension API, not of any HTTP contract.
+ */
 export interface CommandContribution {
   /** The command's id (`registerCommand`). */
   readonly command: string;
@@ -45,8 +48,8 @@ export interface CommandContribution {
 }
 
 /**
- * A key that runs a command anywhere in the workbench, before the content sees
- * the key (it never does; a failing command is logged). A platform's own key replaces `key` there; '' is no key there.
+ * A key that runs a command anywhere in the workbench; a failing command is logged. A platform's own key replaces
+ * `key` there; '' is no key there.
  */
 export interface KeybindingContribution {
   /** The command's id. */
