@@ -1,9 +1,10 @@
 import type { Disposable } from '../../core/disposable/disposable';
 import type { Event } from '../../core/event-emitter/event-emitter';
+import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
- * The workbench's regions as extensions fill them: side panels left and right, panels below the content, and items in
- * the title bar, the filter bar and the status bar. Each panel has a command `workbench.view.<id>`: it shows and
+ * The workbench's regions as extensions fill them (side panels left and right, panels below the content, items in
+ * the title bar, the filter bar and the status bar) and its menus. Each panel has a command `workbench.view.<id>`: it shows and
  * focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are remembered for
  * the browser session.
  */
@@ -14,7 +15,35 @@ export interface UiApi {
   registerBottomPanel(id: string, options: BottomPanelOptions): Panel;
   /** Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item. */
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
+  /**
+   * Adds `item` to the menu `menuId` until disposed. A menu is only an id; whoever shows it documents its context `C`
+   * and its arguments, e.g. `dashboards/entry`: `{ url, title }` of a dashboard entry, its URL as the argument.
+   */
+  registerMenuItem<C extends object = MenuContext>(menuId: string, item: MenuItem<C>): Disposable;
+  /** The entries of `menuId` whose `when` holds in `context`: `navigation` first, the other groups by name, by `order`. */
+  getMenuItems<C extends object = MenuContext>(menuId: string, context?: C): readonly MenuItem<C>[];
+  /** Fires with a menu's id when its entries change. */
+  readonly onDidChangeMenu: Event<string>;
+  /**
+   * Pops up the menu `menuId` at `options.anchor`; nothing while no entry applies. Choosing an entry runs its command
+   * with `options.args`, after the menu closed and gave the focus back. One at a time: a new menu closes the open one;
+   * so do Escape and a press elsewhere.
+   */
+  showContextMenu(menuId: string, options: ContextMenuOptions): void;
 }
+
+export interface ContextMenuOptions {
+  /** Where the menu opens: below an element, or at a point (a right click's `clientX` / `clientY`). */
+  readonly anchor: MenuAnchor;
+  /** The menu's accessible name ("Wetell"). */
+  readonly title: string;
+  /** What `when` and `toggled` are asked with. */
+  readonly context?: object;
+  /** What a chosen entry's command is run with. */
+  readonly args?: readonly unknown[];
+}
+
+export type MenuAnchor = Element | { readonly x: number; readonly y: number };
 
 export interface SidePanelOptions {
   /** The rail button's tooltip and accessible name. */

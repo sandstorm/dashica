@@ -1,18 +1,19 @@
 // UNMIGRATED (workbench): bridge for the server-rendered page until step 5b renders pages on the client; then delete. See docs/2026-10-28-workbench.md §5.
 import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
-import type { Extension } from '../../hosts/extension-host/extension-host';
+import type { Extension, ExtensionContext } from '../../hosts/extension-host/extension-host';
 
 /**
  * Puts the parts of the server-rendered page (`[data-workbench-part]`, staged hidden by the templ layout) into the
- * workbench: the dashboards menu as the left panel "Dashboards", the search bar into the filter bar, the debug drawer as
- * the bottom panel "Debug" (shown on a chart's wrench). Runs before Alpine starts, so the parts are in place when
+ * workbench: the dashboards menu as the left panel "Dashboards" (a dashboard's entry has the menu `dashboards/entry` on a
+ * right click), the search bar into the filter bar, the debug drawer as the bottom panel "Debug" (shown on a chart's
+ * wrench). Runs before Alpine starts, so the parts are in place when
  * Alpine walks them.
  */
 export function legacyPage(doc: Document): Extension {
   return {
     id: 'legacyPage',
-    activate({ ui, subscriptions }) {
+    activate({ ui, commands, subscriptions }) {
       const part = (name: string) => doc.querySelector<HTMLElement>(`[data-workbench-part="${name}"]`);
 
       const brand = html`<a href="/" class="dashica-wb__brand">Dashica</a>`;
@@ -23,7 +24,7 @@ export function legacyPage(doc: Document): Extension {
         const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
         panel.body.append(menu);
         panel.setDefault(true);
-        subscriptions.push(panel);
+        subscriptions.push(panel, ...entryMenu(menu, { ui, commands }));
       }
 
       const searchBar = part('searchbar');
@@ -44,6 +45,27 @@ export function legacyPage(doc: Document): Extension {
       }
     },
   };
+}
+
+/** The menu `dashboards/entry` on a right click of a dashboard's entry in `menu`: context `{ url, title }`, argument the URL. */
+function entryMenu(menu: HTMLElement, { ui, commands }: Pick<ExtensionContext, 'ui' | 'commands'>): Disposable[] {
+  const browserWindow = menu.ownerDocument.defaultView!;
+  const oncontextmenu = (event: MouseEvent) => {
+    const link = (event.target as Element).closest<HTMLAnchorElement>('[data-menu-entry] a[href]');
+    if (!link) return;
+    event.preventDefault();
+    const url = link.href;
+    const title = link.textContent ?? url;
+    ui.showContextMenu('dashboards/entry', { anchor: { x: event.clientX, y: event.clientY }, title, context: { url, title }, args: [url] });
+  };
+  menu.addEventListener('contextmenu', oncontextmenu);
+  return [
+    new Disposable(() => menu.removeEventListener('contextmenu', oncontextmenu)),
+    commands.registerCommand('dashboards.openInNewTab', (url: string) => void browserWindow.open(url, '_blank', 'noopener')),
+    commands.registerCommand('dashboards.copyLink', (url: string) => browserWindow.navigator.clipboard.writeText(url)),
+    ui.registerMenuItem('dashboards/entry', { command: 'dashboards.openInNewTab', title: 'Open in new tab', group: 'navigation', order: 1 }),
+    ui.registerMenuItem('dashboards/entry', { command: 'dashboards.copyLink', title: 'Copy link', group: 'navigation', order: 2 }),
+  ];
 }
 
 /** A grid of four tiles. */

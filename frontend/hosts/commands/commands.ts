@@ -46,6 +46,30 @@ export interface KeybindingContribution {
   readonly args?: unknown;
 }
 
+/**
+ * One entry of a menu (`ui.registerMenuItem`): a command by its id, shown while `when` holds. `C`: what the menu is
+ * shown for (e.g. `{ url, title }` of a dashboard entry), which `when` and `toggled` are asked with.
+ */
+export interface MenuItem<C extends object = MenuContext> {
+  /** Run with the arguments the menu was shown with. */
+  readonly command: string;
+  /** Default: the command's title (`contributes.commands`), else its id. */
+  readonly title?: string;
+  /** SVG markup, drawn in `currentColor`; default: the command's. */
+  readonly icon?: string;
+  /** Whether the entry shows, asked each time the menu is shown; default: always. */
+  readonly when?: (context: C) => boolean;
+  /** For an entry that turns something on or off: whether it is on (a check mark), asked each time the menu is shown. */
+  readonly toggled?: (context: C) => boolean;
+  /** Entries are grouped by this: `navigation` first, the others by name, a separator between groups; default ''. */
+  readonly group?: string;
+  /** The place in its group (lower first; equal: registration order); default 0. */
+  readonly order?: number;
+}
+
+/** What a menu is shown for, by key. */
+export type MenuContext = Readonly<Record<string, unknown>>;
+
 export type Platform = 'mac' | 'win' | 'linux';
 
 export { CommandsHost } from './commands-impl';
