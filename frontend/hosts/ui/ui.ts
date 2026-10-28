@@ -1,10 +1,11 @@
+import type { CancellationToken } from '../../core/cancellation/cancellation';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { Event } from '../../core/event-emitter/event-emitter';
 import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
  * The workbench's regions as extensions fill them (side panels left and right, panels below the content, items in
- * the title bar, the filter bar and the status bar) and its menus. Each panel has a command `workbench.view.<id>`: it shows and
+ * the title bar, the filter bar and the status bar), its menus, and what search everywhere finds. Each panel has a command `workbench.view.<id>`: it shows and
  * focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are remembered for
  * the browser session.
  */
@@ -35,6 +36,35 @@ export interface UiApi {
    * the text changes. Hidden until `show`; one box at a time (a new one hides the open one).
    */
   createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
+  /** Adds what `provider` finds to search everywhere, as a group of its own under `provider.label`, until disposed; `provider.id` is unique. */
+  registerSearchProvider(provider: SearchProvider): Disposable;
+  /** The search providers registered now, in registration order. */
+  getSearchProviders(): readonly SearchProvider[];
+}
+
+/** One kind of thing search everywhere finds (dashboards, commands, …), shown as a group of its own. */
+export interface SearchProvider {
+  /** `<extension>.<name>`, unique. */
+  readonly id: string;
+  /** The group's heading ("Dashboards"), and its name in the prefix hint. */
+  readonly label: string;
+  /** Typed first (`>`), narrows the search to the providers with this prefix, and they show more results. */
+  readonly prefix?: string;
+  /** The group's place (lower first; default 100; equal: by `id`). */
+  readonly order?: number;
+  /**
+   * The items for `query` (the text after the prefix, trimmed; '' at first), asked again whenever it changes. Items
+   * without `highlights` are matched fuzzily against their label, else their description: return every candidate.
+   * Items with `highlights` were matched by the provider and are shown as they are, in its order. May be async: check
+   * `token` between steps and stop once it is cancelled (the viewer typed on, or closed the search).
+   */
+  provideItems(query: string, token: CancellationToken): readonly SearchItem[] | Promise<readonly SearchItem[]>;
+}
+
+/** A result of search everywhere: what it shows, and what picking it does. */
+export interface SearchItem extends QuickPickItem {
+  /** Opens, runs or applies what the item stands for; called once the search is closed and the focus is back. */
+  accept(): void | Promise<unknown>;
 }
 
 export interface ContextMenuOptions {

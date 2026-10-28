@@ -1,5 +1,5 @@
 // See UiApi in ui.ts.
-import type { Disposable } from '../../core/disposable/disposable';
+import { Disposable } from '../../core/disposable/disposable';
 import type { CommandsHost, MenuContext, MenuItem } from '../commands/commands';
 import type { Memento } from '../extension-host/extension-host';
 import { Bar } from './bar/bar';
@@ -7,7 +7,7 @@ import { WindowLayout } from './layout/window-layout';
 import { ContextMenu } from './menus/context-menu';
 import { Menus } from './menus/menus';
 import { QuickInput } from './quick-input/quick-input';
-import type { BarPlacement, BottomPanelOptions, ContextMenuOptions, Panel, QuickPick, QuickPickItem, SidePanelOptions, UiApi } from './ui';
+import type { BarPlacement, BottomPanelOptions, ContextMenuOptions, Panel, QuickPick, QuickPickItem, SearchProvider, SidePanelOptions, UiApi } from './ui';
 import './layout/window-layout.css';
 import './menus/context-menu.css';
 import './quick-input/quick-input.css';
@@ -19,6 +19,7 @@ export class UiHost implements UiApi {
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
   readonly #quickInput: QuickInput;
+  readonly #searchProviders = new Set<SearchProvider>();
   readonly onDidChangeMenu;
 
   constructor(host: HTMLElement, layoutState: Memento, commands: CommandsHost) {
@@ -62,7 +63,18 @@ export class UiHost implements UiApi {
     return this.#quickInput.createQuickPick<T>();
   }
 
+  registerSearchProvider(provider: SearchProvider): Disposable {
+    if (this.getSearchProviders().some((other) => other.id === provider.id)) throw new Error(`There is a search provider ${provider.id} already`);
+    this.#searchProviders.add(provider);
+    return new Disposable(() => this.#searchProviders.delete(provider));
+  }
+
+  getSearchProviders(): readonly SearchProvider[] {
+    return [...this.#searchProviders];
+  }
+
   dispose(): void {
+    this.#searchProviders.clear();
     this.#quickInput.dispose();
     this.#contextMenu.dispose();
     this.#menus.dispose();

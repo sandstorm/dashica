@@ -1,0 +1,16 @@
+/* See searchEverywhere in search-everywhere.ts: its button in the title bar, with the key. */
+.dashica-wb__search-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+  min-width: min(280px, 40vw);
+  padding: 2px 8px;
+  border: 1px solid var(--color-base-300, #ddd);
+  border-radius: 6px;
+  background: var(--color-base-100, #fff);
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 60%, transparent);
+  font: inherit;
+  cursor: pointer;
+}
+.dashica-wb__search-button:hover { color: var(--color-base-content, #1f2937); }
+.dashica-wb__search-button kbd { margin-left: auto; font: inherit; font-size: 12px; }

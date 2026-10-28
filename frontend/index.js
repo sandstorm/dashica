@@ -21,6 +21,7 @@ import favorites from './components/favorites';
 import sidebarSearch from './components/sidebarSearch';
 import { createWorkbench } from './workbench/workbench';
 import { legacyPage } from './extensions/legacy-page/legacy-page';
+import { searchEverywhere } from './extensions/search-everywhere/search-everywhere';
 
 Alpine.plugin(intersect);
 Alpine.plugin(resize);
@@ -46,6 +47,6 @@ window.Dashica.initWorkbench = () => {
     if (!host) return;
     createWorkbench(host, {
         content: document.querySelector('[data-workbench-part="content"]'),
-        extensions: [legacyPage(document)],
+        extensions: [legacyPage(document), searchEverywhere()],
     });
 };

@@ -2,11 +2,12 @@
 import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension, ExtensionContext } from '../../hosts/extension-host/extension-host';
+import type { SearchProvider } from '../../hosts/ui/ui';
 
 /**
  * Puts the parts of the server-rendered page (`[data-workbench-part]`, staged hidden by the templ layout) into the
  * workbench: the dashboards menu as the left panel "Dashboards" (a dashboard's entry has a "…" button for the menu
- * `dashboards/entry`), the search bar into the filter bar, the debug drawer as the bottom panel "Debug" (shown on a chart's
+ * `dashboards/entry`; search everywhere finds its dashboards), the search bar into the filter bar, the debug drawer as the bottom panel "Debug" (shown on a chart's
  * wrench). Runs before Alpine starts, so the parts are in place when
  * Alpine walks them.
  */
@@ -24,7 +25,7 @@ export function legacyPage(doc: Document): Extension {
         const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
         panel.body.append(menu);
         panel.setDefault(true);
-        subscriptions.push(panel, ...entryMenu(menu, { ui, commands }));
+        subscriptions.push(panel, ...entryMenu(menu, { ui, commands }), ui.registerSearchProvider(dashboardSearch(menu)));
       }
 
       const searchBar = part('searchbar');
@@ -45,6 +46,18 @@ export function legacyPage(doc: Document): Extension {
       }
     },
   };
+}
+
+/** "Dashboards" in search everywhere: the menu's entries by title, their group as the description; picking one opens it. */
+function dashboardSearch(menu: HTMLElement): SearchProvider {
+  const entries = [...menu.querySelectorAll<HTMLElement>('[data-menu-group]')].flatMap((group) =>
+    [...group.querySelectorAll<HTMLAnchorElement>('[data-menu-entry] > a[href]')].map((link) => ({
+      label: link.textContent ?? link.href,
+      description: group.dataset.menuGroup,
+      accept: () => menu.ownerDocument.defaultView!.location.assign(link.href),
+    })),
+  );
+  return { id: 'legacyPage.dashboards', label: 'Dashboards', order: 10, provideItems: () => entries };
 }
 
 /** A "…" button on each dashboard's entry in `menu` for the menu `dashboards/entry`: context `{ url, title }`, argument the URL. */
