@@ -53,7 +53,7 @@ dashboard; access control can later be a middleware on a page's subtree. **Entry
 they are**; inner API URLs may change.
 
 ```
-GET  /workbench.json               menu groups, Explore URL; fetched once on boot (the one global endpoint)
+GET  /workbench.json               menu groups (the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
 GET  /p/wetell                     shell HTML (the same for every page)
 GET  /p/wetell/page.json           {kind, title, defaultTime, filterFields, filterButtons, actions, widgets}   ← new
 GET  /p/wetell/api/<id>/query      widget data (Arrow)

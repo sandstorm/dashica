@@ -86,13 +86,13 @@ type Dependencies struct {
 }
 
 type MenuGroup struct {
-	Title   string
-	Entries []MenuGroupEntry
+	Title   string           `json:"title"`
+	Entries []MenuGroupEntry `json:"entries"`
 }
 
 type MenuGroupEntry struct {
-	Title string
-	Url   string
+	Title string `json:"title"`
+	Url   string `json:"url"`
 }
 
 type FilterButton struct {

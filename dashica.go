@@ -1,6 +1,7 @@
 package dashica
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -128,12 +129,34 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertManager:            alertManager,
 	}
 
-	return &DashicaImpl{
+	d := &DashicaImpl{
 		cfg:              cfg,
 		log:              logger,
 		handler:          mux,
 		handlerCollector: handler_collector.NewValidatingCollector(mux, logger),
 		deps:             deps,
+	}
+	if err := d.handlerCollector.Handle("/workbench.json", http.HandlerFunc(d.serveWorkbenchJson)); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /workbench.json")
+	}
+	return d
+}
+
+// WorkbenchJson is what "/workbench.json" says about the whole Dashica: what the client needs before any page.
+type WorkbenchJson struct {
+	// Menu is the dashboards by group, in registration order.
+	Menu []rendering.MenuGroup `json:"menu"`
+}
+
+// serveWorkbenchJson serves the WorkbenchJson of the groups as they are when asked (dashboards register after New).
+func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request) {
+	menu := d.dashboardGroups
+	if menu == nil {
+		menu = []rendering.MenuGroup{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -191,7 +214,7 @@ func (d *DashicaImpl) ListenAndServe() error {
 }
 
 func (d *DashicaImpl) RegisterDashboardGroup(title string) Dashica {
-	d.dashboardGroups = append(d.dashboardGroups, rendering.MenuGroup{Title: title})
+	d.dashboardGroups = append(d.dashboardGroups, rendering.MenuGroup{Title: title, Entries: []rendering.MenuGroupEntry{}})
 	return d
 }
 
