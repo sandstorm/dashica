@@ -41,7 +41,7 @@
     transition: opacity 0.15s;
 }
 
-.application__sidebar ul.menu li:hover .entry-menu-btn,
+.application__sidebar ul.menu li:hover > .entry-menu-btn,
 .entry-menu-btn:focus-visible {
     opacity: 1;
 }
@@ -65,7 +65,7 @@ a.menu-active ~ .entry-menu-btn {
     line-height: 1;
 }
 
-.application__sidebar ul.menu li:hover .star-btn,
+.application__sidebar ul.menu li:hover > .star-btn,
 .star-btn--active {
     opacity: 1;
 }
