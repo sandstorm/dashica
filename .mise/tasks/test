@@ -1,9 +1,10 @@
 #!/bin/bash
-#MISE description="Run the Go and the frontend (vitest) tests, and the comment check"
+#MISE description="Run the Go and the frontend (vitest) tests, the type check and the comment check"
 
 set -e
 go generate ./...
 go vet ./...
 go test ./...
 npm test
+mise run quality:typecheck
 mise run quality:top-comments

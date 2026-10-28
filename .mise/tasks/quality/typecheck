@@ -1,0 +1,9 @@
+#!/bin/bash
+#MISE description="Type-check the workbench's TypeScript and the generated contract (strict tsc, no output)"
+# The workbench's files in frontend/core, frontend/hosts, frontend/extensions and frontend/workbench (the UNMIGRATED
+# rest is not checked), and frontend/generated: the types dashica-gen writes and the golden contract checked against
+# them (see TestContract_Golden in contract_test.go). Run `go generate ./...` first.
+set -e
+npx -y -p typescript@5.9.3 tsc --noEmit --strict --target ESNext --module ESNext --moduleResolution bundler \
+  --lib ESNext,DOM,DOM.Iterable --skipLibCheck --types vite/client,node \
+  frontend/types/htl.d.ts $(find frontend/core frontend/hosts frontend/extensions frontend/workbench frontend/generated -name '*.ts')
