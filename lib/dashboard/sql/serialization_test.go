@@ -63,7 +63,7 @@ func TestFieldKindWireFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var dto fieldDTO
+	var dto sqlFieldDTO
 	if err := json.Unmarshal(b, &dto); err != nil {
 		t.Fatal(err)
 	}

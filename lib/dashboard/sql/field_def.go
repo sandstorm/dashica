@@ -7,7 +7,7 @@ type SqlField interface {
 }
 
 func Field(definition string) SqlField {
-	return &fieldImpl{kind: "expr", definition: definition, alias: definition}
+	return &fieldImpl{kind: kindExpr, definition: definition, alias: definition}
 }
 
 type TimestampedField interface {
@@ -25,7 +25,7 @@ type fieldImpl struct {
 	// constructor (sql.Count()) instead of the baked expression
 	// (sql.Field("count(*)")), and lets the editor label the field. Empty is
 	// treated as "expr".
-	kind string
+	kind fieldKind
 }
 
 func (f *fieldImpl) WithAlias(s string) SqlField {

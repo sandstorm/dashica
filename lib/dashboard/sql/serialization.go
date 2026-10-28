@@ -23,23 +23,33 @@ import (
 // SqlField
 // ---------------------------------------------------------------------------
 
-// fieldDTO is the wire form of every SqlField. Not all keys apply to every
+// fieldKind names the semantic constructor that produced a field.
+type fieldKind string
+
+const (
+	kindExpr       fieldKind = "expr"
+	kindCount      fieldKind = "count"
+	kindEnum       fieldKind = "enum"
+	kindAutoBucket fieldKind = "autoBucket"
+)
+
+// sqlFieldDTO is the wire form of every SqlField. Not all keys apply to every
 // kind: "expr"/"count"/"enum" carry definition+alias (+xBucketSizeMs for
 // timestamped fields); "autoBucket" carries column+alias.
-type fieldDTO struct {
-	Kind          string `json:"kind"`
-	Definition    string `json:"definition,omitempty"`
-	Alias         string `json:"alias,omitempty"`
-	Column        string `json:"column,omitempty"`
-	XBucketSizeMs int64  `json:"xBucketSizeMs,omitempty"`
+type sqlFieldDTO struct {
+	Kind          fieldKind `json:"kind"`
+	Definition    string    `json:"definition,omitempty"`
+	Alias         string    `json:"alias,omitempty"`
+	Column        string    `json:"column,omitempty"`
+	XBucketSizeMs int64     `json:"xBucketSizeMs,omitempty"`
 }
 
 func (f *fieldImpl) MarshalJSON() ([]byte, error) {
 	kind := f.kind
 	if kind == "" {
-		kind = "expr"
+		kind = kindExpr
 	}
-	return json.Marshal(fieldDTO{
+	return json.Marshal(sqlFieldDTO{
 		Kind:          kind,
 		Definition:    f.definition,
 		Alias:         f.alias,
@@ -48,8 +58,8 @@ func (f *fieldImpl) MarshalJSON() ([]byte, error) {
 }
 
 func (f *autoBucketFieldImpl) MarshalJSON() ([]byte, error) {
-	return json.Marshal(fieldDTO{
-		Kind:   "autoBucket",
+	return json.Marshal(sqlFieldDTO{
+		Kind:   kindAutoBucket,
 		Column: f.column_,
 		Alias:  f.alias_,
 	})
@@ -70,14 +80,14 @@ func UnmarshalField(b []byte) (SqlField, error) {
 	if isJSONNull(b) {
 		return nil, nil
 	}
-	var dto fieldDTO
+	var dto sqlFieldDTO
 	if err := json.Unmarshal(b, &dto); err != nil {
 		return nil, err
 	}
 	switch dto.Kind {
-	case "autoBucket":
+	case kindAutoBucket:
 		return AutoBucketAs(dto.Column, dto.Alias), nil
-	case "", "expr", "count", "enum":
+	case "", kindExpr, kindCount, kindEnum:
 		// Reconstruct the fieldImpl directly (not via the semantic constructor)
 		// so Build() output is byte-identical to the original regardless of
 		// kind; kind is metadata for codegen/editor only.

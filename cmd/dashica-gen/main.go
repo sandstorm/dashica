@@ -14,12 +14,15 @@
 //  3. A code-generation table (field <-> builder method) consumed by the Go-code
 //     generator (lib/explore/gocode.go, Phase 3).
 //
+// With -ts it also writes the TypeScript types of what the server sends (ts_emit.go).
+//
 // Emitter mechanics: stdlib text/template + go/format, no dependency (see §4.5).
 package main
 
 import (
 	"flag"
 	"log"
+	"strings"
 )
 
 const widgetPkgPath = "github.com/sandstorm/dashica/lib/dashboard/widget"
@@ -31,6 +34,8 @@ func main() {
 	var (
 		outFile = flag.String("out", "zz_generated.dashica.go", "output file (relative to the widget package dir)")
 		dryRun  = flag.Bool("dry-run", false, "classify fields and print a summary; do not write output")
+		tsOut   = flag.String("ts", "", "also write the TypeScript types to this file (relative to the widget package dir)")
+		tsTypes = flag.String("ts-types", "", "comma-separated Go types (<import path>.<Type>) whose TypeScript interfaces -ts adds")
 	)
 	flag.Parse()
 
@@ -54,6 +59,15 @@ func main() {
 
 	if err := emit(model, *outFile); err != nil {
 		log.Fatal(err)
+	}
+	if *tsOut != "" {
+		var dtos []string
+		if *tsTypes != "" {
+			dtos = strings.Split(*tsTypes, ",")
+		}
+		if err := emitTS(model, dtos, *tsOut); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 

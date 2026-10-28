@@ -85,16 +85,19 @@ type Dependencies struct {
 	AlertManager            *alerting2.AlertManager
 }
 
+// MenuGroup is a group of the dashboards menu ("Wetell"), as RegisterDashboardGroup starts it.
 type MenuGroup struct {
 	Title   string           `json:"title"`
 	Entries []MenuGroupEntry `json:"entries"`
 }
 
+// MenuGroupEntry is a dashboard in the menu: its title and URL ("/p/wetell").
 type MenuGroupEntry struct {
 	Title string `json:"title"`
 	Url   string `json:"url"`
 }
 
+// FilterButton is a button of the filter bar that adds its condition to the filter.
 type FilterButton struct {
 	Title string `json:"title"`
 	// QueryPart is the SQL condition the button adds to the filter ("status >= 500").

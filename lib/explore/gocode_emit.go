@@ -116,7 +116,7 @@ type widgetWire struct {
 	Props json.RawMessage `json:"props"`
 }
 
-// fieldWire mirrors sql's fieldDTO (lib/dashboard/sql/serialization.go). Kept
+// fieldWire mirrors sql's sqlFieldDTO (lib/dashboard/sql/serialization.go). Kept
 // local so the emitter reads the wire format directly; drift is caught by the
 // round-trip test.
 type fieldWire struct {

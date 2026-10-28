@@ -116,7 +116,7 @@ func JsonExtractString(jsonStrField string, paths ...string) SqlField {
 
 func Count() SqlField {
 	return &fieldImpl{
-		kind:       "count",
+		kind:       kindCount,
 		definition: "count(*)",
 		alias:      "cnt",
 	}
@@ -124,7 +124,7 @@ func Count() SqlField {
 
 func Enum(field string) SqlField {
 	return &fieldImpl{
-		kind:       "enum",
+		kind:       kindEnum,
 		definition: fmt.Sprintf("%s::String", field),
 		alias:      field,
 	}

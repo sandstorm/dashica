@@ -1,0 +1,58 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
+	m := loadTestModel(t)
+	out := filepath.Join(t.TempDir(), "zz_generated.dashica.ts")
+	if err := emitTS(m, []string{"github.com/sandstorm/dashica/lib/dashboard.PageJson"}, out); err != nil {
+		t.Fatalf("emitTS: %v", err)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := string(b)
+	for _, want := range []string{
+		// required fields without "?", the query and the children left out of the props
+		"export interface TimeBarProps {",
+		"  x: SqlField;\n",
+		"  stack?: StackOptions;",
+		"  order?: 'value' | 'sum' | 'appearance' | 'inside-out';",
+		"export interface GridProps {\n  /**",
+		"  | { type: 'timeBar'; props: TimeBarProps }",
+		// the wire forms of fields and colors from their Go DTOs, a named string type with constants as their union
+		"export interface SqlField {\n  kind: 'expr' | 'count' | 'enum' | 'autoBucket';",
+		"export interface ColorScale {\n  legend: boolean;",
+		// widget.Node as the Widget union with its other fields
+		"export type WidgetNode = Widget & {\n  /**",
+		"  children?: Record<string, WidgetNode>;\n};",
+		// a DTO after the structs it references, a widget.Node as WidgetNode
+		"export interface FilterButton {",
+		"  filterButtons: FilterButton[];\n  widgets: WidgetNode[];\n}",
+	} {
+		if !strings.Contains(ts, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"  sql?:", "  sql:", "  areas", "  widgets?:"} {
+		if strings.Contains(ts, unwanted) {
+			t.Errorf("unexpected %q", unwanted)
+		}
+	}
+	if strings.Index(ts, "interface FilterButton") > strings.Index(ts, "interface PageJson") {
+		t.Error("FilterButton comes after PageJson")
+	}
+}
+
+func TestEmitTS_RefusesAnUnknownType(t *testing.T) {
+	m := loadTestModel(t)
+	if err := emitTS(m, []string{"github.com/sandstorm/dashica/lib/dashboard.Nope"}, filepath.Join(t.TempDir(), "x.ts")); err == nil {
+		t.Error("expected an error for a type that does not exist")
+	}
+}
