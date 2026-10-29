@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net/http"
 	"regexp"
 
 	"github.com/a-h/templ"
@@ -42,30 +43,54 @@ type showTableStructureResult struct {
 }
 
 func (s *SchemaTable) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if !schemaTableNamePattern.MatchString(s.table) {
-		return s.errorComponent(fmt.Sprintf("invalid table name %q", s.table)), nil
+	statement, err := s.showCreateTable(context.Background(), ctx.Deps)
+	if err != nil {
+		return s.errorComponent(err.Error()), nil
 	}
 
-	client, err := ctx.Deps.ClickhouseClientManager.GetClient("default")
+	htmlOut := fmt.Sprintf(
+		`<pre class="text-xs overflow-x-auto p-3 bg-base-200 rounded">%s</pre>`,
+		html.EscapeString(statement),
+	)
+	return widget_component.Markdown(s.title, htmlOut), nil
+}
+
+// Handler serves the table's CREATE TABLE statement as text at "/schema".
+func (s *SchemaTable) Handler(deps rendering.Dependencies) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /schema", func(w http.ResponseWriter, r *http.Request) {
+		statement, err := s.showCreateTable(r.Context(), deps)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = io.WriteString(w, statement)
+	})
+	return mux
+}
+
+// showCreateTable is what `SHOW CREATE TABLE <table>` answers on the default ClickHouse.
+func (s *SchemaTable) showCreateTable(ctx context.Context, deps rendering.Dependencies) (string, error) {
+	if !schemaTableNamePattern.MatchString(s.table) {
+		return "", fmt.Errorf("invalid table name %q", s.table)
+	}
+
+	client, err := deps.ClickhouseClientManager.GetClient("default")
 	if err != nil {
-		return s.errorComponent(fmt.Sprintf("get clickhouse client: %s", err)), nil
+		return "", fmt.Errorf("get clickhouse client: %w", err)
 	}
 
 	result, err := clickhouse.QueryJSONFirst[showTableStructureResult](
-		context.Background(),
+		ctx,
 		client,
 		fmt.Sprintf("SHOW CREATE TABLE %s", s.table),
 		clickhouse.DefaultQueryOptions(),
 	)
 	if err != nil {
-		return s.errorComponent(fmt.Sprintf("SHOW CREATE TABLE %s: %s", s.table, err)), nil
+		return "", fmt.Errorf("SHOW CREATE TABLE %s: %w", s.table, err)
 	}
-
-	htmlOut := fmt.Sprintf(
-		`<pre class="text-xs overflow-x-auto p-3 bg-base-200 rounded">%s</pre>`,
-		html.EscapeString(result.Statement),
-	)
-	return widget_component.Markdown(s.title, htmlOut), nil
+	return result.Statement, nil
 }
 
 func (s *SchemaTable) errorComponent(msg string) templ.Component {

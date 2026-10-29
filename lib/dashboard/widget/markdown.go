@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"path"
@@ -75,6 +76,30 @@ func (m *Markdown) Assets(fsys fs.FS) *Markdown {
 
 // BuildComponents implements the WidgetDefinition interface.
 func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
+	htmlOut, err := m.renderHTML(ctx.Deps.FileSystem, ctx.UntrustedContent)
+	if err != nil {
+		return nil, err
+	}
+	return widget_component.Markdown(m.title, htmlOut), nil
+}
+
+// Handler serves the markdown rendered to HTML at "/html", for a compiled (trusted) dashboard.
+func (m *Markdown) Handler(deps rendering.Dependencies) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /html", func(w http.ResponseWriter, r *http.Request) {
+		htmlOut, err := m.renderHTML(deps.FileSystem, false)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, htmlOut)
+	})
+	return mux
+}
+
+// renderHTML is the markdown (its content, else its file from the project filesystem `fsys`) as HTML.
+func (m *Markdown) renderHTML(fsys fs.ReadFileFS, untrusted bool) (string, error) {
 	var markdownSource []byte
 	var err error
 
@@ -86,25 +111,24 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 		// os.ReadFile on the host FS would be an arbitrary-file-read primitive once
 		// Explore renders untrusted widgets (e.g. {"file":"/etc/passwd"}). See
 		// docs/2026-07-21-dynamic-widget-dashboard-ui.md Phase-2 finding 1.
-		if ctx.UntrustedContent {
-			return nil, fmt.Errorf("markdown: File() is not permitted for untrusted content; use inline Content()")
+		if untrusted {
+			return "", fmt.Errorf("markdown: File() is not permitted for untrusted content; use inline Content()")
 		}
-		fsys := ctx.Deps.FileSystem
 		if fsys == nil {
-			return nil, fmt.Errorf("markdown: File(%q) requires a project filesystem", m.file)
+			return "", fmt.Errorf("markdown: File(%q) requires a project filesystem", m.file)
 		}
 		cleaned := path.Clean(strings.TrimPrefix(m.file, "./"))
 		if !fs.ValidPath(cleaned) {
-			return nil, fmt.Errorf("markdown: File(%q) is not a valid project-relative path", m.file)
+			return "", fmt.Errorf("markdown: File(%q) is not a valid project-relative path", m.file)
 		}
 		markdownSource, err = fs.ReadFile(fsys, cleaned)
 		if err != nil {
-			return nil, fmt.Errorf("reading markdown file %s: %w", cleaned, err)
+			return "", fmt.Errorf("reading markdown file %s: %w", cleaned, err)
 		}
 	} else if m.content != "" {
 		markdownSource = []byte(m.content)
 	} else {
-		return nil, fmt.Errorf("markdown widget requires either Content() or File()")
+		return "", fmt.Errorf("markdown widget requires either Content() or File()")
 	}
 
 	// Convert markdown to HTML.
@@ -117,7 +141,7 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 	// (docs §6; the rendered HTML still reaches the page via templ.Raw). GFM
 	// tables and syntax highlighting are renderer output, unaffected either way.
 	rendererOpts := []renderer.Option{}
-	if !ctx.UntrustedContent {
+	if !untrusted {
 		rendererOpts = append(rendererOpts, html.WithUnsafe())
 	}
 
@@ -136,15 +160,14 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 	)
 
 	if err := md.Convert(markdownSource, &buf); err != nil {
-		return nil, fmt.Errorf("converting markdown to HTML: %w", err)
+		return "", fmt.Errorf("converting markdown to HTML: %w", err)
 	}
 
 	htmlOut := buf.String()
 	if m.assets != nil {
 		htmlOut = inlineAssetImages(htmlOut, m.assets)
 	}
-
-	return widget_component.Markdown(m.title, htmlOut), nil
+	return htmlOut, nil
 }
 
 var imgSrcPattern = regexp.MustCompile(`(<img\b[^>]*\bsrc=")([^"]+)(")`)

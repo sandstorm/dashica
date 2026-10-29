@@ -48,11 +48,11 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 	if page.Kind != "dashboard" || page.Title != "Wetell" || !page.FilterBar || len(page.FilterButtons) != 1 || page.FilterButtons[0].QueryPart != "status >= 500" {
 		t.Errorf("page: %s", rec.Body)
 	}
-	if len(page.Widgets) != 2 || page.Widgets[0].Type != "markdown" || page.Widgets[1].Type != "grid" {
+	if len(page.Widgets) != 2 || page.Widgets[0].Type != "markdown" || page.Widgets[0].DataURL != "/p/wetell/api/1" || page.Widgets[1].Type != "grid" {
 		t.Fatalf("widgets: %s", rec.Body)
 	}
 	areas := page.Widgets[1].Children
-	if areas["a"].Type != "timeBar" || areas["a"].DataURL != "/p/wetell/api/1" || areas["b"].DataURL != "/p/wetell/api/2" {
+	if areas["a"].Type != "timeBar" || areas["a"].DataURL != "/p/wetell/api/2" || areas["b"].DataURL != "/p/wetell/api/3" {
 		t.Errorf("areas: %+v", areas)
 	}
 }

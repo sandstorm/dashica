@@ -2,6 +2,8 @@ package widget
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -374,4 +376,26 @@ func createTestContext() *rendering.DashboardContext {
 		// Add minimal fields needed for testing
 		// Most widget tests won't need a full context
 	}
+}
+
+func TestMarkdown_ServesItsHTML(t *testing.T) {
+	deps := rendering.Dependencies{FileSystem: fstest.MapFS{"docs/wetell.md": {Data: []byte("# Wetell\n\n<b>raw</b>")}}}
+	rec := httptest.NewRecorder()
+	NewMarkdown().File("docs/wetell.md").Handler(deps).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/html", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /html: %d %s", rec.Code, rec.Body)
+	}
+	mustContain(t, rec.Body.String(), `<h1 id="wetell">Wetell</h1>`)
+	// a compiled dashboard is trusted: its raw HTML passes
+	mustContain(t, rec.Body.String(), `<b>raw</b>`)
+}
+
+func TestMarkdown_ServesTheErrorOfAMissingFile(t *testing.T) {
+	deps := rendering.Dependencies{FileSystem: fstest.MapFS{}}
+	rec := httptest.NewRecorder()
+	NewMarkdown().File("docs/wetell.md").Handler(deps).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/html", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("GET /html: %d %s", rec.Code, rec.Body)
+	}
+	mustContain(t, rec.Body.String(), "reading markdown file docs/wetell.md")
 }

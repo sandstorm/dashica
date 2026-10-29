@@ -67,7 +67,8 @@ POST /p/wetell/action/<id>         a Go action (§3.9)                          
   (`history.pushState`). Panel state survives navigation; the time range does not (§3.7).
 - **Data per widget:** each chart fetches from its own handler URL, in parallel, as today. Explore (later) keeps an
   inline POST. Both sit behind `ctx.query()` (§3.6).
-- **Markdown** stays rendered by goldmark on the server and travels as HTML inside `page.json`.
+- **Markdown** stays rendered by goldmark on the server; its handler serves the HTML (`<dataUrl>/html`), so a file with
+  inlined images does not swell `page.json`. The schema table's handler serves its `SHOW CREATE TABLE` the same way.
 
 ### 3.3 Type-safe contract: `dashica-gen` emits TS too
 
@@ -437,7 +438,7 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 |---|---|
 | `dashica.go` | `GET /workbench.json` (menu groups); menu data stays as today (`RegisterDashboardGroup`) |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
-| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown puts its goldmark HTML into its props; `.FilterAs` / `.AcceptFilter` |
+| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown and the schema table serve their HTML / DDL from their handler; `.FilterAs` / `.AcceptFilter` |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns, collects filter fields; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; filters → one WHERE fragment of declared expressions with bound values into `{{DASHICA_FILTERS}}` / `Where` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
@@ -454,12 +455,12 @@ A widget has at most three things the page needs, and each is a standard library
 | What | Interface | Who |
 |---|---|---|
 | props | its fields tagged `dashica-gen:"client"` (the generated `marshalProps`) | every widget |
-| data | `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | the nine charts (`queryHandler`), `AlertOverview`, `AlertDetail`, `SpeedscopeLink` |
+| data | `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | the nine charts (`queryHandler`), `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `Markdown` (`/html`), `SchemaTable` (`/schema`) |
 | children | `Children() iter.Seq2[string, WidgetDefinition]` | `Grid` (areas by name, sorted), `CollapsibleGroup` ("0", "1", …) |
 
 Everything else is **one** framework function, `widget.Mount`: the type name from the registry, the id, the URL, the
 registration and the Node. A widget never sees the handler collector, its id or its URL; it is tested alone with
-`httptest` (`GET /query`). Markdown, `TextInput` and `CheckboxGroup` implement nothing beyond their JSON.
+`httptest` (`GET /query`). `TextInput` and `CheckboxGroup` implement nothing beyond their JSON.
 
 | Option | For | Against |
 |---|---|---|
