@@ -2,6 +2,7 @@ import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetOf } from '../../hosts/widgets/widgets';
+import './markdown.css';
 
 /**
  * The widget type `markdown`: its title and the HTML the server rendered from its markdown when the page was mounted

@@ -14,7 +14,7 @@ export const schemaTable: Extension = {
 
 function renderSchemaTable(el: HTMLElement, widget: WidgetOf<'schemaTable'>): Disposable {
   const statement: HTMLElement = html`<pre class="text-xs overflow-x-auto p-3 bg-base-200 rounded"></pre>`;
-  const shown: HTMLElement = html`<div class="markdown-widget">${statement}</div>`;
+  const shown: HTMLElement = html`<div>${statement}</div>`;
   if (widget.props.title) statement.before(html`<h2 class="text-2xl font-bold mb-4">${widget.props.title}</h2>`);
   el.replaceChildren(shown);
   const controller = new AbortController();

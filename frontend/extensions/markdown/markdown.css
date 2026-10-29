@@ -1,4 +1,4 @@
-/* Section-style headings for markdown widgets — balanced with chart titles,
+/* See markdown.ts. Section-style headings for markdown widgets — balanced with chart titles,
    not as heavy as Tailwind Typography defaults */
 .markdown-widget .prose h1 {
     font-weight: 500;
