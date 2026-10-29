@@ -43,7 +43,10 @@ export class QueryHost implements QueryApi {
     this.params.load(parseParams(url.get('wp')));
     this.viewOptions.load(url.get('log') === '1');
     this.#restartAutoRefresh();
-    for (const model of [this.time, this.filters, this.params, this.viewOptions]) model.fire();
+    this.time.fire();
+    this.filters.fire();
+    this.params.fire();
+    this.viewOptions.fire();
     this.refresh();
   }
 
@@ -61,7 +64,11 @@ export class QueryHost implements QueryApi {
   dispose(): void {
     clearTimeout(this.#urlWrite);
     clearInterval(this.#autoRefresh);
-    for (const emitter of [this.#onDidRequestRefresh, this.time, this.filters, this.params, this.viewOptions]) emitter.dispose();
+    this.#onDidRequestRefresh.dispose();
+    this.time.dispose();
+    this.filters.dispose();
+    this.params.dispose();
+    this.viewOptions.dispose();
   }
 
   #restartAutoRefresh(): void {
@@ -76,13 +83,18 @@ export class QueryHost implements QueryApi {
     this.#urlWrite = setTimeout(() => {
       const { location, history } = this.browserWindow;
       const url = new URLSearchParams(location.search);
-      const set = (key: string, value: string | undefined) => (value ? url.set(key, value) : url.delete(key));
-      set('time', this.time.range === this.#defaultTime ? undefined : this.time.range);
-      set('range', this.time.range === 'custom' ? this.time.custom : undefined);
-      set('refresh', this.time.autoRefresh?.toString());
-      set('log', this.viewOptions.logScale ? '1' : undefined);
-      set('sql', this.filters.sql);
-      set('wp', Object.keys(this.params.values).length > 0 ? JSON.stringify(this.params.values) : undefined);
+      if (this.time.range !== this.#defaultTime) url.set('time', this.time.range);
+      else url.delete('time');
+      if (this.time.range === 'custom' && this.time.custom) url.set('range', this.time.custom);
+      else url.delete('range');
+      if (this.time.autoRefresh) url.set('refresh', String(this.time.autoRefresh));
+      else url.delete('refresh');
+      if (this.viewOptions.logScale) url.set('log', '1');
+      else url.delete('log');
+      if (this.filters.sql) url.set('sql', this.filters.sql);
+      else url.delete('sql');
+      if (Object.keys(this.params.values).length > 0) url.set('wp', JSON.stringify(this.params.values));
+      else url.delete('wp');
       const search = url.toString();
       if (search !== location.search.replace(/^\?/, '')) history.pushState(history.state, '', search ? `?${search}` : location.pathname);
     }, URL_WRITE_DELAY_MS);

@@ -269,7 +269,9 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 
   dispose(): void {
     this.hide();
-    for (const emitter of [this.#changed, this.#accepted, this.#hidden]) emitter.dispose();
+    this.#changed.dispose();
+    this.#accepted.dispose();
+    this.#hidden.dispose();
   }
 
   /** The names, the progress line, "No results" and the prompt as the state says. */

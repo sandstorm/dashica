@@ -89,11 +89,10 @@ async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<Quer
   const response = await fetch(url, { signal });
   if (response.status !== 200) throw new Error(await response.text());
   const result = (await Arrow.tableFromIPC(response)) as QueryResult;
-  const header = (name: string) => JSON.parse(response.headers.get(name) || 'null');
-  result.dashicaResolvedTimeRange = header('X-Dashica-Resolved-Time-Range');
+  result.dashicaResolvedTimeRange = JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null');
   const bucketSize = response.headers.get('X-Dashica-Bucket-Size');
   if (bucketSize != null) result.dashicaBucketSize = parseInt(bucketSize);
-  result.clickhouseSummary = header('X-Clickhouse-Summary');
-  result.dashicaAlertIf = header('X-Dashica-Alert-If');
+  result.clickhouseSummary = JSON.parse(response.headers.get('X-Clickhouse-Summary') || 'null');
+  result.dashicaAlertIf = JSON.parse(response.headers.get('X-Dashica-Alert-If') || 'null');
   return result;
 }
