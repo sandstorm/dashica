@@ -27,11 +27,9 @@ export const searchEverywhere: Extension = {
     const search = new SearchPick(ui);
     const key = commands.keybindingLabel(SEARCH_EVERYWHERE) ?? '';
     const button = html`<button type="button" class="dashica-wb__search-button" onclick=${() => search.show()}><span>Search</span> <kbd>${key}</kbd></button>`;
-    subscriptions.push(
-      new Disposable(() => search.dispose()),
-      commands.registerCommand(SEARCH_EVERYWHERE, (value?: unknown) => search.show(typeof value === 'string' ? value : '')),
-      ui.registerBarItem('title', button, { alignment: 'center' }),
-      ui.registerSearchProvider(commandSearch(commands)),
-    );
+    subscriptions.push(new Disposable(() => search.dispose()));
+    subscriptions.push(commands.registerCommand(SEARCH_EVERYWHERE, (value?: unknown) => search.show(typeof value === 'string' ? value : '')));
+    subscriptions.push(ui.registerBarItem('title', button, { alignment: 'center' }));
+    subscriptions.push(ui.registerSearchProvider(commandSearch(commands)));
   },
 };

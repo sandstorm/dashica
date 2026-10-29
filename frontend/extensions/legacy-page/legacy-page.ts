@@ -25,7 +25,9 @@ export function legacyPage(doc: Document): Extension {
         const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
         panel.body.append(menu);
         panel.setDefault(true);
-        subscriptions.push(panel, ...entryMenu(menu, { ui, commands }), ui.registerSearchProvider(dashboardSearch(menu)));
+        subscriptions.push(panel);
+        entryMenu(menu, { ui, commands, subscriptions });
+        subscriptions.push(ui.registerSearchProvider(dashboardSearch(menu)));
       }
 
       const searchBar = part('searchbar');
@@ -42,7 +44,8 @@ export function legacyPage(doc: Document): Extension {
         const browserWindow = doc.defaultView!;
         const show = () => panel.show(true);
         browserWindow.addEventListener('dashica-debugDrawer-toggle', show);
-        subscriptions.push(panel, new Disposable(() => browserWindow.removeEventListener('dashica-debugDrawer-toggle', show)));
+        subscriptions.push(panel);
+        subscriptions.push(new Disposable(() => browserWindow.removeEventListener('dashica-debugDrawer-toggle', show)));
       }
     },
   };
@@ -61,7 +64,7 @@ function dashboardSearch(menu: HTMLElement): SearchProvider {
 }
 
 /** A "…" button on each dashboard's entry in `menu` for the menu `dashboards/entry`: context `{ url, title }`, argument the URL. */
-function entryMenu(menu: HTMLElement, { ui, commands }: Pick<ExtensionContext, 'ui' | 'commands'>): Disposable[] {
+function entryMenu(menu: HTMLElement, { ui, commands, subscriptions }: Pick<ExtensionContext, 'ui' | 'commands' | 'subscriptions'>): void {
   const browserWindow = menu.ownerDocument.defaultView!;
   const buttons = [...menu.querySelectorAll<HTMLAnchorElement>('[data-menu-entry] > a[href]')].map((link) => {
     const url = link.href;
@@ -72,13 +75,11 @@ function entryMenu(menu: HTMLElement, { ui, commands }: Pick<ExtensionContext, '
     link.after(button);
     return button;
   });
-  return [
-    new Disposable(() => buttons.forEach((button) => button.remove())),
-    commands.registerCommand('dashboards.openInNewTab', (url: string) => void browserWindow.open(url, '_blank', 'noopener')),
-    commands.registerCommand('dashboards.copyLink', (url: string) => browserWindow.navigator.clipboard.writeText(url)),
-    ui.registerMenuItem('dashboards/entry', { command: 'dashboards.openInNewTab', title: 'Open in new tab', group: 'navigation', order: 1 }),
-    ui.registerMenuItem('dashboards/entry', { command: 'dashboards.copyLink', title: 'Copy link', group: 'navigation', order: 2 }),
-  ];
+  subscriptions.push(new Disposable(() => buttons.forEach((button) => button.remove())));
+  subscriptions.push(commands.registerCommand('dashboards.openInNewTab', (url: string) => void browserWindow.open(url, '_blank', 'noopener')));
+  subscriptions.push(commands.registerCommand('dashboards.copyLink', (url: string) => browserWindow.navigator.clipboard.writeText(url)));
+  subscriptions.push(ui.registerMenuItem('dashboards/entry', { command: 'dashboards.openInNewTab', title: 'Open in new tab', group: 'navigation', order: 1 }));
+  subscriptions.push(ui.registerMenuItem('dashboards/entry', { command: 'dashboards.copyLink', title: 'Copy link', group: 'navigation', order: 2 }));
 }
 
 /** A grid of four tiles. */
