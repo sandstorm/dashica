@@ -1,13 +1,12 @@
 import type { Table } from 'apache-arrow';
 import type { Disposable } from '../../core/disposable/disposable';
-import type { Event } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
-import type { FiltersModel, ParamsModel, TimeModel, ViewOptionsModel } from '../query/query';
+import type { QueryApi } from '../query/query';
 
 /**
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and the page renders its widgets through them. A renderer gets the widget's props and a `WidgetContext`:
- * the page's query state, its data (`query()`), its children and its menu. Charts put themselves into one
+ * the page's query state (`state`), its data (`query()`), its children and its menu. Charts put themselves into one
  * `ChartFrame` (title, spinner, error, menu button).
  */
 export interface WidgetsApi {
@@ -18,19 +17,13 @@ export interface WidgetsApi {
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
 export type WidgetOf<T extends WidgetType> = Extract<WidgetNode, { type: T }>;
 
-export interface WidgetRenderer<T extends WidgetType> {
-  /** Fills `el` with `widget`; disposing the result stops what it started (queries, listeners). `el` is emptied after. */
-  render(el: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext): { dispose(): unknown };
-}
+/** Fills `el` with `widget`; disposing the result stops what it started (queries, listeners). `el` is emptied after. */
+export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext) => { dispose(): unknown };
 
 /** What a widget's renderer gets to work with. */
 export interface WidgetContext {
-  readonly time: TimeModel;
-  readonly filters: FiltersModel;
-  readonly params: ParamsModel;
-  readonly viewOptions: ViewOptionsModel;
-  /** Fires when the widget should query again: the time, the filter or a param changed, or the viewer refreshed. */
-  readonly onDidRequestRefresh: Event<void>;
+  /** The page's time range, filter, params and view options; `state.onDidRequestRefresh`: query again. */
+  readonly state: QueryApi;
   /** The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's message. */
   query(signal?: AbortSignal): Promise<QueryResult>;
   /** `path` below the widget's handler with the page's query state (`/p/wetell/api/8/speedscope-query?filters=…`). */
@@ -45,7 +38,7 @@ export interface WidgetContext {
 export interface WidgetMenuContext {
   readonly widget: WidgetNode;
   /** `path` below the widget's handler with the page's query state, as `WidgetContext.url`. */
-  readonly url: (path: string) => string;
+  url(path: string): string;
   /** What `query()` gave last; `undefined` before. */
   readonly lastResult: QueryResult | undefined;
 }

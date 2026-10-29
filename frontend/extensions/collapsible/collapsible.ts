@@ -11,8 +11,7 @@ export function collapsible(): Extension {
     id: 'collapsible',
     activate({ widgets, subscriptions }) {
       subscriptions.push(
-        widgets.registerWidget('collapsibleGroup', {
-          render(el, widget, ctx) {
+        widgets.registerWidget('collapsibleGroup', (el, widget, ctx) => {
             const content: HTMLElement = html`<div class="collapse-content text-sm"></div>`;
             const group: HTMLDetailsElement = html`<details class="collapse collapse-arrow border-base-300 border">
               <summary class="collapse-title font-semibold">${widget.props.title ?? ''}</summary>
@@ -23,7 +22,6 @@ export function collapsible(): Extension {
             const rendered = children.map(([, child]) => ctx.renderChild(content.appendChild(el.ownerDocument.createElement('div')), child));
             el.replaceChildren(group);
             return Disposable.from(...rendered);
-          },
         }),
       );
     },

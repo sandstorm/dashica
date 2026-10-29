@@ -11,8 +11,7 @@ export function schemaTable(): Extension {
     id: 'schemaTable',
     activate({ widgets, subscriptions }) {
       subscriptions.push(
-        widgets.registerWidget('schemaTable', {
-          render(el, widget) {
+        widgets.registerWidget('schemaTable', (el, widget) => {
             const statement: HTMLElement = html`<pre class="text-xs overflow-x-auto p-3 bg-base-200 rounded"></pre>`;
             el.replaceChildren(html`<div class="markdown-widget">
               ${widget.props.title ? html`<h2 class="text-2xl font-bold mb-4">${widget.props.title}</h2>` : ''}
@@ -30,7 +29,6 @@ export function schemaTable(): Extension {
                 statement.classList.add('text-error');
               });
             return new Disposable(() => controller.abort());
-          },
         }),
       );
     },

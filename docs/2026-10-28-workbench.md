@@ -130,13 +130,12 @@ A widget type is a contribution; its renderer is a function. Charts, tables, mar
 collapsible groups are extensions.
 
 ```ts
-widgets.registerWidget('timeBar', {
-  render(el, widget: TimeBarWidget, ctx): Disposable,   // widget: generated type (§3.3)
-});
+widgets.registerWidget('timeBar', renderTimeBar);
+function renderTimeBar(el, widget: WidgetOf<'timeBar'>, ctx): Disposable   // widget: generated type (§3.3)
 
 ctx.query(): Promise<Table>                // Arrow; tracks loading / ok / error itself (status bar, Debug)
-ctx.time / ctx.filters / ctx.params / ctx.viewOptions / ctx.cursor   // models with onDidChange (§3.7)
-ctx.onDidRequestRefresh                    // time, filter, param or refresh changed
+ctx.state                                  // the QueryApi: time / filters / params / viewOptions / cursor (§3.7)
+ctx.state.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
 ctx.showMenu(anchor)                       // the menu `widget/context` (Debug, …)
@@ -333,7 +332,7 @@ interface QueryApi {
 
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
-  registerWidget<T extends WidgetNode>(type: T['type'], r: { render(el: HTMLElement, w: T, ctx: WidgetContext): Disposable }): Disposable;
+  registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
   readonly statuses: ReadonlyMap<string, WidgetStatus>;   // for the status bar
   readonly onDidChangeStatus: Event<void>;
 }

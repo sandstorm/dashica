@@ -12,8 +12,7 @@ export function markdown(): Extension {
     id: 'markdown',
     activate({ widgets, subscriptions }) {
       subscriptions.push(
-        widgets.registerWidget('markdown', {
-          render(el, widget) {
+        widgets.registerWidget('markdown', (el, widget) => {
             const body: HTMLElement = html`<div class="prose prose-slate dark:prose-invert max-w-none"></div>`;
             el.replaceChildren(html`<div class="markdown-widget">
               ${widget.props.title ? html`<h2 class="text-2xl font-bold mb-4">${widget.props.title}</h2>` : ''}
@@ -30,7 +29,6 @@ export function markdown(): Extension {
                 if (!controller.signal.aborted) showWidgetError(el, error, widget);
               });
             return new Disposable(() => controller.abort());
-          },
         }),
       );
     },

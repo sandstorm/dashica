@@ -9,7 +9,8 @@ import './widgets.css';
 
 /** The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). */
 export class WidgetsHost implements WidgetsApi {
-  readonly #renderers = new Map<string, WidgetRenderer<WidgetType>>();
+  // `any`: each renderer takes the widgets of its own type, the one it is registered for
+  readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
 
   constructor(
     private readonly query: QueryApi,
@@ -18,54 +19,57 @@ export class WidgetsHost implements WidgetsApi {
 
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
     if (this.#renderers.has(type)) throw new Error(`There is a renderer for the widget type ${type} already`);
-    this.#renderers.set(type, renderer as unknown as WidgetRenderer<WidgetType>);
+    this.#renderers.set(type, renderer);
     return new Disposable(() => this.#renderers.delete(type));
   }
 
   /** Renders `widget` into `el` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
   render(el: HTMLElement, widget: WidgetNode): Disposable {
     const renderer = this.#renderers.get(widget.type);
-    let rendered: { dispose(): unknown } | undefined;
+    if (!renderer) {
+      showWidgetError(el, new Error('no renderer for this widget type'), widget);
+      return new Disposable(() => el.replaceChildren());
+    }
     try {
-      if (!renderer) throw new Error('no renderer for this widget type');
-      rendered = renderer.render(el, widget as never, this.#context(widget));
+      const rendered = renderer(el, widget, new RenderedWidget(widget, this, this.query, this.ui));
+      return new Disposable(() => {
+        rendered.dispose();
+        el.replaceChildren();
+      });
     } catch (error) {
       showWidgetError(el, error, widget);
+      return new Disposable(() => el.replaceChildren());
     }
-    return new Disposable(() => {
-      rendered?.dispose();
-      el.replaceChildren();
-    });
+  }
+}
+
+/** The context of one rendered widget; also what its menu `widget/context` is shown for. */
+class RenderedWidget implements WidgetContext, WidgetMenuContext {
+  lastResult: QueryResult | undefined;
+
+  constructor(
+    readonly widget: WidgetNode,
+    private readonly host: WidgetsHost,
+    readonly state: QueryApi,
+    private readonly ui: Pick<UiApi, 'showContextMenu'>,
+  ) {}
+
+  url(path: string): string {
+    return `${this.widget.dataUrl}${path}?${this.state.requestParams()}`;
   }
 
-  #context(widget: WidgetNode): WidgetContext {
-    const { time, filters, params, viewOptions, onDidRequestRefresh } = this.query;
-    const url = (path: string) => `${widget.dataUrl ?? ''}${path}?${this.query.requestParams()}`;
-    let lastResult: QueryResult | undefined;
-    return {
-      time,
-      filters,
-      params,
-      viewOptions,
-      onDidRequestRefresh,
-      url,
-      async query(signal) {
-        if (!widget.dataUrl) throw new Error(`the widget ${widget.type} has no data`);
-        lastResult = await fetchQueryResult(url('/query'), signal);
-        return lastResult;
-      },
-      renderChild: (el, child) => this.render(el, child),
-      showMenu: (anchor) => {
-        const context: WidgetMenuContext = {
-          widget,
-          url,
-          get lastResult() {
-            return lastResult;
-          },
-        };
-        this.ui.showContextMenu('widget/context', { anchor, title: widgetTitle(widget), context, args: [context] });
-      },
-    };
+  async query(signal?: AbortSignal): Promise<QueryResult> {
+    if (!this.widget.dataUrl) throw new Error(`the widget ${this.widget.type} has no data`);
+    this.lastResult = await fetchQueryResult(this.url('/query'), signal);
+    return this.lastResult;
+  }
+
+  renderChild(el: HTMLElement, child: WidgetNode): Disposable {
+    return this.host.render(el, child);
+  }
+
+  showMenu(anchor: HTMLElement): void {
+    this.ui.showContextMenu('widget/context', { anchor, title: this.widget.type, context: this, args: [this] });
   }
 }
 
@@ -76,12 +80,6 @@ export function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<Wi
   shown.className = 'dashica-widget-error';
   shown.textContent = `${message} (${widget.type})`;
   el.replaceChildren(shown);
-}
-
-/** The widget's title for its menu's accessible name, else its type. */
-function widgetTitle(widget: WidgetNode): string {
-  const title = (widget.props as { title?: unknown }).title;
-  return typeof title === 'string' && title ? title : widget.type;
 }
 
 /** The Arrow table at `url`, with what the server said about it in the headers (resolved time range, bucket size, …). */

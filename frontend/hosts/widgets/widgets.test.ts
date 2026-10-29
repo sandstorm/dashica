@@ -19,11 +19,9 @@ const requests: WidgetNode = { type: 'timeBar', props: { title: 'Requests', x: {
 describe('WidgetsHost', () => {
   it('renders a widget with the renderer of its type, and empties the element when disposed', () => {
     const disposed: string[] = [];
-    testbed.widgets.registerWidget('timeBar', {
-      render(el, widget) {
-        el.textContent = widget.props.title ?? '';
-        return new Disposable(() => disposed.push(widget.type));
-      },
+    testbed.widgets.registerWidget('timeBar', (el, widget) => {
+      el.textContent = widget.props.title ?? '';
+      return new Disposable(() => disposed.push(widget.type));
     });
     const { el, rendered } = testbed.render(requests);
     expect(el.textContent).toBe('Requests');
@@ -34,31 +32,25 @@ describe('WidgetsHost', () => {
 
   it('shows the error in place of a widget without renderer, or whose renderer throws', () => {
     expect(testbed.render(requests).el.textContent).toBe('no renderer for this widget type (timeBar)');
-    testbed.widgets.registerWidget('timeBar', {
-      render() {
-        throw new Error('x has no alias');
-      },
+    testbed.widgets.registerWidget('timeBar', () => {
+      throw new Error('x has no alias');
     });
     expect(testbed.render(requests).el.textContent).toBe('x has no alias (timeBar)');
   });
 
   it('refuses a second renderer for a type', () => {
-    const renderer = { render: () => new Disposable(() => {}) };
+    const renderer = () => new Disposable(() => {});
     testbed.widgets.registerWidget('timeBar', renderer);
     expect(() => testbed.widgets.registerWidget('timeBar', renderer)).toThrow('There is a renderer for the widget type timeBar already');
   });
 
   it('renders the children of a widget with their own renderers', () => {
-    testbed.widgets.registerWidget('grid', {
-      render(el, widget, ctx) {
-        return Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child)));
-      },
-    });
-    testbed.widgets.registerWidget('markdown', {
-      render(el, widget) {
-        el.textContent = widget.props.content ?? '';
-        return new Disposable(() => {});
-      },
+    testbed.widgets.registerWidget('grid', (el, widget, ctx) =>
+      Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child))),
+    );
+    testbed.widgets.registerWidget('markdown', (el, widget) => {
+      el.textContent = widget.props.content ?? '';
+      return new Disposable(() => {});
     });
     const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { content: '# Wetell' } } } };
     expect(testbed.render(grid).el.textContent).toBe('# Wetell');
@@ -68,11 +60,9 @@ describe('WidgetsHost', () => {
     let ctx: WidgetContext;
 
     beforeEach(() => {
-      testbed.widgets.registerWidget('timeBar', {
-        render(_el, _widget, given) {
-          ctx = given;
-          return new Disposable(() => {});
-        },
+      testbed.widgets.registerWidget('timeBar', (_el, _widget, given) => {
+        ctx = given;
+        return new Disposable(() => {});
       });
       testbed.render(requests);
     });
@@ -103,7 +93,7 @@ describe('WidgetsHost', () => {
       ctx.showMenu(anchor);
       const [{ menuId, options }] = testbed.menus;
       expect(menuId).toBe('widget/context');
-      expect(options.title).toBe('Requests');
+      expect(options.title).toBe('timeBar');
       const context = options.args![0] as WidgetMenuContext;
       expect(context.widget).toBe(requests);
       expect(context.lastResult?.numRows).toBe(1);
@@ -116,8 +106,9 @@ describe('ChartFrame', () => {
 
   beforeEach(() => {
     drawn.length = 0;
-    testbed.widgets.registerWidget('timeBar', {
-      render: (el, widget, ctx) =>
+    testbed.widgets.registerWidget(
+      'timeBar',
+      (el, widget, ctx) =>
         new ChartFrame(el, ctx, {
           title: widget.props.title,
           height: 200,
@@ -128,7 +119,7 @@ describe('ChartFrame', () => {
             return chart;
           },
         }),
-    });
+    );
   });
 
   const body = (el: HTMLElement) => el.querySelector('.dashica-chart__body')!;

@@ -10,8 +10,7 @@ export function grid(): Extension {
     id: 'grid',
     activate({ widgets, subscriptions }) {
       subscriptions.push(
-        widgets.registerWidget('grid', {
-          render(el, widget, ctx) {
+        widgets.registerWidget('grid', (el, widget, ctx) => {
             const template = widget.props.template ?? [];
             const layout = el.ownerDocument.createElement('div');
             layout.style.display = 'grid';
@@ -26,7 +25,6 @@ export function grid(): Extension {
             });
             el.replaceChildren(layout);
             return Disposable.from(...rendered);
-          },
         }),
       );
     },

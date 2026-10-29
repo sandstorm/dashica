@@ -69,10 +69,10 @@ export class ChartFrame {
     this.#intersection.observe(frame);
     this.#resize = new browserWindow.ResizeObserver(this.#onResize);
     this.#resize.observe(frame);
-    this.#onDidRequestRefresh = ctx.onDidRequestRefresh(() => {
+    this.#onDidRequestRefresh = ctx.state.onDidRequestRefresh(() => {
       if (this.#visible) void this.#query();
     });
-    this.#onDidChangeViewOptions = ctx.viewOptions.onDidChange(() => void this.#draw());
+    this.#onDidChangeViewOptions = ctx.state.viewOptions.onDidChange(() => void this.#draw());
   }
 
   dispose(): void {
@@ -118,7 +118,7 @@ export class ChartFrame {
   async #draw(): Promise<void> {
     if (!this.#result) return;
     const turn = ++this.#drawn;
-    const viewOptions: ViewOptions = this.#ctx.viewOptions.logScale ? ['VIEW_LOGARITHMIC'] : [];
+    const viewOptions: ViewOptions = this.#ctx.state.viewOptions.logScale ? ['VIEW_LOGARITHMIC'] : [];
     try {
       const chart = await this.#options.draw(this.#result, { width: this.#width, colorSchemeDark: this.#darkScheme.matches, viewOptions });
       if (turn !== this.#drawn) return;
