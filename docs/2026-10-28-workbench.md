@@ -533,8 +533,18 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 3a ✅ | **Explore UI removed** (`frontend/explore`, editor page, Explore links); its Go API kept and marked deprecated; `/explore` shows a rebuild notice | dashboards (unchanged) |
 | 3b ✅ | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content; the bridge extension `legacy-page` (UNMIGRATED, deleted in 5b) moves menu, search bar and debug drawer into them; dockview uninstalled | dashboards (old content inside the new chrome) |
 | 4 ✅ | Menus + palette: `registerMenuItem` / `showContextMenu` (first user: a dashboard entry's "…"); `createQuickPick`; search everywhere (⌘K) over dashboards and commands replaces `sidebarSearch` | dashboards |
-| 5a | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |
+| 5a ✅ | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |
 | 5b | Client rendering: widget host, one extension per widget type (wrapping the existing `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
+| 5b.1 | `query` host: time, auto refresh, SQL filter, params, view options, synced with the URL | dashboards (not used yet) |
+| 5b.2 | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `chartFrame` | dashboards (not used yet) |
+| 5b.3 | Go: markdown and schema table serve their HTML from their handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
+| 5b.4 | widget extensions: grid, collapsible, markdown, schema table | dashboards (not used yet) |
+| 5b.5 | widget extensions: the charts, stats, table, alerts (wrapping `frontend/chart/*`) | dashboards (not used yet) |
+| 5b.6 | widget extensions: checkbox group, text input, Speedscope link | dashboards (not used yet) |
+| 5b.7 | `page` host: `workbench.json`, `page.json`, `navigate`; the extension that renders a dashboard page | dashboards (not used yet) |
+| 5b.8 | extensions `dashboards`, `time-range`, `auto-refresh`, `log-scale`, `filters`, `debug` | dashboards (not used yet) |
+| 5b.9 | **the switch:** `/p/<page>` serves the shell, the client renders `page.json`; `legacy-page` and the Alpine page components deleted | dashboards, now client-rendered |
+| 5b.10 | `BuildComponents`, templ and Alpine removed | dashboards |
 | 6 | `QueryState` + structured filters (§3.8), alerts on `time` | filters as chips, click-to-filter |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
