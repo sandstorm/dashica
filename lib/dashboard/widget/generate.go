@@ -14,4 +14,5 @@ package widget
 // directory set to this file's directory, and dashica-gen defaults to loading "."
 // — so it targets whichever package holds this directive.
 //
+//go:generate go run github.com/sandstorm/dashica/cmd/dashica-gen -enums
 //go:generate go run github.com/sandstorm/dashica/cmd/dashica-gen -ts ../../../frontend/generated/zz_generated.dashica.ts -ts-types github.com/sandstorm/dashica.WorkbenchJson,github.com/sandstorm/dashica/lib/dashboard.PageJson

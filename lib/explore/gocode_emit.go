@@ -72,8 +72,10 @@ type GocodeField struct {
 	// "StackOptions".
 	GroupType string `json:"groupType,omitempty"`
 	// EnumValues maps each enum wire string to its Go var (kind == "enum"), e.g.
-	// "sum" -> "OrderSum", so the emitter renders widget.OrderSum.
+	// "sum" -> "widget.OrderSum".
 	EnumValues []GocodeEnumValue `json:"enumValues,omitempty"`
+	// EnumPkg is the import path of an enum's package (kind == "enum").
+	EnumPkg string `json:"enumPkg,omitempty"`
 }
 
 // GocodeEnumValue pairs an enum's wire string with its Go var name.
@@ -666,16 +668,16 @@ func (g *generator) emitGroup(f GocodeField, raw []byte) (string, error) {
 	return "widget." + f.GroupType + "{" + strings.Join(parts, ", ") + "}", nil
 }
 
-// emitEnum renders an enum value as its package-level Go var (widget.OrderSum).
+// emitEnum renders an enum value as its package-level Go var (widget.OrderSum, color.SchemeBlues).
 func (g *generator) emitEnum(f GocodeField, raw []byte) (string, error) {
-	g.imports[pkgWidget] = true
+	g.imports[f.EnumPkg] = true
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return "", err
 	}
 	for _, ev := range f.EnumValues {
 		if ev.Str == s {
-			return "widget." + ev.VarName, nil
+			return ev.VarName, nil
 		}
 	}
 	return "", fmt.Errorf("unknown enum value %q for field %q", s, f.JSONKey)

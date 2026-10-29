@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // This file emits the Go-code-generation table into zz_generated.dashica.go,
@@ -38,11 +39,12 @@ type gcField struct {
 	Fields         []gcField   `json:"fields,omitempty"`
 	GroupType      string      `json:"groupType,omitempty"`
 	EnumValues     []gcEnumVal `json:"enumValues,omitempty"`
+	EnumPkg        string      `json:"enumPkg,omitempty"`
 }
 
 type gcEnumVal struct {
 	Str     string `json:"str"`
-	VarName string `json:"varName"`
+	VarName string `json:"varName"` // as Go code: "widget.OrderSum", "color.SchemeBlues"
 }
 
 // gocodeJSONLiteral builds the gocode table and emits it as a Go double-quoted
@@ -105,8 +107,10 @@ func gocodeField(f fieldInfo, isCtorArg bool) gcField {
 		}
 	}
 	if f.Category == catEnum {
+		pkgName := f.EnumPkg[strings.LastIndex(f.EnumPkg, "/")+1:]
+		gf.EnumPkg = f.EnumPkg
 		for _, ev := range f.EnumOptions {
-			gf.EnumValues = append(gf.EnumValues, gcEnumVal{Str: ev.Str, VarName: ev.VarName})
+			gf.EnumValues = append(gf.EnumValues, gcEnumVal{Str: ev.Str, VarName: pkgName + "." + ev.VarName})
 		}
 	}
 	return gf

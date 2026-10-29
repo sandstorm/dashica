@@ -46,15 +46,15 @@ func TestLoadModel_widgetsAndEnums(t *testing.T) {
 		}
 	}
 
-	order := m.enums["StackOrder"]
+	order := m.enums[widgetPkgPath+".StackOrder"].Values
 	if len(order) != 4 {
 		t.Fatalf("StackOrder: want 4 values, got %d", len(order))
 	}
 	if order[0].VarName != "OrderValue" || order[0].Str != "value" {
 		t.Errorf("StackOrder[0] = %+v, want OrderValue=value", order[0])
 	}
-	if len(m.enums["StackOffset"]) != 3 {
-		t.Errorf("StackOffset: want 3 values, got %d", len(m.enums["StackOffset"]))
+	if len(m.enums[widgetPkgPath+".StackOffset"].Values) != 3 {
+		t.Errorf("StackOffset: want 3 values, got %d", len(m.enums[widgetPkgPath+".StackOffset"].Values))
 	}
 }
 

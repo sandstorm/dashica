@@ -37,12 +37,13 @@ func loadModel(pattern string) (*model, error) {
 
 	m := &model{
 		pkgDir: pkgDir(pkg),
-		enums:  map[string][]enumValue{},
+		enums:  map[string]enumInfo{},
 	}
 
-	// Enum types + their package-level values (StackOrder/StackOffset).
-	enumTypes := findEnumTypes(pkg)
-	m.enums = findEnumValues(pkg, enumTypes)
+	// The enums of the widget package and of the packages of this module it imports (color.Scheme).
+	if err := collectEnums(pkg, m.enums); err != nil {
+		return nil, err
+	}
 
 	// Doc comments per (struct, field), harvested from the syntax trees.
 	docs := harvestDocs(pkg)
@@ -54,7 +55,7 @@ func loadModel(pattern string) (*model, error) {
 	}
 
 	for _, r := range regs {
-		wi, err := classifyWidget(pkg, r, docs, enumTypes, m.enums)
+		wi, err := classifyWidget(pkg, r, docs, m.enums)
 		if err != nil {
 			return nil, fmt.Errorf("widget %q (%s): %w", r.wireName, r.typeName, err)
 		}
@@ -240,77 +241,6 @@ func derefNamed(t types.Type) *types.Named {
 	return nil
 }
 
-// findEnumTypes returns the set of type names in the package that are the
-// enum-safety idiom `struct{ v string }` (StackOrder, StackOffset).
-func findEnumTypes(pkg *packages.Package) map[string]bool {
-	out := map[string]bool{}
-	scope := pkg.Types.Scope()
-	for _, name := range scope.Names() {
-		tn, ok := scope.Lookup(name).(*types.TypeName)
-		if !ok {
-			continue
-		}
-		named, ok := tn.Type().(*types.Named)
-		if !ok {
-			continue
-		}
-		st, ok := named.Underlying().(*types.Struct)
-		if !ok || st.NumFields() != 1 {
-			continue
-		}
-		f := st.Field(0)
-		if !f.Exported() && f.Name() == "v" && isBasic(f.Type(), types.String) {
-			out[name] = true
-		}
-	}
-	return out
-}
-
-// findEnumValues collects, per enum type, the package-level vars of that type
-// and the string literal each carries (in declaration order).
-func findEnumValues(pkg *packages.Package, enumTypes map[string]bool) map[string][]enumValue {
-	out := map[string][]enumValue{}
-	for _, file := range pkg.Syntax {
-		for _, decl := range file.Decls {
-			gd, ok := decl.(*ast.GenDecl)
-			if !ok || gd.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gd.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
-					continue
-				}
-				for i, nameIdent := range vs.Names {
-					if i >= len(vs.Values) {
-						continue
-					}
-					cl, ok := vs.Values[i].(*ast.CompositeLit)
-					if !ok {
-						continue
-					}
-					tIdent, ok := cl.Type.(*ast.Ident)
-					if !ok || !enumTypes[tIdent.Name] {
-						continue
-					}
-					if len(cl.Elts) != 1 {
-						continue
-					}
-					blit, ok := cl.Elts[0].(*ast.BasicLit)
-					if !ok || blit.Kind != token.STRING {
-						continue
-					}
-					out[tIdent.Name] = append(out[tIdent.Name], enumValue{
-						VarName: nameIdent.Name,
-						Str:     strings.Trim(blit.Value, `"`),
-					})
-				}
-			}
-		}
-	}
-	return out
-}
-
 // harvestDocs maps "TypeName.fieldName" -> trimmed doc comment.
 func harvestDocs(pkg *packages.Package) map[string]string {
 	out := map[string]string{}
@@ -348,7 +278,7 @@ func harvestDocs(pkg *packages.Package) map[string]string {
 }
 
 // classifyWidget builds a widgetInfo for one registered widget.
-func classifyWidget(pkg *packages.Package, r registration, docs map[string]string, enumTypes map[string]bool, enums map[string][]enumValue) (*widgetInfo, error) {
+func classifyWidget(pkg *packages.Package, r registration, docs map[string]string, enums map[string]enumInfo) (*widgetInfo, error) {
 	st, ok := r.named.Underlying().(*types.Struct)
 	if !ok {
 		return nil, fmt.Errorf("underlying type is not a struct")
@@ -375,7 +305,7 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 	for i := 0; i < st.NumFields(); i++ {
 		f := st.Field(i)
 		tag := st.Tag(i)
-		fi, skip, err := classifyField(pkg, r.typeName, f, tag, docs, enumTypes, enums, methods, ctorOrder)
+		fi, skip, err := classifyField(pkg, r.typeName, f, tag, docs, enums, methods, ctorOrder)
 		if err != nil {
 			return nil, fmt.Errorf("field %q: %w", f.Name(), err)
 		}
@@ -387,7 +317,7 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 	_, wi.HasHandler = methods["Handler"]
 	if sig, ok := methods["computeProps"]; ok {
 		var err error
-		if wi.ComputedType, wi.ComputedFields, err = computedFields(pkg, sig, docs, enumTypes, enums); err != nil {
+		if wi.ComputedType, wi.ComputedFields, err = computedFields(pkg, sig, docs, enums); err != nil {
 			return nil, fmt.Errorf("computeProps: %w", err)
 		}
 	}
@@ -396,7 +326,7 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 
 // computedFields are the fields of the struct a widget's computeProps returns: its signature must be
 // `computeProps(ctx *rendering.DashboardContext) (<struct of this package>, error)`.
-func computedFields(pkg *packages.Package, sig *types.Signature, docs map[string]string, enumTypes map[string]bool, enums map[string][]enumValue) (string, []fieldInfo, error) {
+func computedFields(pkg *packages.Package, sig *types.Signature, docs map[string]string, enums map[string]enumInfo) (string, []fieldInfo, error) {
 	const want = "want computeProps(ctx *rendering.DashboardContext) (<struct of this package>, error)"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 2 || sig.Results().At(1).Type().String() != "error" {
 		return "", nil, fmt.Errorf("%s, got %s", want, sig)
@@ -415,7 +345,7 @@ func computedFields(pkg *packages.Package, sig *types.Signature, docs map[string
 	}
 	var fields []fieldInfo
 	for i := 0; i < st.NumFields(); i++ {
-		fi, skip, err := classifyField(pkg, named.Obj().Name(), st.Field(i), st.Tag(i), docs, enumTypes, enums, nil, nil)
+		fi, skip, err := classifyField(pkg, named.Obj().Name(), st.Field(i), st.Tag(i), docs, enums, nil, nil)
 		if err != nil {
 			return "", nil, fmt.Errorf("field %q: %w", st.Field(i).Name(), err)
 		}
@@ -427,7 +357,7 @@ func computedFields(pkg *packages.Package, sig *types.Signature, docs map[string
 }
 
 // classifyField classifies one struct field. Returns (info, skip, error).
-func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag string, docs map[string]string, enumTypes map[string]bool, enums map[string][]enumValue, methods map[string]*types.Signature, ctorOrder map[string]int) (*fieldInfo, bool, error) {
+func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag string, docs map[string]string, enums map[string]enumInfo, methods map[string]*types.Signature, ctorOrder map[string]int) (*fieldInfo, bool, error) {
 	name := f.Name()
 
 	// The internal render-time id is never serialized/edited/emitted.
@@ -448,7 +378,7 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 		fi.JSONKey = jk
 	}
 
-	cat, sub, err := categoryOf(pkg, f.Type(), enumTypes, enums)
+	cat, sub, err := categoryOf(pkg, f.Type(), enums)
 	if err != nil {
 		return nil, false, err
 	}
@@ -456,6 +386,7 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 	fi.Group = sub.group
 	fi.GroupType = sub.groupType
 	fi.EnumType = sub.enumType
+	fi.EnumPkg = sub.enumPkg
 	fi.EnumOptions = sub.enumOptions
 	fi.Required = cat == catQueryable || cat == catField || cat == catTsField
 
@@ -511,11 +442,12 @@ type subInfo struct {
 	group       []fieldInfo
 	groupType   string
 	enumType    string
+	enumPkg     string
 	enumOptions []enumValue
 }
 
 // categoryOf maps a Go type to a fieldCategory (the closed supported set).
-func categoryOf(pkg *packages.Package, t types.Type, enumTypes map[string]bool, enums map[string][]enumValue) (fieldCategory, subInfo, error) {
+func categoryOf(pkg *packages.Package, t types.Type, enums map[string]enumInfo) (fieldCategory, subInfo, error) {
 	var sub subInfo
 
 	// Pointers: *int, *bool, *color.ColorScale, *sql.SqlField.
@@ -583,14 +515,18 @@ func categoryOf(pkg *packages.Package, t types.Type, enumTypes map[string]bool, 
 		case "WidgetsMap":
 			return catChildrenMap, sub, nil
 		}
-		if enumTypes[obj.Name()] {
+		if e, ok := enums[obj.Pkg().Path()+"."+obj.Name()]; ok {
 			sub.enumType = obj.Name()
-			sub.enumOptions = enums[obj.Name()]
+			if obj.Pkg() != pkg.Types {
+				sub.enumType = e.PkgName + "." + obj.Name()
+			}
+			sub.enumPkg = e.PkgPath
+			sub.enumOptions = e.Values
 			return catEnum, sub, nil
 		}
 		// A named struct with all-exported fields is a group (e.g. StackOptions).
 		if st, ok := n.Underlying().(*types.Struct); ok {
-			grp, err := classifyGroup(pkg, obj.Name(), st, enumTypes, enums)
+			grp, err := classifyGroup(pkg, obj.Name(), st, enums)
 			if err != nil {
 				return "", sub, err
 			}
@@ -603,14 +539,14 @@ func categoryOf(pkg *packages.Package, t types.Type, enumTypes map[string]bool, 
 	return "", sub, fmt.Errorf("unsupported type %s (add a serializer case + editor kind, or //dashica:skip)", t)
 }
 
-func classifyGroup(pkg *packages.Package, typeName string, st *types.Struct, enumTypes map[string]bool, enums map[string][]enumValue) ([]fieldInfo, error) {
+func classifyGroup(pkg *packages.Package, typeName string, st *types.Struct, enums map[string]enumInfo) ([]fieldInfo, error) {
 	var out []fieldInfo
 	for i := 0; i < st.NumFields(); i++ {
 		f := st.Field(i)
 		if !f.Exported() {
 			return nil, fmt.Errorf("group %s has unexported field %q", typeName, f.Name())
 		}
-		cat, sub, err := categoryOf(pkg, f.Type(), enumTypes, enums)
+		cat, sub, err := categoryOf(pkg, f.Type(), enums)
 		if err != nil {
 			return nil, fmt.Errorf("group %s field %q: %w", typeName, f.Name(), err)
 		}
@@ -619,6 +555,7 @@ func classifyGroup(pkg *packages.Package, typeName string, st *types.Struct, enu
 			JSONKey:     lowerFirst(f.Name()),
 			Category:    cat,
 			EnumType:    sub.enumType,
+			EnumPkg:     sub.enumPkg,
 			EnumOptions: sub.enumOptions,
 			Group:       sub.group,
 		})
@@ -708,4 +645,24 @@ func upperFirst(s string) string {
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
 	return string(r)
+}
+
+// collectEnums adds the enums of `pkg` and of the packages of this module it imports to `enums`, by
+// "<import path>.<Type>".
+func collectEnums(pkg *packages.Package, enums map[string]enumInfo) error {
+	var err error
+	packages.Visit([]*packages.Package{pkg}, nil, func(p *packages.Package) {
+		if err != nil || !strings.HasPrefix(p.PkgPath, modulePath) {
+			return
+		}
+		found, findErr := findEnums(p)
+		if findErr != nil {
+			err = findErr
+			return
+		}
+		for name, e := range found {
+			enums[p.PkgPath+"."+name] = e
+		}
+	})
+	return err
 }

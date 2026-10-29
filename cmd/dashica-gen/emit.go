@@ -173,8 +173,8 @@ func marshalStmt(recv string, f fieldInfo) string {
 	case catBool:
 		return set(v, "json.Marshal("+v+")")
 	case catEnum:
-		// A bare enum field marshals as its inner string value.
-		return set(v+`.v != ""`, "json.Marshal("+v+".v)")
+		// its MarshalJSON (zz_generated.enums.go) writes its value
+		return set(v+" != ("+f.EnumType+"{})", "json.Marshal("+v+")")
 	case catPtrInt, catPtrBool, catColor:
 		return set(v+" != nil", "json.Marshal("+v+")")
 	case catKeyValue, catStringList, catChildrenList, catChildrenMap:
@@ -205,28 +205,12 @@ func unmarshalStmt(typeName string, f fieldInfo) string {
 		// test, so buildQuery's `if b.fill != nil` never derefs a nil interface.
 		return head + fmt.Sprintf(
 			"var f sql.SqlField\nif f, err = sql.UnmarshalField(raw); err != nil {\nreturn err\n}\nif f != nil {\nr.%s = &f\n}\n}", f.GoName)
-	case catEnum:
-		return head + enumUnmarshal(typeName, f) + "\n}"
 	default:
 		// Everything else round-trips through encoding/json straight into the
 		// (possibly pointer) field; nested types with their own JSON methods
-		// (color.ColorScale, Widgets, WidgetsMap, group types) dispatch there.
+		// (color.ColorScale, Widgets, WidgetsMap, group types, enums) dispatch there.
 		return head + fmt.Sprintf("if err = json.Unmarshal(raw, &r.%s); err != nil {\nreturn err\n}\n}", f.GoName)
 	}
-}
-
-// enumUnmarshal validates a string against the known enum vars and assigns the
-// matching package-level value (preserving the enum-safety idiom).
-func enumUnmarshal(typeName string, f fieldInfo) string {
-	var b strings.Builder
-	b.WriteString("var v string\nif err = json.Unmarshal(raw, &v); err != nil {\nreturn err\n}\n")
-	b.WriteString("switch v {\n")
-	b.WriteString(fmt.Sprintf("case \"\":\nr.%s = %s{}\n", f.GoName, f.EnumType))
-	for _, ev := range f.EnumOptions {
-		b.WriteString(fmt.Sprintf("case %q:\nr.%s = %s\n", ev.Str, f.GoName, ev.VarName))
-	}
-	b.WriteString(fmt.Sprintf("default:\nreturn fmt.Errorf(%q, v)\n}", typeName+": unknown "+f.JSONKey+" %q"))
-	return b.String()
 }
 
 func numberLines(s string) string {

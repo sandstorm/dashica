@@ -155,7 +155,12 @@ func loadDTOs(names []string) (*dtoEmitter, error) {
 	if packages.PrintErrors(pkgs) > 0 {
 		return nil, fmt.Errorf("packages of the ts types have errors")
 	}
-	e := &dtoEmitter{docs: map[string]string{}, pkgs: map[string]*types.Package{}, done: map[string]bool{}}
+	e := &dtoEmitter{docs: map[string]string{}, pkgs: map[string]*types.Package{}, done: map[string]bool{}, enums: map[string]enumInfo{}}
+	for _, pkg := range pkgs {
+		if err := collectEnums(pkg, e.enums); err != nil {
+			return nil, err
+		}
+	}
 	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
 		e.pkgs[pkg.PkgPath] = pkg.Types
 		for key, doc := range harvestDocs(pkg) {
@@ -170,10 +175,11 @@ func loadDTOs(names []string) (*dtoEmitter, error) {
 
 // dtoEmitter writes the interfaces of Go structs, each once, after those of the structs it references.
 type dtoEmitter struct {
-	docs map[string]string
-	pkgs map[string]*types.Package
-	done map[string]bool
-	out  strings.Builder
+	docs  map[string]string
+	pkgs  map[string]*types.Package
+	done  map[string]bool
+	enums map[string]enumInfo // by "<import path>.<Type>"
+	out   strings.Builder
 }
 
 // interfaces writes the interfaces of the Go types `names` (<import path>.<Type>).
@@ -354,6 +360,13 @@ func (e *dtoEmitter) tsOf(t types.Type) (string, bool, error) {
 		case "encoding/json.RawMessage":
 			return "unknown", false, nil
 		}
+		if enum, ok := e.enums[qualified(t)]; ok {
+			values := make([]string, len(enum.Values))
+			for i, v := range enum.Values {
+				values[i] = "'" + v.Str + "'"
+			}
+			return strings.Join(values, " | "), false, nil
+		}
 		if _, ok := t.Underlying().(*types.Struct); ok {
 			return tsName(qualified(t)), false, e.emit(t)
 		}
@@ -383,8 +396,8 @@ func constants(t *types.Named) []string {
 	return values
 }
 
-// jsonTag is the key of a `json:"…"` tag and whether it says omitempty.
+// jsonTag is the key of a `json:"…"` tag and whether it says omitempty or omitzero (an enum, a struct).
 func jsonTag(tag string) (string, bool) {
 	key, opts, _ := strings.Cut(reflect.StructTag(tag).Get("json"), ",")
-	return key, strings.Contains(","+opts+",", ",omitempty,")
+	return key, strings.Contains(","+opts+",", ",omitempty,") || strings.Contains(","+opts+",", ",omitzero,")
 }

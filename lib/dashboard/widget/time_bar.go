@@ -74,6 +74,8 @@ type StackOptions struct {
 // Only orders valid for a vertical (stackY) bar chart are exposed; Plot's
 // stackX-only "x" alias is intentionally omitted.
 // Docs: https://observablehq.com/plot/transforms/stack#stack-options
+//
+//dashica-gen:enum
 type StackOrder struct{ v string }
 
 var (
@@ -91,6 +93,8 @@ var (
 // StackOffset is the stack baseline method. Same enum-safety trick as
 // StackOrder. Zero value = a zero baseline (Plot default).
 // Docs: https://observablehq.com/plot/transforms/stack#stack-options
+//
+//dashica-gen:enum
 type StackOffset struct{ v string }
 
 var (

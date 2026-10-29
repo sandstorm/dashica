@@ -19,7 +19,7 @@ func printSummary(m *model) {
 	sort.Strings(enumNames)
 	for _, en := range enumNames {
 		var vals []string
-		for _, v := range m.enums[en] {
+		for _, v := range m.enums[en].Values {
 			vals = append(vals, fmt.Sprintf("%s=%q", v.VarName, v.Str))
 		}
 		fmt.Printf("enum %s: %s\n", en, strings.Join(vals, " "))
