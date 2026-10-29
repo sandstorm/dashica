@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// Tests for time-line.ts: the props as the chart takes them, a line drawn from the widget’s data.
+// Tests for time-line.ts: a line drawn from the widget’s data, in its stroke color or one per strokeField value.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { timeLine, timeLineChartProps } from './time-line';
+import { timeLine } from './time-line';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
@@ -23,18 +23,23 @@ const inView = async () => {
 const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
 
 describe('timeLine', () => {
-  it('gives the chart the stroke field’s alias, else the stroke color', () => {
-    const x = { kind: 'expr' as const, alias: 'time', xBucketSizeMs: QUARTER };
-    const y = { kind: 'count' as const, alias: 'cnt' };
-    expect(timeLineChartProps({ x, y, stroke: '#4682B4', strokeField: { kind: 'expr', alias: 'host' }, zField: { kind: 'expr', alias: 'session' } })).toMatchObject({ x: 'time', xBucketSize: QUARTER, y: 'cnt', stroke: 'host', z: 'session' });
-    expect(timeLineChartProps({ x, y, stroke: '#4682B4' }).stroke).toBe('#4682B4');
-  });
-
   it('draws the widget’s data once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], cnt: [3, 5] });
     const { el } = testbed.render({ type: 'timeLine', props: { x: { kind: 'autoBucket', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.dashica-chart__body svg path').length).toBeGreaterThan(0);
+  });
+
+  it('draws a line in the color stroke, or one per value of strokeField, which wins', async () => {
+    testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], cnt: [3, 5], host: ['a', 'b'] });
+    const x = { kind: 'expr' as const, alias: 'time', xBucketSizeMs: QUARTER };
+    const y = { kind: 'count' as const, alias: 'cnt' };
+    const colored = testbed.render({ type: 'timeLine', props: { x, y, stroke: '#ff0000' }, dataUrl: '/p/shop/api/1' }).el;
+    const perHost = testbed.render({ type: 'timeLine', props: { x, y, stroke: '#ff0000', strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1' }).el;
+    await inView();
+    expect(colored.querySelector('svg g[stroke="#ff0000"] path')).not.toBeNull();
+    expect(perHost.querySelector('svg g[stroke="#ff0000"]')).toBeNull();
+    expect(perHost.querySelectorAll('svg [aria-label="line"] path')).toHaveLength(2);
   });
 });
