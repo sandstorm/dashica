@@ -596,6 +596,8 @@ its own.
   (`frontend/extensions/bar-horizontal/bar-horizontal.ts`).
 - Ordinal time heatmap: `color` and `colorScheme` are not used, the cells are always blues (inferno in dark mode)
   (`frontend/extensions/heatmap/heatmap.ts`).
+- Stats: `fillField` is meant as a column with each number's color, but its alias is taken as the color itself
+  (`frontend/extensions/stats/stats.ts`).
 
 ## 6. Later (out of scope, but the design must not block it)
 
