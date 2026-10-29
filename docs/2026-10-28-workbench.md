@@ -136,7 +136,9 @@ widgets.registerWidget('timeBar', {
 ctx.query(): Promise<Table>                // Arrow; tracks loading / ok / error itself (status bar, Debug)
 ctx.time / ctx.filters / ctx.params / ctx.viewOptions / ctx.cursor   // models with onDidChange (§3.7)
 ctx.onDidRequestRefresh                    // time, filter, param or refresh changed
+ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
+ctx.showMenu(anchor)                       // the menu `widget/context` (Debug, …)
 ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8)
 ```
 

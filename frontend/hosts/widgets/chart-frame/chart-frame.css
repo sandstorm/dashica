@@ -1,0 +1,70 @@
+/* See chartFrame in chart-frame.ts. */
+
+/* while it queries: a spinner in the top right corner */
+.dashica-chart__spinner {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--color-base-100) 70%, transparent);
+    backdrop-filter: blur(4px);
+}
+
+.dashica-chart__spinner[hidden] {
+    display: none;
+}
+
+/* the menu button, left of the spinner, while the pointer is on the chart */
+.dashica-chart__menu {
+    position: absolute;
+    top: 0.5rem;
+    right: 2.5rem;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 150ms;
+}
+
+.dashica-chart:hover .dashica-chart__menu,
+.dashica-chart__menu:focus-within {
+    opacity: 1;
+}
+
+/* the title until the chart is drawn: as Observable Plot draws its own */
+.dashica-chart__title {
+    font: bold 11pt sans-serif;
+    margin: 0 0 0.5em 0;
+}
+
+/* a diagonal shimmer over the chart until it is drawn first */
+.chart-shimmer {
+    background-image: linear-gradient(110deg, transparent 35%, rgba(0, 0, 0, 0.04) 48%, rgba(0, 0, 0, 0.07) 50%, rgba(0, 0, 0, 0.04) 52%, transparent 65%);
+    background-size: 220% 100%;
+    background-repeat: no-repeat;
+    animation: chart-shimmer 2.2s ease-in-out infinite;
+}
+
+.chart-shimmer[hidden] {
+    display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    .chart-shimmer {
+        background-image: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.07) 50%, rgba(255, 255, 255, 0.04) 52%, transparent 65%);
+    }
+}
+
+@keyframes chart-shimmer {
+    0% {
+        background-position: 120% 0;
+    }
+    100% {
+        background-position: -120% 0;
+    }
+}
