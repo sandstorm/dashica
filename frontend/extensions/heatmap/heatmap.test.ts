@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// Tests for heatmap.ts: both heatmaps’ props as the charts take them, cells drawn from the widget’s data.
+// Tests for heatmap.ts: both heatmaps’ cells drawn from the widget’s data; a time heatmap needs its y bucket size.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { heatmap, timeHeatmapOrdinalChartProps } from './heatmap';
+import { heatmap } from './heatmap';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
@@ -42,12 +42,6 @@ describe('heatmap', () => {
   it('refuses a time heatmap without a positive y bucket size', () => {
     const { el } = testbed.render({ type: 'timeHeatmap', props: { x, y: { kind: 'expr', alias: 'duration_ms' } }, dataUrl: '/p/shop/api/1' });
     expect(error(el)).toBe('YBucketSize must be set to a positive value (was 0) (timeHeatmap)');
-  });
-
-  it('gives the ordinal heatmap its color scheme as the color scale, its color scale first', () => {
-    const y = { kind: 'enum' as const, alias: 'status' };
-    expect(timeHeatmapOrdinalChartProps({ x, y, colorScheme: 'Inferno' }).color).toEqual({ scheme: 'Inferno' });
-    expect(timeHeatmapOrdinalChartProps({ x, y, colorScheme: 'Inferno', color: { legend: true, scheme: 'Blues' } }).color).toEqual({ legend: true, scheme: 'Blues' });
   });
 
   it('draws an ordinal heatmap’s cells once it is in view', async () => {

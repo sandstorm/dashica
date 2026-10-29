@@ -594,6 +594,8 @@ its own.
 
 - Bar horizontal: the log scale (`VIEW_LOGARITHMIC`) is on the y axis, the categories, not on x, the measure
   (`frontend/extensions/bar-horizontal/bar-horizontal.ts`).
+- Ordinal time heatmap: `color` and `colorScheme` are not used, the cells are always blues (inferno in dark mode)
+  (`frontend/extensions/heatmap/heatmap.ts`).
 
 ## 6. Later (out of scope, but the design must not block it)
 
