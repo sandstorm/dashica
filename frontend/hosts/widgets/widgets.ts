@@ -8,7 +8,7 @@ import type { FiltersModel, ParamsModel, TimeModel, ViewOptionsModel } from '../
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and the page renders its widgets through them. A renderer gets the widget's props and a `WidgetContext`:
  * the page's query state, its data (`query()`), its children and its menu. Charts put themselves into one
- * `chartFrame` (title, spinner, error, menu button).
+ * `ChartFrame` (title, spinner, error, menu button).
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -66,4 +66,4 @@ export type QueryResult = Table & {
 export type ViewOptions = 'VIEW_LOGARITHMIC'[];
 
 export { WidgetsHost, showWidgetError } from './widgets-impl';
-export { chartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';
+export { ChartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';

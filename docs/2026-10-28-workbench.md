@@ -146,7 +146,7 @@ ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8)
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
 - **Each widget composes itself; the host does not wrap.** Mandatory mechanism sits in `ctx` (`ctx.query()` tracks
   status, so the status bar and Debug work for every widget). The visual chart frame (render once visible, observe
-  size, spinner, error, filter status §3.8, menu button) is **one optional helper**, `chartFrame(el, ctx, draw)`;
+  size, spinner, error, filter status §3.8, menu button) is **one optional helper**, `new ChartFrame(el, ctx, { draw })`;
   charts use it in one line, containers and markdown don't.
 - **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write `query.params`.
 
@@ -540,7 +540,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 5a ✅ | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |
 | 5b | Client rendering: widget host, one extension per widget type (wrapping the existing `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
 | 5b.1 | `query` host: time, auto refresh, SQL filter, params, view options, synced with the URL | dashboards (not used yet) |
-| 5b.2 | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `chartFrame` | dashboards (not used yet) |
+| 5b.2 | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `ChartFrame` | dashboards (not used yet) |
 | 5b.3 | Go: markdown and schema table serve their HTML from their handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
 | 5b.4 | widget extensions: grid, collapsible, markdown, schema table | dashboards (not used yet) |
 | 5b.5 | widget extensions: the charts, stats, table, alerts (wrapping `frontend/chart/*`) | dashboards (not used yet) |

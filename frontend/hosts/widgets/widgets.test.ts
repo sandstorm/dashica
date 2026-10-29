@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-// Tests for WidgetsHost and chartFrame: rendering by type, the widget context (query, children, menu), the chart frame.
+// Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu), the chart frame.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { chartFrame, type WidgetContext, type WidgetMenuContext } from './widgets';
+import { ChartFrame, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -111,14 +111,14 @@ describe('WidgetsHost', () => {
   });
 });
 
-describe('chartFrame', () => {
+describe('ChartFrame', () => {
   const drawn: { rows: number; width: number; log: boolean }[] = [];
 
   beforeEach(() => {
     drawn.length = 0;
     testbed.widgets.registerWidget('timeBar', {
       render: (el, widget, ctx) =>
-        chartFrame(el, ctx, {
+        new ChartFrame(el, ctx, {
           title: widget.props.title,
           height: 200,
           draw(result, { width, viewOptions }) {
