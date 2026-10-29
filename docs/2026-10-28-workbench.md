@@ -322,9 +322,10 @@ interface QueryApi {
   readonly filters: FilterModel;            // {fieldId, op, value}[] + time window + free SQL; URL-synced
   readonly params: ParamsModel;             // form widget values; URL-synced
   readonly viewOptions: ViewOptionsModel;   // log scale, …
-  readonly cursor: CursorModel;             // hovered timestamp, synchronized across time charts
+  readonly cursor: CursorModel;             // hovered timestamp, synchronized across time charts (step 7)
   refresh(): void;
   readonly onDidRequestRefresh: Event<void>;
+  requestParams(): URLSearchParams;         // what every data handler reads; one format with step 6
 }
 
 // widgets — renderers per widget type (§3.6)
