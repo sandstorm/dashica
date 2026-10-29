@@ -3,14 +3,12 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/constant"
 	"go/token"
 	"go/types"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -370,30 +368,9 @@ func (e *dtoEmitter) tsOf(t types.Type) (string, bool, error) {
 		if _, ok := t.Underlying().(*types.Struct); ok {
 			return tsName(qualified(t)), false, e.emit(t)
 		}
-		if values := constants(t); len(values) > 0 {
-			return strings.Join(values, " | "), false, nil
-		}
 		return e.tsOf(t.Underlying())
 	}
 	return "", false, fmt.Errorf("no TypeScript type for %s", t)
-}
-
-// constants are the values of the constants of type `t` in its package, quoted, in declaration order: a named string
-// type with constants (sql.fieldKind) is a union of them.
-func constants(t *types.Named) []string {
-	scope := t.Obj().Pkg().Scope()
-	var consts []*types.Const
-	for _, name := range scope.Names() {
-		if c, ok := scope.Lookup(name).(*types.Const); ok && types.Identical(c.Type(), t) && c.Val().Kind() == constant.String {
-			consts = append(consts, c)
-		}
-	}
-	sort.Slice(consts, func(i, j int) bool { return consts[i].Pos() < consts[j].Pos() })
-	values := make([]string, len(consts))
-	for i, c := range consts {
-		values[i] = "'" + constant.StringVal(c.Val()) + "'"
-	}
-	return values
 }
 
 // jsonTag is the key of a `json:"…"` tag and whether it says omitempty or omitzero (an enum, a struct).

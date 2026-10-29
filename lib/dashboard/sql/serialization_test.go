@@ -67,8 +67,8 @@ func TestFieldKindWireFormat(t *testing.T) {
 	if err := json.Unmarshal(b, &dto); err != nil {
 		t.Fatal(err)
 	}
-	if dto.Kind != "count" {
-		t.Errorf("kind: got %q want %q (wire: %s)", dto.Kind, "count", b)
+	if dto.Kind != kindCount {
+		t.Errorf("kind: got %v want count (wire: %s)", dto.Kind, b)
 	}
 	if dto.Alias != "logs" {
 		t.Errorf("alias: got %q want %q", dto.Alias, "logs")

@@ -24,13 +24,15 @@ import (
 // ---------------------------------------------------------------------------
 
 // fieldKind names the semantic constructor that produced a field.
-type fieldKind string
+//
+//dashica-gen:enum
+type fieldKind struct{ v string }
 
-const (
-	kindExpr       fieldKind = "expr"
-	kindCount      fieldKind = "count"
-	kindEnum       fieldKind = "enum"
-	kindAutoBucket fieldKind = "autoBucket"
+var (
+	kindExpr       = fieldKind{"expr"}
+	kindCount      = fieldKind{"count"}
+	kindEnum       = fieldKind{"enum"}
+	kindAutoBucket = fieldKind{"autoBucket"}
 )
 
 // sqlFieldDTO is the wire form of every SqlField. Not all keys apply to every
@@ -47,7 +49,7 @@ type sqlFieldDTO struct {
 
 func (f *fieldImpl) MarshalJSON() ([]byte, error) {
 	kind := f.kind
-	if kind == "" {
+	if kind == (fieldKind{}) {
 		kind = kindExpr
 	}
 	return json.Marshal(sqlFieldDTO{
@@ -86,22 +88,19 @@ func UnmarshalField(b []byte) (SqlField, error) {
 	if err := json.Unmarshal(b, &dto); err != nil {
 		return nil, err
 	}
-	switch dto.Kind {
-	case kindAutoBucket:
+	// an unknown kind is refused by fieldKind's UnmarshalJSON
+	if dto.Kind == kindAutoBucket {
 		return AutoBucketAs(dto.Column, dto.Alias), nil
-	case "", kindExpr, kindCount, kindEnum:
-		// Reconstruct the fieldImpl directly (not via the semantic constructor)
-		// so Build() output is byte-identical to the original regardless of
-		// kind; kind is metadata for codegen/editor only.
-		return &fieldImpl{
-			kind:                    dto.Kind,
-			definition:              dto.Definition,
-			alias:                   dto.Alias,
-			timestamp_xBucketSizeMs: dto.XBucketSizeMs,
-		}, nil
-	default:
-		return nil, fmt.Errorf("sql: unknown field kind %q", dto.Kind)
 	}
+	// Reconstruct the fieldImpl directly (not via the semantic constructor)
+	// so Build() output is byte-identical to the original regardless of
+	// kind; kind is metadata for codegen/editor only.
+	return &fieldImpl{
+		kind:                    dto.Kind,
+		definition:              dto.Definition,
+		alias:                   dto.Alias,
+		timestamp_xBucketSizeMs: dto.XBucketSizeMs,
+	}, nil
 }
 
 // marshalFields serializes a slice of SqlField to a slice of raw JSON envelopes.
@@ -140,13 +139,24 @@ func unmarshalFields(raw []json.RawMessage) ([]SqlField, error) {
 // SqlQueryable
 // ---------------------------------------------------------------------------
 
+// queryKind names which SqlQueryable a queryDTO is.
+//
+//dashica-gen:enum
+type queryKind struct{ v string }
+
+var (
+	queryTable = queryKind{"table"}
+	queryFile  = queryKind{"file"}
+	queryRaw   = queryKind{"raw"}
+)
+
 // queryDTO is the wire form of every SqlQueryable. The "kind" discriminator
 // selects which subset of keys is meaningful:
 //   - "table": table, select, where, groupBy, orderBy, limit, fillStep, ...
 //   - "file":  path, where, database, skipFilters, autoBucket
 //   - "raw":   sql, where, database, skipFilters, autoBucket
 type queryDTO struct {
-	Kind string `json:"kind"`
+	Kind queryKind `json:"kind"`
 
 	// table (SqlQuery)
 	Table                 string            `json:"table,omitempty"`
@@ -184,7 +194,7 @@ func (q *SqlQuery) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("orderBy: %w", err)
 	}
 	return json.Marshal(queryDTO{
-		Kind:                  "table",
+		Kind:                  queryTable,
 		Table:                 q.from,
 		Select:                sel,
 		GroupBy:               grp,
@@ -232,7 +242,7 @@ func (q *SqlQuery) UnmarshalJSON(b []byte) error {
 
 func (f *SqlFile) MarshalJSON() ([]byte, error) {
 	return json.Marshal(queryDTO{
-		Kind:        "file",
+		Kind:        queryFile,
 		Path:        f.path,
 		Where:       f.where,
 		Database:    f.database,
@@ -258,7 +268,7 @@ func (f *SqlFile) UnmarshalJSON(b []byte) error {
 
 func (s *SqlString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(queryDTO{
-		Kind:        "raw",
+		Kind:        queryRaw,
 		Sql:         s.content,
 		Where:       s.where,
 		Database:    s.database,
@@ -295,33 +305,34 @@ func UnmarshalQueryable(b []byte) (SqlQueryable, error) {
 	if isJSONNull(b) {
 		return nil, nil
 	}
+	// an unknown kind is refused by queryKind's UnmarshalJSON
 	var probe struct {
-		Kind string `json:"kind"`
+		Kind queryKind `json:"kind"`
 	}
 	if err := json.Unmarshal(b, &probe); err != nil {
 		return nil, err
 	}
 	switch probe.Kind {
-	case "table":
+	case queryTable:
 		var q SqlQuery
 		if err := json.Unmarshal(b, &q); err != nil {
 			return nil, err
 		}
 		return &q, nil
-	case "file":
+	case queryFile:
 		var f SqlFile
 		if err := json.Unmarshal(b, &f); err != nil {
 			return nil, err
 		}
 		return &f, nil
-	case "raw":
+	case queryRaw:
 		var s SqlString
 		if err := json.Unmarshal(b, &s); err != nil {
 			return nil, err
 		}
 		return &s, nil
 	default:
-		return nil, fmt.Errorf("sql: unknown queryable kind %q", probe.Kind)
+		return nil, fmt.Errorf("sql: a queryable needs its kind: table, file or raw")
 	}
 }
 
