@@ -43,12 +43,7 @@ func emitTS(m *model, dtoNames []string, outFile string) error {
 	for _, w := range m.widgets {
 		writeTSInterface(&e.out, w.TypeName+"Props", "Props of the "+w.Title+" widget (`"+w.WireName+"`).", propsFields(w))
 	}
-	e.out.WriteString("/** A widget as its type and props. */\nexport type Widget =")
-	for _, w := range m.widgets {
-		fmt.Fprintf(&e.out, "\n  | { type: '%s'; props: %sProps }", w.WireName, w.TypeName)
-	}
-	e.out.WriteString(";\n\nexport type WidgetType = Widget['type'];\n\n")
-	if err := e.widgetNode(); err != nil {
+	if err := e.widgetNode(m); err != nil {
 		return err
 	}
 	if err := e.interfaces(dtoNames...); err != nil {
@@ -227,19 +222,37 @@ func (e *dtoEmitter) emit(named *types.Named) error {
 	return nil
 }
 
-// widgetNode writes WidgetNode: the Widget union (widget.Node's type and props) with widget.Node's other fields.
-func (e *dtoEmitter) widgetNode() error {
+// widgetNode writes WidgetNode, widget.Node per widget type: its props, `dataUrl` when it has a handler, `children`
+// when it has children fields (both as Mount sets them).
+func (e *dtoEmitter) widgetNode(m *model) error {
 	named, err := e.lookup(widgetNode)
 	if err != nil {
 		return err
 	}
 	e.done[widgetNode] = true
-	body, err := e.fields(named, "type", "props")
-	if err != nil {
-		return err
+	fmt.Fprintf(&e.out, "/** %s */\nexport type WidgetNode =", e.typeDoc(named))
+	for _, w := range m.widgets {
+		fmt.Fprintf(&e.out, "\n  | { type: '%s'; props: %sProps", w.WireName, w.TypeName)
+		if w.HasHandler {
+			e.out.WriteString("; dataUrl: string")
+		}
+		if hasChildren(w) {
+			e.out.WriteString("; children?: Record<string, WidgetNode>")
+		}
+		e.out.WriteString(" }")
 	}
-	fmt.Fprintf(&e.out, "/** %s */\nexport type WidgetNode = Widget & {\n%s};\n\n", e.typeDoc(named), body)
+	e.out.WriteString(";\n\nexport type WidgetType = WidgetNode['type'];\n\n")
 	return nil
+}
+
+// hasChildren: `w` lays out other widgets (a grid's areas, a group's widgets); Mount puts them into its children.
+func hasChildren(w widgetInfo) bool {
+	for _, f := range w.Fields {
+		if f.Category == catChildrenList || f.Category == catChildrenMap {
+			return true
+		}
+	}
+	return false
 }
 
 // fields is the TypeScript members of the struct `named` without the JSON keys `skip`, with their docs.

@@ -55,11 +55,11 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   ) {}
 
   url(path: string): string {
+    if (!('dataUrl' in this.widget)) throw new Error(`the widget ${this.widget.type} has no data`);
     return `${this.widget.dataUrl}${path}?${this.state.requestParams()}`;
   }
 
   async query(signal?: AbortSignal): Promise<QueryResult> {
-    if (!this.widget.dataUrl) throw new Error(`the widget ${this.widget.type} has no data`);
     this.lastResult = await fetchQueryResult(this.url('/query'), signal);
     return this.lastResult;
   }

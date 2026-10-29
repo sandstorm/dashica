@@ -384,6 +384,7 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 		}
 		wi.Fields = append(wi.Fields, *fi)
 	}
+	_, wi.HasHandler = methods["Handler"]
 	if sig, ok := methods["computeProps"]; ok {
 		var err error
 		if wi.ComputedType, wi.ComputedFields, err = computedFields(pkg, sig, docs, enumTypes, enums); err != nil {

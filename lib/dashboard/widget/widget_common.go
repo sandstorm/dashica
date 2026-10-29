@@ -51,8 +51,8 @@ type withExplicitId interface {
 	explicitId() string
 }
 
-// Node describes a mounted widget in page.json: its type, its props (its fields tagged `dashica-gen:"client"`), the
-// URL of its handler, and its children.
+// Node describes a mounted widget in page.json: its type, its props (its fields tagged `dashica-gen:"client"` and what
+// its computeProps computes), the URL of its handler, and its children.
 type Node struct {
 	Type  string          `json:"type"`
 	Props json.RawMessage `json:"props"`

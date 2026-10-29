@@ -25,13 +25,13 @@ func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
 		"  stack?: StackOptions;",
 		"  order?: 'value' | 'sum' | 'appearance' | 'inside-out';",
 		"export interface GridProps {\n  /**",
-		"  | { type: 'timeBar'; props: TimeBarProps }",
 		// the wire forms of fields and colors from their Go DTOs, a named string type with constants as their union
 		"export interface SqlField {\n  kind: 'expr' | 'count' | 'enum' | 'autoBucket';",
 		"export interface ColorScale {\n  legend: boolean;",
-		// widget.Node as the Widget union with its other fields
-		"export type WidgetNode = Widget & {\n  /**",
-		"  children?: Record<string, WidgetNode>;\n};",
+		// widget.Node per widget type: a data URL for a widget with a handler, children for a container
+		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string }",
+		"  | { type: 'grid'; props: GridProps; children?: Record<string, WidgetNode> }",
+		"  | { type: 'markdown'; props: MarkdownProps }",
 		// a DTO after the structs it references, a widget.Node as WidgetNode
 		"export interface FilterButton {",
 		"  filterButtons: FilterButton[];\n  widgets: WidgetNode[];\n}",
