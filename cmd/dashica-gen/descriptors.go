@@ -51,7 +51,7 @@ func editorKind(cat fieldCategory) string {
 func descriptorLiteral(m *model) string {
 	var b strings.Builder
 	for _, w := range m.widgets {
-		fmt.Fprintf(&b, "%q: {Title: %q, Category: %q, HasQuery: %v, QueryKey: %q, Fields: []FieldDescriptor{\n",
+		fmt.Fprintf(&b, "%q: {Title: %q, Category: %s, HasQuery: %v, QueryKey: %q, Fields: []FieldDescriptor{\n",
 			w.WireName, w.Title, w.Category, hasQuery(w), queryKey(w))
 		for _, f := range w.Fields {
 			if f.Category == catQueryable {

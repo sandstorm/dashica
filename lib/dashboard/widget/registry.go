@@ -46,23 +46,24 @@ type WidgetFactory func() WidgetDefinition
 //     can reference parameters.
 //   - CategoryContainer: lays out child widgets (Grid, Collapsible Group) —
 //     also kept out of the flat list.
-type WidgetCategory string
+//
+//dashicagen:enum
+type WidgetCategory struct{ v string }
 
-const (
-	CategoryChart     WidgetCategory = "chart"
-	CategoryParameter WidgetCategory = "parameter"
-	CategoryContainer WidgetCategory = "container"
+var (
+	CategoryChart     = WidgetCategory{"chart"}
+	CategoryParameter = WidgetCategory{"parameter"}
+	CategoryContainer = WidgetCategory{"container"}
 )
 
 var (
 	registryMu     sync.RWMutex
 	typeToFactory  = map[string]WidgetFactory{}
-	typeToCategory = map[string]WidgetCategory{}
 	goTypeToName   = map[reflect.Type]string{}
 )
 
 // Register makes a widget type serializable under the given wire name, tagged
-// with its editor category. Called from init() in this package; panics on a
+// with its editor category (read by dashica-gen into the WidgetDescriptor). Called from init() in this package; panics on a
 // duplicate name or a nil factory result (both are programmer errors caught at
 // startup).
 func Register(typeName string, category WidgetCategory, factory WidgetFactory) {
@@ -81,7 +82,6 @@ func Register(typeName string, category WidgetCategory, factory WidgetFactory) {
 	}
 
 	typeToFactory[typeName] = factory
-	typeToCategory[typeName] = category
 	goTypeToName[goType] = typeName
 }
 

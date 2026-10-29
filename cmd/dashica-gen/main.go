@@ -100,7 +100,7 @@ type widgetInfo struct {
 	WireName    string // "timeBar"
 	TypeName    string // "TimeBar"
 	Title       string // "Time Bar" (camel-split, editor display label)
-	Category    string // "chart" | "parameter" | "container"
+	Category    string // the WidgetCategory var: "CategoryChart" | "CategoryParameter" | "CategoryContainer"
 	Constructor string // factory function name, e.g. "NewTimeBar" (gocode)
 	Fields      []fieldInfo
 	// ComputedType is the struct its method computeProps returns ("markdownComputed"), empty without one; its fields

@@ -40,12 +40,12 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 	// Category is declared at Register time and carried through the generator.
 	// The editor lists only "chart" widgets; parameter/container widgets are
 	// hidden from the add list but stay served (serializable / round-trippable).
-	for wire, wantCat := range map[string]string{
-		"timeBar":          "chart",
-		"textInput":        "parameter",
-		"checkboxGroup":    "parameter",
-		"grid":             "container",
-		"collapsibleGroup": "container",
+	for wire, wantCat := range map[string]widget.WidgetCategory{
+		"timeBar":          widget.CategoryChart,
+		"textInput":        widget.CategoryParameter,
+		"checkboxGroup":    widget.CategoryParameter,
+		"grid":             widget.CategoryContainer,
+		"collapsibleGroup": widget.CategoryContainer,
 	} {
 		w, ok := resp.Widgets[wire]
 		if !ok {
@@ -53,7 +53,7 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 			continue
 		}
 		if w.Category != wantCat {
-			t.Errorf("%s category = %q, want %q", wire, w.Category, wantCat)
+			t.Errorf("%s category = %v, want %v", wire, w.Category, wantCat)
 		}
 	}
 

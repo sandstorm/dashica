@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/constant"
 	"go/token"
 	"go/types"
 	"reflect"
@@ -83,7 +82,7 @@ func dirOf(file string) string {
 // registration is one Register("wire", Category, func() WidgetDefinition { return NewX(...) }) call.
 type registration struct {
 	wireName string
-	category string       // "chart" | "parameter" | "container"
+	category string       // the WidgetCategory var: "CategoryChart" | "CategoryParameter" | "CategoryContainer"
 	typeName string       // "TimeBar"
 	ctorName string       // factory function called in the funclit, e.g. "NewTimeBar"
 	named    *types.Named // the widget's named type
@@ -91,7 +90,7 @@ type registration struct {
 
 // findRegistrations scans for Register(<string>, <WidgetCategory>, <funclit>)
 // calls in the widget package's init(), resolving each factory's return type and
-// the category constant's string value. This mirrors the runtime registry
+// the name of its category var. This mirrors the runtime registry
 // exactly, so there is no second hand-maintained widget list.
 func findRegistrations(pkg *packages.Package) ([]registration, error) {
 	var out []registration
@@ -110,7 +109,7 @@ func findRegistrations(pkg *packages.Package) ([]registration, error) {
 				return true
 			}
 			wire := strings.Trim(lit.Value, `"`)
-			category := constStringValue(pkg, call.Args[1])
+			category := categoryVar(pkg, call.Args[1])
 			if category == "" {
 				return true
 			}
@@ -128,15 +127,20 @@ func findRegistrations(pkg *packages.Package) ([]registration, error) {
 	return out, nil
 }
 
-// constStringValue resolves a typed-string-constant expression (e.g. the
-// CategoryChart const) to its underlying string value, or "" if it is not a
-// constant string.
-func constStringValue(pkg *packages.Package, expr ast.Expr) string {
-	tv, ok := pkg.TypesInfo.Types[expr]
-	if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+// categoryVar is the name of the WidgetCategory var `expr` names (CategoryChart), or "" if it names none.
+func categoryVar(pkg *packages.Package, expr ast.Expr) string {
+	id, ok := expr.(*ast.Ident)
+	if !ok {
 		return ""
 	}
-	return constant.StringVal(tv.Value)
+	v, ok := pkg.TypesInfo.Uses[id].(*types.Var)
+	if !ok {
+		return ""
+	}
+	if named, ok := v.Type().(*types.Named); !ok || named.Obj().Name() != "WidgetCategory" {
+		return ""
+	}
+	return v.Name()
 }
 
 // factoryReturnType resolves the widget *types.Named produced by a factory
