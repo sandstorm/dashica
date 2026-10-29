@@ -116,7 +116,7 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 	//                                     ^^^^^ time window to display alert history
 	//
 	//      => this is done by the el.LatestTimestamp.SameDayAs(result.Timestamp) part.
-	if el := s.currentAlertStatus[id]; el != nil && el.LatestStatus == result.State && el.LatestTimestamp.SameDayAs(result.Timestamp) {
+	if el := s.currentAlertStatus[id]; el != nil && el.LatestStatus == result.State.String() && el.LatestTimestamp.SameDayAs(result.Timestamp) {
 		s.mu.RUnlock()
 		return nil
 	} else {
@@ -139,7 +139,7 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 	queryOpts.Parameters["alert_id_group"] = id.Group
 	queryOpts.Parameters["alert_id_key"] = id.Key
 	queryOpts.Parameters["timestamp"] = result.Timestamp.ToDbStr()
-	queryOpts.Parameters["status"] = result.State // TODO: state vs status
+	queryOpts.Parameters["status"] = result.State.String() // TODO: state vs status
 	// queryOpts.Parameters["alert_result_timestamp"] = "" // TODO IMPLEMENT ME??
 	queryOpts.Parameters["message"] = result.Message
 
@@ -156,13 +156,13 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 			AlertIdGroup:    id.Group,
 			AlertIdKey:      id.Key,
 			LatestTimestamp: result.Timestamp,
-			LatestStatus:    result.State,
+			LatestStatus:    result.State.String(),
 			LatestMessage:   result.Message,
 		}
 	} else {
 		// Update existing entry
 		s.currentAlertStatus[id].LatestTimestamp = result.Timestamp
-		s.currentAlertStatus[id].LatestStatus = result.State
+		s.currentAlertStatus[id].LatestStatus = result.State.String()
 		s.currentAlertStatus[id].LatestMessage = result.Message
 	}
 	s.mu.Unlock()

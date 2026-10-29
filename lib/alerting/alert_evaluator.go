@@ -3,7 +3,6 @@ package alerting
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -18,17 +17,19 @@ type AlertEvaluator struct {
 	timeProvider      config.TimeProvider
 }
 
-const AlertStateError = "error"
+// AlertState is what an evaluated alert says; its String() is stored as the status in dashica_alert_events.
+//
+//dashicagen:enum
+type AlertState struct{ v string }
 
-const AlertStateWarn = "warn"
-
-const AlertStateOk = "OK"
-
-var allAlertStates = []string{AlertStateError, AlertStateWarn, AlertStateOk}
+var (
+	AlertStateError = AlertState{"error"}
+	AlertStateWarn  = AlertState{"warn"}
+	AlertStateOk    = AlertState{"OK"}
+)
 
 type AlertResult struct {
-	// State is one of AlertStateError, AlertStateWarn, AlertStateOk
-	State   string
+	State   AlertState
 	Message string
 
 	// Execution Timestamp
@@ -154,10 +155,10 @@ func (e AlertEvaluator) zeroOrSingleRowWithTimestamp(resultRows []alertResultRow
 	}
 
 	alertResult := resultFn(value)
-	if !slices.Contains(allAlertStates, alertResult.State) {
+	if alertResult.State == (AlertState{}) {
 		return e.withTimestamp(&AlertResult{
 			State:   AlertStateError,
-			Message: fmt.Sprintf("INTERNAL ERROR: alert state '%s' evaluated, but only %v supported", alertResult.State, allAlertStates),
+			Message: "INTERNAL ERROR: no alert state evaluated",
 		})
 	}
 
