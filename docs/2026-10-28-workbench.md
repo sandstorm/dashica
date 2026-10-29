@@ -589,6 +589,12 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | Bookmarked inner URLs (debug links) break | accepted; entry-point URLs stay |
 | Playwright cannot run in the sandbox | specs written by the agent, run by the maintainer |
 
+**Bugs the ports keep:** a chart is ported as it behaves; a bug found on the way is listed here and fixed in a commit of
+its own.
+
+- Bar horizontal: the log scale (`VIEW_LOGARITHMIC`) is on the y axis, the categories, not on x, the measure
+  (`frontend/extensions/bar-horizontal/bar-horizontal.ts`).
+
 ## 6. Later (out of scope, but the design must not block it)
 
 - **Explore rebuilt** as extensions on `ExploreModel`: widget tree left, inspector right, Data / Go / JSON bottom, while

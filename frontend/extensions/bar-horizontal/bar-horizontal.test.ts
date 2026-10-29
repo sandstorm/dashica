@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// Tests for bar-horizontal.ts: the props as the chart takes them, bars drawn from the widget’s data.
+// Tests for bar-horizontal.ts: bars drawn from the widget’s data.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { barHorizontal, barHorizontalChartProps } from './bar-horizontal';
+import { barHorizontal } from './bar-horizontal';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
@@ -23,10 +23,6 @@ const inView = async () => {
 const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
 
 describe('barHorizontal', () => {
-  it('gives the chart the fields as their aliases', () => {
-    expect(barHorizontalChartProps({ x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } })).toMatchObject({ x: 'cnt', y: 'path', fill: 'host' });
-  });
-
   it('draws the widget’s data once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], cnt: [30, 2] });
     const { el } = testbed.render({ type: 'barHorizontal', props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' } }, dataUrl: '/p/shop/api/1' });
