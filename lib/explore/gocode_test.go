@@ -33,7 +33,7 @@ func sampleDashboard() *dashboard.Builder {
 			Fill(sql.Enum("level")).
 			Width(600).MarginLeft(40).
 			TipChannels(map[string]string{"level": "Level"}).
-			Color(color.ColorLegend(true), color.ColorMapping("error", "#E74C3C")).
+			Color(color.ColorLegend(true), color.ColorMapping("error", "#E74C3C"), color.ScaleCategorical, color.SchemeGreens).
 			StackOptions(widget.StackOptions{Order: widget.OrderSum, Offset: widget.OffsetExpand, Reverse: true})).
 		Widget(widget.NewTimeLine(baseQuery).
 			Title("Line").X(sql.AutoBucket("timestamp")).Y(sql.Count()).
@@ -43,7 +43,7 @@ func sampleDashboard() *dashboard.Builder {
 		Widget(widget.NewBarHorizontal(baseQuery).X(sql.Count()).Y(sql.Enum("level"))).
 		Widget(widget.NewTimeHeatmap(baseQuery).X(sql.AutoBucket("timestamp")).Y(sql.Enum("level"))).
 		Widget(widget.NewTimeHeatmapOrdinal(baseQuery).
-			X(sql.AutoBucket("timestamp")).Y(sql.Enum("level")).ColorScheme("reds")).
+			X(sql.AutoBucket("timestamp")).Y(sql.Enum("level")).ColorScheme(color.SchemeReds)).
 		Widget(widget.NewStats(baseQuery).TitleField(sql.Field("level")).FillField(sql.Count())).
 		Widget(widget.NewTable(baseQuery).Title("Rows").Limit(50)).
 		Widget(widget.NewMarkdown().Title("Docs").Content("# Hello")).
@@ -83,10 +83,12 @@ func TestGenerateDashboardCode_fragments(t *testing.T) {
 		`sql.Enum("level")`,             // idiomatic enum, not baked ::String
 		"color.ColorLegend(true)",
 		`color.ColorMapping("error", "#E74C3C")`,
+		"color.ScaleCategorical",
+		"color.SchemeGreens",
 		"widget.StackOptions{Order: widget.OrderSum, Offset: widget.OffsetExpand, Reverse: true}",
 		"SortByY(true)",
 		`WithFillStep("toIntervalHour(1)")`,
-		"ColorScheme(\"reds\")",
+		"ColorScheme(color.SchemeReds)",
 		`Area("a",`, // grid child via Area(name, widget)
 		"widget.NewTable(",
 		"Widget(", // collapsibleGroup child via Widget(widget)

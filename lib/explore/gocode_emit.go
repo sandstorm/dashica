@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
@@ -149,12 +150,12 @@ type queryWire struct {
 
 // colorWire mirrors color's colorScaleDTO.
 type colorWire struct {
-	Legend  bool     `json:"legend"`
-	Domain  []string `json:"domain"`
-	Range   []string `json:"range"`
-	Unknown string   `json:"unknown"`
-	Type    string   `json:"type"`
-	Scheme  string   `json:"scheme"`
+	Legend  bool            `json:"legend"`
+	Domain  []string        `json:"domain"`
+	Range   []string        `json:"range"`
+	Unknown string          `json:"unknown"`
+	Type    color.ScaleType `json:"type"`
+	Scheme  color.Scheme    `json:"scheme"`
 }
 
 const defaultColorUnknown = "#8E44AD" // color.New default; omitted from emitted opts
@@ -618,11 +619,11 @@ func (g *generator) emitColorOptions(raw []byte) (string, error) {
 	if c.Unknown != "" && c.Unknown != defaultColorUnknown {
 		opts = append(opts, fmt.Sprintf("color.ColorUnknown(%s)", strconv.Quote(c.Unknown)))
 	}
-	if c.Type != "" {
-		opts = append(opts, fmt.Sprintf("color.ColorType(%s)", strconv.Quote(c.Type)))
+	if c.Type != (color.ScaleType{}) {
+		opts = append(opts, fmt.Sprintf("%#v", c.Type))
 	}
-	if c.Scheme != "" {
-		opts = append(opts, fmt.Sprintf("color.ColorScheme(%s)", strconv.Quote(c.Scheme)))
+	if c.Scheme != (color.Scheme{}) {
+		opts = append(opts, fmt.Sprintf("%#v", c.Scheme))
 	}
 	return joinOptsMultiline(opts), nil
 }

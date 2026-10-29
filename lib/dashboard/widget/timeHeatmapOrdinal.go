@@ -32,11 +32,11 @@ type TimeHeatmapOrdinal struct {
 	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
 	marginLeft *int `dashica-gen:"client"`
-	// colorScheme names an Observable Plot color scheme for the fill scale
-	// (e.g. "blues", "inferno"). Zero value: the dashboard's default
+	// colorScheme is the Observable Plot color scheme of the fill scale
+	// (color.SchemeBlues, color.SchemeInferno). Zero value: the dashboard's default
 	// light/dark scheme. Ignored when color is set.
 	// Docs: https://observablehq.com/plot/features/scales#color-scales
-	colorScheme string `dashica-gen:"client"`
+	colorScheme color.Scheme `dashica-gen:"client"`
 	// color configures the color scale used for fill; takes precedence over colorScheme.
 	color *color.ColorScale `dashica-gen:"client"`
 	// xBucketSize is the width of each time bucket on the x axis, in milliseconds.
@@ -94,7 +94,8 @@ func (h *TimeHeatmapOrdinal) MarginLeft(margin int) *TimeHeatmapOrdinal {
 	return &cloned
 }
 
-func (h *TimeHeatmapOrdinal) ColorScheme(scheme string) *TimeHeatmapOrdinal {
+// ColorScheme sets the color scheme of the fill scale (color.SchemeBlues).
+func (h *TimeHeatmapOrdinal) ColorScheme(scheme color.Scheme) *TimeHeatmapOrdinal {
 	cloned := *h
 	cloned.colorScheme = scheme
 	return &cloned
@@ -172,8 +173,8 @@ func (h *TimeHeatmapOrdinal) buildChartProps() map[string]interface{} {
 	if h.fill != nil {
 		props["fill"] = (*h.fill).Alias()
 	}
-	if h.colorScheme != "" {
-		props["color"] = map[string]string{"scheme": h.colorScheme}
+	if h.colorScheme != (color.Scheme{}) {
+		props["color"] = map[string]string{"scheme": h.colorScheme.String()}
 	}
 	if h.color != nil {
 		props["color"] = h.color

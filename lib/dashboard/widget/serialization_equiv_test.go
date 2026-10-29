@@ -102,7 +102,7 @@ func TestRoundTrip_stableJSON(t *testing.T) {
 			Title("Heat").
 			X(sql.AutoBucket("timestamp")).
 			Y(sql.Enum("level")).
-			ColorScheme("reds"),
+			ColorScheme(color.SchemeReds),
 		"stats": NewStats(baseQuery).
 			TitleField(sql.Field("level")).
 			FillField(sql.Count()),

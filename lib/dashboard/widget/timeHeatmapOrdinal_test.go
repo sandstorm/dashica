@@ -115,7 +115,7 @@ func TestTimeHeatmapOrdinal_BuildChartProps(t *testing.T) {
 				return h.X(sql.Timestamp15Min()).
 					Y(sql.Field("status")).
 					YBucketSize(100).
-					ColorScheme("viridis")
+					ColorScheme(color.SchemeViridis)
 			},
 			expected: map[string]interface{}{
 				"x":           "time",
@@ -123,7 +123,7 @@ func TestTimeHeatmapOrdinal_BuildChartProps(t *testing.T) {
 				"y":           "status",
 				"yBucketSize": float64(100),
 				"color": map[string]interface{}{
-					"scheme": "viridis",
+					"scheme": "Viridis",
 				},
 			},
 		},

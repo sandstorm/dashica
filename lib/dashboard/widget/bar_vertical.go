@@ -46,7 +46,7 @@ type BarVertical struct {
 	marginTop *int `dashica-gen:"client"`
 	// colorScheme is currently unused by this widget; reserved for a future
 	// direct color-scheme override.
-	colorScheme string `dashica-gen:"client"`
+	colorScheme color.Scheme `dashica-gen:"client"`
 	// color configures the color scale used for fill. Zero value: an ordinal
 	// scale with the observable10 scheme, shown with a legend.
 	color *color.ColorScale `dashica-gen:"client"`

@@ -46,8 +46,8 @@ describe('heatmap', () => {
 
   it('gives the ordinal heatmap its color scheme as the color scale, its color scale first', () => {
     const y = { kind: 'enum' as const, alias: 'status' };
-    expect(timeHeatmapOrdinalChartProps({ x, y, colorScheme: 'inferno' }).color).toEqual({ scheme: 'inferno' });
-    expect(timeHeatmapOrdinalChartProps({ x, y, colorScheme: 'inferno', color: { legend: true, scheme: 'blues' } }).color).toEqual({ legend: true, scheme: 'blues' });
+    expect(timeHeatmapOrdinalChartProps({ x, y, colorScheme: 'Inferno' }).color).toEqual({ scheme: 'Inferno' });
+    expect(timeHeatmapOrdinalChartProps({ x, y, colorScheme: 'Inferno', color: { legend: true, scheme: 'Blues' } }).color).toEqual({ legend: true, scheme: 'Blues' });
   });
 
   it('draws an ordinal heatmap’s cells once it is in view', async () => {
