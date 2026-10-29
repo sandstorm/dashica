@@ -2,8 +2,8 @@
 import * as Plot from "@observablehq/plot";
 import type {ChannelValue, ChannelValueSpec, QueryResult, ViewOptions} from "../types";
 //import {decorateChart} from "../component/decorateChart.js";
-import {SchemaAnalyzer} from "../util/schema";
-import {_brushMark} from "./timeBrush_.js";
+import {SchemaAnalyzer} from "../extensions/chart-library/schema";
+import {timeBrush} from "../extensions/chart-library/time-brush";
 import type {ScaleOptions} from "@observablehq/plot/src/scales";
 import type {Markish} from "@observablehq/plot";
 import type {TipOptions} from "@observablehq/plot/src/marks/tip";
@@ -49,6 +49,8 @@ interface ChartProps {
 
     x: ChannelValueSpec,
     xBucketSize: number,
+    // the time range the viewer drags across the chart
+    onTimeSelect: (from: Date, to: Date) => void,
     y: ChannelValueSpec,
 
     /**
@@ -163,7 +165,7 @@ function _bars(data: QueryResult, props: ChartProps) {
                 // HEURISTIC to determine whether to add an inset or not
                 insetLeft: numberOfUniqueXValues === undefined || !props.width || props.fx ? 0 : (numberOfUniqueXValues * 2 < props.width ? 1 : 0), // a bit of padding between the bars. - HEURISTIC
             }),
-            _brushMark,
+            timeBrush(props.onTimeSelect),
             Plot.ruleY([0]),
             ...(props.extraMarks || []),
             // Alert threshold lines from X-Dashica-Alert-If header

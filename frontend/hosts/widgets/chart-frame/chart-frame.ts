@@ -19,6 +19,8 @@ export interface DrawOptions {
   readonly width: number;
   readonly colorSchemeDark: boolean;
   readonly viewOptions: ViewOptions;
+  /** Sets the page's time range to the range the viewer dragged across a time chart. */
+  readonly onTimeSelect: (from: Date, to: Date) => void;
 }
 
 /**
@@ -101,6 +103,8 @@ export class ChartFrame {
 
   readonly #onSchemeChange = () => void this.#draw();
 
+  readonly #onTimeSelect = (from: Date, to: Date) => this.#ctx.state.time.setCustom(from, to);
+
   async #query(): Promise<void> {
     this.#running?.abort();
     const controller = (this.#running = new AbortController());
@@ -120,7 +124,12 @@ export class ChartFrame {
     const turn = ++this.#drawn;
     const viewOptions: ViewOptions = this.#ctx.state.viewOptions.logScale ? ['VIEW_LOGARITHMIC'] : [];
     try {
-      const chart = await this.#options.draw(this.#result, { width: this.#width, colorSchemeDark: this.#darkScheme.matches, viewOptions });
+      const chart = await this.#options.draw(this.#result, {
+        width: this.#width,
+        colorSchemeDark: this.#darkScheme.matches,
+        viewOptions,
+        onTimeSelect: this.#onTimeSelect,
+      });
       if (turn !== this.#drawn) return;
       this.#body.replaceChildren(chart);
       this.#shimmer.hidden = true;

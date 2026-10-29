@@ -2,8 +2,8 @@
 import * as Plot from "@observablehq/plot";
 import type {ChannelValueSpec, QueryResult, ViewOptions} from "../types";
 //import {decorateChart} from "../component/decorateChart.js";
-import {SchemaAnalyzer} from "../util/schema.js";
-import {_brushMark} from "./timeBrush_.js";
+import {SchemaAnalyzer} from "../extensions/chart-library/schema";
+import {timeBrush} from "../extensions/chart-library/time-brush";
 
 interface ChartProps {
     viewOptions?: ViewOptions;
@@ -27,6 +27,8 @@ interface ChartProps {
 
     x: ChannelValueSpec,
     xBucketSize: number,
+    // the time range the viewer drags across the chart
+    onTimeSelect: (from: Date, to: Date) => void,
     y: ChannelValueSpec,
     yBucketSize: number,
 
@@ -79,7 +81,7 @@ async function _heatmapOrdinal(data: QueryResult, props: ChartProps) {
                 tip: true,
                 fill: props.fill,
             }),
-            _brushMark,
+            timeBrush(props.onTimeSelect),
             Plot.ruleY([0])
         ]
     })

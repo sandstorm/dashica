@@ -1,8 +1,8 @@
 // UNMIGRATED (workbench): port, rewrite or delete, then remove this line. See docs/2026-10-28-workbench.md §5.
 import * as Plot from "@observablehq/plot";
 import type {ChannelValue, ChannelValueSpec, QueryResult, ViewOptions} from "../types";
-import {SchemaAnalyzer} from "../util/schema";
-import {_brushMark} from "./timeBrush_.js";
+import {SchemaAnalyzer} from "../extensions/chart-library/schema";
+import {timeBrush} from "../extensions/chart-library/time-brush";
 import type {ScaleOptions} from "@observablehq/plot/src/scales";
 import type {Markish} from "@observablehq/plot";
 import type {TipOptions} from "@observablehq/plot/src/marks/tip";
@@ -21,6 +21,8 @@ interface ChartProps {
 
     x: ChannelValueSpec;
     xBucketSize: number;
+    // the time range the viewer drags across the chart
+    onTimeSelect: (from: Date, to: Date) => void;
     y: ChannelValueSpec;
 
     color?: ScaleOptions;
@@ -93,7 +95,7 @@ export function timeLine(data: QueryResult, props: ChartProps) {
                 clip: true,
                 tip: props.tip !== undefined ? props.tip : true,
             }),
-            _brushMark,
+            timeBrush(props.onTimeSelect),
             Plot.ruleY([0]),
             ...(props.extraMarks || []),
         ].filter(Boolean),

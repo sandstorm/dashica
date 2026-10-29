@@ -120,6 +120,12 @@ As in Zwiebelfisch: an extension is `{ id, contributes, activate(context) }`; it
 points, pushes every registration (a `Disposable`) into `context.subscriptions`, and never imports another extension.
 Hosts keep only mechanism.
 
+What several extensions need for drawing lives in a library folder `frontend/extensions/<name>-library/`: stateless
+helpers, no `Extension`, no state of its own at module level (what it builds may keep the state of the drawn element,
+a table's search box). Extensions may import a `-library` folder. `chart-library` holds the column check
+(`SchemaAnalyzer`), the time selection of the time charts (`timeBrush`: for now a drag sets the page's time range,
+through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and, later, the table.
+
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |

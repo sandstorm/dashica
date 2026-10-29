@@ -99,7 +99,9 @@ Alpine.data('chart', () => ({
             try {
                 if (this._queryResult) {
                     const viewOptions = this.$store.timeState.logScale ? ['VIEW_LOGARITHMIC'] : [];
-                    const finalChartProps = {...chartProps, width: this._width, colorSchemeDark: this._colorSchemeDark, viewOptions};
+                    // a time chart's dragged time range, for the time range picker (store.ts)
+                    const onTimeSelect = (from: Date, to: Date) => window.dispatchEvent(new CustomEvent('dashica-set-time', {detail: {from, to}}));
+                    const finalChartProps = {...chartProps, width: this._width, colorSchemeDark: this._colorSchemeDark, viewOptions, onTimeSelect};
                     const chart = await charts[chartType](this._queryResult, finalChartProps);
                     this.$refs.chartContainer.innerHTML = '';
                     this.$refs.chartContainer.appendChild(chart);

@@ -103,6 +103,7 @@ describe('WidgetsHost', () => {
 
 describe('ChartFrame', () => {
   const drawn: { rows: number; width: number; log: boolean }[] = [];
+  let selectTime: (from: Date, to: Date) => void;
 
   beforeEach(() => {
     drawn.length = 0;
@@ -112,7 +113,8 @@ describe('ChartFrame', () => {
         new ChartFrame(el, ctx, {
           title: widget.props.title,
           height: 200,
-          draw(result, { width, viewOptions }) {
+          draw(result, { width, viewOptions, onTimeSelect }) {
+            selectTime = onTimeSelect;
             drawn.push({ rows: result.numRows, width, log: viewOptions.includes('VIEW_LOGARITHMIC') });
             const chart = document.createElement('figure');
             chart.textContent = `${result.numRows} rows`;
@@ -158,6 +160,16 @@ describe('ChartFrame', () => {
     testbed.scrollIntoView();
     await settle();
     expect(body(el).textContent).toBe('Unknown identifier status');
+  });
+
+  it('sets the page’s time range to the range dragged across the chart', async () => {
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    testbed.render(requests);
+    testbed.scrollIntoView();
+    await settle();
+    selectTime(new Date(2026, 9, 29, 10, 0), new Date(2026, 9, 29, 11, 30));
+    expect(testbed.query.time.range).toBe('custom');
+    expect(testbed.query.time.custom).toBe('2026-10-29 10:00 to 2026-10-29 11:30');
   });
 
   it('opens the widget’s menu from its button', () => {

@@ -2,7 +2,7 @@
 import {html} from "htl";
 //import {decorateChart} from "../component/decorateChart.js";
 import type {QueryResult} from "../types";
-import {SchemaAnalyzer} from "../util/schema.js";
+import {SchemaAnalyzer} from "../extensions/chart-library/schema";
 
 import './stats.css';
 
