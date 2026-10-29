@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
 	"path"
@@ -26,10 +25,10 @@ import (
 // It is intended for documentation and static content, not for Observable-style dashboards.
 type Markdown struct {
 	// content is the markdown source rendered inline, set via Content().
-	content string `dashica-gen:"client"`
+	content string
 	// file is the project-relative path to a markdown file to load and
 	// render, set via File(). Ignored for untrusted content.
-	file string `dashica-gen:"client"`
+	file string
 	// title is the optional title shown above the rendered markdown.
 	title string `dashica-gen:"client"`
 	// assets is a runtime filesystem handle, not serializable data — skipped by
@@ -93,21 +92,6 @@ type markdownComputed struct {
 func (m *Markdown) computeProps(ctx *rendering.DashboardContext) (markdownComputed, error) {
 	html, err := m.renderHTML(ctx.Deps.FileSystem, ctx.UntrustedContent)
 	return markdownComputed{html: html}, err
-}
-
-// Handler serves the markdown rendered to HTML at "/html", for a compiled (trusted) dashboard.
-func (m *Markdown) Handler(deps rendering.Dependencies) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /html", func(w http.ResponseWriter, r *http.Request) {
-		htmlOut, err := m.renderHTML(deps.FileSystem, false)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, htmlOut)
-	})
-	return mux
 }
 
 // renderHTML is the markdown (its content, else its file from the project filesystem `fsys`) as HTML.

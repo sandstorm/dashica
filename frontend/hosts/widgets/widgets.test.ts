@@ -49,11 +49,11 @@ describe('WidgetsHost', () => {
       Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child))),
     );
     testbed.widgets.registerWidget('markdown', (el, widget) => {
-      el.textContent = widget.props.content ?? '';
+      el.textContent = widget.props.title ?? '';
       return new Disposable(() => {});
     });
-    const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { content: '# Wetell' } } } };
-    expect(testbed.render(grid).el.textContent).toBe('# Wetell');
+    const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { title: 'Wetell' } } } };
+    expect(testbed.render(grid).el.textContent).toBe('Wetell');
   });
 
   describe('the widget context', () => {

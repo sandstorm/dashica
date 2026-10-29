@@ -67,14 +67,28 @@ POST /p/wetell/action/<id>         a Go action (§3.9)                          
   (`history.pushState`). Panel state survives navigation; the time range does not (§3.7).
 - **Data per widget:** each chart fetches from its own handler URL, in parallel, as today. Explore (later) keeps an
   inline POST. Both sit behind `ctx.query()` (§3.6).
-- **Markdown** stays rendered by goldmark on the server; its handler serves the HTML (`<dataUrl>/html`), so a file with
-  inlined images does not swell `page.json`. The schema table's handler serves its `SHOW CREATE TABLE` the same way.
+- **Markdown** stays rendered by goldmark on the server, once when the page is mounted: its HTML is in its props
+  (`html`, from its `computeProps`: a struct of what the server computes, beside the widget's definition, §3.3). The schema table's handler serves its
+  `SHOW CREATE TABLE` (`<dataUrl>/schema`), as it asks ClickHouse.
 
 ### 3.3 Type-safe contract: `dashica-gen` emits TS too
 
 Go is the source of truth. `dashica-gen` additionally emits TS types: a discriminated union `Widget = {type:
 'timeBar', props: TimeBarProps} | …` plus the DTOs (`page.json`, `workbench.json`, actions). Go tests write golden
 JSON fixtures, TS tests read them, so drift fails a test on both sides.
+
+A widget's props are its fields tagged `dashica-gen:"client"`, plus what the server computes when the page is
+mounted: a widget with a method `computeProps(ctx *rendering.DashboardContext) (<struct>, error)` gets that
+struct's fields too, in its props and its TS props. They stay out of its definition, so out of what Explore stores,
+the editor and gocode:
+
+```go
+// markdownComputed is what the server computes for a markdown when the page is mounted.
+type markdownComputed struct {
+	// html is content or file rendered to HTML.
+	html string
+}
+```
 
 ### 3.4 Workbench regions
 
@@ -437,7 +451,7 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 |---|---|
 | `dashica.go` | `GET /workbench.json` (menu groups); menu data stays as today (`RegisterDashboardGroup`) |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
-| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown and the schema table serve their HTML / DDL from their handler; `.FilterAs` / `.AcceptFilter` |
+| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; `.FilterAs` / `.AcceptFilter` |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns, collects filter fields; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; filters → one WHERE fragment of declared expressions with bound values into `{{DASHICA_FILTERS}}` / `Where` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
@@ -454,7 +468,7 @@ A widget has at most three things the page needs, and each is a standard library
 | What | Interface | Who |
 |---|---|---|
 | props | its fields tagged `dashica-gen:"client"` (the generated `marshalProps`) | every widget |
-| data | `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | the nine charts (`queryHandler`), `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `Markdown` (`/html`), `SchemaTable` (`/schema`) |
+| data | `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | the nine charts (`queryHandler`), `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `SchemaTable` (`/schema`) |
 | children | `Children() iter.Seq2[string, WidgetDefinition]` | `Grid` (areas by name, sorted), `CollapsibleGroup` ("0", "1", …) |
 
 Everything else is **one** framework function, `widget.Mount`: the type name from the registry, the id, the URL, the
@@ -540,7 +554,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 5b | Client rendering: widget host, one extension per widget type (wrapping the existing `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
 | 5b.1 | `query` host: time, auto refresh, SQL filter, params, view options, synced with the URL | dashboards (not used yet) |
 | 5b.2 | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `ChartFrame` | dashboards (not used yet) |
-| 5b.3 | Go: markdown and schema table serve their HTML from their handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
+| 5b.3 | Go: markdown's HTML in its props (`computeProps`), the schema table serves its DDL from its handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
 | 5b.4 | widget extensions: grid, collapsible, markdown, schema table | dashboards (not used yet) |
 | 5b.5 | widget extensions: the charts, stats, table, alerts (wrapping `frontend/chart/*`) | dashboards (not used yet) |
 | 5b.6 | widget extensions: checkbox group, text input, Speedscope link | dashboards (not used yet) |

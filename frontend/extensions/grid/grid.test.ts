@@ -16,14 +16,12 @@ afterEach(() => testbed.dispose());
 
 describe('grid', () => {
   it('lays out its areas as the template draws them, each area’s widget in its cell', async () => {
-    testbed.serveText('/p/wetell/api/1/html', '<p>Requests</p>');
-    testbed.serveText('/p/wetell/api/2/html', '<p>Errors</p>');
     const { el } = testbed.render({
       type: 'grid',
       props: { template: ['a b', 'c c'], gap: '4px' },
       children: {
-        b: { type: 'markdown', props: {}, dataUrl: '/p/wetell/api/2' },
-        a: { type: 'markdown', props: {}, dataUrl: '/p/wetell/api/1' },
+        b: { type: 'markdown', props: { html: '<p>Errors</p>' } },
+        a: { type: 'markdown', props: { html: '<p>Requests</p>' } },
       },
     });
     await settle();
