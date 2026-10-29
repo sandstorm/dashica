@@ -40,7 +40,7 @@ const (
 type sqlFieldDTO struct {
 	Kind          fieldKind `json:"kind"`
 	Definition    string    `json:"definition,omitempty"`
-	Alias         string    `json:"alias,omitempty"`
+	Alias         string    `json:"alias"`
 	Column        string    `json:"column,omitempty"`
 	XBucketSizeMs int64     `json:"xBucketSizeMs,omitempty"`
 }
