@@ -20,7 +20,7 @@ export type WidgetOf<T extends WidgetType> = Extract<WidgetNode, { type: T }>;
 
 export interface WidgetRenderer<T extends WidgetType> {
   /** Fills `el` with `widget`; disposing the result stops what it started (queries, listeners). `el` is emptied after. */
-  render(el: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext): Disposable;
+  render(el: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext): { dispose(): unknown };
 }
 
 /** What a widget's renderer gets to work with. */
