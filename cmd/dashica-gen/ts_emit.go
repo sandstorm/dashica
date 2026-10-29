@@ -41,7 +41,7 @@ func emitTS(m *model, dtoNames []string, outFile string) error {
 		writeTSInterface(&e.out, g.GroupType, "", g.Group)
 	}
 	for _, w := range m.widgets {
-		writeTSInterface(&e.out, w.TypeName+"Props", "Props of the "+w.Title+" widget (`"+w.WireName+"`).", propsFields(w.Fields))
+		writeTSInterface(&e.out, w.TypeName+"Props", "Props of the "+w.Title+" widget (`"+w.WireName+"`).", propsFields(w))
 	}
 	e.out.WriteString("/** A widget as its type and props. */\nexport type Widget =")
 	for _, w := range m.widgets {

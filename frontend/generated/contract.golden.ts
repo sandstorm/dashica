@@ -31,7 +31,8 @@ export const page = {
     {
       "type": "markdown",
       "props": {
-        "content": "# Wetell"
+        "content": "# Wetell",
+        "html": "\u003ch1 id=\"wetell\"\u003eWetell\u003c/h1\u003e\n"
       },
       "dataUrl": "/p/wetell/api/1"
     },

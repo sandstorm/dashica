@@ -384,7 +384,45 @@ func classifyWidget(pkg *packages.Package, r registration, docs map[string]strin
 		}
 		wi.Fields = append(wi.Fields, *fi)
 	}
+	if sig, ok := methods["computeProps"]; ok {
+		var err error
+		if wi.ComputedType, wi.ComputedFields, err = computedFields(pkg, sig, docs, enumTypes, enums); err != nil {
+			return nil, fmt.Errorf("computeProps: %w", err)
+		}
+	}
 	return wi, nil
+}
+
+// computedFields are the fields of the struct a widget's computeProps returns: its signature must be
+// `computeProps(ctx *rendering.DashboardContext) (<struct of this package>, error)`.
+func computedFields(pkg *packages.Package, sig *types.Signature, docs map[string]string, enumTypes map[string]bool, enums map[string][]enumValue) (string, []fieldInfo, error) {
+	const want = "want computeProps(ctx *rendering.DashboardContext) (<struct of this package>, error)"
+	if sig.Params().Len() != 1 || sig.Results().Len() != 2 || sig.Results().At(1).Type().String() != "error" {
+		return "", nil, fmt.Errorf("%s, got %s", want, sig)
+	}
+	ctx, ok := sig.Params().At(0).Type().(*types.Pointer)
+	if !ok || !isNamedFrom(ctx.Elem(), "rendering", "DashboardContext") {
+		return "", nil, fmt.Errorf("%s, got %s", want, sig)
+	}
+	named, ok := sig.Results().At(0).Type().(*types.Named)
+	if !ok || named.Obj().Pkg() != pkg.Types {
+		return "", nil, fmt.Errorf("%s, got %s", want, sig)
+	}
+	st, ok := named.Underlying().(*types.Struct)
+	if !ok {
+		return "", nil, fmt.Errorf("%s, got %s", want, sig)
+	}
+	var fields []fieldInfo
+	for i := 0; i < st.NumFields(); i++ {
+		fi, skip, err := classifyField(pkg, named.Obj().Name(), st.Field(i), st.Tag(i), docs, enumTypes, enums, nil, nil)
+		if err != nil {
+			return "", nil, fmt.Errorf("field %q: %w", st.Field(i).Name(), err)
+		}
+		if !skip {
+			fields = append(fields, *fi)
+		}
+	}
+	return named.Obj().Name(), fields, nil
 }
 
 // classifyField classifies one struct field. Returns (info, skip, error).

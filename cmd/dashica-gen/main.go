@@ -92,6 +92,10 @@ type widgetInfo struct {
 	Category    string // "chart" | "parameter" | "container"
 	Constructor string // factory function name, e.g. "NewTimeBar" (gocode)
 	Fields      []fieldInfo
+	// ComputedType is the struct its method computeProps returns ("markdownComputed"), empty without one; its fields
+	// (ComputedFields) are what the server computes when the page is mounted, in the props in page.json only.
+	ComputedType   string
+	ComputedFields []fieldInfo
 }
 
 // fieldCategory names how a field is (de)serialized and rendered. It is the

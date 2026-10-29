@@ -22,7 +22,7 @@ func (pathEcho) BuildComponents(*rendering.DashboardContext) (templ.Component, e
 	return templ.NopComponent, nil
 }
 
-func (pathEcho) marshalProps() ([]byte, error) { return []byte("{}"), nil }
+func (pathEcho) marshalProps(*rendering.DashboardContext) ([]byte, error) { return []byte("{}"), nil }
 
 func (pathEcho) Handler(rendering.Dependencies) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, r.URL.Path) })

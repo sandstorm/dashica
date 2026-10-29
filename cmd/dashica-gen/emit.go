@@ -36,19 +36,21 @@ func emit(m *model, outFile string) error {
 	}
 	for _, w := range m.widgets {
 		data.Widgets = append(data.Widgets, widgetView{
-			Type:      w.TypeName,
-			WireName:  w.WireName,
-			Keys:      jsonKeys(w.Fields),
-			Marshal:   marshalStmts(w.Fields),
-			Props:     marshalStmts(propsFields(w.Fields)),
-			Unmarshal: unmarshalStmts(w.TypeName, w.Fields),
+			Type:          w.TypeName,
+			WireName:      w.WireName,
+			Keys:          jsonKeys(w.Fields),
+			Marshal:       marshalStmts("r", w.Fields),
+			Props:         marshalStmts("r", clientFields(w.Fields)),
+			Computed:      w.ComputedType != "",
+			ComputedProps: marshalStmts("c", w.ComputedFields),
+			Unmarshal:     unmarshalStmts(w.TypeName, w.Fields),
 		})
 	}
 	for _, g := range groups {
 		data.Groups = append(data.Groups, groupView{
 			Type:      g.GroupType,
 			Keys:      jsonKeys(g.Group),
-			Marshal:   marshalStmts(g.Group),
+			Marshal:   marshalStmts("r", g.Group),
 			Unmarshal: unmarshalStmts(g.GroupType, g.Group),
 		})
 	}
@@ -72,12 +74,15 @@ func emit(m *model, outFile string) error {
 }
 
 type widgetView struct {
-	Type      string
-	WireName  string
-	Keys      []string
-	Marshal   []string
-	Props     []string
-	Unmarshal []string
+	Type     string
+	WireName string
+	Keys     []string
+	Marshal  []string
+	Props    []string
+	// Computed: it has a computeProps; ComputedProps marshal what it returns.
+	Computed      bool
+	ComputedProps []string
+	Unmarshal     []string
 }
 
 type groupView struct {
@@ -110,8 +115,8 @@ func jsonKeys(fields []fieldInfo) []string {
 	return out
 }
 
-// propsFields are the fields in a widget's props in page.json: those tagged `dashica-gen:"client"`.
-func propsFields(fields []fieldInfo) []fieldInfo {
+// clientFields are the fields tagged `dashica-gen:"client"`.
+func clientFields(fields []fieldInfo) []fieldInfo {
 	var out []fieldInfo
 	for _, f := range fields {
 		if f.Client {
@@ -121,11 +126,18 @@ func propsFields(fields []fieldInfo) []fieldInfo {
 	return out
 }
 
-// marshalStmts renders the guarded marshal block for each field.
-func marshalStmts(fields []fieldInfo) []string {
+// propsFields are the fields in a widget's props in page.json: those tagged `dashica-gen:"client"`, then what its
+// computeProps computes.
+func propsFields(w widgetInfo) []fieldInfo {
+	return append(clientFields(w.Fields), w.ComputedFields...)
+}
+
+// marshalStmts renders the guarded marshal block for each field of the struct `recv` ("r": the widget, "c": what
+// its computeProps returned).
+func marshalStmts(recv string, fields []fieldInfo) []string {
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		out = append(out, marshalStmt(f))
+		out = append(out, marshalStmt(recv, f))
 	}
 	return out
 }
@@ -141,33 +153,34 @@ func unmarshalStmts(typeName string, fields []fieldInfo) []string {
 // marshalStmt emits `if <nonzero> { m[key], err = <marshal>; ... }` for one
 // field. The map is map[string]json.RawMessage, so a present key is always the
 // field's own JSON; absent keys are the omit-when-empty case.
-func marshalStmt(f fieldInfo) string {
+func marshalStmt(recv string, f fieldInfo) string {
+	v := recv + "." + f.GoName
 	key := f.JSONKey
 	set := func(guard, expr string) string {
 		return fmt.Sprintf("if %s {\nif m[%q], err = %s; err != nil {\nreturn nil, err\n}\n}", guard, key, expr)
 	}
 	switch f.Category {
 	case catQueryable:
-		return set("r."+f.GoName+" != nil", "sql.MarshalQueryable(r."+f.GoName+")")
+		return set(v+" != nil", "sql.MarshalQueryable("+v+")")
 	case catField, catTsField:
-		return set("r."+f.GoName+" != nil", "sql.MarshalField(r."+f.GoName+")")
+		return set(v+" != nil", "sql.MarshalField("+v+")")
 	case catOptField:
-		return set("r."+f.GoName+" != nil", "sql.MarshalField(*r."+f.GoName+")")
+		return set(v+" != nil", "sql.MarshalField(*"+v+")")
 	case catString:
-		return set(fmt.Sprintf("r.%s != \"\"", f.GoName), "json.Marshal(r."+f.GoName+")")
+		return set(v+` != ""`, "json.Marshal("+v+")")
 	case catInt, catInt64:
-		return set(fmt.Sprintf("r.%s != 0", f.GoName), "json.Marshal(r."+f.GoName+")")
+		return set(v+" != 0", "json.Marshal("+v+")")
 	case catBool:
-		return set("r."+f.GoName, "json.Marshal(r."+f.GoName+")")
+		return set(v, "json.Marshal("+v+")")
 	case catEnum:
 		// A bare enum field marshals as its inner string value.
-		return set(fmt.Sprintf("r.%s.v != \"\"", f.GoName), "json.Marshal(r."+f.GoName+".v)")
+		return set(v+`.v != ""`, "json.Marshal("+v+".v)")
 	case catPtrInt, catPtrBool, catColor:
-		return set("r."+f.GoName+" != nil", "json.Marshal(r."+f.GoName+")")
+		return set(v+" != nil", "json.Marshal("+v+")")
 	case catKeyValue, catStringList, catChildrenList, catChildrenMap:
-		return set(fmt.Sprintf("len(r.%s) > 0", f.GoName), "json.Marshal(r."+f.GoName+")")
+		return set("len("+v+") > 0", "json.Marshal("+v+")")
 	case catGroup:
-		return set(fmt.Sprintf("r.%s != (%s{})", f.GoName, f.GroupType), "json.Marshal(r."+f.GoName+")")
+		return set(v+" != ("+f.GroupType+"{})", "json.Marshal("+v+")")
 	}
 	panic("marshalStmt: unhandled category " + string(f.Category))
 }
@@ -232,6 +245,7 @@ import (
 	"fmt"
 
 	"github.com/sandstorm/dashica/lib/dashboard/color"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
@@ -254,14 +268,19 @@ func (r *{{.Type}}) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// marshalProps is its props in page.json: the fields tagged ` + "`" + `dashica-gen:"client"` + "`" + `.
-func (r *{{.Type}}) marshalProps() ([]byte, error) {
+// marshalProps is its props in page.json: the fields tagged ` + "`" + `dashica-gen:"client"` + "`" + `{{if .Computed}}, then what computeProps computes{{end}}.
+func (r *{{.Type}}) marshalProps(ctx *rendering.DashboardContext) ([]byte, error) {
 	m := map[string]json.RawMessage{}
 	var err error
 	_ = err
 	{{range .Props}}{{.}}
-	{{end}}
-	return json.Marshal(m)
+	{{end}}{{if .Computed}}c, err := r.computeProps(ctx)
+	if err != nil {
+		return nil, err
+	}
+	{{range .ComputedProps}}{{.}}
+	{{end}}{{else}}_ = ctx
+	{{end}}return json.Marshal(m)
 }
 
 func (r *{{.Type}}) UnmarshalJSON(b []byte) error {

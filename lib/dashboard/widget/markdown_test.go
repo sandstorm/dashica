@@ -2,13 +2,16 @@ package widget
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/fstest"
 
+	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 func TestMarkdown_Content(t *testing.T) {
@@ -398,4 +401,27 @@ func TestMarkdown_ServesTheErrorOfAMissingFile(t *testing.T) {
 		t.Fatalf("GET /html: %d %s", rec.Code, rec.Body)
 	}
 	mustContain(t, rec.Body.String(), "reading markdown file docs/wetell.md")
+}
+
+func TestMarkdown_SendsItsHTMLInItsProps(t *testing.T) {
+	ctx := &rendering.DashboardContext{Deps: rendering.Dependencies{FileSystem: fstest.MapFS{"wetell/about.md": {Data: []byte("# Wetell\n\n<b>raw</b>")}}}}
+	nodes, err := Widgets{NewMarkdown().File("wetell/about.md")}.Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/wetell/api"))
+	if err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
+	var props struct{ Html string }
+	if err := json.Unmarshal(nodes[0].Props, &props); err != nil {
+		t.Fatalf("props %s: %v", nodes[0].Props, err)
+	}
+	mustContain(t, props.Html, `<h1 id="wetell">Wetell</h1>`)
+	// a compiled dashboard is trusted: its raw HTML passes
+	mustContain(t, props.Html, `<b>raw</b>`)
+}
+
+func TestMarkdown_RefusesToMountWithAMissingFile(t *testing.T) {
+	ctx := &rendering.DashboardContext{Deps: rendering.Dependencies{FileSystem: fstest.MapFS{}}}
+	_, err := Widgets{NewMarkdown().File("wetell/about.md")}.Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()))
+	if err == nil || !strings.Contains(err.Error(), "reading markdown file wetell/about.md") {
+		t.Errorf("got %v", err)
+	}
 }

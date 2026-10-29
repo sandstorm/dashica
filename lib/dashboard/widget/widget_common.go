@@ -29,10 +29,10 @@ type WidgetDefinition interface {
 	BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error)
 }
 
-// withProps is a widget's props in page.json, its fields tagged `dashica-gen:"client"`: dashica-gen generates
-// marshalProps for every registered widget.
+// withProps is a widget's props in page.json, its fields tagged `dashica-gen:"client"` and what its computeProps
+// computes when the page is mounted (a markdown's HTML): dashica-gen generates marshalProps for every registered widget.
 type withProps interface {
-	marshalProps() ([]byte, error)
+	marshalProps(ctx *rendering.DashboardContext) ([]byte, error)
 }
 
 // withHandler is a widget with data: its handler answers the requests below its URL ("/query", "/viewer/index.html").
@@ -75,7 +75,7 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 	if !ok {
 		return Node{}, fmt.Errorf("%s has no marshalProps: run go generate", typ)
 	}
-	props, err := described.marshalProps()
+	props, err := described.marshalProps(ctx)
 	if err != nil {
 		return Node{}, fmt.Errorf("%s: marshalling props: %w", typ, err)
 	}

@@ -113,6 +113,12 @@ func TestClassify_timeBar(t *testing.T) {
 		}
 	}
 
+	// What computeProps returns is in the props only: not in the fields that Explore stores, the editor and gocode read.
+	md := widgetByWire(m, "markdown")
+	if md.ComputedType != "markdownComputed" || len(md.ComputedFields) != 1 || md.ComputedFields[0].GoName != "html" {
+		t.Errorf("markdown computed = %s %+v, want markdownComputed with html", md.ComputedType, md.ComputedFields)
+	}
+
 	// The queryable field keeps its Go name as the JSON key (no magic rename).
 	if f := fieldByName(tb, "sql"); f != nil && f.JSONKey != "sql" {
 		t.Errorf("sql JSONKey = %q, want %q", f.JSONKey, "sql")

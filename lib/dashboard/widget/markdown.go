@@ -83,6 +83,18 @@ func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Compo
 	return widget_component.Markdown(m.title, htmlOut), nil
 }
 
+// markdownComputed is what the server computes for a markdown when the page is mounted.
+type markdownComputed struct {
+	// html is content or file rendered to HTML.
+	html string
+}
+
+// computeProps renders the markdown; an untrusted dashboard's File() is refused.
+func (m *Markdown) computeProps(ctx *rendering.DashboardContext) (markdownComputed, error) {
+	html, err := m.renderHTML(ctx.Deps.FileSystem, ctx.UntrustedContent)
+	return markdownComputed{html: html}, err
+}
+
 // Handler serves the markdown rendered to HTML at "/html", for a compiled (trusted) dashboard.
 func (m *Markdown) Handler(deps rendering.Dependencies) http.Handler {
 	mux := http.NewServeMux()
