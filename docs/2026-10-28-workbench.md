@@ -535,8 +535,10 @@ Open in this design:
 
 ## 5. Migration and risks
 
-Replace in place on `feature/workbench`; merge to `main` at the end. Every step leaves the dashboards working (check
-both instances with `mise run up`).
+Replace in place on `feature/workbench`; merge to `main` at the end. Every step up to 5b.4 left the dashboards working.
+From 5b.5 on, the old page is deleted first and the dashboards do not work until the switch (5b.9): no adapter keeps
+the old page alive, and every commit leaves less code behind it (decided 2026-10-29). Check both instances with
+`mise run up` after the switch.
 
 **Working mode:** the agent may commit (this overrides "no commits" in `dashica-src/CLAUDE.md` for this branch), but
 **stops after every commit and waits for the maintainer's review** before the next one. Commits stay small (one step,
@@ -563,23 +565,23 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 3b ✅ | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content; the bridge extension `legacy-page` (UNMIGRATED, deleted in 5b) moves menu, search bar and debug drawer into them; dockview uninstalled | dashboards (old content inside the new chrome) |
 | 4 ✅ | Menus + palette: `registerMenuItem` / `showContextMenu` (first user: a dashboard entry's "…"); `createQuickPick`; search everywhere (⌘K) over dashboards and commands replaces `sidebarSearch` | dashboards |
 | 5a ✅ | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |
-| 5b | Client rendering: widget host, one extension per widget type (wrapping the existing `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
+| 5b | Client rendering: widget host, one extension per widget type (its chart ported from `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
 | 5b.1 | `query` host: time, auto refresh, SQL filter, params, view options, synced with the URL | dashboards (not used yet) |
 | 5b.2 | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `ChartFrame` | dashboards (not used yet) |
 | 5b.3 | Go: markdown's HTML in its props (`computeProps`), the schema table serves its DDL from its handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
 | 5b.4 | widget extensions: grid, collapsible, markdown, schema table | dashboards (not used yet) |
-| 5b.5 | widget extensions: the charts, stats, table, alerts (wrapping `frontend/chart/*`) | dashboards (not used yet) |
-| 5b.6 | widget extensions: checkbox group, text input, Speedscope link | dashboards (not used yet) |
-| 5b.7 | `page` host: `workbench.json`, `page.json`, `navigate`; the extension that renders a dashboard page | dashboards (not used yet) |
-| 5b.8 | extensions `dashboards`, `time-range`, `auto-refresh`, `log-scale`, `filters`, `debug` | dashboards (not used yet) |
-| 5b.9 | **the switch:** `/p/<page>` serves the shell, the client renders `page.json`; `legacy-page` and the Alpine page components deleted | dashboards, now client-rendered |
-| 5b.10 | `BuildComponents`, templ and Alpine removed | dashboards |
+| 5b.5 | the old page deleted (`frontend/components`, `legacy-page`, Alpine, the old store); widget extensions: the charts, stats, table, alerts, each chart of `frontend/chart/*` ported into its extension and taking its generated props, shared helpers in `chart-library` | nothing: the dashboards are blank until 5b.9 |
+| 5b.6 | widget extensions: checkbox group, text input, Speedscope link | nothing (until 5b.9) |
+| 5b.7 | `page` host: `workbench.json`, `page.json`, `navigate`; the extension that renders a dashboard page | nothing (until 5b.9) |
+| 5b.8 | extensions `dashboards`, `time-range`, `auto-refresh`, `log-scale`, `filters`, `debug` | nothing (until 5b.9) |
+| 5b.9 | **the switch:** `/p/<page>` serves the shell, the client renders `page.json` | dashboards, now client-rendered |
+| 5b.10 | `BuildComponents` (the widgets' old server props) and templ removed | dashboards |
 | 6 | `QueryState` + structured filters (§3.8), alerts on `time` | filters as chips, click-to-filter |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
 | Risk | Mitigation |
 |---|---|
-| Step 5b is one big switch | 5a lands the contract first with golden tests; renderers wrap existing chart code; Playwright flows before merge |
+| Step 5b is one big switch, with blank dashboards from 5b.5 to 5b.9 | 5a lands the contract first with golden tests; the charts are ported as they behave; Playwright flows before merge |
 | Explore unavailable from step 3 until rebuilt | accepted: Explore is experimental; rebuilt after the merge (§6) |
 | Long-lived branch drifts from `main` (new dashboards in the outer repo) | dashboards are Go only and keep their builder API; rebase regularly |
 | Bound filter values typed `String` against numeric columns | verify ClickHouse's conversion in step 6; else carry the type in the filter field |
