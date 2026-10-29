@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -30,6 +31,7 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 	d := New().
 		WithTitle("Wetell").
 		WithLayout(layout.DefaultPage).
+		DefaultTimeRange("168h").
 		FilterButton("Errors", "status >= 500").
 		Widget(widget.NewMarkdown().Content("# Wetell")).
 		Widget(widget.NewGrid().Template("a b").
@@ -45,7 +47,7 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatalf("page.json: %v\n%s", err, rec.Body)
 	}
-	if page.Kind != "dashboard" || page.Title != "Wetell" || !page.FilterBar || len(page.FilterButtons) != 1 || page.FilterButtons[0].QueryPart != "status >= 500" {
+	if page.Kind != "dashboard" || page.Title != "Wetell" || page.DefaultTime != "168h" || !page.FilterBar || len(page.FilterButtons) != 1 || page.FilterButtons[0].QueryPart != "status >= 500" {
 		t.Errorf("page: %s", rec.Body)
 	}
 	if len(page.Widgets) != 2 || page.Widgets[0].Type != "markdown" || page.Widgets[0].DataURL != "/p/wetell/api/1" || page.Widgets[1].Type != "grid" {
@@ -54,5 +56,13 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 	areas := page.Widgets[1].Children
 	if areas["a"].Type != "timeBar" || areas["a"].DataURL != "/p/wetell/api/2" || areas["b"].DataURL != "/p/wetell/api/3" {
 		t.Errorf("areas: %+v", areas)
+	}
+}
+
+func TestPageJson_RefusesADefaultTimeRangeThatIsNotADuration(t *testing.T) {
+	d := New().WithLayout(layout.DefaultPage).DefaultTimeRange("7d")
+	err := d.CollectHandlers(&rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}}, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/wetell"))
+	if err == nil || !strings.Contains(err.Error(), `DefaultTimeRange("7d") is not a Go duration`) {
+		t.Errorf("err = %v", err)
 	}
 }

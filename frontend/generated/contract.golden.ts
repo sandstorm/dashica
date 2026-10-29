@@ -19,6 +19,7 @@ export const workbench = {
 export const page = {
   "kind": "dashboard",
   "title": "Wetell",
+  "defaultTime": "168h",
   "filterBar": true,
   "filterButtons": [
     {

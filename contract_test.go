@@ -32,6 +32,7 @@ func everyWidget() *dashboard.Builder {
 	return dashboard.New().
 		WithTitle("Wetell").
 		WithLayout(layout.DefaultPage).
+		DefaultTimeRange("168h").
 		FilterButton("Errors", "status >= 500").
 		Widget(widget.NewMarkdown().Content("# Wetell")).
 		Widget(widget.NewGrid().Template("a b").

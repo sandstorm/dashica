@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/layout"
@@ -37,10 +38,11 @@ func New() *Builder {
 // Builder is the standard widget-list dashboard implementation and its fluent
 // construction API.
 type Builder struct {
-	widgets   widget.Widgets
-	layout    layout.Layout
-	title     string
-	searchBar rendering.SearchBarOption
+	widgets     widget.Widgets
+	layout      layout.Layout
+	title       string
+	defaultTime string
+	searchBar   rendering.SearchBarOption
 }
 
 func (d *Builder) WithTitle(title string) *Builder {
@@ -51,6 +53,13 @@ func (d *Builder) WithTitle(title string) *Builder {
 
 func (d *Builder) Title() string {
 	return d.title
+}
+
+// DefaultTimeRange is the time range the page opens with, as a Go duration ("1h", "168h" for 7 days); 24h when unset.
+func (d *Builder) DefaultTimeRange(duration string) *Builder {
+	cloned := *d
+	cloned.defaultTime = duration
+	return &cloned
 }
 
 func (d *Builder) Widget(w widget.WidgetDefinition) *Builder {
@@ -81,6 +90,11 @@ func (d *Builder) FilterButton(title string, queryPart string) *Builder {
 }
 
 func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
+	if d.defaultTime != "" {
+		if _, err := time.ParseDuration(d.defaultTime); err != nil {
+			return fmt.Errorf("DefaultTimeRange(%q) is not a Go duration (\"168h\" for 7 days): %w", d.defaultTime, err)
+		}
+	}
 	// first: it gives the widgets their ids and URLs, which BuildComponents renders
 	nodes, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api"))
 	if err != nil {
@@ -89,6 +103,7 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 	page, err := json.Marshal(PageJson{
 		Kind:          "dashboard",
 		Title:         d.title,
+		DefaultTime:   d.defaultTime,
 		FilterBar:     d.searchBar.IsVisible,
 		FilterButtons: append([]rendering.FilterButton{}, d.searchBar.FilterButtons...),
 		Widgets:       nodes,

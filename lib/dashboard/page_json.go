@@ -12,6 +12,8 @@ type PageJson struct {
 	// Kind is the kind of page: "dashboard".
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
+	// DefaultTime is the time range the page opens with, as a Go duration ("168h"); empty: 24h.
+	DefaultTime string `json:"defaultTime,omitempty"`
 	// FilterBar is whether the page shows the filter bar.
 	FilterBar     bool                     `json:"filterBar"`
 	FilterButtons []rendering.FilterButton `json:"filterButtons"`

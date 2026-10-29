@@ -154,7 +154,7 @@ ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8)
 
 | Model | Holds | URL | Scope |
 |---|---|---|---|
-| `time` | time range, auto refresh | `?time=1h` | per page; default declared in Go (`.DefaultTimeRange("7d")`, fallback `24h`); navigation opens the target with its own default (as Grafana) |
+| `time` | time range, auto refresh | `?time=1h` | per page; default declared in Go (`.DefaultTimeRange("168h")`, a Go duration as the presets send it; fallback `24h`); navigation opens the target with its own default (as Grafana) |
 | `filters` | structured filters, a time-window filter, free SQL | `?f=…&tw=…&sql=…` | per page |
 | `params` | values of form widgets | `?wp=…` | per page |
 | `viewOptions` | log scale, … | `?log=1` | global; read by every chart |
