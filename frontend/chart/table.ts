@@ -3,7 +3,6 @@ import {html} from "htl";
 import {DataType, Field} from "apache-arrow";
 import {TabulatorFull as Tabulator} from 'tabulator-tables';
 import type {ColumnDefinition, RowComponent, CellComponent} from 'tabulator-tables';
-import Alpine from '@alpinejs/csp';
 import {Maximize2, X, Pin, Copy, Braces, createElement} from 'lucide';
 import './table.css';
 
@@ -126,7 +125,7 @@ interface TooltipEl {
 function createTooltipEl(): TooltipEl {
     // Build the static skeleton with htl (same pattern as `panelHeader` below);
     // grab element refs afterwards. Behaviour (drag/position/pin) is wired
-    // imperatively — see the note in `table()` on why Alpine don't fit.
+    // imperatively — see the note in `table()`.
     const root = html`<div class="stickyTooltip">
         <div class="stickyTooltip__header">
             <span class="stickyTooltip__index" style="display:none"></span>
@@ -464,18 +463,10 @@ export function table(queryResult: any, extProps: any) {
     // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
     const data = queryResult.toArray().map((row: any) => row.toJSON());
 
-    // Create reactive state for search and selection
-    const state = Alpine.reactive({
-        searchTerm: '',
-        selectedRecords: [] as Record<string, any>[],
-        detailsHtml: '',
-        panelFullscreen: false
-    });
-
-    // Auto-update details HTML when selection changes
-    Alpine.effect(() => {
-        state.detailsHtml = renderRecordDetails(state.selectedRecords);
-    });
+    // The search and the selection: each change calls what shows it (applySearch, showSelection)
+    let searchTerm = '';
+    let selectedRecords: Record<string, any>[] = [];
+    let panelFullscreen = false;
 
     // Build timestamp-specific context menu
     const timestampContextMenu = (fieldName: string) => [
@@ -625,17 +616,16 @@ export function table(queryResult: any, extProps: any) {
     searchInput.placeholder = 'Search records...';
     searchInput.classList.add('input', 'input-bordered', 'w-full', 'mb-2');
     searchInput.addEventListener('input', (e) => {
-        state.searchTerm = (e.target as HTMLInputElement).value;
+        searchTerm = (e.target as HTMLInputElement).value;
+        applySearch();
     });
 
-    // Auto-update filter when search term changes
+    // Filters the rows by the search term
     let tabulatorTable: Tabulator;
-    Alpine.effect(() => {
-        const searchTerm = state.searchTerm.toLowerCase();
+    function applySearch() {
+        const needle = searchTerm.toLowerCase();
 
-        if (!tabulatorTable) return;
-
-        if (!searchTerm) {
+        if (!needle) {
             tabulatorTable.clearFilter();
             return;
         }
@@ -645,9 +635,9 @@ export function table(queryResult: any, extProps: any) {
             const searchableText = Object.values(rowData)
                 .map(v => String(v).toLowerCase())
                 .join(' ');
-            return searchableText.includes(searchTerm);
+            return searchableText.includes(needle);
         });
-    });
+    }
 
     // Create table element
     const tableRoot = document.createElement('div');
@@ -738,12 +728,13 @@ export function table(queryResult: any, extProps: any) {
 
     // Listen to row selection changes
     tabulatorTable.on("rowSelectionChanged", (data, rows) => {
-        state.selectedRecords = data;
+        selectedRecords = data;
+        showSelection();
     });
 
     // Re-paint search highlights after every (re)render — covers filter changes,
     // sorting, and virtual-scroll row recycling.
-    tabulatorTable.on("renderComplete", () => applySearchHighlight(state.searchTerm));
+    tabulatorTable.on("renderComplete", () => applySearchHighlight(searchTerm));
 
     // Custom sticky tooltip: hover a cell to show its full value; the pointer
     // can move onto the tooltip to select/copy, pin it (marks the source cell
@@ -754,12 +745,8 @@ export function table(queryResult: any, extProps: any) {
     //     same approach as `panelHeader` below. That's the house style in this
     //     file for one-shot DOM.
     //   - Behaviour (drag, viewport-clamped positioning, N independent pins,
-    //     live re-decoration on Tabulator renders) is imperative. Alpine (we
-    //     use @alpinejs/csp — CSP mode forbids inline expressions and wants
-    //     registered x-data components) is a poor fit for this transient,
-    //     multi-instance, pointer-driven widget; Alpine here stays where it
-    //     shines: the reactive search/selection state above.
-    const tooltipManager = createTooltipManager(tabulatorTable, () => applySearchHighlight(state.searchTerm));
+    //     live re-decoration on Tabulator renders) is imperative.
+    const tooltipManager = createTooltipManager(tabulatorTable, () => applySearchHighlight(searchTerm));
     tabulatorTable.on("cellMouseEnter", (e: any, cell: CellComponent) => {
         tooltipManager.onCellEnter(e, cell);
     });
@@ -809,7 +796,8 @@ export function table(queryResult: any, extProps: any) {
     const selectedCountSpan = panelHeader.querySelector('.selected-count') as HTMLSpanElement;
 
     fullscreenBtn.addEventListener('click', () => {
-        state.panelFullscreen = !state.panelFullscreen;
+        panelFullscreen = !panelFullscreen;
+        showSelection();
     });
 
     closeBtn.addEventListener('click', () => {
@@ -817,12 +805,12 @@ export function table(queryResult: any, extProps: any) {
         tabulatorTable.deselectRow();
     });
 
-    // Auto-update panel visibility, content, and fullscreen state
-    Alpine.effect(() => {
-        const hasSelection = state.selectedRecords.length > 0;
+    // Shows the panel with the selected records, or hides it; full screen when toggled
+    function showSelection() {
+        const hasSelection = selectedRecords.length > 0;
 
         // Update selected count
-        selectedCountSpan.textContent = state.selectedRecords.length.toString();
+        selectedCountSpan.textContent = selectedRecords.length.toString();
 
         // Toggle panel visibility with animation
         if (hasSelection) {
@@ -830,25 +818,26 @@ export function table(queryResult: any, extProps: any) {
             // Force reflow to enable CSS transition
             void detailsPanel.offsetHeight;
             detailsPanel.classList.add('open');
-            detailsContainer.innerHTML = state.detailsHtml;
-            applySearchHighlight(state.searchTerm); // highlight term in record panel
+            detailsContainer.innerHTML = renderRecordDetails(selectedRecords);
+            applySearchHighlight(searchTerm); // highlight term in record panel
         } else {
             detailsPanel.classList.remove('open');
             // Wait for animation before hiding
             setTimeout(() => {
-                if (state.selectedRecords.length === 0) {
+                if (selectedRecords.length === 0) {
                     detailsPanel.classList.add('hidden');
                 }
             }, 300);
         }
 
         // Toggle fullscreen class
-        if (state.panelFullscreen) {
+        if (panelFullscreen) {
             detailsPanel.classList.add('fullscreen');
         } else {
             detailsPanel.classList.remove('fullscreen');
         }
-    });
+    }
+    showSelection();
 
     // Assemble container
     container.appendChild(searchInput);
