@@ -6,9 +6,8 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-// chartComponent builds the shared Chart element for a leaf widget. It absorbs
-// the widgetBaseUrl concatenation every leaf's BuildComponents used to inline
-// (ctx.CurrentHandlerUrl + "/api/" + id) AND — in an Explore preview render
+// chartComponent builds the shared Chart element for a leaf widget: its data URL
+// is the one Mount recorded (ctx.DataURL). In an Explore preview render
 // (ctx.PreviewBaseUrl set) — stamps the widget's OWN envelope onto the element
 // via MarshalWidget(self). That way each chart is born knowing what
 // preview/query must re-execute, so a container's nested charts each fetch
@@ -20,8 +19,8 @@ import (
 // in the registry (e.g. the alert widgets) can't serialize to an envelope;
 // MarshalWidget errors and we simply omit the preview attributes — such widgets
 // are never previewed via Explore anyway.
-func chartComponent(ctx *rendering.DashboardContext, self WidgetDefinition, id, chartType, chartPropsJSON string, height int) templ.Component {
-	widgetBaseUrl := ctx.CurrentHandlerUrl + "/api/" + id
+func chartComponent(ctx *rendering.DashboardContext, self WidgetDefinition, chartType, chartPropsJSON string, height int) templ.Component {
+	widgetBaseUrl := ctx.DataURL(self)
 
 	var previewBase, previewBody string
 	if ctx.PreviewBaseUrl != "" {

@@ -40,6 +40,7 @@ func emit(m *model, outFile string) error {
 			WireName:  w.WireName,
 			Keys:      jsonKeys(w.Fields),
 			Marshal:   marshalStmts(w.Fields),
+			Props:     marshalStmts(propsFields(w.Fields)),
 			Unmarshal: unmarshalStmts(w.TypeName, w.Fields),
 		})
 	}
@@ -75,6 +76,7 @@ type widgetView struct {
 	WireName  string
 	Keys      []string
 	Marshal   []string
+	Props     []string
 	Unmarshal []string
 }
 
@@ -104,6 +106,17 @@ func jsonKeys(fields []fieldInfo) []string {
 	out := make([]string, len(fields))
 	for i, f := range fields {
 		out[i] = f.JSONKey
+	}
+	return out
+}
+
+// propsFields are the fields in a widget's props in page.json: those tagged `dashica-gen:"client"`.
+func propsFields(fields []fieldInfo) []fieldInfo {
+	var out []fieldInfo
+	for _, f := range fields {
+		if f.Client {
+			out = append(out, f)
+		}
 	}
 	return out
 }
@@ -237,6 +250,16 @@ func (r *{{.Type}}) MarshalJSON() ([]byte, error) {
 	m := map[string]json.RawMessage{}
 	var err error
 	{{range .Marshal}}{{.}}
+	{{end}}
+	return json.Marshal(m)
+}
+
+// marshalProps is its props in page.json: the fields tagged ` + "`" + `dashica-gen:"client"` + "`" + `.
+func (r *{{.Type}}) marshalProps() ([]byte, error) {
+	m := map[string]json.RawMessage{}
+	var err error
+	_ = err
+	{{range .Props}}{{.}}
 	{{end}}
 	return json.Marshal(m)
 }

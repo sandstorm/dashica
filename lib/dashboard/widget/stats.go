@@ -3,10 +3,10 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -17,11 +17,11 @@ type Stats struct {
 	sql sql.SqlQueryable
 	// titleField overrides the per-row "label" column with a fixed title used
 	// for every stat. Zero value: each row's "label" column is used.
-	titleField *sql.SqlField `dashica-gen:"role=dimension"`
+	titleField *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fillField selects a column giving each stat's text color as a CSS color
 	// string. Zero value: a row's own "color" column, or the default color.
-	fillField *sql.SqlField `dashica-gen:"role=measure"`
-	// id is the stable widget id; assigned automatically when empty.
+	fillField *sql.SqlField `dashica-gen:"client,role=measure"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 }
 
@@ -56,17 +56,13 @@ func NewStats(sql sql.SqlQueryable) *Stats {
 }
 
 func (s *Stats) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(s.id) == 0 {
-		s.id = ctx.NextWidgetId()
-	}
-
 	chartProps := s.buildChartProps()
 	chartPropsJSON, err := json.Marshal(chartProps)
 	if err != nil {
 		return nil, fmt.Errorf("stats: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, s, s.id, "stats", string(chartPropsJSON), 0), nil
+	return chartComponent(ctx, s, "stats", string(chartPropsJSON), 0), nil
 }
 
 func (s *Stats) buildChartProps() map[string]interface{} {
@@ -83,11 +79,7 @@ func (s *Stats) buildChartProps() map[string]interface{} {
 	return props
 }
 
-func (s *Stats) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(s.id) == 0 {
-		s.id = ctx.NextWidgetId()
-	}
-
+func (s *Stats) Handler(deps rendering.Dependencies) http.Handler {
 	// Build the SQL query - select all stat fields
 	query := s.sql
 	// Add optional fields
@@ -98,7 +90,9 @@ func (s *Stats) CollectHandlers(ctx *rendering.DashboardContext, registerHandler
 		query = query.With(sql.Select(*s.fillField))
 	}
 
-	return RegisterQueryHandlers(s.id, "stats", query, ctx, registerHandler)
+	return queryHandler(deps, query)
 }
 
-var _ InteractiveWidget = (*Stats)(nil)
+func (s *Stats) explicitId() string { return s.id }
+
+var _ WidgetDefinition = (*Stats)(nil)

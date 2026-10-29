@@ -1,8 +1,13 @@
 package widget
 
 import (
+	"encoding/json"
 	"fmt"
+	"iter"
+	"maps"
 	"net/http"
+	"slices"
+	"strconv"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
@@ -17,73 +22,138 @@ type Widgets []WidgetDefinition
 // WidgetsMap maps an area/slot name to its widget, e.g. Grid's named areas.
 type WidgetsMap map[string]WidgetDefinition
 
-func (w Widgets) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	for _, widget := range w {
-		if interactive, ok := widget.(InteractiveWidget); ok {
-			err := interactive.CollectHandlers(ctx, registerHandler)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (w WidgetsMap) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	for _, widget := range w {
-		if interactive, ok := widget.(InteractiveWidget); ok {
-			err := interactive.CollectHandlers(ctx, registerHandler)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 type WidgetDefinition interface {
+	// BuildComponents renders the widget's HTML; its URLs are those Mount recorded (ctx.DataURL).
+	//
+	// Deprecated: (workbench) replaced by the client rendering the Node of Mount (step 5b); see docs/2026-10-28-workbench.md §5.
 	BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error)
 }
 
-type InteractiveWidget interface {
-	WidgetDefinition
-	CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error
+// withProps is a widget's props in page.json, its fields tagged `dashica-gen:"client"`: dashica-gen generates
+// marshalProps for every registered widget.
+type withProps interface {
+	marshalProps() ([]byte, error)
 }
 
-// RegisterQueryHandlers is a helper function that registers both query and debug endpoints for a widget
-// widgetId: the unique identifier for the widget (used to generate endpoint paths)
-// widgetName: the name of the widget type (used in error messages)
-// query: the SQL query to execute
-// ctx: the dashboard rendering context
-// registerHandler: the handler collector to register handlers with
-func RegisterQueryHandlers(widgetId, widgetName string, query sql.SqlQueryable, ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
+// withHandler is a widget with data: its handler answers the requests below its URL ("/query", "/viewer/index.html").
+type withHandler interface {
+	Handler(deps rendering.Dependencies) http.Handler
+}
+
+// withChildren is a widget that lays out other widgets: a grid's areas by name, a group's widgets by position.
+type withChildren interface {
+	Children() iter.Seq2[string, WidgetDefinition]
+}
+
+// withExplicitId is a widget whose author may choose its id (`.Id("sso_home_plus_stripe_stats")`), so its URL stays
+// the same as the page changes.
+type withExplicitId interface {
+	explicitId() string
+}
+
+// Node describes a mounted widget in page.json: its type, its props (its fields tagged `dashica-gen:"client"`), the
+// URL of its handler, and its children.
+type Node struct {
+	Type  string          `json:"type"`
+	Props json.RawMessage `json:"props"`
+	// DataURL is where its handler answers ("/p/wetell/api/3": /query and /debug below it); empty for a widget
+	// without data.
+	DataURL string `json:"dataUrl,omitempty"`
+	// Children by name: a grid's areas; a collapsible group's widgets as "0", "1", ….
+	Children map[string]Node `json:"children,omitempty"`
+}
+
+// Mount is the Node of `w` for page.json. A withHandler gets its handler mounted at "<page>/api/<id>/" below `api`,
+// the id chosen by its author (`.Id(…)`) or else the page's next (ctx.WidgetHandlers), and that URL as its DataURL;
+// a withChildren's children are mounted the same way, in the order it yields them.
+func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollector, w WidgetDefinition) (Node, error) {
+	typ, err := typeName(w)
+	if err != nil {
+		return Node{}, err
+	}
+	described, ok := w.(withProps)
+	if !ok {
+		return Node{}, fmt.Errorf("%s has no marshalProps: run go generate", typ)
+	}
+	props, err := described.marshalProps()
+	if err != nil {
+		return Node{}, fmt.Errorf("%s: marshalling props: %w", typ, err)
+	}
+	node := Node{Type: typ, Props: props}
+	if data, ok := w.(withHandler); ok {
+		id := ""
+		if chosen, ok := w.(withExplicitId); ok {
+			id = chosen.explicitId()
+		}
+		own := ctx.WidgetHandlers(api, w, id)
+		if err := own.Handle("/", http.StripPrefix(own.Path(), data.Handler(ctx.Deps))); err != nil {
+			return Node{}, fmt.Errorf("%s: %w", typ, err)
+		}
+		node.DataURL = own.Path()
+	}
+	if container, ok := w.(withChildren); ok {
+		node.Children = map[string]Node{}
+		for name, child := range container.Children() {
+			if node.Children[name], err = Mount(ctx, api, child); err != nil {
+				return Node{}, fmt.Errorf("%s '%s': %w", typ, name, err)
+			}
+		}
+	}
+	return node, nil
+}
+
+// Mount mounts each widget below `api`; the nodes keep the order.
+func (w Widgets) Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollector) ([]Node, error) {
+	nodes := make([]Node, 0, len(w))
+	for _, child := range w {
+		node, err := Mount(ctx, api, child)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}
+
+// all yields the widgets by position: "0", "1", ….
+func (w Widgets) all() iter.Seq2[string, WidgetDefinition] {
+	return func(yield func(string, WidgetDefinition) bool) {
+		for i, child := range w {
+			if !yield(strconv.Itoa(i), child) {
+				return
+			}
+		}
+	}
+}
+
+// all yields the widgets by name, sorted, so the ids stay the same from one start to the next.
+func (w WidgetsMap) all() iter.Seq2[string, WidgetDefinition] {
+	return func(yield func(string, WidgetDefinition) bool) {
+		for _, name := range slices.Sorted(maps.Keys(w)) {
+			if !yield(name, w[name]) {
+				return
+			}
+		}
+	}
+}
+
+// queryHandler serves `query`: /query (the data, Arrow) and /debug (the query, EXPLAIN).
+func queryHandler(deps rendering.Dependencies, query sql.SqlQueryable) http.Handler {
 	qh := httpserver.QueryHandler{
-		ClickhouseClientManager: ctx.Deps.ClickhouseClientManager,
-		Logger:                  ctx.Deps.Logger,
-		FileSystem:              ctx.Deps.FileSystem,
+		ClickhouseClientManager: deps.ClickhouseClientManager,
+		Logger:                  deps.Logger,
+		FileSystem:              deps.FileSystem,
 	}
-
-	// Register query endpoint
-	err := registerHandler.Handle(widgetId+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := qh.HandleQuery(query, w, r)
-		if err != nil {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
+		if err := qh.HandleQuery(query, w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	}))
-	if err != nil {
-		return fmt.Errorf("%s: %w", widgetName, err)
-	}
-
-	// Register debug endpoint
-	err = registerHandler.Handle(widgetId+"/debug", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := qh.HandleDebug(query, w, r)
-		if err != nil {
+	})
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
+		if err := qh.HandleDebug(query, w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	}))
-	if err != nil {
-		return fmt.Errorf("%s: %w", widgetName, err)
-	}
-
-	return nil
+	})
+	return mux
 }

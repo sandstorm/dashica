@@ -3,12 +3,12 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 // BarHorizontal: bars go from left to right. x is the value axis, y is the category axis.
@@ -16,31 +16,31 @@ type BarHorizontal struct {
 	// sql is the underlying query builder; adjust it with AdjustQuery.
 	sql sql.SqlQueryable
 	// x is the measure plotted as bar length.
-	x sql.SqlField `dashica-gen:"role=measure"`
+	x sql.SqlField `dashica-gen:"client,role=measure"`
 	// y is the category (grouping) field, plotted on the vertical axis.
-	y sql.SqlField `dashica-gen:"role=dimension"`
+	y sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fill is the series bound to the color scale. Zero value: bars use a
 	// single default color, or are colored by y when fy is set.
-	fill *sql.SqlField `dashica-gen:"role=dimension"`
+	fill *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// title is the chart title shown above the plot.
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 	// height is the chart height in pixels.
-	height int
+	height int `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
-	width *int
+	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
-	marginLeft *int
+	marginLeft *int `dashica-gen:"client"`
 	// marginRight is the right margin in pixels. Zero value: Observable Plot's default.
-	marginRight *int
+	marginRight *int `dashica-gen:"client"`
 	// marginBottom is the bottom margin in pixels. Zero value: Observable Plot's default.
-	marginBottom *int
+	marginBottom *int `dashica-gen:"client"`
 	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
-	marginTop *int
+	marginTop *int `dashica-gen:"client"`
 	// color configures the color scale used for fill. Zero value: an ordinal
 	// scale with the observable10 scheme, shown with a legend.
-	color *color.ColorScale
+	color *color.ColorScale `dashica-gen:"client"`
 }
 
 func NewBarHorizontal(sqlq sql.SqlQueryable) *BarHorizontal {
@@ -132,17 +132,13 @@ func (b *BarHorizontal) AdjustQuery(opts ...sql.SqlBuilderOption) *BarHorizontal
 }
 
 func (b *BarHorizontal) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
 	props := b.buildChartProps()
 	propsJSON, err := json.Marshal(props)
 	if err != nil {
 		return nil, fmt.Errorf("barHorizontal: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, b, b.id, "barHorizontal", string(propsJSON), b.height), nil
+	return chartComponent(ctx, b, "barHorizontal", string(propsJSON), b.height), nil
 }
 
 func (b *BarHorizontal) buildChartProps() map[string]interface{} {
@@ -195,12 +191,10 @@ func (b *BarHorizontal) buildQuery() sql.SqlQueryable {
 	return query
 }
 
-func (b *BarHorizontal) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-	query := b.buildQuery()
-	return RegisterQueryHandlers(b.id, "barHorizontal", query, ctx, registerHandler)
+func (b *BarHorizontal) Handler(deps rendering.Dependencies) http.Handler {
+	return queryHandler(deps, b.buildQuery())
 }
 
-var _ InteractiveWidget = (*BarHorizontal)(nil)
+func (b *BarHorizontal) explicitId() string { return b.id }
+
+var _ WidgetDefinition = (*BarHorizontal)(nil)

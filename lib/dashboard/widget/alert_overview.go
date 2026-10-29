@@ -9,15 +9,12 @@ import (
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/httpserver"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 type AlertOverview struct {
 	// alertGroupPattern is an ILIKE pattern (e.g. "prod-%") selecting which
 	// alert groups' history rows are shown.
-	alertGroupPattern string
-	// id is the stable widget id; assigned automatically when empty.
-	id string
+	alertGroupPattern string `dashica-gen:"client"`
 }
 
 func NewAlertOverview(alertGroupPattern string) *AlertOverview {
@@ -27,16 +24,12 @@ func NewAlertOverview(alertGroupPattern string) *AlertOverview {
 }
 
 func (a *AlertOverview) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(a.id) == 0 {
-		a.id = ctx.NextWidgetId()
-	}
-
 	chartPropsJSON, err := json.Marshal(map[string]interface{}{})
 	if err != nil {
 		return nil, fmt.Errorf("alertOverview: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, a, a.id, "alertOverview", string(chartPropsJSON), 0), nil
+	return chartComponent(ctx, a, "alertOverview", string(chartPropsJSON), 0), nil
 }
 
 const alertOverviewQuery = `
@@ -62,15 +55,12 @@ ORDER BY
     alert_id_group, alert_id_key, timestamp
 `
 
-func (a *AlertOverview) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(a.id) == 0 {
-		a.id = ctx.NextWidgetId()
-	}
-
+func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 	pattern := a.alertGroupPattern
+	mux := http.NewServeMux()
 
-	err := registerHandler.Handle(a.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		client, err := ctx.Deps.ClickhouseClientManager.GetClient("alert_storage")
+	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
+		client, err := deps.ClickhouseClientManager.GetClient("alert_storage")
 		if err != nil {
 			http.Error(w, "get clickhouse client for alert_storage: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -104,21 +94,14 @@ func (a *AlertOverview) CollectHandlers(ctx *rendering.DashboardContext, registe
 			http.Error(w, "clickhouse query: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-	}))
-	if err != nil {
-		return fmt.Errorf("alertOverview: %w", err)
-	}
+	})
 
 	// Debug endpoint (minimal)
-	err = registerHandler.Handle(a.id+"/debug", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"query": alertOverviewQuery, "pattern": pattern})
-	}))
-	if err != nil {
-		return fmt.Errorf("alertOverview debug: %w", err)
-	}
-
-	return nil
+	})
+	return mux
 }
 
-var _ InteractiveWidget = (*AlertOverview)(nil)
+var _ WidgetDefinition = (*AlertOverview)(nil)

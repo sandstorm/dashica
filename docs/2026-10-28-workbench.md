@@ -366,27 +366,48 @@ Favorites stay inside `dashboards` (separating them would need a contribution po
 ### 3.12 Sketch: Go changes
 
 ```go
-// lib/dashboard/widget — one method instead of BuildComponents + CollectHandlers (§3.13)
+// lib/dashboard/widget — a widget implements only what it has (§3.13); the rest is the framework's Mount
 type WidgetDefinition interface {
-	// Mount registers the widget's handlers below `handlers` (already nested at "<page>/api/<id>")
-	// and returns the node that describes it in page.json.
-	Mount(ctx *rendering.DashboardContext, handlers handler_collector.HandlerCollector) (Node, error)
+	BuildComponents(…) // Deprecated until step 5b
 }
 
-// the one-liner for the common case: /query + /debug for a SQL query, filter fields collected
-func MountQuery(ctx *rendering.DashboardContext, h handler_collector.HandlerCollector,
-	typ string, props any, query sql.SqlQueryable) (Node, error)
+// withProps is a widget's props: its fields tagged dashica-gen:"client", generated for every registered widget; not
+// part of WidgetDefinition, since the package must compile without zz_generated.dashica.go for dashica-gen to load it
+type withProps interface {
+	marshalProps() ([]byte, error)
+}
+
+// withHandler is a widget with data: its handler answers the requests below its URL ("/query", "/viewer/index.html").
+type withHandler interface {
+	Handler(deps rendering.Dependencies) http.Handler
+}
+
+// withChildren is a widget that lays out other widgets: a grid's areas by name, a group's widgets by position.
+type withChildren interface {
+	Children() iter.Seq2[string, WidgetDefinition]
+}
+
+// a chart: an http.ServeMux with "GET /query" (Arrow) and "GET /debug" (the query, EXPLAIN)
+func (b *TimeBar) Handler(deps rendering.Dependencies) http.Handler { return queryHandler(deps, b.sql) }
+
+// a grid: its areas sorted by name, so the ids stay the same from one start to the next
+func (g *Grid) Children() iter.Seq2[string, WidgetDefinition] { return g.areas.all() }
+
+// Mount is the Node of `w` for page.json, the one place that knows URLs, ids and the Node: its type from the registry,
+// its props; a withHandler at "<page>/api/<id>/" (http.StripPrefix, id: the author's `.Id(…)`, else the page's
+// next number) with that URL as dataUrl; a withChildren's children mounted the same way, in the order it yields them.
+func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollector, w WidgetDefinition) (Node, error)
 
 type Node struct {
 	Type     string          `json:"type"`
-	Props    json.RawMessage `json:"props"`              // the generated serializer (dashica-gen)
-	DataURL  string          `json:"dataUrl,omitempty"`  // "<page>/api/<id>": /query, /debug below it
+	Props    json.RawMessage `json:"props"`              // its fields tagged `dashica-gen:"client"`
+	DataURL  string          `json:"dataUrl,omitempty"`  // "<page>/api/<id>": its handler answers below it
 	Children map[string]Node `json:"children,omitempty"` // grid areas by name; collapsible: "0", "1", …
 }
 
 // lib/dashboard — the Builder serves the shell, page.json and actions
 func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, h handler_collector.HandlerCollector) error {
-	nodes, err := d.widgets.Mount(ctx, h.Nested("/api"))       // mounts /api/<id>/query + /debug, collects filter fields
+	nodes, err := d.widgets.Mount(ctx, h.Nested("/api"))       // widget.Mount for each: /api/<id>/…, collects filter fields
 	page := PageJson{Kind: "dashboard", Title: d.title, DefaultTime: d.defaultTime, FilterFields: ctx.FilterFields(),
 		FilterButtons: …, Actions: d.actions.Describe(), Widgets: nodes}
 	h.HandleRoot(shell.Handler)                                 // the one static shell HTML
@@ -413,32 +434,55 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 |---|---|
 | `dashica.go` | `GET /workbench.json` (menu groups); menu data stays as today (`RegisterDashboardGroup`) |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
-| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `Mount` (§3.13), `RegisterQueryHandlers` → `MountQuery`; ids assigned by the framework; markdown puts its goldmark HTML into its props; `.FilterAs` / `.AcceptFilter` |
+| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown puts its goldmark HTML into its props; `.FilterAs` / `.AcceptFilter` |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns, collects filter fields; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; filters → one WHERE fragment of declared expressions with bound values into `{{DASHICA_FILTERS}}` / `Where` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
 | deleted | `lib/components/**` (templ), Alpine, dockview, `lib/explore` + `frontend/explore` (rebuilt later, §6) |
 
-### 3.13 Why `Mount`, one method
+### 3.13 Widgets implement standard interfaces; the framework mounts
 
 Today every widget walks the tree twice, `BuildComponents` (HTML) and `CollectHandlers` (HTTP), and both passes must
 agree on the widget id: whichever runs first calls `ctx.NextWidgetId()` and stores it in the widget (`b.id = …`),
 mutating an otherwise immutable builder. Order and mutation are the coupling.
 
+A widget has at most three things the page needs, and each is a standard library type:
+
+| What | Interface | Who |
+|---|---|---|
+| props | its fields tagged `dashica-gen:"client"` (the generated `marshalProps`) | every widget |
+| data | `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | the nine charts (`queryHandler`), `AlertOverview`, `AlertDetail`, `SpeedscopeLink` |
+| children | `Children() iter.Seq2[string, WidgetDefinition]` | `Grid` (areas by name, sorted), `CollapsibleGroup` ("0", "1", …) |
+
+Everything else is **one** framework function, `widget.Mount`: the type name from the registry, the id, the URL, the
+registration and the Node. A widget never sees the handler collector, its id or its URL; it is tested alone with
+`httptest` (`GET /query`). Markdown, `TextInput` and `CheckboxGroup` implement nothing beyond their JSON.
+
 | Option | For | Against |
 |---|---|---|
-| **`Mount` (recommended)**: one pass, register handlers + return node | URL and node agree by construction; the id is assigned once by the framework (the collector arrives nested at `api/<id>`), so widgets stop calling `NextWidgetId` and stop mutating themselves; custom handlers stay possible | "describe" and "serve" in one method; describing alone (Explore later) needs a capturing collector, which `lib/explore/preview.go` already has |
+| **Standard interfaces + one framework `Mount` (recommended)** | no own API to learn; URL, id and Node in one place; a widget is an ordinary `http.Handler`; the type name cannot be mistyped | what a widget does is spread over optional interfaces: forgetting `Handler` goes unnoticed by the compiler (the golden contract test shows a chart without `dataUrl`) |
+| A `Mount` method per widget, with helpers (`MountQuery`, `mountWithHandlers`) | everything a widget does in one method | each widget passes the collector, its type string and the Node through; registration, error checks and `DataURL` repeated per widget |
 | Two methods, `Describe` + `CollectHandlers` | describe without HTTP | the two-pass id coupling stays, only with JSON instead of templ |
-| Widgets declare only a query; the framework mounts all handlers | widgets never touch HTTP | does not fit `AlertOverview` / `AlertDetail` (alert storage client), `SpeedscopeLink` (serves a viewer FS): they would need an escape hatch, i.e. `Mount` again |
+| Widgets declare only a query; the framework builds all handlers | widgets never touch HTTP | does not fit `AlertOverview` / `AlertDetail` (alert storage client), `SpeedscopeLink` (serves a viewer FS) |
 
-`Mount` keeps HTTP where it is today (widgets already own their handlers), so it is a rename plus the merge of two
-passes, not a new abstraction. Query widgets (time bar, bars, heatmaps, stats, table: nine today calling
-`RegisterQueryHandlers`) become one `MountQuery(...)` line; the three special widgets keep their hand-written
-handlers.
+`Handler(deps)` is not a standard signature: as an `http.Handler` itself (`ServeHTTP`) the widget would lack the
+ClickHouse manager and logger at request time, and passing them through `r.Context()` is implicit.
 
-Containers (grid, collapsible) need each child's own `dataUrl` in `page.json`; the generated serializer nests plain
-widget envelopes without URLs, so the two containers implement `Mount` **by hand** (~20 lines each). The generator
-stays leaf-only.
+**Props are opt-in:** a field reaches the client only when tagged `dashica-gen:"client"`; every other field (the query,
+anything added later) stays on the server, so forgetting the tag hides a field instead of leaking it. dashica-gen emits
+`marshalProps` and the TypeScript `XxxProps` from the same tagged fields, so Go and TS cannot disagree; a query or
+children field with the tag is a generator error. The tag, not `json:"…"`: the fields are unexported, so `go vet`
+refuses a json tag on them, and the widget's JSON (`MarshalJSON`, all fields) is what Explore exports.
+
+Open in this design:
+
+1. **Positions as keys:** `CollapsibleGroup` yields "0", "1", … (`Widgets.all`, since `slices.All` yields `int`).
+2. **Filter fields** (§3.8) are collected from each chart's query at mount: `queryHandler` hides the query, so a chart
+   also says it (`Query() sql.SqlQueryable`), which the framework then turns into the handler and the filter fields;
+   then `Handler` is left for the three special widgets.
+3. **Field expressions:** `x` / `y` / `fill` are tagged `client` and go out as `SqlField` with their expression
+   (`JSONExtractString(attrs,'host')`), as before; §3.8 says expressions never leave the server. The client needs
+   only the column alias: reduce them at the filter step (§5).
 
 ## 4. Alternatives considered
 

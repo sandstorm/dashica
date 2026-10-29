@@ -13,10 +13,9 @@ import (
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
-// echoWidget is a fake InteractiveWidget registered only for these tests. Its
+// echoWidget is a fake widget with a query registered only for these tests. Its
 // query handler echoes the request's `filters` query arg, letting us assert
 // that dispatchPreview reaches the widget's own /query handler with the
 // original request intact — without a ClickHouse connection.
@@ -26,16 +25,15 @@ func (e *echoWidget) BuildComponents(*rendering.DashboardContext) (templ.Compone
 	return templ.NopComponent, nil
 }
 
-func (e *echoWidget) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
-	id := ctx.NextWidgetId()
-	if err := collector.Handle(id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (e *echoWidget) Handler(rendering.Dependencies) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "QUERY filters="+r.URL.Query().Get("filters"))
-	})); err != nil {
-		return err
-	}
-	return collector.Handle(id+"/debug", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "DEBUG filters="+r.URL.Query().Get("filters"))
-	}))
+	})
+	return mux
 }
 
 // nonInteractiveWidget is a fake widget with no query handler.
@@ -54,9 +52,8 @@ func (c *chartEchoWidget) BuildComponents(*rendering.DashboardContext) (templ.Co
 	return widget_component.Chart("/base", "timeBar", `{"x":"time","y":"count"}`, 150, "", ""), nil
 }
 
-func (c *chartEchoWidget) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
-	id := ctx.NextWidgetId()
-	return collector.Handle(id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+func (c *chartEchoWidget) Handler(rendering.Dependencies) http.Handler {
+	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 }
 
 func init() {
@@ -181,25 +178,5 @@ func TestPreviewRender_RejectsNonPost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/explore/api/preview/render", nil)
 	if err := e.handlePreviewRender(httptest.NewRecorder(), req); err == nil {
 		t.Fatal("expected error for GET")
-	}
-}
-
-func TestCapturingCollector_RecordsNestedPaths(t *testing.T) {
-	c := &capturingCollector{handlers: map[string]http.Handler{}}
-	api := c.Nested("/api")
-	if err := api.Handle("1/query", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})); err != nil {
-		t.Fatal(err)
-	}
-	if err := api.Handle("1/debug", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})); err != nil {
-		t.Fatal(err)
-	}
-	if !c.IsRegistered("/api/1/query") {
-		t.Errorf("expected /api/1/query registered, have %v", c.handlers)
-	}
-	if c.findBySuffix("/query") == nil {
-		t.Error("findBySuffix(/query) returned nil")
-	}
-	if c.findBySuffix("/nope") != nil {
-		t.Error("findBySuffix(/nope) should be nil")
 	}
 }

@@ -3,11 +3,11 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -18,43 +18,43 @@ type BarVertical struct {
 	// sql is the underlying query builder; adjust it with AdjustQuery.
 	sql sql.SqlQueryable
 	// x is the category (grouping) field, plotted on the horizontal axis.
-	x sql.SqlField `dashica-gen:"role=dimension"`
+	x sql.SqlField `dashica-gen:"client,role=dimension"`
 	// y is the measure plotted as bar height.
-	y sql.SqlField `dashica-gen:"role=measure"`
+	y sql.SqlField `dashica-gen:"client,role=measure"`
 	// fill is the series bound to the color scale. Zero value: bars use a
 	// single default color, or are colored by x when fx is set.
-	fill *sql.SqlField `dashica-gen:"role=dimension"`
+	fill *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fx facets the chart horizontally, bound to the fx scale.
-	fx *sql.SqlField `dashica-gen:"role=dimension"`
+	fx *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fy facets the chart vertically, bound to the fy scale.
-	fy *sql.SqlField `dashica-gen:"role=dimension"`
+	fy *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// title is the chart title shown above the plot.
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 	// height is the chart height in pixels.
-	height int
+	height int `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
-	width *int
+	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
-	marginLeft *int
+	marginLeft *int `dashica-gen:"client"`
 	// marginRight is the right margin in pixels. Zero value: Observable Plot's default.
-	marginRight *int
+	marginRight *int `dashica-gen:"client"`
 	// marginBottom is the bottom margin in pixels. Zero value: Observable Plot's default.
-	marginBottom *int
+	marginBottom *int `dashica-gen:"client"`
 	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
-	marginTop *int
+	marginTop *int `dashica-gen:"client"`
 	// colorScheme is currently unused by this widget; reserved for a future
 	// direct color-scheme override.
-	colorScheme string
+	colorScheme string `dashica-gen:"client"`
 	// color configures the color scale used for fill. Zero value: an ordinal
 	// scale with the observable10 scheme, shown with a legend.
-	color *color.ColorScale
+	color *color.ColorScale `dashica-gen:"client"`
 	// sortReverse sorts the x domain by y value when set; true for descending
 	// order, false for ascending. Zero value (nil): input order, unsorted.
-	sortReverse *bool `dashica-gen:"method=SortByY"`
+	sortReverse *bool `dashica-gen:"client,method=SortByY"`
 	// tipChannels adds extra labeled channels to the hover tooltip.
-	tipChannels map[string]string
+	tipChannels map[string]string `dashica-gen:"client"`
 }
 
 func NewBarVertical(sql sql.SqlQueryable) *BarVertical {
@@ -173,17 +173,13 @@ func (b *BarVertical) AdjustQuery(opts ...sql.SqlBuilderOption) *BarVertical {
 }
 
 func (b *BarVertical) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
 	chartProps := b.buildChartProps()
 	chartPropsJSON, err := json.Marshal(chartProps)
 	if err != nil {
 		return nil, fmt.Errorf("barVertical: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, b, b.id, "barVertical", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, "barVertical", string(chartPropsJSON), b.height), nil
 }
 
 func (b *BarVertical) buildChartProps() map[string]interface{} {
@@ -265,13 +261,10 @@ func (b *BarVertical) buildQuery() sql.SqlQueryable {
 	return query
 }
 
-func (b *BarVertical) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
-	query := b.buildQuery()
-	return RegisterQueryHandlers(b.id, "barVertical", query, ctx, registerHandler)
+func (b *BarVertical) Handler(deps rendering.Dependencies) http.Handler {
+	return queryHandler(deps, b.buildQuery())
 }
 
-var _ InteractiveWidget = (*BarVertical)(nil)
+func (b *BarVertical) explicitId() string { return b.id }
+
+var _ WidgetDefinition = (*BarVertical)(nil)

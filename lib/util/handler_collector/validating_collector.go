@@ -13,6 +13,8 @@ type HandlerCollector interface {
 	HandleRoot(handler http.Handler) error
 	Nested(prefix string) HandlerCollector
 	IsRegistered(path string) bool
+	// Path is the URL path below which it registers ("/p/wetell/api/3").
+	Path() string
 }
 
 func NewValidatingCollector(mux *http.ServeMux, logger zerolog.Logger) HandlerCollector {
@@ -66,6 +68,10 @@ func (c validatingCollectorImpl) HandleRoot(handler http.Handler) error {
 	(*c.seen)[c.prefix] = true
 	c.mux.Handle(c.prefix, handler)
 	return nil
+}
+
+func (c validatingCollectorImpl) Path() string {
+	return c.prefix
 }
 
 func (c validatingCollectorImpl) IsRegistered(path string) bool {

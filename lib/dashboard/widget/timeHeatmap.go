@@ -3,10 +3,10 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -15,24 +15,24 @@ type TimeHeatmap struct {
 	// sql is the underlying query builder; adjust it with AdjustQuery.
 	sql sql.SqlQueryable
 	// x is the timestamped time-axis field, bucketed by xBucketSize.
-	x sql.TimestampedField
+	x sql.TimestampedField `dashica-gen:"client"`
 	// y is the numeric field bucketed by yBucketSize into the rectangle rows.
-	y sql.SqlField `dashica-gen:"role=dimension"`
+	y sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fill is the measure bound to the color scale, coloring each cell.
 	// Zero value: cells are colored by Observable Plot's default scheme.
-	fill *sql.SqlField `dashica-gen:"role=measure"`
+	fill *sql.SqlField `dashica-gen:"client,role=measure"`
 	// title is the chart title shown above the plot.
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 	// height is the chart height in pixels. Zero value: Observable Plot's default.
-	height *int
+	height *int `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
-	width *int
+	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
-	marginLeft *int
+	marginLeft *int `dashica-gen:"client"`
 	// yBucketSize is the height of each row in y-axis units; required, must be positive.
-	yBucketSize int64
+	yBucketSize int64 `dashica-gen:"client"`
 }
 
 func (h *TimeHeatmap) X(xField sql.TimestampedField) *TimeHeatmap {
@@ -102,10 +102,6 @@ func NewTimeHeatmap(sql *sql.SqlQuery) *TimeHeatmap {
 }
 
 func (h *TimeHeatmap) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(h.id) == 0 {
-		h.id = ctx.NextWidgetId()
-	}
-
 	if h.yBucketSize <= 0 {
 		return nil, fmt.Errorf("timeHeatmap: YBucketSize must be set to a positive value (was %d)", h.yBucketSize)
 	}
@@ -120,7 +116,7 @@ func (h *TimeHeatmap) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 	if h.height != nil {
 		heightVal = *h.height
 	}
-	return chartComponent(ctx, h, h.id, "timeHeatmap", string(chartPropsJSON), heightVal), nil
+	return chartComponent(ctx, h, "timeHeatmap", string(chartPropsJSON), heightVal), nil
 }
 
 func (h *TimeHeatmap) buildChartProps() map[string]interface{} {
@@ -172,13 +168,10 @@ func (h *TimeHeatmap) buildQuery() sql.SqlQueryable {
 	return query
 }
 
-func (h *TimeHeatmap) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(h.id) == 0 {
-		h.id = ctx.NextWidgetId()
-	}
-
-	query := h.buildQuery()
-	return RegisterQueryHandlers(h.id, "timeHeatmap", query, ctx, registerHandler)
+func (h *TimeHeatmap) Handler(deps rendering.Dependencies) http.Handler {
+	return queryHandler(deps, h.buildQuery())
 }
 
-var _ InteractiveWidget = (*TimeHeatmap)(nil)
+func (h *TimeHeatmap) explicitId() string { return h.id }
+
+var _ WidgetDefinition = (*TimeHeatmap)(nil)

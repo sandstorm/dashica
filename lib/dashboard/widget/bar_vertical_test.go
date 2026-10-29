@@ -697,29 +697,3 @@ func TestBarVertical_BuildComponents(t *testing.T) {
 		t.Error("Expected non-nil component")
 	}
 }
-
-func TestBarVertical_BuildComponents_AutoGeneratesId(t *testing.T) {
-	baseQuery := sql.New(sql.From(testTableName))
-	widget := NewBarVertical(baseQuery).
-		X(sql.Field("category")).
-		Y(sql.Count())
-
-	ctx := &rendering.DashboardContext{
-		CurrentHandlerUrl: "/dashboard",
-	}
-
-	// Widget should auto-generate an ID
-	component, err := widget.BuildComponents(ctx)
-	if err != nil {
-		t.Fatalf("BuildComponents failed: %v", err)
-	}
-
-	if component == nil {
-		t.Error("Expected non-nil component")
-	}
-
-	// The widget should have been assigned an ID (starts at 1)
-	if widget.id == "" {
-		t.Error("Expected widget.id to be auto-generated, but it was empty")
-	}
-}

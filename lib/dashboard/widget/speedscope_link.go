@@ -14,7 +14,6 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 	"github.com/sandstorm/dashica/speedscope_viewer"
 )
 
@@ -27,8 +26,8 @@ type SpeedscopeLink struct {
 	// bundled Speedscope viewer as space-delimited CSV.
 	sql sql.SqlQueryable
 	// title is the link's button label. Zero value: "Open Speedscope".
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 }
 
@@ -49,10 +48,7 @@ func (s *SpeedscopeLink) Id(id string) *SpeedscopeLink {
 }
 
 func (s *SpeedscopeLink) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(s.id) == 0 {
-		s.id = ctx.NextWidgetId()
-	}
-	widgetBaseUrl := ctx.CurrentHandlerUrl + "/api/" + s.id
+	widgetBaseUrl := ctx.DataURL(s)
 
 	title := s.title
 	if title == "" {
@@ -74,29 +70,19 @@ func (s *SpeedscopeLink) BuildComponents(ctx *rendering.DashboardContext) (templ
 	}), nil
 }
 
-func (s *SpeedscopeLink) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(s.id) == 0 {
-		s.id = ctx.NextWidgetId()
-	}
-
-	deps := ctx.Deps
+func (s *SpeedscopeLink) Handler(deps rendering.Dependencies) http.Handler {
 	query := s.sql
-	if err := registerHandler.Handle(s.id+"/speedscope-query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/speedscope-query", func(w http.ResponseWriter, r *http.Request) {
 		if err := serveSpeedscope(query, deps, w, r); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	})); err != nil {
-		return err
-	}
-
-	viewerFS, err := fs.Sub(speedscope_viewer.FS, "dist")
-	if err != nil {
-		return fmt.Errorf("subbing speedscope viewer FS: %w", err)
-	}
-	viewerPrefix := ctx.CurrentHandlerUrl + "/api/" + s.id + "/viewer"
-	return registerHandler.Handle(s.id+"/viewer/",
-		http.StripPrefix(viewerPrefix, http.FileServerFS(viewerFS)))
+	})
+	mux.Handle("/viewer/", http.StripPrefix("/viewer", http.FileServerFS(speedscopeViewer)))
+	return mux
 }
+
+func (s *SpeedscopeLink) explicitId() string { return s.id }
 
 // serveSpeedscope runs the query and streams the result as space-delimited CSV — the format
 // Speedscope's profileURL ingestor expects.
@@ -146,4 +132,7 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 	return nil
 }
 
-var _ InteractiveWidget = (*SpeedscopeLink)(nil)
+// speedscopeViewer is the bundled Speedscope viewer; fs.Sub errs only for an invalid name, which "dist" is not.
+var speedscopeViewer, _ = fs.Sub(speedscope_viewer.FS, "dist")
+
+var _ WidgetDefinition = (*SpeedscopeLink)(nil)

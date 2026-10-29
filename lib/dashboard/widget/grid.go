@@ -2,23 +2,23 @@ package widget
 
 import (
 	"fmt"
+	"iter"
 	"sort"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 type Grid struct {
 	// template is the CSS grid-template-areas rows, set via Template(); each
 	// string is one row of space-separated area names.
-	template []string
+	template []string `dashica-gen:"client"`
 	// areas maps area name to the widget rendered in that area, set via Area().
 	areas WidgetsMap `dashica-gen:"method=Area"`
 	// gap is the spacing between grid items (Tailwind spacing scale). Zero
 	// value from NewGrid(): "4px".
-	gap string
+	gap string `dashica-gen:"client"`
 }
 
 func NewGrid() *Grid {
@@ -90,8 +90,6 @@ func (g *Grid) resolvedTemplate() []string {
 	return names
 }
 
-func (g *Grid) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
-	return g.areas.CollectHandlers(ctx, collector)
-}
+func (g *Grid) Children() iter.Seq2[string, WidgetDefinition] { return g.areas.all() }
 
 var _ WidgetDefinition = (*Grid)(nil)

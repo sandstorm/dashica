@@ -18,9 +18,9 @@ import (
 // table of a dashboard inline.
 type SchemaTable struct {
 	// table is the ClickHouse table name to run SHOW CREATE TABLE against.
-	table string
+	table string `dashica-gen:"client"`
 	// title is the optional title rendered above the schema block.
-	title string
+	title string `dashica-gen:"client"`
 }
 
 // NewSchemaTable creates a new SchemaTable widget for the given table name.

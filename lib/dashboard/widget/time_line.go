@@ -3,11 +3,11 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -16,51 +16,51 @@ type TimeLine struct {
 	// sql is the underlying query builder; adjust it with AdjustQuery.
 	sql sql.SqlQueryable
 	// x is the timestamped time-axis field, bucketed by xBucketSize.
-	x sql.TimestampedField
+	x sql.TimestampedField `dashica-gen:"client"`
 	// y is the measure plotted as the line's vertical position.
-	y sql.SqlField `dashica-gen:"role=measure"`
+	y sql.SqlField `dashica-gen:"client,role=measure"`
 	// stroke is a constant CSS color for the line. Zero value: '#4682B4'.
 	// Ignored when strokeField is set.
-	stroke string
+	stroke string `dashica-gen:"client"`
 	// strokeField is the series bound to the color scale, drawn as one line
 	// per distinct value. Zero value: a single line colored by stroke.
-	strokeField *sql.SqlField `dashica-gen:"role=dimension"`
+	strokeField *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// zField groups points into separate lines without affecting color; use it
 	// together with strokeField to draw one line per z value (e.g. per session)
 	// all colored by the stroke value (e.g. per user), so overlapping series
 	// stay visually distinct but share a color.
-	zField *sql.SqlField `dashica-gen:"role=dimension,method=Z"`
+	zField *sql.SqlField `dashica-gen:"client,role=dimension,method=Z"`
 	// fx facets the chart horizontally, bound to the fx scale.
-	fx *sql.SqlField `dashica-gen:"role=dimension"`
+	fx *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fy facets the chart vertically, bound to the fy scale.
-	fy *sql.SqlField `dashica-gen:"role=dimension"`
+	fy *sql.SqlField `dashica-gen:"client,role=dimension"`
 	// title is the chart title shown above the plot.
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 	// height is the chart height in pixels.
-	height int
+	height int `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
-	width *int
+	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
-	marginLeft *int
+	marginLeft *int `dashica-gen:"client"`
 	// marginRight is the right margin in pixels. Zero value: Observable Plot's default.
-	marginRight *int
+	marginRight *int `dashica-gen:"client"`
 	// marginBottom is the bottom margin in pixels. Zero value: Observable Plot's default.
-	marginBottom *int
+	marginBottom *int `dashica-gen:"client"`
 	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
-	marginTop *int
+	marginTop *int `dashica-gen:"client"`
 	// color configures the color scale used for stroke. Zero value: an ordinal
 	// scale with the observable10 scheme, shown with a legend.
-	color *color.ColorScale
+	color *color.ColorScale `dashica-gen:"client"`
 	// tipChannels adds extra labeled channels to the hover tooltip.
-	tipChannels map[string]string
+	tipChannels map[string]string `dashica-gen:"client"`
 	// fillStep makes the x (time) axis use ClickHouse `WITH FILL STEP <step>`, so
 	// empty time buckets are synthesized instead of the line interpolating across
 	// them. It is a raw interval expression, e.g. "toIntervalHour(1)". Any
 	// strokeField is used as the fill partition key (filled independently per
 	// series); filled numeric y values default to 0. Zero value: no gap filling.
-	fillStep string `dashica-gen:"method=WithFillStep"`
+	fillStep string `dashica-gen:"client,method=WithFillStep"`
 }
 
 func NewTimeLine(sql sql.SqlQueryable) *TimeLine {
@@ -198,17 +198,13 @@ func (b *TimeLine) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeLine {
 }
 
 func (b *TimeLine) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
 	chartProps := b.buildChartProps()
 	chartPropsJSON, err := json.Marshal(chartProps)
 	if err != nil {
 		return nil, fmt.Errorf("timeLine: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, b, b.id, "timeLine", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, "timeLine", string(chartPropsJSON), b.height), nil
 }
 
 func (b *TimeLine) buildChartProps() map[string]interface{} {
@@ -309,13 +305,10 @@ func (b *TimeLine) buildQuery() sql.SqlQueryable {
 	return query
 }
 
-func (b *TimeLine) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
-	query := b.buildQuery()
-	return RegisterQueryHandlers(b.id, "timeLine", query, ctx, registerHandler)
+func (b *TimeLine) Handler(deps rendering.Dependencies) http.Handler {
+	return queryHandler(deps, b.buildQuery())
 }
 
-var _ InteractiveWidget = (*TimeLine)(nil)
+func (b *TimeLine) explicitId() string { return b.id }
+
+var _ WidgetDefinition = (*TimeLine)(nil)

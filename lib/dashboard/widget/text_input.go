@@ -14,14 +14,14 @@ import (
 // Other widgets on the page that send `params` automatically pick up the value.
 type TextInput struct {
 	// name is the widget-param slot key this input writes to.
-	name string
+	name string `dashica-gen:"client"`
 	// label is the text shown above the input field.
-	label string
+	label string `dashica-gen:"client"`
 	// placeholder is the input's placeholder text, shown when empty.
-	placeholder string
+	placeholder string `dashica-gen:"client"`
 	// prependCaret prefixes the stored value with "^" when non-empty, turning
 	// a typed path prefix into a regex anchor for the SQL query.
-	prependCaret bool
+	prependCaret bool `dashica-gen:"client"`
 }
 
 // NewTextInput creates a text input that writes to the named widget-param slot.

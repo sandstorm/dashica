@@ -3,11 +3,14 @@ package widget
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
+	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 func TestBarHorizontal_BuildChartProps(t *testing.T) {
@@ -84,20 +87,6 @@ LIMIT 5;`
 	}
 }
 
-func TestBarHorizontal_BuildComponents_AutoId(t *testing.T) {
-	bh := NewBarHorizontal(sql.New(sql.From("t"))).
-		X(sql.Count()).
-		Y(sql.Field("category"))
-
-	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
-	if _, err := bh.BuildComponents(ctx); err != nil {
-		t.Fatalf("BuildComponents: %v", err)
-	}
-	if bh.id == "" {
-		t.Error("expected auto-generated id")
-	}
-}
-
 func TestBarHorizontal_Immutability(t *testing.T) {
 	original := NewBarHorizontal(sql.New(sql.From("t")))
 	withX := original.X(sql.Field("a"))
@@ -138,9 +127,13 @@ func TestBarHorizontal_FillNullUnmarshalsToNil(t *testing.T) {
 }
 
 // renderComponent helper renders a templ.Component to a string for assertion.
+// renderComponent renders `w` as the page "/d" does: mounted first, so it has its URL.
 func renderComponent(t *testing.T, w WidgetDefinition) string {
 	t.Helper()
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
+	if _, err := (Widgets{w}).Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/d/api")); err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
 	component, err := w.BuildComponents(ctx)
 	if err != nil {
 		t.Fatalf("BuildComponents: %v", err)

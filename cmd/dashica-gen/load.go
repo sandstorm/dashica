@@ -437,6 +437,12 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 	}
 	fi.Role = role
 
+	// A query stays on the server, children are their Node's; neither is in the props.
+	fi.Client = dashicaTag["client"] == "true"
+	if fi.Client && (cat == catQueryable || cat == catChildrenList || cat == catChildrenMap) {
+		return nil, false, fmt.Errorf("client tag not valid on %s: it is not sent in the props", cat)
+	}
+
 	// gocode mapping (docs §4 Step 4). A field is a constructor argument when the
 	// constructor assigns it (the SqlQueryable of a chart; name/label/options of a
 	// parameter widget); otherwise it is a chained builder call whose method name

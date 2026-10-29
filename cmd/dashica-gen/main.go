@@ -118,6 +118,9 @@ type fieldInfo struct {
 	// dimension slot never shows "Row count" (a measure) and vice versa. Only
 	// set on field categories; a TimestampedField defaults to "dimension".
 	Role string
+	// Client is whether the field goes to the client, in the widget's props in page.json (marshalProps) and its
+	// TypeScript props: the `dashica-gen:"client"` struct tag. Every other field stays on the server.
+	Client bool
 	// group only:
 	Group     []fieldInfo
 	GroupType string // named struct type, e.g. "StackOptions"

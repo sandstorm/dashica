@@ -12,17 +12,14 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 type AlertDetail struct {
 	// alertGroup and alertKey identify the alert whose history this widget renders.
-	alertGroup string
-	alertKey   string
+	alertGroup string `dashica-gen:"client"`
+	alertKey   string `dashica-gen:"client"`
 	// title is the chart title shown above the plot. Defaults to "group#key".
-	title string
-	// id is the stable widget id; assigned automatically when empty.
-	id string
+	title string `dashica-gen:"client"`
 }
 
 func NewAlertDetail(alertGroup, alertKey string) *AlertDetail {
@@ -40,10 +37,6 @@ func (a *AlertDetail) Title(title string) *AlertDetail {
 }
 
 func (a *AlertDetail) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(a.id) == 0 {
-		a.id = ctx.NextWidgetId()
-	}
-
 	props := map[string]interface{}{
 		"title":       a.title,
 		"height":      200,
@@ -56,24 +49,21 @@ func (a *AlertDetail) BuildComponents(ctx *rendering.DashboardContext) (templ.Co
 		return nil, fmt.Errorf("alertDetail: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, a, a.id, "timeBar", string(chartPropsJSON), 200), nil
+	return chartComponent(ctx, a, "timeBar", string(chartPropsJSON), 200), nil
 }
 
-func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(a.id) == 0 {
-		a.id = ctx.NextWidgetId()
-	}
-
+func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
 	alertId := alerting.AlertId{Group: a.alertGroup, Key: a.alertKey}
+	mux := http.NewServeMux()
 
-	err := registerHandler.Handle(a.id+"/query", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		alertDef := ctx.Deps.AlertManager.GetAlertDefinition(alertId)
+	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
+		alertDef := deps.AlertManager.GetAlertDefinition(alertId)
 		if alertDef == nil {
 			http.Error(w, fmt.Sprintf("alert definition %s#%s not found", alertId.Group, alertId.Key), http.StatusNotFound)
 			return
 		}
 
-		client, err := ctx.Deps.ClickhouseClientManager.GetClient("default")
+		client, err := deps.ClickhouseClientManager.GetClient("default")
 		if err != nil {
 			http.Error(w, "get clickhouse client: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -120,20 +110,13 @@ func (a *AlertDetail) CollectHandlers(ctx *rendering.DashboardContext, registerH
 			http.Error(w, "clickhouse query: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-	}))
-	if err != nil {
-		return fmt.Errorf("alertDetail: %w", err)
-	}
+	})
 
-	err = registerHandler.Handle(a.id+"/debug", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"alertId": alertId.Group + "#" + alertId.Key})
-	}))
-	if err != nil {
-		return fmt.Errorf("alertDetail debug: %w", err)
-	}
-
-	return nil
+	})
+	return mux
 }
 
-var _ InteractiveWidget = (*AlertDetail)(nil)
+var _ WidgetDefinition = (*AlertDetail)(nil)

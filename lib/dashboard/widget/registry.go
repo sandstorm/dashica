@@ -132,11 +132,9 @@ func MarshalWidget(w WidgetDefinition) ([]byte, error) {
 		return []byte("null"), nil
 	}
 
-	registryMu.RLock()
-	name, ok := goTypeToName[reflect.TypeOf(w)]
-	registryMu.RUnlock()
-	if !ok {
-		return nil, fmt.Errorf("%w: %T", ErrWidgetNotRegistered, w)
+	name, err := typeName(w)
+	if err != nil {
+		return nil, err
 	}
 
 	props, err := json.Marshal(w)
@@ -144,6 +142,17 @@ func MarshalWidget(w WidgetDefinition) ([]byte, error) {
 		return nil, fmt.Errorf("widget %q: marshal props: %w", name, err)
 	}
 	return json.Marshal(widgetEnvelope{Type: name, Props: props})
+}
+
+// typeName is the name `w`'s type is registered under ("timeBar").
+func typeName(w WidgetDefinition) (string, error) {
+	registryMu.RLock()
+	name, ok := goTypeToName[reflect.TypeOf(w)]
+	registryMu.RUnlock()
+	if !ok {
+		return "", fmt.Errorf("%w: %T", ErrWidgetNotRegistered, w)
+	}
+	return name, nil
 }
 
 // UnmarshalWidget reconstructs the concrete widget named by the "type"

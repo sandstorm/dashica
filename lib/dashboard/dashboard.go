@@ -80,6 +80,11 @@ func (d *Builder) FilterButton(title string, queryPart string) *Builder {
 }
 
 func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
+	// first: it gives the widgets their ids and URLs, which BuildComponents renders
+	if _, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api")); err != nil {
+		return fmt.Errorf("mounting widgets: %w", err)
+	}
+
 	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(ctx) })
 	if err != nil {
 		return fmt.Errorf("building components: %w", err)
@@ -98,7 +103,7 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 		return fmt.Errorf("registering open-in-explore handler: %w", err)
 	}
 
-	return d.widgets.CollectHandlers(ctx, handlerCollector.Nested("/api"))
+	return nil
 }
 
 // openInExploreHandler serializes this dashboard (skipping out-of-scope widgets)

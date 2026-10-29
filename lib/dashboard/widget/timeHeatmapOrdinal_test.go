@@ -362,28 +362,3 @@ func TestTimeHeatmapOrdinal_BuildComponents(t *testing.T) {
 		t.Error("Expected non-nil component")
 	}
 }
-
-func TestTimeHeatmapOrdinal_BuildComponents_AutoGeneratesId(t *testing.T) {
-	baseQuery := sql.New(sql.From(timeHeatmapOrdinalTestTableName))
-	widget := NewTimeHeatmapOrdinal(baseQuery).
-		X(sql.Timestamp15Min()).
-		Y(sql.Field("status")).
-		YBucketSize(100)
-
-	ctx := &rendering.DashboardContext{
-		CurrentHandlerUrl: "/dashboard",
-	}
-
-	component, err := widget.BuildComponents(ctx)
-	if err != nil {
-		t.Fatalf("BuildComponents failed: %v", err)
-	}
-
-	if component == nil {
-		t.Error("Expected non-nil component")
-	}
-
-	if widget.id == "" {
-		t.Error("Expected widget.id to be auto-generated, but it was empty")
-	}
-}

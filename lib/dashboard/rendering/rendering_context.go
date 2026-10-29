@@ -9,6 +9,7 @@ import (
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 type DashboardContext struct {
@@ -50,11 +51,28 @@ type DashboardContext struct {
 	PreviewBaseUrl string
 
 	nextWidgetId int
+	dataURLs     map[any]string
 }
 
-func (c *DashboardContext) NextWidgetId() string {
-	c.nextWidgetId++
-	return strconv.Itoa(c.nextWidgetId)
+// WidgetHandlers is where `widget` registers its handlers: below `api` ("<page>/api") at `id`, or at the page's next
+// number ("1", "2", …) when `id` is empty. From then on DataURL names that URL.
+func (c *DashboardContext) WidgetHandlers(api handler_collector.HandlerCollector, widget any, id string) handler_collector.HandlerCollector {
+	if id == "" {
+		c.nextWidgetId++
+		id = strconv.Itoa(c.nextWidgetId)
+	}
+	handlers := api.Nested("/" + id)
+	if c.dataURLs == nil {
+		c.dataURLs = map[any]string{}
+	}
+	c.dataURLs[widget] = handlers.Path()
+	return handlers
+}
+
+// DataURL is the URL below which `widget`'s handlers are ("/p/wetell/api/3"), as WidgetHandlers gave them; empty for
+// a widget without handlers.
+func (c *DashboardContext) DataURL(widget any) string {
+	return c.dataURLs[widget]
 }
 
 type Dependencies struct {

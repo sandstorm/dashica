@@ -2,21 +2,21 @@ package widget
 
 import (
 	"fmt"
+	"iter"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/util"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
 type CollapsibleGroup struct {
 	// title is the text shown on the collapsible header.
-	title string
+	title string `dashica-gen:"client"`
 	// widgets are the child widgets rendered inside the group, in order.
 	widgets Widgets `dashica-gen:"method=Widget"`
 	// open controls whether the group starts expanded. Zero value: collapsed.
-	open bool
+	open bool `dashica-gen:"client"`
 }
 
 func NewCollapsibleGroup() *CollapsibleGroup {
@@ -50,8 +50,6 @@ func (w *CollapsibleGroup) BuildComponents(ctx *rendering.DashboardContext) (tem
 	return widget_component.CollapsibleGroup(w.title, templ.Join(components...), w.open), nil
 }
 
-func (w *CollapsibleGroup) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
-	return w.widgets.CollectHandlers(ctx, collector)
-}
+func (w *CollapsibleGroup) Children() iter.Seq2[string, WidgetDefinition] { return w.widgets.all() }
 
 var _ WidgetDefinition = (*CollapsibleGroup)(nil)

@@ -2,9 +2,11 @@ package widget
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -29,46 +31,21 @@ func TestSpeedscopeLink_DefaultTitle(t *testing.T) {
 	mustContain(t, out, `Open Speedscope`)
 }
 
-func TestSpeedscopeLink_AutoGeneratesId(t *testing.T) {
-	w := NewSpeedscopeLink(sql.New(sql.From("t")))
-	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
-	if _, err := w.BuildComponents(ctx); err != nil {
-		t.Fatalf("BuildComponents: %v", err)
-	}
-	if w.id == "" {
-		t.Error("expected auto-generated id")
-	}
-}
-
-func TestSpeedscopeLink_RegistersHandler(t *testing.T) {
+func TestSpeedscopeLink_ServesTheViewerBelowItsURL(t *testing.T) {
 	w := NewSpeedscopeLink(sql.New(sql.From("t"))).Id("widget-7")
-	rec := newRecordingCollector()
-	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
-	if err := w.CollectHandlers(ctx, rec); err != nil {
-		t.Fatalf("CollectHandlers: %v", err)
+	mux := http.NewServeMux()
+	nodes, err := Widgets{w}.Mount(&rendering.DashboardContext{CurrentHandlerUrl: "/d"}, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/d/api"))
+	if err != nil {
+		t.Fatalf("Mount: %v", err)
 	}
-	if _, ok := rec.handlers["widget-7/speedscope-query"]; !ok {
-		var keys []string
-		for k := range rec.handlers {
-			keys = append(keys, k)
-		}
-		t.Errorf("expected widget-7/speedscope-query handler, got: %v", keys)
+	if nodes[0].Type != "speedscopeLink" || nodes[0].DataURL != "/d/api/widget-7" {
+		t.Errorf("unexpected node %+v", nodes[0])
 	}
-}
-
-func TestSpeedscopeLink_RegistersViewerHandler(t *testing.T) {
-	w := NewSpeedscopeLink(sql.New(sql.From("t"))).Id("widget-7")
-	rec := newRecordingCollector()
-	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/d"}
-	if err := w.CollectHandlers(ctx, rec); err != nil {
-		t.Fatalf("CollectHandlers: %v", err)
-	}
-	if _, ok := rec.handlers["widget-7/viewer/"]; !ok {
-		var keys []string
-		for k := range rec.handlers {
-			keys = append(keys, k)
-		}
-		t.Errorf("expected widget-7/viewer/ handler, got: %v", keys)
+	// .gitkeep is the one file of the viewer's dist that is checked in.
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/d/api/widget-7/viewer/.gitkeep", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("viewer: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -88,22 +65,3 @@ func TestSpeedscopeLink_ContextNotShared(t *testing.T) {
 		t.Errorf("rendering not stable")
 	}
 }
-
-// recordingCollector is a minimal in-memory handler_collector.HandlerCollector for tests.
-type recordingCollector struct {
-	handlers map[string]http.Handler
-}
-
-func newRecordingCollector() *recordingCollector {
-	return &recordingCollector{handlers: map[string]http.Handler{}}
-}
-
-func (r *recordingCollector) Handle(path string, handler http.Handler) error {
-	r.handlers[path] = handler
-	return nil
-}
-func (r *recordingCollector) HandleRoot(_ http.Handler) error                    { return nil }
-func (r *recordingCollector) Nested(_ string) handler_collector.HandlerCollector { return r }
-func (r *recordingCollector) IsRegistered(_ string) bool                         { return false }
-
-var _ handler_collector.HandlerCollector = (*recordingCollector)(nil)

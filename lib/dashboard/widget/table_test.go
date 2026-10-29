@@ -73,7 +73,7 @@ func TestTableAppliesLimitToQuery(t *testing.T) {
 	query := sql.New(sql.From("test_table"))
 	table := NewTable(query).Limit(500)
 
-	// We can't directly test CollectHandlers without a full context,
+	// We can't directly test Mount without a full context,
 	// but we can verify the limit is stored correctly and would be applied
 	if table.limit != 500 {
 		t.Errorf("Expected limit of 500, got %d", table.limit)

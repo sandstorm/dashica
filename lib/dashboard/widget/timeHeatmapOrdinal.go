@@ -3,11 +3,11 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -16,34 +16,34 @@ type TimeHeatmapOrdinal struct {
 	// sql is the underlying query builder; adjust it with AdjustQuery.
 	sql sql.SqlQueryable
 	// x is the timestamped time-axis field, bucketed by xBucketSize.
-	x sql.TimestampedField
+	x sql.TimestampedField `dashica-gen:"client"`
 	// y is the ordinal (categorical) field plotted as one row per distinct value.
-	y sql.SqlField `dashica-gen:"role=dimension"`
+	y sql.SqlField `dashica-gen:"client,role=dimension"`
 	// fill is the measure bound to the color scale, coloring each cell.
 	// Zero value: cells are colored by Observable Plot's default scheme.
-	fill *sql.SqlField `dashica-gen:"role=measure"`
+	fill *sql.SqlField `dashica-gen:"client,role=measure"`
 	// title is the chart title shown above the plot.
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 	// height is the chart height in pixels. Zero value: Observable Plot's default.
-	height *int
+	height *int `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
-	width *int
+	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
-	marginLeft *int
+	marginLeft *int `dashica-gen:"client"`
 	// colorScheme names an Observable Plot color scheme for the fill scale
 	// (e.g. "blues", "inferno"). Zero value: the dashboard's default
 	// light/dark scheme. Ignored when color is set.
 	// Docs: https://observablehq.com/plot/features/scales#color-scales
-	colorScheme string
+	colorScheme string `dashica-gen:"client"`
 	// color configures the color scale used for fill; takes precedence over colorScheme.
-	color *color.ColorScale
+	color *color.ColorScale `dashica-gen:"client"`
 	// xBucketSize is the width of each time bucket on the x axis, in milliseconds.
-	xBucketSize int64
+	xBucketSize int64 `dashica-gen:"client"`
 	// yBucketSize is sent to the API but not used by the ordinal heatmap's
 	// rendering, since rows are one per distinct y value rather than bucketed.
-	yBucketSize int64
+	yBucketSize int64 `dashica-gen:"client"`
 }
 
 func (h *TimeHeatmapOrdinal) X(xField sql.TimestampedField) *TimeHeatmapOrdinal {
@@ -134,10 +134,6 @@ func NewTimeHeatmapOrdinal(sql *sql.SqlQuery) *TimeHeatmapOrdinal {
 }
 
 func (h *TimeHeatmapOrdinal) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(h.id) == 0 {
-		h.id = ctx.NextWidgetId()
-	}
-
 	chartProps := h.buildChartProps()
 	chartPropsJSON, err := json.Marshal(chartProps)
 	if err != nil {
@@ -148,7 +144,7 @@ func (h *TimeHeatmapOrdinal) BuildComponents(ctx *rendering.DashboardContext) (t
 	if h.height != nil {
 		heightVal = *h.height
 	}
-	return chartComponent(ctx, h, h.id, "timeHeatmapOrdinal", string(chartPropsJSON), heightVal), nil
+	return chartComponent(ctx, h, "timeHeatmapOrdinal", string(chartPropsJSON), heightVal), nil
 }
 
 func (h *TimeHeatmapOrdinal) buildChartProps() map[string]interface{} {
@@ -206,13 +202,10 @@ func (h *TimeHeatmapOrdinal) buildQuery() sql.SqlQueryable {
 	return query
 }
 
-func (h *TimeHeatmapOrdinal) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(h.id) == 0 {
-		h.id = ctx.NextWidgetId()
-	}
-
-	query := h.buildQuery()
-	return RegisterQueryHandlers(h.id, "timeHeatmapOrdinal", query, ctx, registerHandler)
+func (h *TimeHeatmapOrdinal) Handler(deps rendering.Dependencies) http.Handler {
+	return queryHandler(deps, h.buildQuery())
 }
 
-var _ InteractiveWidget = (*TimeHeatmapOrdinal)(nil)
+func (h *TimeHeatmapOrdinal) explicitId() string { return h.id }
+
+var _ WidgetDefinition = (*TimeHeatmapOrdinal)(nil)

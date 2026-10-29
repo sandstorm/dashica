@@ -106,6 +106,13 @@ func TestClassify_timeBar(t *testing.T) {
 		}
 	}
 
+	// Only the fields tagged `dashica-gen:"client"` go to the client: not its query.
+	for name, client := range map[string]bool{"sql": false, "x": true, "title": true, "stack": true} {
+		if f := fieldByName(tb, name); f != nil && f.Client != client {
+			t.Errorf("field %q: client = %v, want %v", name, f.Client, client)
+		}
+	}
+
 	// The queryable field keeps its Go name as the JSON key (no magic rename).
 	if f := fieldByName(tb, "sql"); f != nil && f.JSONKey != "sql" {
 		t.Errorf("sql JSONKey = %q, want %q", f.JSONKey, "sql")

@@ -3,10 +3,10 @@ package widget
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-	"github.com/sandstorm/dashica/lib/util/handler_collector"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -16,13 +16,13 @@ type Table struct {
 	// are taken as-is from the query result, one column per table column.
 	sql sql.SqlQueryable
 	// title is the table title shown above the widget.
-	title string
-	// id is the stable widget id; assigned automatically when empty.
+	title string `dashica-gen:"client"`
+	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
 	// height is the table height in pixels.
-	height int
+	height int `dashica-gen:"client"`
 	// limit caps the number of rows fetched via a SQL LIMIT clause.
-	limit int
+	limit int `dashica-gen:"client"`
 }
 
 func NewTable(sql sql.SqlQueryable) *Table {
@@ -64,17 +64,13 @@ func (b *Table) AdjustQuery(opts ...sql.SqlBuilderOption) *Table {
 }
 
 func (b *Table) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
 	chartProps := b.buildChartProps()
 	chartPropsJSON, err := json.Marshal(chartProps)
 	if err != nil {
 		return nil, fmt.Errorf("table: failed to marshal chart props: %w", err)
 	}
 
-	return chartComponent(ctx, b, b.id, "table", string(chartPropsJSON), b.height), nil
+	return chartComponent(ctx, b, "table", string(chartPropsJSON), b.height), nil
 }
 
 func (b *Table) buildChartProps() map[string]interface{} {
@@ -91,17 +87,15 @@ func (b *Table) buildChartProps() map[string]interface{} {
 	return props
 }
 
-func (b *Table) CollectHandlers(ctx *rendering.DashboardContext, registerHandler handler_collector.HandlerCollector) error {
-	if len(b.id) == 0 {
-		b.id = ctx.NextWidgetId()
-	}
-
+func (b *Table) Handler(deps rendering.Dependencies) http.Handler {
 	// Build the SQL query
 	query := b.sql.With(
 		sql.Limit(b.limit),
 	)
 
-	return RegisterQueryHandlers(b.id, "table", query, ctx, registerHandler)
+	return queryHandler(deps, query)
 }
 
-var _ InteractiveWidget = (*Table)(nil)
+func (b *Table) explicitId() string { return b.id }
+
+var _ WidgetDefinition = (*Table)(nil)
