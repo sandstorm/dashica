@@ -11,8 +11,10 @@ import { ChartFrame, type WidgetContext, type WidgetOf } from '../../hosts/widge
  */
 export const heatmap: Extension = {
   id: 'heatmap',
-  activate: ({ widgets, subscriptions }) =>
-    subscriptions.push(widgets.registerWidget('timeHeatmap', renderTimeHeatmap), widgets.registerWidget('timeHeatmapOrdinal', renderTimeHeatmapOrdinal)),
+  activate({ widgets, subscriptions }) {
+    subscriptions.push(widgets.registerWidget('timeHeatmap', renderTimeHeatmap));
+    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', renderTimeHeatmapOrdinal));
+  },
 };
 
 function renderTimeHeatmap(el: HTMLElement, widget: WidgetOf<'timeHeatmap'>, ctx: WidgetContext): ChartFrame {

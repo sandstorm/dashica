@@ -10,8 +10,10 @@ import { ChartFrame, type WidgetContext, type WidgetOf } from '../../hosts/widge
  */
 export const alerts: Extension = {
   id: 'alerts',
-  activate: ({ widgets, subscriptions }) =>
-    subscriptions.push(widgets.registerWidget('alertOverview', renderAlertOverview), widgets.registerWidget('alertDetail', renderAlertDetail)),
+  activate({ widgets, subscriptions }) {
+    subscriptions.push(widgets.registerWidget('alertOverview', renderAlertOverview));
+    subscriptions.push(widgets.registerWidget('alertDetail', renderAlertDetail));
+  },
 };
 
 function renderAlertOverview(el: HTMLElement, _widget: WidgetOf<'alertOverview'>, ctx: WidgetContext): ChartFrame {
