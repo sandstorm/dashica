@@ -24,6 +24,21 @@ func TestFindEnums_RefusesWhatIsNotAnnotatedOrNotShaped(t *testing.T) {
 	}
 }
 
+// -enums loads the syntax only, so it writes the methods of a package that needs them to compile.
+func TestFindEnums_ReadsTheSyntaxOnly(t *testing.T) {
+	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax}, "./testdata/selfuse")
+	if err != nil || len(pkgs) != 1 {
+		t.Fatalf("load: %v", err)
+	}
+	enums, err := findEnums(pkgs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if values := enums["Curve"].Values; len(values) != 2 || values[1].VarName != "CurveStep" || values[1].Str != "step" {
+		t.Errorf("Curve values = %+v, want CurveLinear=linear, CurveStep=step", values)
+	}
+}
+
 // gofmt keeps a directive (`//name:…`, name in lowercase letters and digits) as written, and puts a space into any
 // other comment: the annotation has to be one, or formatting the file loses the enum.
 func TestEnumAnnotation_IsKeptByGofmt(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"go/ast"
 	"go/format"
 	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -40,7 +40,7 @@ func findEnums(pkg *packages.Package) (map[string]enumInfo, error) {
 			for _, spec := range gd.Specs {
 				ts := spec.(*ast.TypeSpec)
 				annotated := hasAnnotation(ts.Doc) || (len(gd.Specs) == 1 && hasAnnotation(gd.Doc))
-				shaped := isEnumShape(pkg.Types.Scope().Lookup(ts.Name.Name).Type())
+				shaped := isEnumShape(ts)
 				switch {
 				case annotated && !shaped:
 					return nil, fmt.Errorf("%s.%s is annotated %s but is no struct{ v string }", pkg.Name, ts.Name.Name, enumAnnotation)
@@ -93,14 +93,16 @@ func hasAnnotation(doc *ast.CommentGroup) bool {
 	return false
 }
 
-// isEnumShape: `t` is a named `struct{ v string }`.
-func isEnumShape(t types.Type) bool {
-	named, ok := t.(*types.Named)
-	if !ok {
+// isEnumShape: `ts` declares `struct{ v string }`. It reads the syntax only, so -enums runs on a package that does
+// not compile without its zz_generated.enums.go (one calling String() on its own enum).
+func isEnumShape(ts *ast.TypeSpec) bool {
+	st, ok := ts.Type.(*ast.StructType)
+	if !ok || ts.Assign.IsValid() || ts.TypeParams != nil || len(st.Fields.List) != 1 {
 		return false
 	}
-	st, ok := named.Underlying().(*types.Struct)
-	return ok && st.NumFields() == 1 && st.Field(0).Name() == "v" && isBasic(st.Field(0).Type(), types.String)
+	field := st.Fields.List[0]
+	typ, ok := field.Type.(*ast.Ident)
+	return len(field.Names) == 1 && field.Names[0].Name == "v" && ok && typ.Name == "string"
 }
 
 // enumLiteral is the type and string of `T{"…"}`.
@@ -123,7 +125,8 @@ func enumLiteral(expr ast.Expr) (string, string, bool) {
 // emitEnums writes zz_generated.enums.go into the package of `pattern`: per enum String, GoString, MarshalJSON and
 // UnmarshalJSON, the last refusing a value that is none of its values.
 func emitEnums(pattern string) error {
-	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes}, pattern)
+	// the syntax only (see isEnumShape)
+	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax}, pattern)
 	if err != nil {
 		return fmt.Errorf("load %s: %w", pattern, err)
 	}
@@ -138,11 +141,14 @@ func emitEnums(pattern string) error {
 	if err != nil {
 		return err
 	}
+	var names []string
+	for name := range enums {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	var sorted []enumInfo
-	for _, name := range pkg.Types.Scope().Names() {
-		if e, ok := enums[name]; ok {
-			sorted = append(sorted, e)
-		}
+	for _, name := range names {
+		sorted = append(sorted, enums[name])
 	}
 	var buf bytes.Buffer
 	if err := enumsTemplate.Execute(&buf, struct {
