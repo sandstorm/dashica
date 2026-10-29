@@ -74,9 +74,9 @@ export const page = {
             "height": 150,
             "title": "Requests over time",
             "x": {
-              "kind": "expr",
-              "definition": "toStartOfFifteenMinutes(timestamp)::DateTime64",
+              "kind": "autoBucket",
               "alias": "time",
+              "column": "timestamp",
               "xBucketSizeMs": 900000
             },
             "y": {

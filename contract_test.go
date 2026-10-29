@@ -37,7 +37,7 @@ func everyWidget() *dashboard.Builder {
 		Widget(widget.NewMarkdown().Content("# Wetell")).
 		Widget(widget.NewGrid().Template("a b").
 			Area("a", widget.NewTimeBar(logs).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status")).Title("Requests")).
-			Area("b", widget.NewTimeLine(logs).X(sql.Timestamp15Min()).Y(sql.Count()).Title("Requests over time"))).
+			Area("b", widget.NewTimeLine(logs).X(sql.AutoBucket("timestamp")).Y(sql.Count()).Title("Requests over time"))).
 		Widget(widget.NewCollapsibleGroup().Title("Details").Open().
 			Widget(widget.NewBarVertical(logs).X(sql.Field("status")).Y(sql.Count())).
 			Widget(widget.NewBarHorizontal(logs).X(sql.Count()).Y(sql.Field("path"))).

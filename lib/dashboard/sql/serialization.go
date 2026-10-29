@@ -35,7 +35,8 @@ const (
 
 // sqlFieldDTO is the wire form of every SqlField. Not all keys apply to every
 // kind: "expr"/"count"/"enum" carry definition+alias (+xBucketSizeMs for
-// timestamped fields); "autoBucket" carries column+alias.
+// timestamped fields); "autoBucket" carries column+alias+xBucketSizeMs (its size
+// until the server picks one for the time range).
 type sqlFieldDTO struct {
 	Kind          fieldKind `json:"kind"`
 	Definition    string    `json:"definition,omitempty"`
@@ -59,9 +60,10 @@ func (f *fieldImpl) MarshalJSON() ([]byte, error) {
 
 func (f *autoBucketFieldImpl) MarshalJSON() ([]byte, error) {
 	return json.Marshal(sqlFieldDTO{
-		Kind:   kindAutoBucket,
-		Column: f.column_,
-		Alias:  f.alias_,
+		Kind:          kindAutoBucket,
+		Column:        f.column_,
+		Alias:         f.alias_,
+		XBucketSizeMs: f.sizeMs,
 	})
 }
 
