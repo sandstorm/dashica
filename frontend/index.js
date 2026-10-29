@@ -45,6 +45,6 @@ window.Dashica.initWorkbench = () => {
     if (!host) return;
     createWorkbench(host, {
         content: document.querySelector('[data-workbench-part="content"]'),
-        extensions: [legacyPage(document), searchEverywhere()],
+        extensions: [legacyPage(document), searchEverywhere],
     });
 };

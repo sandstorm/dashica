@@ -10,7 +10,7 @@ let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.activate(collapsible(), schemaTable());
+  testbed.activate(collapsible, schemaTable);
 });
 
 afterEach(() => testbed.dispose());

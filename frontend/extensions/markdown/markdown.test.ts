@@ -8,7 +8,7 @@ let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.activate(markdown());
+  testbed.activate(markdown);
 });
 
 afterEach(() => testbed.dispose());

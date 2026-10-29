@@ -18,7 +18,7 @@ function setup() {
   const ran: string[] = [];
   workbench = createWorkbench(host, {
     extensions: [
-      searchEverywhere(),
+      searchEverywhere,
       {
         id: 'timeRange',
         contributes: {

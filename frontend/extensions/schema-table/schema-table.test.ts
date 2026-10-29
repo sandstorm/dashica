@@ -8,7 +8,7 @@ let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.activate(schemaTable());
+  testbed.activate(schemaTable);
 });
 
 afterEach(() => testbed.dispose());
