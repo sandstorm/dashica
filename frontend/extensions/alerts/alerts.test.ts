@@ -37,5 +37,6 @@ describe('alerts', () => {
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.dashica-chart__body svg g[stroke="red"] line')).toHaveLength(1);
   });
 });
