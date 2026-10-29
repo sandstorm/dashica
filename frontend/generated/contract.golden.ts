@@ -5,11 +5,11 @@ import type { PageJson, WorkbenchJson } from './zz_generated.dashica';
 export const workbench = {
   "menu": [
     {
-      "title": "Wetell",
+      "title": "Shop",
       "entries": [
         {
-          "title": "Wetell",
-          "url": "/p/wetell"
+          "title": "Shop",
+          "url": "/p/shop"
         }
       ]
     }
@@ -18,7 +18,7 @@ export const workbench = {
 
 export const page = {
   "kind": "dashboard",
-  "title": "Wetell",
+  "title": "Shop",
   "defaultTime": "168h",
   "filterBar": true,
   "filterButtons": [
@@ -31,7 +31,7 @@ export const page = {
     {
       "type": "markdown",
       "props": {
-        "html": "\u003ch1 id=\"wetell\"\u003eWetell\u003c/h1\u003e\n"
+        "html": "\u003ch1 id=\"shop\"\u003eShop\u003c/h1\u003e\n"
       }
     },
     {
@@ -65,7 +65,7 @@ export const page = {
               "alias": "cnt"
             }
           },
-          "dataUrl": "/p/wetell/api/1"
+          "dataUrl": "/p/shop/api/1"
         },
         "b": {
           "type": "timeLine",
@@ -84,7 +84,7 @@ export const page = {
               "alias": "cnt"
             }
           },
-          "dataUrl": "/p/wetell/api/2"
+          "dataUrl": "/p/shop/api/2"
         }
       }
     },
@@ -110,7 +110,7 @@ export const page = {
               "alias": "cnt"
             }
           },
-          "dataUrl": "/p/wetell/api/3"
+          "dataUrl": "/p/shop/api/3"
         },
         "1": {
           "type": "barHorizontal",
@@ -127,7 +127,7 @@ export const page = {
               "alias": "path"
             }
           },
-          "dataUrl": "/p/wetell/api/4"
+          "dataUrl": "/p/shop/api/4"
         },
         "2": {
           "type": "timeHeatmap",
@@ -145,7 +145,7 @@ export const page = {
             },
             "yBucketSize": 100
           },
-          "dataUrl": "/p/wetell/api/5"
+          "dataUrl": "/p/shop/api/5"
         },
         "3": {
           "type": "timeHeatmapOrdinal",
@@ -162,12 +162,12 @@ export const page = {
               "alias": "status"
             }
           },
-          "dataUrl": "/p/wetell/api/6"
+          "dataUrl": "/p/shop/api/6"
         },
         "4": {
           "type": "stats",
           "props": {},
-          "dataUrl": "/p/wetell/api/wetell_stats"
+          "dataUrl": "/p/shop/api/shop_stats"
         },
         "5": {
           "type": "table",
@@ -176,7 +176,7 @@ export const page = {
             "limit": 100,
             "title": "Latest"
           },
-          "dataUrl": "/p/wetell/api/7"
+          "dataUrl": "/p/shop/api/7"
         }
       }
     },
@@ -204,28 +204,28 @@ export const page = {
       "props": {
         "table": "http_logs"
       },
-      "dataUrl": "/p/wetell/api/8"
+      "dataUrl": "/p/shop/api/8"
     },
     {
       "type": "speedscopeLink",
       "props": {},
-      "dataUrl": "/p/wetell/api/9"
+      "dataUrl": "/p/shop/api/9"
     },
     {
       "type": "alertOverview",
       "props": {
-        "alertGroupPattern": "wetell%"
+        "alertGroupPattern": "shop%"
       },
-      "dataUrl": "/p/wetell/api/10"
+      "dataUrl": "/p/shop/api/10"
     },
     {
       "type": "alertDetail",
       "props": {
-        "alertGroup": "wetell",
-        "alertKey": "app_auth_events",
-        "title": "wetell#app_auth_events"
+        "alertGroup": "shop",
+        "alertKey": "login_events",
+        "title": "shop#login_events"
       },
-      "dataUrl": "/p/wetell/api/11"
+      "dataUrl": "/p/shop/api/11"
     }
   ]
 } satisfies PageJson;

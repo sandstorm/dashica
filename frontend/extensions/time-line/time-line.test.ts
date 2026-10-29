@@ -31,8 +31,8 @@ describe('timeLine', () => {
   });
 
   it('draws the widget’s data once it is in view', async () => {
-    testbed.serve('/p/wetell/api/1/query', { time: [T0, T0 + QUARTER], cnt: [3, 5] });
-    const { el } = testbed.render({ type: 'timeLine', props: { x: { kind: 'autoBucket', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/wetell/api/1' });
+    testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], cnt: [3, 5] });
+    const { el } = testbed.render({ type: 'timeLine', props: { x: { kind: 'autoBucket', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.dashica-chart__body svg path').length).toBeGreaterThan(0);

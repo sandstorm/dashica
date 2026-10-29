@@ -54,11 +54,11 @@ they are**; inner API URLs may change.
 
 ```
 GET  /workbench.json               menu groups (the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
-GET  /p/wetell                     shell HTML (the same for every page)
-GET  /p/wetell/page.json           {kind, title, defaultTime, filterFields, filterButtons, actions, widgets}   ← new
-GET  /p/wetell/api/<id>/query      widget data (Arrow)
-GET  /p/wetell/api/<id>/debug      query, EXPLAIN
-POST /p/wetell/action/<id>         a Go action (§3.9)                                                        ← new
+GET  /p/shop                       shell HTML (the same for every page)
+GET  /p/shop/page.json             {kind, title, defaultTime, filterFields, filterButtons, actions, widgets}   ← new
+GET  /p/shop/api/<id>/query        widget data (Arrow)
+GET  /p/shop/api/<id>/debug        query, EXPLAIN
+POST /p/shop/action/<id>           a Go action (§3.9)                                                        ← new
 ```
 
 - `page.json` is built **in the same `CollectHandlers` pass** that mounts the widget handlers, so it carries exactly
@@ -93,7 +93,7 @@ type markdownComputed struct {
 ### 3.4 Workbench regions
 
 ```
-┌─ Dashica › Wetell ──── [⌘K search] ── [Last 1h ▾][⟳ 30s][log] ┐   title bar
+┌─ Dashica › Shop ────── [⌘K search] ── [Last 1h ▾][⟳ 30s][log] ┐   title bar
 │▐menu▌ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐inspector▌│   filter bar (above the content)
 │▐    ▌ content (scrolls)                          │▐         ▌│   left · content · right
 │▐    ▌ bottom panel: Debug │ Details              │▐         ▌│   bottom panel (below the content)
@@ -129,7 +129,7 @@ Hosts keep only mechanism.
 | `query` | the state every query depends on (§3.7) |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
 
-- Client extensions live only in `dashica-src`; the instances (Sandstorm, Solarwatt) customize through Go.
+- Client extensions live only in `dashica-src`; the instances customize through Go.
 - **Extensions do not depend on each other (for now).** What several need goes into a host (e.g. `query.viewOptions`).
   When that would turn a feature into a host only to share one model (Explore's tabs on `ExploreModel` are the likely
   case), take VS Code's way: `dependsOn: ['explore']`, and what `activate()` returns is its API to the dependents.
@@ -578,7 +578,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 ## 6. Later (out of scope, but the design must not block it)
 
 - **Explore rebuilt** as extensions on `ExploreModel`: widget tree left, inspector right, Data / Go / JSON bottom, while
-  `page.kind === 'explore'`. "Open in Explore" becomes a built-in action: `?source=/p/wetell&widget=api/3`, Explore
+  `page.kind === 'explore'`. "Open in Explore" becomes a built-in action: `?source=/p/shop&widget=api/3`, Explore
   reads that widget from the source's `page.json` (no server state, no URL length issue). Persistence: localStorage +
   share link as today.
 - **Drill-down: start at a chart, go ad hoc from there.** Two kinds, as Superset names them:

@@ -14,7 +14,7 @@ beforeEach(() => {
 
 afterEach(() => testbed.dispose());
 
-const requests: WidgetNode = { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/wetell/api/1' };
+const requests: WidgetNode = { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' };
 
 describe('WidgetsHost', () => {
   it('renders a widget with the renderer of its type, and empties the element when disposed', () => {
@@ -52,8 +52,8 @@ describe('WidgetsHost', () => {
       el.textContent = widget.props.title ?? '';
       return new Disposable(() => {});
     });
-    const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { title: 'Wetell' } } } };
-    expect(testbed.render(grid).el.textContent).toBe('Wetell');
+    const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { title: 'Shop' } } } };
+    expect(testbed.render(grid).el.textContent).toBe('Shop');
   });
 
   describe('the widget context', () => {
@@ -69,7 +69,7 @@ describe('WidgetsHost', () => {
 
     it('queries the widget’s handler with the page’s query state, and reads what the server says in the headers', async () => {
       testbed.query.filters.setSql('status >= 500');
-      testbed.serve('/p/wetell/api/1/query', { cnt: [3] }, { 'X-Dashica-Bucket-Size': '900000', 'X-Dashica-Resolved-Time-Range': '{"from":1,"to":2}' });
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Bucket-Size': '900000', 'X-Dashica-Resolved-Time-Range': '{"from":1,"to":2}' });
       const result = await ctx.query();
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);
       expect(result.dashicaBucketSize).toBe(900000);
@@ -78,16 +78,16 @@ describe('WidgetsHost', () => {
     });
 
     it('rejects with the server’s message', async () => {
-      testbed.serveText('/p/wetell/api/1/query', 'Unknown identifier status', 500);
+      testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
       await expect(ctx.query()).rejects.toThrow('Unknown identifier status');
     });
 
     it('names URLs below the widget’s handler with the page’s query state', () => {
-      expect(ctx.url('/speedscope-query')).toMatch(/^\/p\/wetell\/api\/1\/speedscope-query\?filters=/);
+      expect(ctx.url('/speedscope-query')).toMatch(/^\/p\/shop\/api\/1\/speedscope-query\?filters=/);
     });
 
     it('shows the menu widget/context for the widget, with what it queried last', async () => {
-      testbed.serve('/p/wetell/api/1/query', { cnt: [3] });
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] });
       await ctx.query();
       const anchor = document.body.appendChild(document.createElement('button'));
       ctx.showMenu(anchor);
@@ -125,7 +125,7 @@ describe('ChartFrame', () => {
   const body = (el: HTMLElement) => el.querySelector('.dashica-chart__body')!;
 
   it('shows the title until it is drawn, and queries only once it is in view', async () => {
-    testbed.serve('/p/wetell/api/1/query', { cnt: [3, 4] });
+    testbed.serve('/p/shop/api/1/query', { cnt: [3, 4] });
     const { el } = testbed.render(requests);
     expect(body(el).textContent).toBe('Requests');
     testbed.query.refresh();
@@ -137,7 +137,7 @@ describe('ChartFrame', () => {
   });
 
   it('queries again on a refresh, and draws again for another width or the log scale', async () => {
-    testbed.serve('/p/wetell/api/1/query', { cnt: [3] });
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
     testbed.render(requests);
     testbed.resize(640);
     testbed.scrollIntoView();
@@ -153,7 +153,7 @@ describe('ChartFrame', () => {
   });
 
   it('shows the error of a failed query in the chart', async () => {
-    testbed.serveText('/p/wetell/api/1/query', 'Unknown identifier status', 500);
+    testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
     const { el } = testbed.render(requests);
     testbed.scrollIntoView();
     await settle();

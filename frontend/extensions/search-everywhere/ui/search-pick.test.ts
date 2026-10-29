@@ -40,14 +40,14 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('SearchPick', () => {
   it('shows every provider as a group in `order`, matching fuzzily and marking the matches', () => {
     const { search, type, rows, marked } = setup(
-      provider('Alerts', ['Wetell auth events', 'Ingress errors', 'Disk full'], { order: 20 }),
-      provider('Dashboards', ['Wetell overview', 'Oekokiste'], { order: 10 }),
+      provider('Alerts', ['Shop login events', 'Ingress errors', 'Disk full'], { order: 20 }),
+      provider('Dashboards', ['Shop overview', 'Billing'], { order: 10 }),
     );
     search.show();
-    expect(rows()).toEqual(['# Dashboards', 'Wetell overview', 'Oekokiste', '# Alerts', 'Wetell auth events', 'Ingress errors', 'Disk full']);
-    type('wet');
-    expect(rows()).toEqual(['# Dashboards', 'Wetell overview', '# Alerts', 'Wetell auth events']);
-    expect(marked()).toEqual(['Wet', 'Wet']);
+    expect(rows()).toEqual(['# Dashboards', 'Shop overview', 'Billing', '# Alerts', 'Shop login events', 'Ingress errors', 'Disk full']);
+    type('sho');
+    expect(rows()).toEqual(['# Dashboards', 'Shop overview', '# Alerts', 'Shop login events']);
+    expect(marked()).toEqual(['Sho', 'Sho']);
     type('nothing like it');
     expect(rows()).toEqual([]);
     expect(document.querySelector<HTMLElement>('.dashica-wb__quick-pick-empty')!.hidden).toBe(false);
@@ -58,13 +58,13 @@ describe('SearchPick', () => {
       id: 'dashboards',
       label: 'Dashboards',
       provideItems: () => [
-        { label: 'Logs', description: 'Wetell', accept() {} },
-        { label: 'Wetell overview', description: 'Wetell', accept() {} },
+        { label: 'Logs', description: 'Shop', accept() {} },
+        { label: 'Shop overview', description: 'Shop', accept() {} },
       ],
     });
     search.show();
-    type('wetell');
-    expect(rows()).toEqual(['# Dashboards', 'Wetell overview Wetell', 'Logs Wetell']);
+    type('shop');
+    expect(rows()).toEqual(['# Dashboards', 'Shop overview Shop', 'Logs Shop']);
   });
 
   it('narrows to the providers of a prefix, which show more, and says how in the hint and the headings', () => {
@@ -89,7 +89,7 @@ describe('SearchPick', () => {
   });
 
   it('opens with a value, e.g. a prefix', () => {
-    const { search, field, rows } = setup(provider('Commands', ['Refresh now'], { prefix: '>' }), provider('Dashboards', ['Wetell overview']));
+    const { search, field, rows } = setup(provider('Commands', ['Refresh now'], { prefix: '>' }), provider('Dashboards', ['Shop overview']));
     search.show('>');
     expect(field().value).toBe('>');
     expect(rows()).toEqual(['# Commands', 'Refresh now']);
@@ -106,7 +106,7 @@ describe('SearchPick', () => {
         return query ? [{ label: `GET /${query} 500`, highlights: { label: [[5, 5 + query.length]] }, accept() {} }] : [];
       },
     };
-    const { host, search, type, rows, marked } = setup(server, provider('Dashboards', ['Wetell overview']));
+    const { host, search, type, rows, marked } = setup(server, provider('Dashboards', ['Shop overview']));
     search.show();
     type('login');
     const progress = host.querySelector<HTMLElement>('.dashica-wb__quick-pick-progress')!;
@@ -121,13 +121,13 @@ describe('SearchPick', () => {
   });
 
   it('runs the picked item once the search is closed and the focus is back', () => {
-    const { host, ui, search, field, rows } = setup(provider('Dashboards', ['Wetell overview', 'Oekokiste']));
+    const { host, ui, search, field, rows } = setup(provider('Dashboards', ['Shop overview', 'Billing']));
     const button = host.appendChild(document.createElement('button'));
     button.focus();
     const picked = vi.fn(() => expect([document.activeElement, host.querySelector('.dashica-wb__quick-pick')]).toEqual([button, null]));
-    ui.registerSearchProvider({ id: 'more', label: 'More', provideItems: () => [{ label: 'Oekokiste alerts', accept: picked }] });
+    ui.registerSearchProvider({ id: 'more', label: 'More', provideItems: () => [{ label: 'Billing alerts', accept: picked }] });
     search.show();
-    expect(rows()).toContain('Oekokiste alerts');
+    expect(rows()).toContain('Billing alerts');
     search.show('alerts');
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(picked).toHaveBeenCalledTimes(1);
@@ -142,9 +142,9 @@ describe('SearchPick', () => {
         throw new Error('broken');
       },
     };
-    const { search, rows } = setup(failing, provider('Dashboards', ['Wetell overview']));
+    const { search, rows } = setup(failing, provider('Dashboards', ['Shop overview']));
     search.show();
-    expect(rows()).toEqual(['# Dashboards', 'Wetell overview']);
+    expect(rows()).toEqual(['# Dashboards', 'Shop overview']);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
   });

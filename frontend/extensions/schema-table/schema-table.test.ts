@@ -15,16 +15,16 @@ afterEach(() => testbed.dispose());
 
 describe('schemaTable', () => {
   it('shows the CREATE TABLE statement below its title', async () => {
-    testbed.serveText('/p/wetell/api/1/schema', 'CREATE TABLE default.http_logs (`timestamp` DateTime64(3))');
-    const { el } = testbed.render({ type: 'schemaTable', props: { table: 'http_logs', title: 'Logs' }, dataUrl: '/p/wetell/api/1' });
+    testbed.serveText('/p/shop/api/1/schema', 'CREATE TABLE default.http_logs (`timestamp` DateTime64(3))');
+    const { el } = testbed.render({ type: 'schemaTable', props: { table: 'http_logs', title: 'Logs' }, dataUrl: '/p/shop/api/1' });
     await settle();
     expect(el.querySelector('h2')!.textContent).toBe('Logs');
     expect(el.querySelector('pre')!.textContent).toBe('CREATE TABLE default.http_logs (`timestamp` DateTime64(3))');
   });
 
   it('marks the server’s error as one', async () => {
-    testbed.serveText('/p/wetell/api/1/schema', 'SHOW CREATE TABLE http_logs: Table default.http_logs does not exist', 500);
-    const { el } = testbed.render({ type: 'schemaTable', props: { table: 'http_logs' }, dataUrl: '/p/wetell/api/1' });
+    testbed.serveText('/p/shop/api/1/schema', 'SHOW CREATE TABLE http_logs: Table default.http_logs does not exist', 500);
+    const { el } = testbed.render({ type: 'schemaTable', props: { table: 'http_logs' }, dataUrl: '/p/shop/api/1' });
     await settle();
     expect(el.querySelector('pre')!.classList.contains('text-error')).toBe(true);
     expect(el.querySelector('pre')!.textContent).toContain('does not exist');

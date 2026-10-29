@@ -9,11 +9,11 @@ import { WidgetsHost } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `QueryHost`, with the browser parts jsdom lacks stubbed.
- * `activate` activates widget extensions on it (they get `widgets` and `query`); `serve` answers a URL path (`/p/wetell/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
+ * `activate` activates widget extensions on it (they get `widgets` and `query`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
  * chart visible, `resize` sets every chart's width; `menus` are the context menus shown. `dispose` in `afterEach`.
  */
 export function widgetTestbed() {
-  history.replaceState(null, '', '/p/wetell');
+  history.replaceState(null, '', '/p/shop');
   const query = new QueryHost(window);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
   const widgets = new WidgetsHost(query, { showContextMenu: (menuId, options) => menus.push({ menuId, options }) });

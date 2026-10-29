@@ -34,9 +34,9 @@ func init() {
 
 func mountPage(t *testing.T, widgets ...WidgetDefinition) (*rendering.DashboardContext, *http.ServeMux, handler_collector.HandlerCollector, []Node) {
 	t.Helper()
-	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/wetell"}
+	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop"}
 	mux := http.NewServeMux()
-	handlers := handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/wetell/api")
+	handlers := handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop/api")
 	nodes, err := Widgets(widgets).Mount(ctx, handlers)
 	if err != nil {
 		t.Fatalf("Mount: %v", err)
@@ -47,19 +47,19 @@ func mountPage(t *testing.T, widgets ...WidgetDefinition) (*rendering.DashboardC
 func TestMount_NumbersTheWidgetsWithHandlersInOrderAndMountsThemAtTheirIds(t *testing.T) {
 	errors := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Title("Errors")
 	byStatus := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
-	stripe := NewStats(sql.New(sql.From("stripe"))).Id("sso_home_plus_stripe_stats")
-	group := NewCollapsibleGroup().Title("Details").Widget(NewGrid().Template("a b").Area("a", byStatus).Area("b", stripe))
+	revenue := NewStats(sql.New(sql.From("payments"))).Id("shop_revenue_stats")
+	group := NewCollapsibleGroup().Title("Details").Widget(NewGrid().Template("a b").Area("a", byStatus).Area("b", revenue))
 	ctx, _, handlers, nodes := mountPage(t, errors, group)
 
-	for _, path := range []string{"/p/wetell/api/1/", "/p/wetell/api/2/", "/p/wetell/api/sso_home_plus_stripe_stats/"} {
+	for _, path := range []string{"/p/shop/api/1/", "/p/shop/api/2/", "/p/shop/api/shop_revenue_stats/"} {
 		if !handlers.IsRegistered(path) {
 			t.Errorf("expected %s to be registered", path)
 		}
 	}
-	if nodes[0].DataURL != "/p/wetell/api/1" || ctx.DataURL(errors) != "/p/wetell/api/1" {
+	if nodes[0].DataURL != "/p/shop/api/1" || ctx.DataURL(errors) != "/p/shop/api/1" {
 		t.Errorf("time bar: node %q, context %q", nodes[0].DataURL, ctx.DataURL(errors))
 	}
-	if nodes[1].Type != "collapsibleGroup" || nodes[1].DataURL != "" || nodes[1].Children["0"].Children["a"].DataURL != "/p/wetell/api/2" {
+	if nodes[1].Type != "collapsibleGroup" || nodes[1].DataURL != "" || nodes[1].Children["0"].Children["a"].DataURL != "/p/shop/api/2" {
 		t.Errorf("containers have no URL, their children theirs: %+v", nodes[1])
 	}
 	var props map[string]any
@@ -67,18 +67,18 @@ func TestMount_NumbersTheWidgetsWithHandlersInOrderAndMountsThemAtTheirIds(t *te
 		t.Errorf("time bar props: title kept, query left out, got %s (%v)", nodes[0].Props, err)
 	}
 	area := nodes[1].Children["0"].Children["b"]
-	if area.Type != "stats" || area.DataURL != "/p/wetell/api/sso_home_plus_stripe_stats" {
+	if area.Type != "stats" || area.DataURL != "/p/shop/api/shop_revenue_stats" {
 		t.Errorf("explicit id: %+v", area)
 	}
 }
 
 func TestMount_TheHandlerSeesThePathBelowTheWidgetsURL(t *testing.T) {
 	_, mux, _, nodes := mountPage(t, pathEcho{})
-	if nodes[0].Type != "_pathEcho" || nodes[0].DataURL != "/p/wetell/api/1" {
+	if nodes[0].Type != "_pathEcho" || nodes[0].DataURL != "/p/shop/api/1" {
 		t.Fatalf("unexpected node %+v", nodes[0])
 	}
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/wetell/api/1/viewer/index.html", nil))
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/shop/api/1/viewer/index.html", nil))
 	if rec.Body.String() != "/viewer/index.html" {
 		t.Errorf("handler saw %q", rec.Body)
 	}

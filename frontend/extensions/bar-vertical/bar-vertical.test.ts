@@ -30,8 +30,8 @@ describe('barVertical', () => {
   });
 
   it('draws the widget’s data once it is in view', async () => {
-    testbed.serve('/p/wetell/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
-    const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/wetell/api/1' });
+    testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
+    const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);

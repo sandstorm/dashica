@@ -70,7 +70,7 @@ export interface SearchItem extends QuickPickItem {
 export interface ContextMenuOptions {
   /** Where the menu opens: below an element, or at a point (a right click's `clientX` / `clientY`). */
   readonly anchor: MenuAnchor;
-  /** The menu's accessible name ("Wetell"). */
+  /** The menu's accessible name ("Shop"). */
   readonly title: string;
   /** What `when` and `toggled` are asked with. */
   readonly context?: object;
@@ -82,7 +82,7 @@ export type MenuAnchor = Element | { readonly x: number; readonly y: number };
 
 /** A row of a quick pick. */
 export interface QuickPickItem {
-  /** What the item is called ("Wetell"). */
+  /** What the item is called ("Shop"). */
   readonly label: string;
   /** Less prominent, after the label ("Customers"). */
   readonly description?: string;

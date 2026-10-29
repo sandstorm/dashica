@@ -381,8 +381,8 @@ func createTestContext() *rendering.DashboardContext {
 }
 
 func TestMarkdown_SendsItsHTMLInItsProps(t *testing.T) {
-	ctx := &rendering.DashboardContext{Deps: rendering.Dependencies{FileSystem: fstest.MapFS{"wetell/about.md": {Data: []byte("# Wetell\n\n<b>raw</b>")}}}}
-	nodes, err := Widgets{NewMarkdown().File("wetell/about.md")}.Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/wetell/api"))
+	ctx := &rendering.DashboardContext{Deps: rendering.Dependencies{FileSystem: fstest.MapFS{"shop/about.md": {Data: []byte("# Shop\n\n<b>raw</b>")}}}}
+	nodes, err := Widgets{NewMarkdown().File("shop/about.md")}.Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/shop/api"))
 	if err != nil {
 		t.Fatalf("Mount: %v", err)
 	}
@@ -390,15 +390,15 @@ func TestMarkdown_SendsItsHTMLInItsProps(t *testing.T) {
 	if err := json.Unmarshal(nodes[0].Props, &props); err != nil {
 		t.Fatalf("props %s: %v", nodes[0].Props, err)
 	}
-	mustContain(t, props.Html, `<h1 id="wetell">Wetell</h1>`)
+	mustContain(t, props.Html, `<h1 id="shop">Shop</h1>`)
 	// a compiled dashboard is trusted: its raw HTML passes
 	mustContain(t, props.Html, `<b>raw</b>`)
 }
 
 func TestMarkdown_RefusesToMountWithAMissingFile(t *testing.T) {
 	ctx := &rendering.DashboardContext{Deps: rendering.Dependencies{FileSystem: fstest.MapFS{}}}
-	_, err := Widgets{NewMarkdown().File("wetell/about.md")}.Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()))
-	if err == nil || !strings.Contains(err.Error(), "reading markdown file wetell/about.md") {
+	_, err := Widgets{NewMarkdown().File("shop/about.md")}.Mount(ctx, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()))
+	if err == nil || !strings.Contains(err.Error(), "reading markdown file shop/about.md") {
 		t.Errorf("got %v", err)
 	}
 }

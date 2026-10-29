@@ -514,7 +514,7 @@ var bucketSafeRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // bucketFilename produces a descriptive name from the bucket's dim values, e.g.
 //
-//	"event_dataset=oekokiste_shop_log__level=error.json"
+//	"event_dataset=shop_log__level=error.json"
 //
 // Falls back to "bucket.json" if dims produce nothing useful.
 func bucketFilename(dims map[string]any) string {

@@ -28,8 +28,8 @@ describe('barHorizontal', () => {
   });
 
   it('draws the widget’s data once it is in view', async () => {
-    testbed.serve('/p/wetell/api/1/query', { path: ['/api', '/login'], cnt: [30, 2] });
-    const { el } = testbed.render({ type: 'barHorizontal', props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' } }, dataUrl: '/p/wetell/api/1' });
+    testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], cnt: [30, 2] });
+    const { el } = testbed.render({ type: 'barHorizontal', props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);

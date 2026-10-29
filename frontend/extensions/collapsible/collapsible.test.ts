@@ -15,11 +15,11 @@ beforeEach(() => {
 
 afterEach(() => testbed.dispose());
 
-const table = (n: number): WidgetNode => ({ type: 'schemaTable', props: { table: `t${n}` }, dataUrl: `/p/wetell/api/${n}` });
+const table = (n: number): WidgetNode => ({ type: 'schemaTable', props: { table: `t${n}` }, dataUrl: `/p/shop/api/${n}` });
 
 describe('collapsible', () => {
   it('shows its widgets in their order below its title', async () => {
-    for (const n of [1, 2, 10]) testbed.serveText(`/p/wetell/api/${n}/schema`, `CREATE TABLE t${n}`);
+    for (const n of [1, 2, 10]) testbed.serveText(`/p/shop/api/${n}/schema`, `CREATE TABLE t${n}`);
     const { el } = testbed.render({ type: 'collapsibleGroup', props: { title: 'Details', open: true }, children: { '10': table(10), '0': table(1), '2': table(2) } });
     await settle();
     const group = el.querySelector('details')!;

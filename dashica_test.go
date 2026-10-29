@@ -20,8 +20,8 @@ func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
 	if got := get(); got != `{"menu":[]}`+"\n" {
 		t.Errorf("before any group: %s", got)
 	}
-	d.RegisterDashboardGroup("Wetell")
-	if got := get(); got != `{"menu":[{"title":"Wetell","entries":[]}]}`+"\n" {
+	d.RegisterDashboardGroup("Shop")
+	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}]}`+"\n" {
 		t.Errorf("after registering: %s", got)
 	}
 }

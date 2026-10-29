@@ -24,16 +24,16 @@ const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.te
 
 describe('alerts', () => {
   it('draws the statuses of the group’s alerts once it is in view', async () => {
-    testbed.serve('/p/wetell/api/1/query', { alert_id_key: ['app_auth_events'], start: [T0], end: [T0 + QUARTER], status: ['error'] });
-    const { el } = testbed.render({ type: 'alertOverview', props: { alertGroupPattern: 'wetell%' }, dataUrl: '/p/wetell/api/1' });
+    testbed.serve('/p/shop/api/1/query', { alert_id_key: ['login_events'], start: [T0], end: [T0 + QUARTER], status: ['error'] });
+    const { el } = testbed.render({ type: 'alertOverview', props: { alertGroupPattern: 'shop%' }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelector('.dashica-chart__body svg')).not.toBeNull();
   });
 
   it('draws an alert’s history with its threshold', async () => {
-    testbed.serve('/p/wetell/api/2/query', { time: [T0, T0 + QUARTER], value: [3, 0] }, { 'X-Dashica-Alert-If': '{"value_lt":1}' });
-    const { el } = testbed.render({ type: 'alertDetail', props: { alertGroup: 'wetell', alertKey: 'app_auth_events', title: 'wetell#app_auth_events' }, dataUrl: '/p/wetell/api/2' });
+    testbed.serve('/p/shop/api/2/query', { time: [T0, T0 + QUARTER], value: [3, 0] }, { 'X-Dashica-Alert-If': '{"value_lt":1}' });
+    const { el } = testbed.render({ type: 'alertDetail', props: { alertGroup: 'shop', alertKey: 'login_events', title: 'shop#login_events' }, dataUrl: '/p/shop/api/2' });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);

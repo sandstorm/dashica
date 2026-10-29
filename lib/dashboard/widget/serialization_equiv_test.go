@@ -110,7 +110,7 @@ func TestRoundTrip_stableJSON(t *testing.T) {
 		"schemaTable":    NewSchemaTable("http_logs").Title("Schema"),
 		"speedscopeLink": NewSpeedscopeLink(baseQuery).Title("Open flame graph"),
 		"alertOverview":  NewAlertOverview("prod-%"),
-		"alertDetail":    NewAlertDetail("wetell", "app_auth_events").Title("App auth events"),
+		"alertDetail":    NewAlertDetail("shop", "login_events").Title("Login events"),
 		"markdown": NewMarkdown().
 			Content("# Hello").Title("Docs"),
 		"grid": NewGrid().

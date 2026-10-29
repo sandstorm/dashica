@@ -78,11 +78,11 @@ describe('StorageMemento', () => {
     const memento = StorageMemento.of(document, 'sessionStorage', 'dashica:session:dashboards:');
     expect(memento.get('openGroups')).toBeUndefined();
     expect(memento.get('openGroups', [])).toEqual([]);
-    await memento.update('openGroups', ['wetell']);
-    expect(memento.get('openGroups')).toEqual(['wetell']);
-    expect(StorageMemento.of(document, 'sessionStorage', 'dashica:session:dashboards:').get('openGroups')).toEqual(['wetell']);
+    await memento.update('openGroups', ['shop']);
+    expect(memento.get('openGroups')).toEqual(['shop']);
+    expect(StorageMemento.of(document, 'sessionStorage', 'dashica:session:dashboards:').get('openGroups')).toEqual(['shop']);
     expect(StorageMemento.of(document, 'sessionStorage', 'dashica:session:other:').get('openGroups')).toBeUndefined();
-    expect(sessionStorage.getItem('dashica:session:dashboards:openGroups')).toBe('["wetell"]');
+    expect(sessionStorage.getItem('dashica:session:dashboards:openGroups')).toBe('["shop"]');
   });
 
   it('forgets a value updated to undefined', async () => {

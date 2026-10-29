@@ -36,7 +36,7 @@ function setup() {
     menusWith('dashboards/entry', ENTRIES),
     commandsWith({ executeCommand: async (command, ...args) => void ran.push([command, document.activeElement === trigger, ...args]), keybindingLabel: (command) => (command === 'dashboards.copyLink' ? '⌘C' : undefined) }),
   );
-  const show = (favorite = true) => menus.show('dashboards/entry', { anchor: { x: 10, y: 20 }, title: 'Wetell', context: { favorite }, args: ['/p/wetell'] });
+  const show = (favorite = true) => menus.show('dashboards/entry', { anchor: { x: 10, y: 20 }, title: 'Shop', context: { favorite }, args: ['/p/shop'] });
   const items = () => [...host.querySelectorAll<HTMLElement>('.dashica-wb__context-menu-item')];
   const key = (key: string) => (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   const isOpen = () => host.querySelector('[role=menu]') !== null;
@@ -48,7 +48,7 @@ describe('ContextMenu', () => {
     const { host, show, items } = setup();
     show();
     const menu = host.querySelector('[role=menu]')!;
-    expect(menu.getAttribute('aria-label')).toBe('Wetell');
+    expect(menu.getAttribute('aria-label')).toBe('Shop');
     expect([...menu.children].map((child) => child.getAttribute('role'))).toEqual(['menuitem', 'menuitem', 'separator', 'menuitem']);
     expect(items().map((item) => item.textContent)).toEqual(['Open in new tab', 'Copy link ⌘C', 'favorites.remove']);
     expect(document.activeElement).toBe(items()[0]);
@@ -91,7 +91,7 @@ describe('ContextMenu', () => {
     const { show, items, ran, isOpen } = setup();
     show(false);
     items()[1].click();
-    expect(ran).toEqual([['dashboards.copyLink', true, '/p/wetell']]);
+    expect(ran).toEqual([['dashboards.copyLink', true, '/p/shop']]);
     expect(isOpen()).toBe(false);
   });
 

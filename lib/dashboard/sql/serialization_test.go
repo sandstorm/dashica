@@ -140,7 +140,7 @@ func TestQueryableRoundTripBuildIdentical(t *testing.T) {
 		},
 		{
 			"file",
-			FromFile("src/p_wetell/overview.sql"),
+			FromFile("src/p_shop/overview.sql"),
 		},
 		{
 			"raw string",

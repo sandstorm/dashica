@@ -132,7 +132,7 @@ alerts:
   http500ErrorsOverLimit:
     query_path: ./alerts/http_errors_per_hour.sql
     params:
-      customer_tenant: oekokiste
+      customer_tenant: shop
       min_status: 500
       max_status: 599
       skip_status: 0

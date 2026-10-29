@@ -45,7 +45,7 @@ type withChildren interface {
 	Children() iter.Seq2[string, WidgetDefinition]
 }
 
-// withExplicitId is a widget whose author may choose its id (`.Id("sso_home_plus_stripe_stats")`), so its URL stays
+// withExplicitId is a widget whose author may choose its id (`.Id("shop_revenue_stats")`), so its URL stays
 // the same as the page changes.
 type withExplicitId interface {
 	explicitId() string
@@ -56,7 +56,7 @@ type withExplicitId interface {
 type Node struct {
 	Type  string          `json:"type"`
 	Props json.RawMessage `json:"props"`
-	// DataURL is where its handler answers ("/p/wetell/api/3": /query and /debug below it); empty for a widget
+	// DataURL is where its handler answers ("/p/shop/api/3": /query and /debug below it); empty for a widget
 	// without data.
 	DataURL string `json:"dataUrl,omitempty"`
 	// Children by name: a grid's areas; a collapsible group's widgets as "0", "1", ….

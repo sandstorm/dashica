@@ -69,7 +69,7 @@ func (c *DashboardContext) WidgetHandlers(api handler_collector.HandlerCollector
 	return handlers
 }
 
-// DataURL is the URL below which `widget`'s handlers are ("/p/wetell/api/3"), as WidgetHandlers gave them; empty for
+// DataURL is the URL below which `widget`'s handlers are ("/p/shop/api/3"), as WidgetHandlers gave them; empty for
 // a widget without handlers.
 func (c *DashboardContext) DataURL(widget any) string {
 	return c.dataURLs[widget]
@@ -85,13 +85,13 @@ type Dependencies struct {
 	AlertManager            *alerting2.AlertManager
 }
 
-// MenuGroup is a group of the dashboards menu ("Wetell"), as RegisterDashboardGroup starts it.
+// MenuGroup is a group of the dashboards menu ("Shop"), as RegisterDashboardGroup starts it.
 type MenuGroup struct {
 	Title   string           `json:"title"`
 	Entries []MenuGroupEntry `json:"entries"`
 }
 
-// MenuGroupEntry is a dashboard in the menu: its title and URL ("/p/wetell").
+// MenuGroupEntry is a dashboard in the menu: its title and URL ("/p/shop").
 type MenuGroupEntry struct {
 	Title string `json:"title"`
 	Url   string `json:"url"`

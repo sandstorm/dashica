@@ -38,14 +38,14 @@ describe('createQuickPick', () => {
     pick.show();
     pick.value = 'a';
     expect([document.activeElement, field().getAttribute('aria-label'), host.querySelector('.dashica-wb__quick-pick-hint')!.textContent]).toEqual([field(), 'Search everywhere', 'Narrow with > Commands']);
-    type(field(), 'wetell');
-    expect(values).toEqual(['a', 'wetell']);
+    type(field(), 'shop');
+    expect(values).toEqual(['a', 'shop']);
     expect(host.querySelector('.dashica-wb__quick-pick-heading')!.textContent).toBe('Dashboards 2 more');
-    expect([host.querySelector('[role=option]')!.textContent, host.querySelector('mark')!.textContent]).toEqual(['wetell overview ⌘K', 'wetell']);
+    expect([host.querySelector('[role=option]')!.textContent, host.querySelector('mark')!.textContent]).toEqual(['shop overview ⌘K', 'shop']);
     pick.busy = true;
     expect(host.querySelector<HTMLElement>('.dashica-wb__quick-pick-progress')!.hidden).toBe(false);
     key(field(), 'Enter');
-    expect([accepted, hidden, host.querySelector('.dashica-wb__quick-pick') !== null]).toEqual([['wetell overview'], 0, true]);
+    expect([accepted, hidden, host.querySelector('.dashica-wb__quick-pick') !== null]).toEqual([['shop overview'], 0, true]);
     pick.hide();
     expect([hidden, host.querySelector('.dashica-wb__quick-pick'), document.activeElement]).toEqual([1, null, button]);
     pick.show();
@@ -58,12 +58,12 @@ describe('createQuickPick', () => {
     const pick = quickInput.createQuickPick<{ label: string }>();
     const accepted: string[] = [];
     pick.onDidAccept(() => accepted.push(pick.selectedItems[0].label));
-    pick.items = [{ label: 'Wetell' }, { label: 'Oekokiste' }];
+    pick.items = [{ label: 'Shop' }, { label: 'Billing' }];
     pick.show();
     key(field(), 'ArrowDown');
-    expect(host.querySelector('[aria-selected=true]')!.textContent).toBe('Oekokiste');
+    expect(host.querySelector('[aria-selected=true]')!.textContent).toBe('Billing');
     host.querySelector<HTMLElement>('[role=option]')!.click();
-    expect(accepted).toEqual(['Wetell']);
+    expect(accepted).toEqual(['Shop']);
     pick.items = [];
     type(field(), 'zzz');
     pick.items = [];
@@ -91,7 +91,7 @@ describe('createQuickPick', () => {
     const picks = [setup(), setup()].map(({ host, quickInput, field }) => {
       const pick = quickInput.createQuickPick<{ label: string }>();
       pick.prompt = 'Narrow';
-      pick.items = [{ label: 'Wetell' }];
+      pick.items = [{ label: 'Shop' }];
       pick.show();
       const listbox = host.querySelector('[role=listbox]')!;
       expect([field().getAttribute('aria-controls'), field().getAttribute('aria-describedby')]).toEqual([listbox.id, host.querySelector('.dashica-wb__quick-pick-hint')!.id]);

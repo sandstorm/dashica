@@ -30,11 +30,11 @@ const contractGolden = "frontend/generated/contract.golden.ts"
 func everyWidget() *dashboard.Builder {
 	logs := sql.New(sql.From("http_logs"))
 	return dashboard.New().
-		WithTitle("Wetell").
+		WithTitle("Shop").
 		WithLayout(layout.DefaultPage).
 		DefaultTimeRange("168h").
 		FilterButton("Errors", "status >= 500").
-		Widget(widget.NewMarkdown().Content("# Wetell")).
+		Widget(widget.NewMarkdown().Content("# Shop")).
 		Widget(widget.NewGrid().Template("a b").
 			Area("a", widget.NewTimeBar(logs).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status")).Title("Requests")).
 			Area("b", widget.NewTimeLine(logs).X(sql.AutoBucket("timestamp")).Y(sql.Count()).Title("Requests over time"))).
@@ -43,14 +43,14 @@ func everyWidget() *dashboard.Builder {
 			Widget(widget.NewBarHorizontal(logs).X(sql.Count()).Y(sql.Field("path"))).
 			Widget(widget.NewTimeHeatmap(logs).X(sql.Timestamp15Min()).Y(sql.Field("duration_ms")).YBucketSize(100)).
 			Widget(widget.NewTimeHeatmapOrdinal(logs).X(sql.Timestamp15Min()).Y(sql.Enum("status"))).
-			Widget(widget.NewStats(logs).Id("wetell_stats")).
+			Widget(widget.NewStats(logs).Id("shop_stats")).
 			Widget(widget.NewTable(logs).Title("Latest").Limit(100))).
 		Widget(widget.NewCheckboxGroup("level", "Level", []string{"error", "warn"})).
 		Widget(widget.NewTextInput("path", "Path").Placeholder("/api")).
 		Widget(widget.NewSchemaTable("http_logs")).
 		Widget(widget.NewSpeedscopeLink(logs)).
-		Widget(widget.NewAlertOverview("wetell%")).
-		Widget(widget.NewAlertDetail("wetell", "app_auth_events"))
+		Widget(widget.NewAlertOverview("shop%")).
+		Widget(widget.NewAlertDetail("shop", "login_events"))
 }
 
 func TestContract_Golden(t *testing.T) {
@@ -60,10 +60,10 @@ func TestContract_Golden(t *testing.T) {
 		ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger),
 		Logger:                  logger,
 	})
-	d.RegisterDashboardGroup("Wetell").RegisterDashboard("/p/wetell", everyWidget())
+	d.RegisterDashboardGroup("Shop").RegisterDashboard("/p/shop", everyWidget())
 
 	workbench := get(t, mux, "/workbench.json")
-	page := get(t, mux, "/p/wetell/page.json")
+	page := get(t, mux, "/p/shop/page.json")
 	if missing := missingTypes(t, page); len(missing) > 0 {
 		t.Errorf("everyWidget lacks %v", missing)
 	}

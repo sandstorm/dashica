@@ -26,7 +26,7 @@ export interface WidgetContext {
   readonly state: QueryApi;
   /** The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's message. */
   query(signal?: AbortSignal): Promise<QueryResult>;
-  /** `path` below the widget's handler with the page's query state (`/p/wetell/api/8/speedscope-query?filters=…`). */
+  /** `path` below the widget's handler with the page's query state (`/p/shop/api/8/speedscope-query?filters=…`). */
   url(path: string): string;
   /** Renders `child` (a grid's area, a group's widget) into `el`. */
   renderChild(el: HTMLElement, child: WidgetNode): Disposable;

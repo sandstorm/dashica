@@ -8,7 +8,7 @@ let refreshes: number;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  history.replaceState(null, '', '/p/wetell');
+  history.replaceState(null, '', '/p/shop');
   query = new QueryHost(window);
   refreshes = 0;
   query.onDidRequestRefresh(() => refreshes++);
@@ -23,7 +23,7 @@ const urlParams = () => Object.fromEntries(new URLSearchParams(location.search))
 
 describe('QueryHost', () => {
   it('takes the state from the URL, the page default for a missing time range', () => {
-    history.replaceState(null, '', '/p/wetell?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D&log=1&refresh=30');
+    history.replaceState(null, '', '/p/shop?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D&log=1&refresh=30');
     query.load({ defaultTime: '168h' });
     expect(query.time.range).toBe('168h');
     expect(query.time.autoRefresh).toBe(30);
@@ -34,7 +34,7 @@ describe('QueryHost', () => {
   });
 
   it('falls back to 24h for a page without a default time range, and to no params for a broken wp', () => {
-    history.replaceState(null, '', '/p/wetell?wp=%5B1%5D');
+    history.replaceState(null, '', '/p/shop?wp=%5B1%5D');
     query.load();
     expect(query.time.range).toBe('24h');
     expect(query.params.values).toEqual({});
@@ -96,7 +96,7 @@ describe('QueryHost', () => {
   it('keeps a change from before a load out of the URL of the next page', () => {
     query.load();
     query.filters.setSql('status >= 500');
-    history.pushState(null, '', '/p/oekokiste');
+    history.pushState(null, '', '/p/billing');
     query.load();
     vi.advanceTimersByTime(200);
     expect(location.search).toBe('');
