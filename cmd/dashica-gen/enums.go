@@ -17,9 +17,9 @@ import (
 
 // enumAnnotation marks a type as an enum: `struct{ v string }` with its values as package-level vars
 // (`var OrderSum = StackOrder{"sum"}`), so a value outside them does not compile.
-const enumAnnotation = "//dashica-gen:enum"
+const enumAnnotation = "//dashicagen:enum"
 
-// enumInfo is a type annotated //dashica-gen:enum and its values, in declaration order.
+// enumInfo is a type annotated //dashicagen:enum and its values, in declaration order.
 type enumInfo struct {
 	PkgPath  string // "github.com/sandstorm/dashica/lib/dashboard/color"
 	PkgName  string // "color"
@@ -27,7 +27,7 @@ type enumInfo struct {
 	Values   []enumValue
 }
 
-// findEnums are the enums of `pkg`, by type name. A type annotated //dashica-gen:enum must be `struct{ v string }` with
+// findEnums are the enums of `pkg`, by type name. A type annotated //dashicagen:enum must be `struct{ v string }` with
 // at least one value; a `struct{ v string }` without the annotation is refused too, so every enum says it is one.
 func findEnums(pkg *packages.Package) (map[string]enumInfo, error) {
 	out := map[string]enumInfo{}

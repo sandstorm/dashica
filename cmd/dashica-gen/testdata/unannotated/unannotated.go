@@ -1,4 +1,4 @@
-// Package unannotated has an enum-shaped type without //dashica-gen:enum, which findEnums refuses.
+// Package unannotated has an enum-shaped type without //dashicagen:enum, which findEnums refuses.
 package unannotated
 
 type Curve struct{ v string }

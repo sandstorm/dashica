@@ -75,7 +75,7 @@ type StackOptions struct {
 // stackX-only "x" alias is intentionally omitted.
 // Docs: https://observablehq.com/plot/transforms/stack#stack-options
 //
-//dashica-gen:enum
+//dashicagen:enum
 type StackOrder struct{ v string }
 
 var (
@@ -94,7 +94,7 @@ var (
 // StackOrder. Zero value = a zero baseline (Plot default).
 // Docs: https://observablehq.com/plot/transforms/stack#stack-options
 //
-//dashica-gen:enum
+//dashicagen:enum
 type StackOffset struct{ v string }
 
 var (

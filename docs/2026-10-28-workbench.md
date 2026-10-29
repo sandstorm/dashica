@@ -90,7 +90,7 @@ type markdownComputed struct {
 }
 ```
 
-An enum is a type annotated `//dashica-gen:enum`, of the form `struct{ v string }` with its values as package-level
+An enum is a type annotated `//dashicagen:enum`, of the form `struct{ v string }` with its values as package-level
 vars (`var OrderSum = StackOrder{"sum"}`), so a value outside them does not compile. `dashica-gen -enums` writes its
 `String`, `GoString` (the Go code Explore writes), `MarshalJSON` and an `UnmarshalJSON` that refuses an unknown value;
 the TS types have its values as a union, in the widgets' props and in the DTOs.

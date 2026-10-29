@@ -25,7 +25,7 @@ import (
 
 // fieldKind names the semantic constructor that produced a field.
 //
-//dashica-gen:enum
+//dashicagen:enum
 type fieldKind struct{ v string }
 
 var (
@@ -141,7 +141,7 @@ func unmarshalFields(raw []json.RawMessage) ([]SqlField, error) {
 
 // queryKind names which SqlQueryable a queryDTO is.
 //
-//dashica-gen:enum
+//dashicagen:enum
 type queryKind struct{ v string }
 
 var (

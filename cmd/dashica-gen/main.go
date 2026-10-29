@@ -40,7 +40,7 @@ func main() {
 		dryRun  = flag.Bool("dry-run", false, "classify fields and print a summary; do not write output")
 		tsOut   = flag.String("ts", "", "also write the TypeScript types to this file (relative to the widget package dir)")
 		tsTypes = flag.String("ts-types", "", "comma-separated Go types (<import path>.<Type>) whose TypeScript interfaces -ts adds")
-		enums   = flag.Bool("enums", false, "write the methods of the package's enums (//dashica-gen:enum) to zz_generated.enums.go, nothing else")
+		enums   = flag.Bool("enums", false, "write the methods of the package's enums (//dashicagen:enum) to zz_generated.enums.go, nothing else")
 	)
 	flag.Parse()
 
@@ -87,7 +87,7 @@ func main() {
 type model struct {
 	pkgDir  string
 	widgets []widgetInfo
-	// enums are the enums the widgets may use (//dashica-gen:enum), by "<import path>.<Type>".
+	// enums are the enums the widgets may use (//dashicagen:enum), by "<import path>.<Type>".
 	enums map[string]enumInfo
 }
 
