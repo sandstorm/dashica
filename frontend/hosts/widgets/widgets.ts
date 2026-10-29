@@ -65,5 +65,5 @@ export type QueryResult = Table & {
 /** How the charts show their data: `VIEW_LOGARITHMIC` for a log scale. */
 export type ViewOptions = 'VIEW_LOGARITHMIC'[];
 
-export { WidgetsHost } from './widgets-impl';
+export { WidgetsHost, showWidgetError } from './widgets-impl';
 export { chartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';

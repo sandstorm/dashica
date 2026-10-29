@@ -33,10 +33,12 @@ export class ExtensionHost {
   }
 
   #context(id: string, subscriptions: ExtensionContext['subscriptions']): ExtensionContext {
-    const { commands, ui, ownerDocument } = this.options;
+    const { commands, ui, query, widgets, ownerDocument } = this.options;
     return {
       commands,
       ui,
+      query,
+      widgets,
       subscriptions,
       globalState: StorageMemento.of(ownerDocument, 'localStorage', `dashica:global:${id}:`),
       workspaceState: StorageMemento.of(ownerDocument, 'sessionStorage', `dashica:session:${id}:`),
