@@ -227,7 +227,7 @@ refresh.
 
 **Alerts:** alert widgets only need the time range (the handler uses `filters` only to resolve it), so they read
 `time` like every other handler. Dashboard filters do not apply to alert widgets, and alert evaluation
-(`lib/alerting`) is not touched. Until the filter step (§5) alerts keep the JSON parameter.
+(`lib/alerting`) is not touched. Until step 6.1 (§5) alerts keep the JSON parameter.
 
 ### 3.8 Filters: structured, declared, explicit
 
@@ -240,21 +240,39 @@ the server.
 - **Builder queries** (`sql.New`, `sql.Field`): dashica knows each field's `Definition()` and `Alias()`. The filter
   field's expression is the **definition** (`status`, `JSONExtractString(attrs,'host')`), its label the alias. The
   expression references base-table columns, so the filter works in every chart on that table.
-- **SQL files** (`sql.FromFile`): only output column names are known. ClickHouse resolves SELECT aliases in WHERE,
-  and `{{DASHICA_FILTERS}}` sits in the WHERE of the SELECT that defines them, so `alias = value` works for that
-  chart. To filter across charts the author maps it: `.FilterAs("Status", "status_code")`.
-- The same id with two different expressions on one page is a registration error (fail fast).
+- **SQL files** (`sql.FromFile`, also `sql.FromString`): only output column names are known. ClickHouse resolves
+  SELECT aliases in WHERE, and `{{DASHICA_FILTERS}}` sits in the WHERE of the SELECT that defines them, so
+  `alias = value` works for that chart. ✅ (decided 2026-10-30) **A SQL-file chart accepts filters only on its own
+  output columns**: the aliases of its dimension fields, by name. The author maps nothing and declares no base table;
+  every other filter is reported as ignored. A filter on `host` reaches a SQL-file chart when its output has a
+  dimension `host`, whatever expression a builder chart declares for `host`.
+- **Which fields:** the dimension slots of a chart's props (`role=dimension` in its `dashica-gen` tag: `fill`, a bar's
+  category, an ordinal heatmap's row, `fx` / `fy`, …); a table's GROUP BY fields, or all its select fields when it has
+  no GROUP BY (raw rows). Measures and time axes are not filter fields (time selection is step 7).
+- **The id is the alias** (`host`), the label as well. The same id with two different expressions on one page is a
+  registration error naming both charts (fail fast); SQL-file fields carry no expression and never conflict.
+- **Where the client finds an id:** each chart's Node carries `filters`, a map from the alias of a clickable field to
+  its filter id (`{"host": "host"}`), beside its props; a table looks up its columns there, so it needs no field
+  props. Today both are the alias; the map keeps the client free of that rule.
+- **Ops:** `eq` (Filter by …) and `ne` (Exclude …); a NULL is not selectable. More (`in`, ranges) when a UI needs them.
 
-The URL carries ids, ops and values (`?f=status:eq:500&f=host:in:a,b`); **values are bound as ClickHouse parameters**
-(`{f0:String}`), never quoted into SQL. So the server builds the WHERE fragment only from Go-declared expressions; no
-per-backend quoting code, no injection through filters. Free SQL stays one advanced chip (`?sql=…`). Filter buttons
-stay SQL, written in Go, shown as toggles in the filter bar.
+The URL carries ids, ops and values (`?f=status:eq:500&f=host:ne:a`; the value is everything after the second colon);
+**values are bound as ClickHouse parameters** (`{__f0:String}`, beside `__from` / `__to`), never quoted into SQL. So
+the server builds the WHERE fragment only from Go-declared expressions; no per-backend quoting code, no injection
+through filters. Free SQL stays one advanced chip (`?sql=…`). Filter buttons stay SQL, written in Go, shown as toggles
+in the filter bar.
+
+✅ Checked 2026-10-30 on ClickHouse 25.9 (`clickhouse local`): a `String` parameter compared with `UInt16`,
+`Nullable(UInt16)`, `Float64`, `DateTime` and `LowCardinality(String)` columns converts and matches (`=`, `!=`, also
+`IN {p:Array(String)}`); a value that does not convert (`abc` against `UInt16`) fails the query with `TYPE_MISMATCH`
+(code 53), which the chart shows as its error. So filter fields carry no type.
 
 **Applicability is explicit, never silent, and decided by the server.** Each widget's query handler knows, from
-`Mount`, which filter fields apply to it: builder widgets accept the fields of their base table; SQL-file widgets
-accept their own aliases plus what they declare (`.AcceptFilter("host")`); `FromFileWithoutFilters` accepts none. The
-handler applies those and reports the rest in the response (`X-Dashica-Ignored-Filters: host`, like today's
-`X-Dashica-Resolved-Time-Range`). The client keeps no rule about applicability; the chart frame only shows the
+`Mount`, which filter fields apply to it: builder widgets accept every field a builder chart of the page declares on
+the same base table (`From` and database), so the handler reads the page's fields once the whole page is mounted;
+SQL-file widgets accept their own output columns; `FromFileWithoutFilters` and `SkipFilters()` accept none. The
+handler applies those and reports the rest, also ids the page does not know, in the response
+(`X-Dashica-Ignored-Filters: host`, like today's `X-Dashica-Resolved-Time-Range`). The client keeps no rule about applicability; the chart frame only shows the
 header: no badge when it is empty, otherwise "ignores `host`". The chart still renders, without the filters that do
 not apply. A runtime `UNKNOWN_IDENTIFIER` (ClickHouse
 code 47, e.g. from the free SQL chip) fails that chart only, with the column named. No query parsing.
@@ -470,8 +488,13 @@ type withChildren interface {
 	Children() iter.Seq2[string, WidgetDefinition]
 }
 
-// a chart: an http.ServeMux with "GET /query" (Arrow) and "GET /debug" (the query, EXPLAIN)
-func (b *TimeBar) Handler(deps rendering.Dependencies) http.Handler { return queryHandler(deps, b.sql) }
+// withQuery is a chart: Mount serves its query ("GET /query" Arrow, "GET /debug" the query and EXPLAIN) and collects
+// its filter fields from it (step 6.2)
+type withQuery interface {
+	Query() sql.SqlQueryable
+}
+
+func (b *TimeBar) Query() sql.SqlQueryable { return b.sql }
 
 // a grid: its areas sorted by name, so the ids stay the same from one start to the next
 func (g *Grid) Children() iter.Seq2[string, WidgetDefinition] { return g.areas.all() }
@@ -517,7 +540,7 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 |---|---|
 | `dashica.go` | `GET /workbench.json` (§3.2): the groups as `RegisterDashboardGroup` starts them, each page's menu entry with `widget.Outline(page.Widgets)` of the `PageJson` its `CollectHandlers` returns |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
-| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; `.FilterAs` / `.AcceptFilter` |
+| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; charts implement `Query()`, `Mount` collects their filter fields |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns, collects filter fields; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; filters → one WHERE fragment of declared expressions with bound values into `{{DASHICA_FILTERS}}` / `Where` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
@@ -534,7 +557,7 @@ A widget has at most three things the page needs, and each is a standard library
 | What | Interface | Who |
 |---|---|---|
 | props | its fields tagged `dashica-gen:"client"` (the generated `marshalProps`) | every widget |
-| data | `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | the nine charts (`queryHandler`), `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `SchemaTable` (`/schema`) |
+| data | a chart: `Query() sql.SqlQueryable`, served by the framework's `queryHandler` (from 6.2); else `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | `Query`: the nine charts; `Handler`: `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `SchemaTable` (`/schema`) |
 | children | `Children() iter.Seq2[string, WidgetDefinition]` | `Grid` (areas by name, sorted), `CollapsibleGroup` ("0", "1", …) |
 
 Everything else is **one** framework function, `widget.Mount`: the type name from the registry, the id, the URL, the
@@ -562,10 +585,10 @@ Open in this design:
 1. **Positions as keys:** `CollapsibleGroup` yields "0", "1", … (`Widgets.all`, since `slices.All` yields `int`).
 2. **Filter fields** (§3.8) are collected from each chart's query at mount: `queryHandler` hides the query, so a chart
    also says it (`Query() sql.SqlQueryable`), which the framework then turns into the handler and the filter fields;
-   then `Handler` is left for the three special widgets.
+   then `Handler` is left for the special widgets. Decided: step 6.2.
 3. **Field expressions:** `x` / `y` / `fill` are tagged `client` and go out as `SqlField` with their expression
    (`JSONExtractString(attrs,'host')`), as before; §3.8 says expressions never leave the server. The client needs
-   only the column alias: reduce them at the filter step (§5).
+   only the column alias: reduced in step 6.9 (Explore's Go code reads the widgets' full JSON, not their props).
 
 ## 4. Alternatives considered
 
@@ -600,6 +623,11 @@ or a part of one), so deviations from this concept, problems and naming issues a
 deviation found while implementing is raised before committing, not decided silently; agreed changes go into this
 document in the same commit.
 
+**Step 6 runs as sub-steps** (decided 2026-10-30): 6.1 … 6.9 below, in order, each its own commit that leaves the
+dashboards working and checks its row off. The agent goes on to the next sub-step without waiting; the maintainer
+reviews the commits asynchronously afterwards, one by one. A deviation from this concept is still written into this
+document in the commit that makes it, and listed in the commit message, so the review finds it.
+
 **Nothing gets lost:** every frontend file from before the workbench (`frontend/**/*.ts`, `*.js`, outside
 `frontend/core`, `frontend/hosts`, `frontend/extensions`) starts with `// UNMIGRATED (workbench): …`. A step that ports,
 rewrites or deliberately deletes a file's content removes the marker (or the file) in the same commit, and says in the
@@ -630,7 +658,16 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 5b.8 ✅ | extensions `dashboards`, `time-range`, `refresh`, `filters`, `debug` | nothing (until 5b.9) |
 | 5b.9 ✅ | **the switch:** `/p/<page>` serves the shell, the client renders `page.json` | dashboards, now client-rendered |
 | 5b.10 ✅ | `BuildComponents` (the widgets' old server props) and templ removed | dashboards |
-| 6 | `QueryState` + structured filters (§3.8), alerts on `time` | filters as chips, click-to-filter |
+| 6 | `QueryState` + structured filters (§3.8), alerts on `time`; in sub-steps, each its own commit | filters as chips, click-to-filter |
+| 6.1 | Go `QueryState` (`time`, `range`, `sql`, `wp`) parsed once per request in `lib/httpserver`; every handler (query, debug, alert overview + chart, Speedscope, `/time-range`) reads it, `DashboardFilters` / the `filters` and `params` JSON are gone; the client sends the page URL's keys (`requestParams`); alerts read only `time` | dashboards, alerts |
+| 6.2 | charts implement `Query() sql.SqlQueryable` (the query they run, with their own selects); `Mount` serves it through `queryHandler`; `Handler` is left for alerts, Speedscope, schema table | dashboards (refactor only) |
+| 6.3 | `Mount` collects filter fields (§3.8: dimension slots, table GROUP BY / select fields; id = alias; conflicts fail registration); `page.json` `filterFields: [{id, label}]`, each chart's Node `filters: {alias: id}`; generator + golden fixtures regenerated | dashboards; both instances register |
+| 6.4 | `?f=id:op:value` (`eq`, `ne`) in `QueryState`; the query handler applies the applicable filters with bound `{__fN:String}` values (builder: declared expression, same base table; SQL file: own output column) and writes `X-Dashica-Ignored-Filters`; Debug shows the filter clause and its parameters | dashboards; filters by hand-written URL |
+| 6.5 | client: `FiltersModel` holds `{fieldId, op, value}[]` (URL `f`, `requestParams`), `ctx.addFilter`; the filter bar shows them as chips (label, = / ≠, value, ×); `ChartFrame` shows "ignores `label`" from `X-Dashica-Ignored-Filters` | filters as chips (from links) |
+| 6.6 | table: a cell's menu "Filter by …" / "Exclude …" adds a structured filter for columns with a filter id; columns without one keep today's SQL entries, the timestamp entries (±5 min …) stay SQL until step 7 | click-to-filter in tables |
+| 6.7 | `ui.registerFloatingBar` (menu `widget/selection`); the selection model in the `widgets` host (one selection, Escape clears, `ctx.select`); `filters` contributes "Filter by …" / "Exclude …" for `category`; first users: bar vertical / horizontal (category, fill) | click-to-filter on bar charts |
+| 6.8 | the other charts select categories: time bar / time line series (fill, stroke, z), ordinal heatmap rows, `fx` / `fy` facets; table cells select through the same bar, replacing the cell menu's id entries of 6.6 | click-to-filter everywhere |
+| 6.9 | props carry aliases (§3.13, 3): client `SqlField` slots go out as `{alias, xBucketSizeMs?}`, never the definition; generator, TS types and fixtures regenerated | dashboards; no expression in `page.json` |
 | 6a ✅ | small, any time after 5b.9: queries stop with their client (§3.7), auto refresh pauses in a hidden tab, chart titles in search everywhere and chart links (§3.11) | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
@@ -639,7 +676,8 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | Step 5b is one big switch, with blank dashboards from 5b.5 to 5b.9 | 5a lands the contract first with golden tests; the charts are ported as they behave; Playwright flows before merge |
 | Explore unavailable from step 3 until rebuilt | accepted: Explore is experimental; rebuilt after the merge (§6) |
 | Long-lived branch drifts from `main` (new dashboards in the outer repo) | dashboards are Go only and keep their builder API; rebase regularly |
-| Bound filter values typed `String` against numeric columns | verify ClickHouse's conversion in step 6; else carry the type in the filter field |
+| Bound filter values typed `String` against numeric columns | ✅ checked on ClickHouse 25.9 (§3.8): converts; a value that does not convert fails that chart with `TYPE_MISMATCH`. Production runs 26.10: the integration test of 6.4 runs against CI's ClickHouse |
+| The same alias with two expressions on a page (template dashboards over several tables) | 6.3 registers both instances; a conflict there is raised before its commit (rename the alias, or scope ids by table) |
 | SELECT aliases in WHERE are ClickHouse-specific | only for SQL files, which are ClickHouse SQL anyway |
 | Bookmarked inner URLs (debug links) break | accepted; entry-point URLs stay |
 | Playwright cannot run in the sandbox | specs written by the agent, run by the maintainer |
@@ -661,7 +699,7 @@ its own.
 - **Drill-down: start at a chart, go ad hoc from there.** Two kinds, as Superset names them:
   - *Drill to detail:* a click on a bar / cell opens the bottom panel with the raw rows behind it: the chart's base
     table and WHERE, the page's filters and time, plus the clicked value (`SELECT * … LIMIT n`). Needs the base table,
-    which builder queries know; SQL files only if they declare it (§7, question 2).
+    which builder queries know; SQL files declare none (§7, question 2), so they have no "Show rows".
   - *Drill by / ad hoc:* "Open in Explore" from a chart or dashboard carries the chart *and* the current `QueryState`
     (time, filters, params), so you narrow further, regroup by another field or add charts from there. Builds on the
     Explore rebuild below.
@@ -685,8 +723,9 @@ its own.
 ## 7. Open questions
 
 1. **Time selection:** does "Filter to window" need its own chip, or is it a second, narrower time range?
-2. **Filter fields of SQL files:** are `.FilterAs` / `.AcceptFilter` the right granularity, or should a SQL file declare
-   its base table once (`sql.FromFile(path, sql.Table("logs"))`) and accept that table's fields like builder queries?
+2. ✅ **Filter fields of SQL files** (decided 2026-10-30): a SQL-file chart accepts filters only on its own output
+   column names, which ClickHouse resolves in WHERE; no `.FilterAs` / `.AcceptFilter` / `sql.Table`. Every other
+   filter is reported as ignored (§3.8).
 3. **Alerts and filters:** should dashboard filters ever apply to alert widgets (e.g. only alerts of host `a`)? For
    now no.
 4. **Drill-down:** is "drill to detail" (raw rows in the bottom panel) wanted early, before the Explore rebuild?
