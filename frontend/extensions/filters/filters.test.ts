@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for filters.ts: the bar per page, the buttons, the SQL filter.
+// Tests for filters.ts: the funnel button and the filter bar per page, the buttons, the SQL filter.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
@@ -8,6 +8,7 @@ import { QueryHost } from '../../hosts/query/query';
 import { filters } from './filters';
 
 let query: QueryHost;
+let titleBar: HTMLElement;
 let bar: HTMLElement;
 let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson>['event'] };
 let pageChanged: EventEmitter<PageJson>;
@@ -33,12 +34,13 @@ beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost(window);
   query.load();
+  titleBar = document.body.appendChild(document.createElement('div'));
   bar = document.body.appendChild(document.createElement('div'));
   pageChanged = new EventEmitter<PageJson>();
   page = { current: undefined, onDidChangePage: pageChanged.event };
   const ui = {
-    registerBarItem: (_bar: string, el: HTMLElement) => {
-      bar.appendChild(el);
+    registerBarItem: (name: string, el: HTMLElement) => {
+      (name === 'title' ? titleBar : bar).appendChild(el);
       return { dispose: () => el.remove() };
     },
   };
@@ -54,8 +56,9 @@ afterEach(() => {
 });
 
 const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === title)!;
+const funnel = () => titleBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
 const sql = () => bar.querySelector('textarea')!;
-const active = () => !bar.querySelector<HTMLElement>('.badge')!.hidden;
+const active = () => !funnel().querySelector<HTMLElement>('.badge')!.hidden;
 
 describe('filters', () => {
   it('adds a filter button’s condition to the SQL filter', () => {
@@ -75,9 +78,9 @@ describe('filters', () => {
     expect(query.filters.sql).toBe("path LIKE '/api/%'");
   });
 
-  it('sets the SQL filter typed, after the toggle opened it', () => {
+  it('sets the SQL filter typed, after the funnel button opened it', () => {
     expect(sql().hidden).toBe(true);
-    button('filters').click();
+    funnel().click();
     expect(sql().hidden).toBe(false);
     sql().value = "method = 'POST'";
     sql().dispatchEvent(new Event('input'));
@@ -90,8 +93,19 @@ describe('filters', () => {
     expect(sql().hidden).toBe(false);
   });
 
-  it('is gone on a page without filter bar', () => {
+  it('has no filter bar on a page without filter buttons until the SQL filter is opened', () => {
+    show({ ...shop, title: 'Checkout', filterButtons: [] });
+    expect(bar.children.length).toBe(0);
+    expect(funnel()).toBeDefined();
+    funnel().click();
+    expect(bar.children.length).toBe(1);
+    funnel().click();
+    expect(bar.children.length).toBe(0);
+  });
+
+  it('is gone on a page without filters', () => {
     show({ ...shop, title: 'Checkout', filterBar: false });
     expect(bar.children.length).toBe(0);
+    expect(titleBar.children.length).toBe(0);
   });
 });
