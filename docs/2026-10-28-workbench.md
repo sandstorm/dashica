@@ -195,14 +195,17 @@ client owns the UI, the server only binds.
 query the same numbers. The legacy `From` / `To` and the ClickHouse query for `now()` are gone. `GET /time-range`
 answers the same window for the picker.
 
-**Time range as in Grafana (decided 2026-10-30):** the title bar shows one button with the range ("Last 1h",
-"29.10. 10:00 – 12:00"), and beside it ‹ › (shift by the window's length) and ⊖ (zoom out to twice the window). The
+✅ **Time range as in Grafana (decided and done 2026-10-30):** the title bar shows one button with the range
+("Last 1 hour", "2026-10-29 10:00 to 12:00"), and beside it ‹ › (shift by the window's length) and ⊖ (zoom out to twice the window). The
 button opens a panel below it: on the left From / To and "Apply", and the custom ranges used last (3, per viewer); on
 the right the quick ranges (the presets), filtered by typing. From and To are each an absolute time
-(`2026-10-29 10:00`, in the viewer's time zone) or a time relative to now (`now`, `now-6h`; units `s m h d w`). The
+(`2026-10-29 10:00`, in the server's time zone, as before) or a time relative to now (`now`, `now-6h`; units `s m h d w`). The
 **server** understands these expressions, as Grafana does, so a relative range moves with auto refresh and a shared
 link stays relative: `?time=custom&range=now-6h to now-1h`. A preset is any Go duration (`?time=90m`). No calendar in
-the first version.
+the first version. Apply asks `/time-range` and shows the server's reason when it cannot read a time; shift and zoom
+out take their window from it, so the grammar lives in Go only. **Open:** the server reads an absolute time in its
+own time zone, while a selection on a chart writes the viewer's local time (as on the old page); for a viewer in
+another zone the window is off by the difference.
 
 **Alerts:** alert widgets only need the time range (the handler uses `filters` only to resolve it), so they read
 `time` like every other handler. Dashboard filters do not apply to alert widgets, and alert evaluation
