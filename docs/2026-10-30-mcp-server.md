@@ -287,10 +287,17 @@ For every result column:
 they are written where the field is defined and reused with it (`templates.*` define most fields once for many
 dashboards). The MCP server reads them from the widget's declared fields; the UI ignores them.
 
-**Dictionaries** stay for free text: the distinct values of identifier columns (tenants, projects; a few hundred
-values) are loaded once per hour and replaced wherever they appear in text (hostnames such as
-`shop-a.example.com`, messages, alert messages). Which columns: the instance names them in Go
-(`anonymize.DistinctValues(alias, table, column, class)`), since Dashica knows no tables (§2.4).
+**Dictionaries** catch known identifiers inside free text (`.Text()` columns, alert messages): a tenant `shop-a` in
+a message or in `shop-a.example.com` becomes its pseudonym. Public columns pass unchanged and scrambled ones are
+replaced whole, so only free text needs them. Two sources, both fresh for every tool call, no cache and no timer
+(a tenant added a minute ago must not pass in plain text):
+
+- **The result itself:** every value of a scrambled column in the same result is also replaced where it appears in
+  the result's free text. This needs no query.
+- **Declared identifier columns:** the distinct values the instance names in Go
+  (`anonymize.DistinctValues(alias, table, column, class)`, since Dashica knows no tables, §2.4), queried with each
+  tool call whose result has free text: a `SELECT DISTINCT` over a few hundred values, milliseconds next to the
+  widget's own query. A call without free text queries nothing.
 
 #### 3.6.3 How: keyed pseudonyms, redaction, drop
 
@@ -499,18 +506,21 @@ is never stored.
 2. **`lib/anonymize` and the field marks:** `.Public()` / `.Text()` / `.Secret()` on `sql.SqlField`, keyed
    pseudonyms, scrubber (ported from `lib/db_sampler`, which then uses it), dictionaries; unit tests and the canary
    fixture. No MCP yet.
-3. **`lib/mcp` skeleton:** go-sdk dependency (check the `go` directive), `/mcp` handler behind `mcp.enabled`,
-   OIDC token check and `Grant` (Keycloak, §3.5), protected resource metadata, audit log, tools `list_dashboards` and `describe_dashboard` (no data yet). Config
-   struct `config.MCPConfig`.
-4. **`get_widget_data`:** catalog entry, `QueryHandler.Run`, limits, anonymizer, truncation; canary test through the pipeline;
-   `mode: aggregates`.
-5. **Alerts:** `AlertManager.AlertDefinitions()` (new list method), `list_alerts`, `get_alert_history` with scrubbed
+3. **Login:** OIDC with Keycloak for the UI (§3.5), the session cookie, the user in the workbench and its main menu
+   (§3.10, without MCP yet). Useful on its own.
+4. **`lib/mcp` skeleton and connections:** go-sdk dependency (check the `go` directive), `/mcp/c/<id>` behind
+   `mcp.enabled`, access token check, protected resource metadata, connections (table, form, list in the main
+   menu), the grant (roles ∩ connection), the audit log table; tools `list_dashboards` and `describe_dashboard` (no
+   data yet).
+5. **`get_widget_data`:** catalog entry, `QueryHandler.Run`, limits, anonymizer, truncation; canary test through the
+   pipeline; aggregates only.
+6. **Alerts:** `AlertManager.AlertDefinitions()` (new list method), `list_alerts`, `get_alert_history` with scrubbed
    messages.
-6. **Instance:** `.Public()` marks on the fields of `src/templates/`, the dictionaries in `main.go`, the `mcp` block
-   in the production config, the Keycloak roles for a few users, aggregates only, on a few gateway pages; run the review report against
+7. **Audit log in the UI:** the bottom panel "MCP audit" (§3.10) with each call's input, SQL and anonymized result.
+8. **Instance:** `.Public()` marks on the fields of `src/templates/`, the dictionaries in `main.go`, the Keycloak
+   client and roles, MCP for a few users, aggregates only, on a few gateway pages; run the review report against
    production before widening access.
-7. Later, driven by use: reverse lookup command, structured `query_table`, `.Anonymize` overrides on widgets,
-   OAuth via Keycloak (§3.5), the builder-made `query` tool (§3.9).
+9. Later, driven by use: the reverse lookup command, the builder-made `query` tool (§3.9).
 
 ### 5.2 Risks
 
