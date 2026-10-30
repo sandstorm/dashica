@@ -93,6 +93,13 @@ describe('QueryHost', () => {
     expect(query.time.custom).toBe('2026-10-29 10:00 to 2026-10-29 12:30');
   });
 
+  it('writes a custom range relative to now as it is', () => {
+    query.load();
+    query.time.setCustomRange('now-6h', 'now-1h');
+    vi.advanceTimersByTime(200);
+    expect(urlParams()).toEqual({ time: 'custom', range: 'now-6h to now-1h' });
+  });
+
   it('keeps a change from before a load out of the URL of the next page', () => {
     query.load();
     query.filters.setSql('status >= 500');

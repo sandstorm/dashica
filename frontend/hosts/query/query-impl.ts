@@ -136,8 +136,12 @@ class TimeState extends Model implements TimeModel {
   }
 
   setCustom(from: Date, to: Date): void {
+    this.setCustomRange(formatLocal(from), formatLocal(to));
+  }
+
+  setCustomRange(from: string, to: string): void {
     this.range = 'custom';
-    this.custom = `${formatLocal(from)} to ${formatLocal(to)}`;
+    this.custom = `${from} to ${to}`;
     this.fire();
     this.changed(true);
   }

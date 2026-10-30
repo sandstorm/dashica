@@ -22,13 +22,15 @@ export interface QueryApi {
 export interface TimeModel {
   /** A preset as a Go duration (`1h`, `168h`), or `custom` for `custom`. */
   readonly range: string;
-  /** The custom range as the server reads it (`2026-10-29 10:00 to 2026-10-29 12:00`); '' unless `range` is `custom`. */
+  /** The custom range as the server reads it (`2026-10-29 10:00 to now-1h`); '' unless `range` is `custom`. */
   readonly custom: string;
   /** The seconds between two automatic refreshes; `undefined`: no auto refresh. */
   readonly autoRefresh: number | undefined;
   setRange(range: string): void;
   /** Sets the range to `custom`, from `from` to `to` in the viewer's time zone (a selection on a time chart). */
   setCustom(from: Date, to: Date): void;
+  /** Sets the range to `custom`, each end a time as the server reads it: `2026-10-29 10:00` or relative, `now-6h`. */
+  setCustomRange(from: string, to: string): void;
   setAutoRefresh(seconds: number | undefined): void;
   readonly onDidChange: Event<void>;
 }
