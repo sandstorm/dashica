@@ -20,7 +20,7 @@ func TestCollectHandlers_RegistersAllRoutes(t *testing.T) {
 	e := New() // dashboard.Dashboard
 
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/explore", MainMenu: &[]rendering.MenuGroup{}}
-	if err := e.CollectHandlers(ctx, collector.Nested("/explore")); err != nil {
+	if _, err := e.CollectHandlers(ctx, collector.Nested("/explore")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)
 	}
 
@@ -43,7 +43,7 @@ func TestEditorPage_ShowsTheRebuildNotice(t *testing.T) {
 	mux := http.NewServeMux()
 	collector := handler_collector.NewValidatingCollector(mux, zerolog.Nop())
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/explore", MainMenu: &[]rendering.MenuGroup{}}
-	if err := New().CollectHandlers(ctx, collector.Nested("/explore")); err != nil {
+	if _, err := New().CollectHandlers(ctx, collector.Nested("/explore")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)
 	}
 

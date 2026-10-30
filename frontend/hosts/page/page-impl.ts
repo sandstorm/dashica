@@ -58,16 +58,22 @@ export class PageHost implements PageApi {
 
   /**
    * Shows the page at `url`. `navigate`: as a new history entry, or by the browser when it has no `page.json`;
-   * `history`: the browser's back or forward went there, the URL is set already, and on the same page only its query
-   * state changed; `start`: the first page.
+   * `history`: the browser's back or forward, or a link to a hash, went there, the URL is set already, and on the same
+   * page only its query state or its hash changed; `start`: the first page.
    */
   async #open(url: string, how: 'navigate' | 'history' | 'start'): Promise<void> {
     const target = new URL(url, this.browserWindow.location.href);
+    this.#loading?.abort();
     if (how === 'history' && target.pathname === this.#path && this.current) {
-      this.query.load({ defaultTime: this.current.defaultTime });
+      // only the hash changed (`#w=3`, back between two): the browser fires `hashchange` itself
+      if (!this.query.holdsState()) this.query.load({ defaultTime: this.current.defaultTime });
       return;
     }
-    this.#loading?.abort();
+    const samePage = target.pathname === this.#path && (target.search === '' || target.search === this.browserWindow.location.search);
+    if (how === 'navigate' && samePage && this.current && target.hash) {
+      this.#jumpTo(target.hash);
+      return;
+    }
     const loading = new AbortController();
     this.#loading = loading;
     let page: PageJson;
@@ -88,6 +94,17 @@ export class PageHost implements PageApi {
     if (loading.signal.aborted) return;
     if (how === 'navigate') this.#pushState(target);
     this.#show(target.pathname, page);
+  }
+
+  /**
+   * Goes to `hash` (`#w=3`) on the page shown, keeping its query state, as a new history entry; `hashchange` tells the
+   * page, also when the hash was there already.
+   */
+  #jumpTo(hash: string): void {
+    const { location, history } = this.browserWindow;
+    const oldURL = location.href;
+    if (hash !== location.hash) history.pushState(history.state, '', hash);
+    this.browserWindow.dispatchEvent(new HashChangeEvent('hashchange', { oldURL, newURL: location.href }));
   }
 
   #pushState(target: URL): void {

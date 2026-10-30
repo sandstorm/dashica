@@ -16,7 +16,8 @@ export interface PageApi {
   readonly onDidChangePage: Event<PageJson>;
   /**
    * Shows the page at `url` (`/p/shop?time=1h`) as a new history entry; a URL without `page.json` (`/public/…`) is
-   * loaded by the browser. Resolves when it is shown.
+   * loaded by the browser. A hash on the page shown (`/p/shop#w=3`) keeps the page and its query state and fires
+   * `hashchange`. Resolves when it is shown.
    */
   navigate(url: string): Promise<void>;
   /** Renders the pages of `kind` until disposed; one renderer per kind. */

@@ -42,6 +42,7 @@ func emit(m *model, outFile string) error {
 			Marshal:       marshalStmts("r", w.Fields),
 			Props:         marshalStmts("r", clientFields(w.Fields)),
 			Computed:      w.ComputedType != "",
+			Titled:        hasTitle(w.Fields),
 			ComputedProps: marshalStmts("c", w.ComputedFields),
 			Unmarshal:     unmarshalStmts(w.TypeName, w.Fields),
 		})
@@ -83,6 +84,8 @@ type widgetView struct {
 	Computed      bool
 	ComputedProps []string
 	Unmarshal     []string
+	// Titled: it has a client field `title`, which widgetTitle returns.
+	Titled bool
 }
 
 type groupView struct {
@@ -124,6 +127,16 @@ func clientFields(fields []fieldInfo) []fieldInfo {
 		}
 	}
 	return out
+}
+
+// hasTitle is whether `fields` has the client field `title` (a chart's, a group's).
+func hasTitle(fields []fieldInfo) bool {
+	for _, f := range fields {
+		if f.GoName == "title" && f.Client {
+			return true
+		}
+	}
+	return false
 }
 
 // propsFields are the fields in a widget's props in page.json: those tagged `dashica-gen:"client"`, then what its
@@ -266,7 +279,10 @@ func (r *{{.Type}}) marshalProps(ctx *rendering.DashboardContext) ([]byte, error
 	{{end}}{{else}}_ = ctx
 	{{end}}return json.Marshal(m)
 }
-
+{{if .Titled}}
+// widgetTitle is its title, as the page's outline names it.
+func (r *{{.Type}}) widgetTitle() string { return r.title }
+{{end}}
 func (r *{{.Type}}) UnmarshalJSON(b []byte) error {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(b, &m); err != nil {

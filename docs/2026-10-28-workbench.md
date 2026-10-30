@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28, not yet implemented. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -53,9 +53,9 @@ dashboard; access control can later be a middleware on a page's subtree. **Entry
 they are**; inner API URLs may change.
 
 ```
-GET  /workbench.json               menu groups (the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
+GET  /workbench.json               menu groups, each page with its outline (below; the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
 GET  /p/shop                       shell HTML (the same for every page)
-GET  /p/shop/page.json             {kind, title, defaultTime, filterFields, filterButtons, actions, widgets}   ← new
+GET  /p/shop/page.json             {kind, title, defaultTime, filterBar, filterButtons, widgets}; filterFields with step 6, actions with step 7+
 GET  /p/shop/api/<id>/query        widget data (Arrow)
 GET  /p/shop/api/<id>/debug        query, EXPLAIN
 POST /p/shop/action/<id>           a Go action (§3.9)                                                        ← new
@@ -67,6 +67,15 @@ POST /p/shop/action/<id>           a Go action (§3.9)                          
   (`history.pushState`). Panel state survives navigation; the time range does not (§3.7).
 - **Data per widget:** each chart fetches from its own handler URL, in parallel, as today. Explore (later) keeps an
   inline POST. Both sit behind `ctx.query()` (§3.6).
+- **The outline: what a page holds by title** (decided 2026-10-30). Registering a page produces its description as a
+  value: `CollectHandlers` returns the `PageJson` it mounted. Its **outline** is a pure function of that value,
+  `widget.Outline(page.Widgets)`: every widget with data and a title, `{id, title, group}` (the id in its `dataUrl`,
+  `group` the title of the collapsible group around it), in the order the page mounted them. The title comes typed
+  from the widget: `dashica-gen` generates `widgetTitle()` from each widget's client field `title` (as it generates
+  `marshalProps`), and `Mount` puts it on the Node as `Title` (Go only, `json:"-"`), so `page.json` stays as it is.
+  Each menu entry of `/workbench.json` carries its page's outline (`{title, url, outline}`); the browser searches it
+  and builds `#w=` links from it. Filtering `/workbench.json` per user (permissions, §6) covers the menu and the
+  outlines alike.
 - **Markdown** stays rendered by goldmark on the server, once when the page is mounted: its HTML is in its props
   (`html`, from its `computeProps`: a struct of what the server computes, beside the widget's definition, §3.3). The schema table's handler serves its
   `SHOW CREATE TABLE` (`<dataUrl>/schema`), as it asks ClickHouse.
@@ -109,7 +118,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Region | Holds |
 |---|---|
 | Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
-| Filter bar | above the content, between the side panels: active filters as removable chips, the page's filter buttons as toggles, "edit SQL" |
+| Filter bar | above the content, between the side panels, only while it has something to show: active filters as removable chips, the page's filter buttons as toggles, the SQL filter (opened from the funnel button in the title bar) |
 | Left side panel | "Dashboards" (menu groups, favorites, search); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Bottom panel | Debug (query, EXPLAIN); later row details |
@@ -205,6 +214,16 @@ the first version. Apply asks `/time-range` and shows the server's reason when i
 out take their window from it, so the grammar lives in Go only. **Open:** the server reads an absolute time in its
 own time zone, while a selection on a chart writes the viewer's local time (as on the old page); for a viewer in
 another zone the window is off by the difference.
+
+**A query nobody waits for stops** (decided 2026-10-30). The client half exists: `ChartFrame` aborts its running
+request on each refresh and on dispose (navigation), and the Go handlers pass `r.Context()` to the request to
+ClickHouse, so that request is cancelled as well. Missing: ClickHouse keeps running a SELECT whose HTTP client went
+away unless the query carries `cancel_http_readonly_queries_on_client_close=1`; `lib/clickhouse` sets it on every
+query.
+
+**Auto refresh pauses in a hidden tab** (decided 2026-10-30): the `query` host skips a tick while `document.hidden`,
+and refreshes once when the tab is shown again if it skipped one; the next tick follows a whole interval after that
+refresh.
 
 **Alerts:** alert widgets only need the time range (the handler uses `filters` only to resolve it), so they read
 `time` like every other handler. Dashboard filters do not apply to alert widgets, and alert evaluation
@@ -395,7 +414,7 @@ Built-in extensions:
 | Extension | Contributes |
 |---|---|
 | `dashboards` | left panel "Dashboards" (groups, favorites, filter box) |
-| `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites |
+| `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites, chart titles |
 | `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7); `widget/selection` "Zoom" |
 | `refresh` | title bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
 | (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
@@ -403,11 +422,31 @@ Built-in extensions:
 | `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |
 | `query-status` | status bar: queries, loading, failed, timings |
 | `debug` | bottom panel "Debug" (query, EXPLAIN); `widget/context` "Debug" |
+| `chart-link` | `widget/context` "Copy link to chart" (`/p/shop#w=3`) |
 | `row-details` | `table/row` "Details" and `widget/selection` "Show rows" → bottom panel |
 | `page-actions` | Go actions from `page.json` → commands + menu items |
 | one per widget type: `time-bar`, `time-line`, `bar-vertical`, `bar-horizontal`, `heatmap`, `stats`, `table`, `markdown`, `checkbox-group`, `text-input`, `grid`, `collapsible`, `alerts`, … | `registerWidget` for its type, its CSS, its own menu items |
 
 Favorites stay inside `dashboards` (separating them would need a contribution point inside the Dashboards panel).
+
+**Chart titles in search everywhere** (decided 2026-10-30): the charts are the pages' outlines in `workbench.json`
+(§3.2), `{id, title, group}` per menu entry. The builder API stays as it is. A result shows `page › group › title`; pages rank before charts, the current page's charts
+before other pages' (the same titles repeat across template dashboards).
+
+A result is a link `/p/shop#w=3` through `navigate`, and the same link is what "Copy link to chart" copies. When the
+page has rendered, the dashboard page opens the collapsible groups around the chart (a closed group does not query),
+scrolls the chart into view and highlights it briefly; on the current page without a reload. A link breaks when the
+page is reordered and the chart has no `.Id(…)`: accepted.
+
+✅ As implemented (6a): the outline (§3.2). The charts are a group of `search-everywhere` ("Charts", after
+"Dashboards"), matched there so the page shown comes first. A widget with data carries `data-data-url` on its element,
+where the dashboard page finds it. `navigate` to a hash on the page shown (a link without a query keeps the page's)
+pushes the hash and fires `hashchange`, without loading `page.json`. A change of only the hash by the browser (a link
+`#w=3` in the page, a typed hash, back and forward between two) neither loads `page.json` nor queries again: the
+`query` host knows the query string it last read or wrote, and the browser fires `hashchange` itself. A load of
+another page still running is aborted by either. The charts come in the order they were mounted (a grid's by
+area name). "Copy link to chart" copies the page and the hash without the query state; the
+next change of the query state drops the hash from the URL.
 
 ### 3.12 Sketch: Go changes
 
@@ -476,7 +515,7 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 
 | Where | Change |
 |---|---|
-| `dashica.go` | `GET /workbench.json` (menu groups); menu data stays as today (`RegisterDashboardGroup`) |
+| `dashica.go` | `GET /workbench.json` (§3.2): the groups as `RegisterDashboardGroup` starts them, each page's menu entry with `widget.Outline(page.Widgets)` of the `PageJson` its `CollectHandlers` returns |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
 | `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; `.FilterAs` / `.AcceptFilter` |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns, collects filter fields; `SearchBarOption` becomes `page.json` fields |
@@ -580,18 +619,19 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 3b ✅ | Window layout replacing dockview: `WindowLayout` / `SideBar`, bottom panel, title / filter / status bars around the server-rendered content; the bridge extension `legacy-page` (UNMIGRATED, deleted in 5b) moves menu, search bar and debug drawer into them; dockview uninstalled | dashboards (old content inside the new chrome) |
 | 4 ✅ | Menus + palette: `registerMenuItem` / `showContextMenu` (first user: a dashboard entry's "…"); `createQuickPick`; search everywhere (⌘K) over dashboards and commands replaces `sidebarSearch` | dashboards |
 | 5a ✅ | Contract: `page.json`, `workbench.json`, `dashica-gen` TS + golden fixtures; served next to the old pages | dashboards; nothing visible changes |
-| 5b | Client rendering: widget host, one extension per widget type (its chart ported from `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
-| 5b.1 | `query` host: time, auto refresh, SQL filter, params, view options, synced with the URL | dashboards (not used yet) |
-| 5b.2 | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `ChartFrame` | dashboards (not used yet) |
-| 5b.3 | Go: markdown's HTML in its props (`computeProps`), the schema table serves its DDL from its handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
-| 5b.4 | widget extensions: grid, collapsible, markdown, schema table | dashboards (not used yet) |
-| 5b.5 | the old page deleted (`frontend/components`, `legacy-page`, Alpine, the old store); widget extensions: the charts, stats, table, alerts, each chart of `frontend/chart/*` ported into its extension and taking its generated props, shared helpers in `chart-library` | nothing: the dashboards are blank until 5b.9 |
-| 5b.6 | widget extensions: checkbox group, text input, Speedscope link | nothing (until 5b.9) |
-| 5b.7 | `page` host: `workbench.json`, `page.json`, `navigate`; the extension that renders a dashboard page | nothing (until 5b.9) |
-| 5b.8 | extensions `dashboards`, `time-range`, `auto-refresh`, `log-scale`, `filters`, `debug` | nothing (until 5b.9) |
-| 5b.9 | **the switch:** `/p/<page>` serves the shell, the client renders `page.json` | dashboards, now client-rendered |
-| 5b.10 | `BuildComponents` (the widgets' old server props) and templ removed | dashboards |
+| 5b ✅ | Client rendering: widget host, one extension per widget type (its chart ported from `frontend/chart/*`), client-side navigation, per-page default time; templ chrome and Alpine removed | dashboards, now client-rendered |
+| 5b.1 ✅ | `query` host: time, auto refresh, SQL filter, params, view options, synced with the URL | dashboards (not used yet) |
+| 5b.2 ✅ | `widgets` host: `registerWidget`, the widget context (`query()`, `renderChild`, the widget menu), `ChartFrame` | dashboards (not used yet) |
+| 5b.3 ✅ | Go: markdown's HTML in its props (`computeProps`), the schema table serves its DDL from its handler; `.DefaultTimeRange(…)` in `page.json` | dashboards |
+| 5b.4 ✅ | widget extensions: grid, collapsible, markdown, schema table | dashboards (not used yet) |
+| 5b.5 ✅ | the old page deleted (`frontend/components`, `legacy-page`, Alpine, the old store); widget extensions: the charts, stats, table, alerts, each chart of `frontend/chart/*` ported into its extension and taking its generated props, shared helpers in `chart-library` | nothing: the dashboards are blank until 5b.9 |
+| 5b.6 ✅ | widget extensions: checkbox group, text input, Speedscope link | nothing (until 5b.9) |
+| 5b.7 ✅ | `page` host: `workbench.json`, `page.json`, `navigate`; the extension that renders a dashboard page | nothing (until 5b.9) |
+| 5b.8 ✅ | extensions `dashboards`, `time-range`, `refresh`, `filters`, `debug` | nothing (until 5b.9) |
+| 5b.9 ✅ | **the switch:** `/p/<page>` serves the shell, the client renders `page.json` | dashboards, now client-rendered |
+| 5b.10 ✅ | `BuildComponents` (the widgets' old server props) and templ removed | dashboards |
 | 6 | `QueryState` + structured filters (§3.8), alerts on `time` | filters as chips, click-to-filter |
+| 6a ✅ | small, any time after 5b.9: queries stop with their client (§3.7), auto refresh pauses in a hidden tab, chart titles in search everywhere and chart links (§3.11) | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
 | Risk | Mitigation |

@@ -21,7 +21,7 @@ export class SearchPick {
   show(value = ''): void {
     const pick = this.ui.createQuickPick<Row>();
     pick.title = 'Search everywhere';
-    pick.placeholder = 'Search dashboards, commands…';
+    pick.placeholder = 'Search dashboards, charts, commands…';
     pick.prompt = this.#hint();
     pick.onDidChangeValue((text) => this.#search(text));
     pick.onDidAccept(() => {

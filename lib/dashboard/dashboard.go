@@ -21,7 +21,8 @@ import (
 // these two methods.
 type Dashboard interface {
 	Title() string
-	CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error
+	// CollectHandlers mounts the page's handlers and is the page they serve as page.json.
+	CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) (PageJson, error)
 }
 
 // New starts building a standard widget dashboard. The returned *Builder is a
@@ -79,33 +80,34 @@ func (d *Builder) FilterButton(title string, queryPart string) *Builder {
 	return &cloned
 }
 
-func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) error {
+func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollector handler_collector.HandlerCollector) (PageJson, error) {
 	if d.defaultTime != "" {
 		if _, err := time.ParseDuration(d.defaultTime); err != nil {
-			return fmt.Errorf("DefaultTimeRange(%q) is not a Go duration (\"168h\" for 7 days): %w", d.defaultTime, err)
+			return PageJson{}, fmt.Errorf("DefaultTimeRange(%q) is not a Go duration (\"168h\" for 7 days): %w", d.defaultTime, err)
 		}
 	}
 	nodes, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api"))
 	if err != nil {
-		return fmt.Errorf("mounting widgets: %w", err)
+		return PageJson{}, fmt.Errorf("mounting widgets: %w", err)
 	}
-	page, err := json.Marshal(PageJson{
+	page := PageJson{
 		Kind:          "dashboard",
 		Title:         d.title,
 		DefaultTime:   d.defaultTime,
 		FilterBar:     d.searchBar.IsVisible,
 		FilterButtons: append([]rendering.FilterButton{}, d.searchBar.FilterButtons...),
 		Widgets:       nodes,
-	})
-	if err != nil {
-		return fmt.Errorf("marshalling page.json: %w", err)
 	}
-	if err := handlerCollector.Handle("page.json", jsonHandler(page)); err != nil {
-		return fmt.Errorf("registering page.json handler: %w", err)
+	body, err := json.Marshal(page)
+	if err != nil {
+		return PageJson{}, fmt.Errorf("marshalling page.json: %w", err)
+	}
+	if err := handlerCollector.Handle("page.json", jsonHandler(body)); err != nil {
+		return PageJson{}, fmt.Errorf("registering page.json handler: %w", err)
 	}
 
 	if err := handlerCollector.HandleRoot(shellHandler); err != nil {
-		return fmt.Errorf("registering the shell: %w", err)
+		return PageJson{}, fmt.Errorf("registering the shell: %w", err)
 	}
 
 	// "Open in Explore": redirect to the Explore editor pre-loaded with this
@@ -113,10 +115,10 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 	// Registered unconditionally; it 404s at request time when Explore is not
 	// wired up. No page links here while Explore is rebuilt (DEPRECATED (workbench)).
 	if err := handlerCollector.Handle("open-in-explore", d.openInExploreHandler(ctx)); err != nil {
-		return fmt.Errorf("registering open-in-explore handler: %w", err)
+		return PageJson{}, fmt.Errorf("registering open-in-explore handler: %w", err)
 	}
 
-	return nil
+	return page, nil
 }
 
 // openInExploreHandler serializes this dashboard (skipping out-of-scope widgets)

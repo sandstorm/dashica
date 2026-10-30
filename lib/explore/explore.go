@@ -62,11 +62,15 @@ func (e *exploreImpl) Title() string { return e.title }
 // compiled dashboard). See DashicaImpl.RegisterDashboard.
 func (e *exploreImpl) IsExploreView() bool { return true }
 
-func (e *exploreImpl) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
+func (e *exploreImpl) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) (dashboard.PageJson, error) {
 	e.deps = ctx.Deps
 	e.baseURL = ctx.CurrentHandlerUrl
 	e.mainMenu = ctx.MainMenu
-	return e.registerHandlers(ctx, collector)
+	page, err := rebuildNotice.CollectHandlers(ctx, collector)
+	if err != nil {
+		return dashboard.PageJson{}, err
+	}
+	return page, e.registerHandlers(collector)
 }
 
 var _ dashboard.Dashboard = (*exploreImpl)(nil)

@@ -9,7 +9,29 @@ export const workbench = {
       "entries": [
         {
           "title": "Shop",
-          "url": "/p/shop"
+          "url": "/p/shop",
+          "outline": [
+            {
+              "id": "1",
+              "title": "Requests",
+              "group": ""
+            },
+            {
+              "id": "2",
+              "title": "Requests over time",
+              "group": ""
+            },
+            {
+              "id": "7",
+              "title": "Latest",
+              "group": "Details"
+            },
+            {
+              "id": "11",
+              "title": "shop#login_events",
+              "group": ""
+            }
+          ]
         }
       ]
     }

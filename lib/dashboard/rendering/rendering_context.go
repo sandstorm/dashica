@@ -80,10 +80,21 @@ type MenuGroup struct {
 	Entries []MenuGroupEntry `json:"entries"`
 }
 
-// MenuGroupEntry is a dashboard in the menu: its title and URL ("/p/shop").
+// MenuGroupEntry is a dashboard in the menu: its title, URL ("/p/shop") and outline.
 type MenuGroupEntry struct {
 	Title string `json:"title"`
 	Url   string `json:"url"`
+	// Outline is its charts, as search everywhere finds them.
+	Outline []OutlineEntry `json:"outline"`
+}
+
+// OutlineEntry is a chart in a page's outline: a widget with data and a title.
+type OutlineEntry struct {
+	// Id is the last part of its dataUrl ("3" of "/p/shop/api/3"); the link "/p/shop#w=3" shows it.
+	Id    string `json:"id"`
+	Title string `json:"title"`
+	// Group is the title of the collapsible group around it; empty outside one.
+	Group string `json:"group"`
 }
 
 // FilterButton is a button of the filter bar that adds its condition to the filter.

@@ -1,13 +1,16 @@
 package widget
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"iter"
 	"maps"
 	"net/http"
+	"path"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -41,6 +44,11 @@ type withChildren interface {
 	Children() iter.Seq2[string, WidgetDefinition]
 }
 
+// withTitle is a widget with a title (a chart's, a group's): dashica-gen generates widgetTitle from its field `title`.
+type withTitle interface {
+	widgetTitle() string
+}
+
 // withExplicitId is a widget whose author may choose its id (`.Id("shop_revenue_stats")`), so its URL stays
 // the same as the page changes.
 type withExplicitId interface {
@@ -57,6 +65,8 @@ type Node struct {
 	DataURL string `json:"dataUrl,omitempty"`
 	// Children by name: a grid's areas; a collapsible group's widgets as "0", "1", ….
 	Children map[string]Node `json:"children,omitempty"`
+	// Title is its title for the page's outline (Outline); in page.json it is in its props.
+	Title string `json:"-"`
 }
 
 // Mount is the Node of `w` for page.json. A withHandler gets its handler mounted at "<page>/api/<id>/" below `api`,
@@ -76,6 +86,9 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 		return Node{}, fmt.Errorf("%s: marshalling props: %w", typ, err)
 	}
 	node := Node{Type: typ, Props: props}
+	if titled, ok := w.(withTitle); ok {
+		node.Title = titled.widgetTitle()
+	}
 	if data, ok := w.(withHandler); ok {
 		id := ""
 		if chosen, ok := w.(withExplicitId); ok {
@@ -96,6 +109,45 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 		}
 	}
 	return node, nil
+}
+
+// Outline is the charts among `nodes` and their children, in the order they were mounted: the widgets with data and a
+// title, each with the title of the collapsible group around it.
+func Outline(nodes []Node) []rendering.OutlineEntry {
+	return outline(nodes, "")
+}
+
+// outline is Outline inside the collapsible group titled `group` ("" outside one).
+func outline(nodes []Node, group string) []rendering.OutlineEntry {
+	entries := []rendering.OutlineEntry{}
+	for _, node := range nodes {
+		if node.DataURL != "" && node.Title != "" {
+			entries = append(entries, rendering.OutlineEntry{Id: path.Base(node.DataURL), Title: node.Title, Group: group})
+		}
+		inner := group
+		if node.Type == "collapsibleGroup" {
+			inner = node.Title
+		}
+		entries = append(entries, outline(mountOrder(node.Children), inner)...)
+	}
+	return entries
+}
+
+// mountOrder is `children` in the order Mount mounted them: a group's by position ("2" before "10"), a grid's by name.
+func mountOrder(children map[string]Node) []Node {
+	names := slices.SortedFunc(maps.Keys(children), func(a, b string) int {
+		i, errA := strconv.Atoi(a)
+		j, errB := strconv.Atoi(b)
+		if errA == nil && errB == nil {
+			return cmp.Compare(i, j)
+		}
+		return strings.Compare(a, b)
+	})
+	ordered := make([]Node, len(names))
+	for i, name := range names {
+		ordered[i] = children[name]
+	}
+	return ordered
 }
 
 // Mount mounts each widget below `api`; the nodes keep the order.

@@ -16,6 +16,7 @@ import (
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -153,7 +154,7 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 
 // WorkbenchJson is what "/workbench.json" says about the whole Dashica: what the client needs before any page.
 type WorkbenchJson struct {
-	// Menu is the dashboards by group, in registration order.
+	// Menu is the dashboards by group, in registration order, each with its outline.
 	Menu []rendering.MenuGroup `json:"menu"`
 }
 
@@ -239,7 +240,7 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		d.exploreBaseURL = url
 	}
 
-	err := dashb.CollectHandlers(
+	page, err := dashb.CollectHandlers(
 		&rendering.DashboardContext{
 			MainMenu:          &d.dashboardGroups,
 			CurrentHandlerUrl: url,
@@ -260,8 +261,9 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		title = url
 	}
 	d.dashboardGroups[len(d.dashboardGroups)-1].Entries = append(d.dashboardGroups[len(d.dashboardGroups)-1].Entries, rendering.MenuGroupEntry{
-		Title: title,
-		Url:   url,
+		Title:   title,
+		Url:     url,
+		Outline: widget.Outline(page.Widgets),
 	})
 	return d
 }

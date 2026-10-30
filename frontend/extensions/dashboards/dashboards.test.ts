@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Tests for dashboards.ts in the workbench: the menu, the page shown marked, favorites, search everywhere.
+// Tests for dashboards.ts in the workbench: the menu, the page shown marked, favorites, search everywhere (with the
+// charts of searchEverywhere after the dashboards).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { settle } from '../../hosts/widgets/widgets-testing';
@@ -24,8 +25,8 @@ beforeEach(async () => {
         {
           title: 'Shop',
           entries: [
-            { title: 'Orders', url: '/p/shop' },
-            { title: 'Checkout', url: '/p/checkout' },
+            { title: 'Orders', url: '/p/shop', outline: [] },
+            { title: 'Checkout', url: '/p/checkout', outline: [{ id: '3', title: 'Orders per minute', group: 'Details' }] },
           ],
         },
       ],
@@ -78,5 +79,18 @@ describe('dashboards', () => {
     const options = [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);
     expect(options).toContain('Orders Shop');
     expect(options).toContain('Checkout Shop');
+  });
+
+  it('ranks the dashboards before the charts in search everywhere, and opens a chart at its place', async () => {
+    host.querySelector<HTMLButtonElement>('.d-search-button')!.click();
+    const field = host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+    field.value = 'orders';
+    field.dispatchEvent(new Event('input'));
+    await settle();
+    const options = [...host.querySelectorAll<HTMLElement>('[role=option]')];
+    expect(options.map((option) => option.textContent)).toEqual(['Orders Shop', 'Checkout › Details › Orders per minute']);
+    options[1].click();
+    await settle();
+    expect(location.pathname + location.hash).toBe('/p/checkout#w=3');
   });
 });

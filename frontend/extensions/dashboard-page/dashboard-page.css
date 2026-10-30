@@ -7,3 +7,18 @@
   padding: var(--space-4) var(--space-6);
   background: var(--color-surface);
 }
+
+/* The chart a link names, for a moment: an accent outline that fades. */
+.d-dashboard-page__linked {
+  border-radius: var(--radius-md);
+  outline: calc(2 * var(--border-width)) solid transparent;
+  outline-offset: var(--space-1);
+  animation: d-dashboard-page-linked calc(6 * var(--duration-slow)) ease-in;
+}
+
+@keyframes d-dashboard-page-linked {
+  from,
+  50% {
+    outline-color: var(--color-accent);
+  }
+}

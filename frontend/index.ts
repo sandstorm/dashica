@@ -6,6 +6,7 @@ import { createWorkbench } from './workbench/workbench';
 import { alerts } from './extensions/alerts/alerts';
 import { barHorizontal } from './extensions/bar-horizontal/bar-horizontal';
 import { barVertical } from './extensions/bar-vertical/bar-vertical';
+import { chartLink } from './extensions/chart-link/chart-link';
 import { checkboxGroup } from './extensions/checkbox-group/checkbox-group';
 import { collapsible } from './extensions/collapsible/collapsible';
 import { dashboardPage } from './extensions/dashboard-page/dashboard-page';
@@ -34,6 +35,7 @@ const EXTENSIONS: readonly Extension[] = [
   refresh,
   filters,
   debug,
+  chartLink,
   dashboardPage,
   grid,
   collapsible,

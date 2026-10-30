@@ -17,6 +17,8 @@ export class QueryHost implements QueryApi {
    * whole interval later.
    */
   #skippedTick = false;
+  /** The search of the URL that holds the state (`?time=1h`, '' for none), as last loaded or written. */
+  #search = '';
   readonly #onVisibilityChange = () => {
     if (this.browserWindow.document.hidden || !this.#skippedTick) return;
     this.#restartAutoRefresh();
@@ -45,7 +47,8 @@ export class QueryHost implements QueryApi {
   load({ defaultTime }: { defaultTime?: string } = {}): void {
     clearTimeout(this.#urlWrite);
     this.#defaultTime = defaultTime || DEFAULT_TIME;
-    const url = new URLSearchParams(this.browserWindow.location.search);
+    this.#search = this.browserWindow.location.search;
+    const url = new URLSearchParams(this.#search);
     const refresh = Number(url.get('refresh'));
     this.time.load(url.get('time') || this.#defaultTime, url.get('range') ?? '', refresh > 0 ? refresh : undefined);
     this.filters.load(url.get('sql') ?? '');
@@ -55,6 +58,11 @@ export class QueryHost implements QueryApi {
     this.filters.fire();
     this.params.fire();
     this.refresh();
+  }
+
+  /** Whether the URL of the browser holds the state as it is: only its hash changed since. */
+  holdsState(): boolean {
+    return this.browserWindow.location.search === this.#search;
   }
 
   refresh(): void {
@@ -108,6 +116,7 @@ export class QueryHost implements QueryApi {
       else url.delete('wp');
       const search = url.toString();
       if (search !== location.search.replace(/^\?/, '')) history.pushState(history.state, '', search ? `?${search}` : location.pathname);
+      this.#search = location.search;
     }, URL_WRITE_DELAY_MS);
   }
 }

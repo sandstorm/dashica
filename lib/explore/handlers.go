@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/sandstorm/dashica/lib/dashboard"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
@@ -16,11 +15,7 @@ import (
 // registerHandlers wires the editor page and the API sub-routes. Route layout
 // mirrors docs section 4.3. Everything lives under the registration URL; the
 // API routes hang off a "/api" nested collector.
-func (e *exploreImpl) registerHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
-	if err := rebuildNotice.CollectHandlers(ctx, collector); err != nil {
-		return err
-	}
-
+func (e *exploreImpl) registerHandlers(collector handler_collector.HandlerCollector) error {
 	api := collector.Nested("/api")
 
 	if err := api.Handle("preview/query", apiHandler(e.handlePreviewQuery).asHTTP()); err != nil {

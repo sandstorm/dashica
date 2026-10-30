@@ -25,6 +25,7 @@ export class WidgetsHost implements WidgetsApi {
 
   /** Renders `widget` into `el` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
   render(el: HTMLElement, widget: WidgetNode): Disposable {
+    if ('dataUrl' in widget && widget.dataUrl) el.dataset.dataUrl = widget.dataUrl;
     const renderer = this.#renderers.get(widget.type);
     if (!renderer) {
       showWidgetError(el, new Error('no renderer for this widget type'), widget);

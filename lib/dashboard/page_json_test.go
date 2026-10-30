@@ -19,7 +19,7 @@ func serve(t *testing.T, d Dashboard) *http.ServeMux {
 	t.Helper()
 	mux := http.NewServeMux()
 	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop"}
-	if err := d.CollectHandlers(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop")); err != nil {
+	if _, err := d.CollectHandlers(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)
 	}
 	return mux
@@ -59,7 +59,7 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 
 func TestPageJson_RefusesADefaultTimeRangeThatIsNotADuration(t *testing.T) {
 	d := New().DefaultTimeRange("7d")
-	err := d.CollectHandlers(&rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}}, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/shop"))
+	_, err := d.CollectHandlers(&rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}}, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/shop"))
 	if err == nil || !strings.Contains(err.Error(), `DefaultTimeRange("7d") is not a Go duration`) {
 		t.Errorf("err = %v", err)
 	}

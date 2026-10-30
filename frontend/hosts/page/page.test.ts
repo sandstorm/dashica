@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for page.ts: the first page, navigate, links, back and forward, a page that cannot be shown.
+// Tests for page.ts: the first page, navigate, links, back and forward, a hash on the page, a page that cannot be shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { PageJson } from '../../generated/zz_generated.dashica';
@@ -22,10 +22,13 @@ beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   pages = { '/p/shop/page.json': page('Shop', '168h'), '/p/checkout/page.json': page('Checkout') };
   rendered = [];
-  vi.stubGlobal('fetch', async (url: string) => {
-    const shown = pages[url];
-    return shown ? new Response(JSON.stringify(shown)) : new Response('404 page not found', { status: 404 });
-  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      const shown = pages[url];
+      return shown ? new Response(JSON.stringify(shown)) : new Response('404 page not found', { status: 404 });
+    }),
+  );
   query = new QueryHost(window);
   content = document.body.appendChild(document.createElement('main'));
   host = new PageHost(window, { menu: [] }, query, content);
@@ -64,6 +67,52 @@ describe('PageHost', () => {
     expect(content.textContent).toBe('Checkout');
     expect(rendered).toEqual(['Shop', 'disposed Shop', 'Checkout']);
     expect(query.time.range).toBe('24h');
+  });
+
+  it('goes to a hash on the page shown without loading it again, keeping its query state', async () => {
+    await host.start();
+    query.time.setRange('1h');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const hashes: string[] = [];
+    window.addEventListener('hashchange', () => hashes.push(location.hash), { once: true });
+    await host.navigate('/p/shop#w=3');
+    expect(location.search).toBe('?time=1h');
+    expect(location.hash).toBe('#w=3');
+    expect(hashes).toEqual(['#w=3']);
+    expect(rendered).toEqual(['Shop']);
+    expect(query.time.range).toBe('1h');
+  });
+
+  it('leaves a change of only the hash by the browser (a link, back and forward) to the page, querying nothing again', async () => {
+    await host.start();
+    query.time.setRange('1h');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const fetched = vi.mocked(fetch).mock.calls.length;
+    let refreshes = 0;
+    query.onDidRequestRefresh(() => refreshes++);
+    history.pushState(null, '', '#w=3');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    history.back();
+    await new Promise((resolve) => window.addEventListener('popstate', resolve, { once: true }));
+    await settle();
+    expect(location.hash).toBe('');
+    expect(vi.mocked(fetch).mock.calls.length).toBe(fetched);
+    expect(refreshes).toBe(0);
+    expect(rendered).toEqual(['Shop']);
+    expect(query.time.range).toBe('1h');
+  });
+
+  it('goes to a hash on the page shown when the page asked for before has not loaded yet', async () => {
+    await host.start();
+    let respond!: () => void;
+    vi.stubGlobal('fetch', () => new Promise<Response>((resolve) => (respond = () => resolve(new Response(JSON.stringify(page('Checkout')))))));
+    const toCheckout = host.navigate('/p/checkout');
+    await host.navigate('/p/shop#w=3');
+    respond();
+    await toCheckout;
+    expect(location.pathname).toBe('/p/shop');
+    expect(location.hash).toBe('#w=3');
+    expect(rendered).toEqual(['Shop']);
   });
 
   it('opens a link to another page in the content area', async () => {
