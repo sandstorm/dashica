@@ -1,19 +1,9 @@
 #!/bin/bash
-#MISE description="Type-check the workbench's TypeScript and the generated contract (strict tsc, no output)"
-# The workbench's files in frontend/core, frontend/hosts, frontend/extensions and frontend/workbench, and
-# frontend/generated: the types dashica-gen writes and the golden contract checked against them (see
-# TestContract_Golden in contract_test.go), generated first, so tsc never checks stale types. The UNMIGRATED rest is
-# not checked: tsc follows the imports into it (a widget extension wraps frontend/chart/*), and only the errors in the
-# files above count.
+#MISE description="Type-check the frontend's TypeScript and the generated contract (strict tsc, no output)"
+# All of frontend/, including frontend/generated: the types dashica-gen writes and the golden contract checked against
+# them (see TestContract_Golden in contract_test.go), generated first, so tsc never checks stale types.
 set -e
-(cd lib/dashboard/widget && go generate ./...)
-CHECKED='frontend/(core|hosts|extensions|workbench|generated)/'
-output=$(npx -y -p typescript@5.9.3 tsc --noEmit --strict --target ESNext --module ESNext --moduleResolution bundler \
+(cd lib && go generate ./...)
+npx -y -p typescript@5.9.3 tsc --noEmit --strict --target ESNext --module ESNext --moduleResolution bundler \
   --lib ESNext,DOM,DOM.Iterable --skipLibCheck --types vite/client,node \
-  frontend/types/htl.d.ts $(find frontend/core frontend/hosts frontend/extensions frontend/workbench frontend/generated -name '*.ts') || true)
-# an error is its line `path(line,col): error …` and the indented lines after it
-errors=$(printf '%s\n' "$output" | awk -v checked="^$CHECKED" '/^[^ ].*\([0-9]+,[0-9]+\): error/ { keep = ($0 ~ checked) } keep')
-if [ -n "$errors" ]; then
-  printf '%s\n' "$errors"
-  exit 1
-fi
+  $(find frontend -name '*.ts')
