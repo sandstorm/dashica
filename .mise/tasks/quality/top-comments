@@ -5,8 +5,8 @@
 // repository root. A file without exports (a script, a stylesheet) may have its why as its top comment; a test
 // (`*.test.*`, `*.spec.ts`, anything in tests/) needs only a top comment (`Tests for X`). Also fails on a docs file
 // a source names that does not exist.
-// Checks the workbench's files in frontend/core, frontend/hosts and frontend/extensions (the UNMIGRATED rest is not
-// checked); prints each failing file and exits 1. Rules: docs/2026-10-28-workbench.md §3.10.
+// Checks the workbench's files in frontend/core, frontend/hosts and frontend/extensions; prints each failing file and
+// exits 1. Rules: docs/2026-10-28-workbench.md §3.10.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';

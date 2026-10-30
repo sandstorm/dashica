@@ -12,7 +12,7 @@ const speedscopeOutDir = path.resolve("speedscope_viewer/dist");
 fs.mkdirSync(outDir, { recursive: true });
 
 await esbuild.build({
-    entryPoints: ["frontend/index.js"],
+    entryPoints: ["frontend/index.ts"],
     outdir: outDir,
     bundle: true,
     plugins: [tailwindPlugin()],
