@@ -1,0 +1,55 @@
+/* See dashboards.ts. The "…" and the star sit at an entry's right end, shown on hover (a favorite's star always). */
+.dashboards-menu {
+  width: 100%;
+  padding: 1rem;
+}
+
+.dashboards-menu li {
+  position: relative;
+}
+
+.dashboards-menu li a {
+  padding-right: 3rem;
+}
+
+.dashboards-menu__more,
+.dashboards-menu__star {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.dashboards-menu__more {
+  right: 1.5rem;
+}
+
+.dashboards-menu__star {
+  right: 0.25rem;
+  font-size: 0.85em;
+}
+
+.dashboards-menu li:hover > .dashboards-menu__more,
+.dashboards-menu__more:focus-visible,
+.dashboards-menu li:hover > .dashboards-menu__star,
+.dashboards-menu__star:focus-visible,
+.dashboards-menu__star--active {
+  opacity: 1;
+}
+
+a.menu-active ~ .dashboards-menu__more,
+a.menu-active ~ .dashboards-menu__star {
+  color: white;
+}
+
+.dashica-wb__brand {
+  font-weight: 600;
+  text-decoration: none;
+  color: inherit;
+}
