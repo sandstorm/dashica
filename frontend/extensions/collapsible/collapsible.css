@@ -42,7 +42,10 @@
   padding: var(--space-2) 0;
 }
 
-/* closed groups one after another: a list of titles, 4px apart instead of the page's 24px */
-.d-dashboard-page > :has(> .d-collapsible:not([open])) + :has(> .d-collapsible:not([open])) {
+/*
+ * groups one after another: 4px apart instead of the page's 24px, open or closed alike, so that opening one never
+ * moves the title under the pointer
+ */
+.d-dashboard-page > :has(> .d-collapsible) + :has(> .d-collapsible) {
   margin-top: calc(var(--space-1) - var(--space-6));
 }
