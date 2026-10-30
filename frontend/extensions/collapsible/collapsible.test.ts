@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for collapsible.ts: the title, open or closed at first, the widgets in their order.
+// Tests for collapsible.ts: the title and widget count, open or closed at first, the widgets in their order.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
@@ -25,6 +25,7 @@ describe('collapsible', () => {
     const group = el.querySelector('details')!;
     expect(group.open).toBe(true);
     expect(group.querySelector('summary span')!.textContent).toBe('Details');
+    expect(group.querySelector('summary .d-collapsible__count')!.textContent).toBe('· 3 widgets');
     expect([...group.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual(['CREATE TABLE t1', 'CREATE TABLE t2', 'CREATE TABLE t10']);
   });
 

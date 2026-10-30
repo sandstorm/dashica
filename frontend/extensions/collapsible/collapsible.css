@@ -1,17 +1,19 @@
-/* See collapsible.ts: a flat row with a rule above, the chevron turned while open, the widgets below as on the page. */
-.d-collapsible {
-  border-top: var(--border-width) solid var(--color-border);
-}
-
+/* See collapsible.ts: a title row that tints under the pointer, the chevron turned while open, the widgets below as on the page. */
 .d-collapsible__title {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-2) 0;
+  margin: 0 calc(-1 * var(--space-2));
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   cursor: pointer;
   user-select: none;
+}
+
+.d-collapsible__title:hover {
+  background: var(--color-hover);
 }
 
 .d-collapsible__chevron {
@@ -23,9 +25,24 @@
   transform: rotate(90deg);
 }
 
+/* how many widgets a closed group holds */
+.d-collapsible__count {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-normal);
+}
+
+.d-collapsible[open] > .d-collapsible__title > .d-collapsible__count {
+  display: none;
+}
+
 .d-collapsible__content {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
   padding: var(--space-2) 0;
+}
+
+/* closed groups one after another: a list of titles, 4px apart instead of the page's 24px */
+.d-dashboard-page > :has(> .d-collapsible:not([open])) + :has(> .d-collapsible:not([open])) {
+  margin-top: calc(var(--space-1) - var(--space-6));
 }

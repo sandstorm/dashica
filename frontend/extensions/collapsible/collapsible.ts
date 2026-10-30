@@ -8,7 +8,8 @@ import './collapsible.css';
 /**
  * The widget type `collapsibleGroup`: its widgets one below the other under a title the viewer clicks to open or close
  * them; open at first when the group says so. A chart in a closed group queries once the group is opened. Flat, as a
- * row: a rule above, the title with a chevron (turned while open), the widgets 24px apart, no box around them.
+ * row: the title with a chevron (turned while open) and, while closed, how many widgets it holds; the widgets 24px
+ * apart, no box around them.
  */
 export const collapsible: Extension = {
   id: 'collapsible',
@@ -17,16 +18,18 @@ export const collapsible: Extension = {
 
 function renderCollapsible(el: HTMLElement, widget: WidgetOf<'collapsibleGroup'>, ctx: WidgetContext): Disposable {
   const content: HTMLElement = html`<div class="d-collapsible__content"></div>`;
+  const children = Object.entries(widget.children ?? {}).sort(([a], [b]) => Number(a) - Number(b));
   const group: HTMLDetailsElement = html`<details class="d-collapsible">
     <summary class="d-collapsible__title">
       ${createElement(ChevronRight, { width: 16, height: 16, class: 'd-collapsible__chevron' })}
       <span>${widget.props.title ?? ''}</span>
+      <span class="d-collapsible__count">· ${children.length === 1 ? '1 widget' : `${children.length} widgets`}</span>
     </summary>
     ${content}
   </details>`;
   group.open = widget.props.open ?? false;
   const rendered: Disposable[] = [];
-  for (const [, child] of Object.entries(widget.children ?? {}).sort(([a], [b]) => Number(a) - Number(b))) {
+  for (const [, child] of children) {
     rendered.push(ctx.renderChild(content.appendChild(el.ownerDocument.createElement('div')), child));
   }
   el.replaceChildren(group);
