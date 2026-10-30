@@ -27,11 +27,14 @@ export const filters: Extension = {
   },
 };
 
-/** The filter bar's content; `showButtons` takes the page's buttons, `showSql` the SQL filter of `query`. */
+/**
+ * The filter bar's content; `showButtons` takes the page's buttons, `showSql` the SQL filter of `query`. The buttons
+ * are outlined: a plain daisyUI button has the filter bar's own background (base-200).
+ */
 class FilterBar {
   readonly #buttons: HTMLElement = html`<div class="flex flex-wrap items-center gap-2"></div>`;
   readonly #active: HTMLElement = html`<span class="badge badge-primary badge-xs">active</span>`;
-  readonly #toggle: HTMLButtonElement = html`<button type="button" class="btn btn-xs" aria-expanded="false">filters</button>`;
+  readonly #toggle: HTMLButtonElement = html`<button type="button" class="btn btn-xs btn-outline" aria-expanded="false">filters</button>`;
   readonly #sql: HTMLTextAreaElement = html`<textarea
     class="textarea textarea-bordered textarea-xs w-full font-mono"
     placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
@@ -60,7 +63,7 @@ class FilterBar {
   showButtons(buttons: readonly FilterButton[]): void {
     this.#buttons.replaceChildren(
       ...buttons.map((button) => {
-        const el: HTMLButtonElement = html`<button type="button" class="btn btn-sm">${button.title}</button>`;
+        const el: HTMLButtonElement = html`<button type="button" class="btn btn-sm btn-outline">${button.title}</button>`;
         el.addEventListener('click', () => this.#add(button.queryPart));
         return el;
       }),
