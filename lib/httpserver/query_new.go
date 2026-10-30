@@ -128,6 +128,10 @@ func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, cli
 			To:   intPtr(int64(toInt) * 1000),
 		}, nil
 	} else {
+		// the range cannot be read; say why, as the time picker does
+		if _, _, err := f.ResolveTimeRange(time.Now()); err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("no time range given")
 	}
 

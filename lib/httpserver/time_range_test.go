@@ -161,3 +161,11 @@ func TestTimeRangeHandler_SaysWhatIsWrong(t *testing.T) {
 		t.Errorf("got %d %q, want 400 naming \"yesterday\"", rec.Code, rec.Body)
 	}
 }
+
+func TestResolveTimeRangeFromDbAsTime_SaysWhatIsWrong(t *testing.T) {
+	f := DashboardFilters{TimeRange: "custom", CustomTimeRange: "yesterday to now"}
+	_, err := f.ResolveTimeRangeFromDbAsTime(t.Context(), nil)
+	if err == nil || !strings.Contains(err.Error(), `"yesterday"`) {
+		t.Errorf("err = %v, want one naming \"yesterday\"", err)
+	}
+}
