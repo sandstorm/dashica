@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for time-range.ts: presets, a range without preset, custom, refresh.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Tests for time-range.ts: the button, the quick ranges, From / To, closing the panel, refresh.
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { timeRange } from './time-range';
@@ -30,46 +30,95 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const select = () => bar.querySelector('select')!;
+const rangeButton = () => bar.querySelector<HTMLButtonElement>('button[aria-haspopup]')!;
+const panel = () => bar.querySelector<HTMLElement>('[role=dialog]')!;
 const input = (label: string) => bar.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+const quickRanges = () => [...panel().querySelectorAll('li button')].map((item) => item.textContent);
+const apply = () => bar.querySelector<HTMLButtonElement>('button[type=submit]')!;
 
-function pick(value: string): void {
-  select().value = value;
-  select().dispatchEvent(new Event('change'));
+function type(label: string, value: string): void {
+  input(label).value = value;
+  input(label).dispatchEvent(new Event('input'));
+}
+
+function submit(): void {
+  bar.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 }
 
 describe('timeRange', () => {
-  it('shows the range and sets a preset picked', () => {
-    expect(select().value).toBe('24h');
-    pick('1h');
+  it('shows the range on its button, and sets a quick range picked', () => {
+    expect(rangeButton().textContent).toBe('Last 24 hours');
+    rangeButton().click();
+    expect(panel().hidden).toBe(false);
+    [...panel().querySelectorAll<HTMLButtonElement>('li button')].find((item) => item.textContent === 'Last 1 hour')!.click();
     expect(query.time.range).toBe('1h');
+    expect(rangeButton().textContent).toBe('Last 1 hour');
+    expect(panel().hidden).toBe(true);
   });
 
-  it('offers a range without preset, as the page declares it', () => {
+  it('shows a range without preset, as the page declares it', () => {
     query.load({ defaultTime: '90m' });
-    expect(select().value).toBe('90m');
-    expect(select().selectedOptions[0].textContent).toBe('Last 90m');
+    expect(rangeButton().textContent).toBe('Last 90m');
   });
 
-  it('turns "Custom" into the window of the preset before, auto refresh off', () => {
-    vi.useFakeTimers({ now: new Date(2026, 9, 29, 12, 0) });
+  it('narrows the quick ranges to what is typed', () => {
+    rangeButton().click();
+    type('Search quick ranges', 'days');
+    expect(quickRanges()).toEqual(['Last 2 days', 'Last 7 days', 'Last 30 days']);
+  });
+
+  it('opens with From / To of the range shown', () => {
+    query.time.setRange('6h');
+    rangeButton().click();
+    expect(input('From').value).toBe('now-6h');
+    expect(input('To').value).toBe('now');
+  });
+
+  it('applies a range relative to now, auto refresh kept', () => {
     query.time.setAutoRefresh(30);
-    pick('1h');
-    pick('custom');
-    vi.useRealTimers();
-    expect(query.time.custom).toBe('2026-10-29 11:00 to 2026-10-29 12:00');
-    expect(query.time.autoRefresh).toBeUndefined();
-    expect(input('From').value).toBe('2026-10-29T11:00');
-    expect(input('To').value).toBe('2026-10-29T12:00');
+    rangeButton().click();
+    type('From', 'now-6h');
+    type('To', 'now-1h');
+    submit();
+    expect(query.time.custom).toBe('now-6h to now-1h');
+    expect(query.time.autoRefresh).toBe(30);
+    expect(rangeButton().textContent).toBe('now-6h to now-1h');
+    expect(panel().hidden).toBe(true);
   });
 
-  it('sets the custom range typed', () => {
-    pick('custom');
-    input('From').value = '2026-10-28T08:00';
-    input('From').dispatchEvent(new Event('change'));
-    input('To').value = '2026-10-28T09:30';
-    input('To').dispatchEvent(new Event('change'));
+  it('applies a fixed range, auto refresh off, its day once on the button', () => {
+    query.time.setAutoRefresh(30);
+    rangeButton().click();
+    type('From', '2026-10-28 08:00');
+    type('To', '2026-10-28 09:30');
+    submit();
     expect(query.time.custom).toBe('2026-10-28 08:00 to 2026-10-28 09:30');
+    expect(query.time.autoRefresh).toBeUndefined();
+    expect(rangeButton().textContent).toBe('2026-10-28 08:00 to 09:30');
+  });
+
+  it('marks what it cannot read, and a From after To; applies neither', () => {
+    rangeButton().click();
+    type('From', 'yesterday');
+    expect(input('From').getAttribute('aria-invalid')).toBe('true');
+    expect(apply().disabled).toBe(true);
+    type('From', 'now-1h');
+    type('To', 'now-2h');
+    expect(input('From').getAttribute('aria-invalid')).toBe('false');
+    expect(apply().disabled).toBe(true);
+    submit();
+    expect(query.time.range).toBe('24h');
+  });
+
+  it('closes on Escape and on a click outside', () => {
+    rangeButton().click();
+    input('From').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(panel().hidden).toBe(true);
+    rangeButton().click();
+    input('From').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(panel().hidden).toBe(false);
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(panel().hidden).toBe(true);
   });
 
   it('refreshes from its button and its command', () => {
