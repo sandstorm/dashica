@@ -1,12 +1,12 @@
 import { html } from 'htl';
-import { ChevronDown, ChevronLeft, ChevronRight, Clock, RefreshCw, ZoomOut, createElement } from 'lucide';
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement } from 'lucide';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
 import { formatTime, type QueryApi } from '../../hosts/query/query';
 
 /**
  * The time range of the page's queries, in the title bar: a button showing the range ("Last 1 hour",
  * "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the window by its length, ⊖ zooming out to twice the
- * window, and the refresh button (also the command `timeRange.refresh`).
+ * window.
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
  * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply asks it (`/time-range`) and shows its reason when it
  * cannot. A range ending at a fixed time does not move, so applying one turns auto refresh off. A selection on a time
@@ -14,15 +14,11 @@ import { formatTime, type QueryApi } from '../../hosts/query/query';
  */
 export const timeRange: Extension = {
   id: 'timeRange',
-  contributes: {
-    commands: [{ command: 'timeRange.refresh', title: 'Refresh', category: 'Time range' }],
-  },
-  activate({ ui, query, commands, globalState, subscriptions }) {
+  activate({ ui, query, globalState, subscriptions }) {
     const picker = new TimeRangePicker(query, globalState);
     picker.show();
     subscriptions.push(query.time.onDidChange(() => picker.show()));
     subscriptions.push(ui.registerBarItem('title', picker.el, { alignment: 'right', priority: 30 }));
-    subscriptions.push(commands.registerCommand('timeRange.refresh', () => query.refresh()));
     subscriptions.push({ dispose: () => picker.close() });
   },
 };
@@ -45,7 +41,7 @@ const PRESETS = [
 ];
 
 /**
- * The range button with its panel, shift, zoom out and refresh; `show` shows `query.time`. The panel closes on Escape, on a
+ * The range button with its panel, shift and zoom out; `show` shows `query.time`. The panel closes on Escape, on a
  * click outside, and once a range is picked or applied.
  */
 class TimeRangePicker {
@@ -112,7 +108,6 @@ class TimeRangePicker {
       class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
       title="Zoom out"
       aria-label="Zoom out">${createElement(ZoomOut, { class: 'w-4 h-4' })}</button>`;
-    const refresh = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Refresh" aria-label="Refresh">${createElement(RefreshCw, { class: 'w-4 h-4' })}</button>`;
 
     this.#button.addEventListener('click', () => (this.#panel.hidden ? this.open() : this.close()));
     form.addEventListener('submit', (event) => {
@@ -128,7 +123,6 @@ class TimeRangePicker {
     back.addEventListener('click', () => void this.#shift(-1));
     forward.addEventListener('click', () => void this.#shift(1));
     zoomOut.addEventListener('click', () => void this.#zoomOut());
-    refresh.addEventListener('click', () => query.refresh());
     this.el = html`<div class="relative flex items-center gap-2">
       <div class="join">
         ${this.#button}
@@ -137,7 +131,6 @@ class TimeRangePicker {
         ${zoomOut}
       </div>
       ${this.#panel}
-      ${refresh}
     </div>`;
   }
 

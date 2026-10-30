@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range), closing the panel, refresh.
+// Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range), closing the panel, shift and zoom.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
@@ -7,7 +7,6 @@ import { timeRange } from './time-range';
 
 let query: QueryHost;
 let bar: HTMLElement;
-let commands: Map<string, () => void>;
 let stored: Map<string, unknown>;
 
 beforeEach(() => {
@@ -15,7 +14,6 @@ beforeEach(() => {
   query = new QueryHost(window);
   query.load();
   bar = document.body.appendChild(document.createElement('div'));
-  commands = new Map();
   stored = new Map();
   const globalState: Memento = {
     get: (key: string, defaultValue?: unknown) => (stored.has(key) ? stored.get(key) : defaultValue),
@@ -26,7 +24,6 @@ beforeEach(() => {
     globalState,
     subscriptions: [],
     ui: { registerBarItem: (_bar: string, el: HTMLElement) => bar.appendChild(el) },
-    commands: { registerCommand: (id: string, run: () => void) => commands.set(id, run) },
   };
   timeRange.activate(context as unknown as ExtensionContext);
 });
@@ -192,13 +189,5 @@ describe('timeRange', () => {
     query.time.setCustom('2026-10-29 10:00', '2026-10-29 12:00');
     click('Zoom out');
     await vi.waitFor(() => expect(query.time.custom).toBe('2026-10-29 09:00 to 2026-10-29 13:00'));
-  });
-
-  it('refreshes from its button and its command', () => {
-    let refreshed = 0;
-    query.onDidRequestRefresh(() => refreshed++);
-    bar.querySelector<HTMLButtonElement>('button[title=Refresh]')!.click();
-    commands.get('timeRange.refresh')!();
-    expect(refreshed).toBe(2);
   });
 });

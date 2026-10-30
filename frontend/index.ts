@@ -4,7 +4,6 @@ import type { WorkbenchJson } from './generated/zz_generated.dashica';
 import type { Extension } from './hosts/extension-host/extension-host';
 import { createWorkbench } from './workbench/workbench';
 import { alerts } from './extensions/alerts/alerts';
-import { autoRefresh } from './extensions/auto-refresh/auto-refresh';
 import { barHorizontal } from './extensions/bar-horizontal/bar-horizontal';
 import { barVertical } from './extensions/bar-vertical/bar-vertical';
 import { checkboxGroup } from './extensions/checkbox-group/checkbox-group';
@@ -17,6 +16,7 @@ import { grid } from './extensions/grid/grid';
 import { heatmap } from './extensions/heatmap/heatmap';
 import { markdown } from './extensions/markdown/markdown';
 import { schemaTable } from './extensions/schema-table/schema-table';
+import { refresh } from './extensions/refresh/refresh';
 import { searchEverywhere } from './extensions/search-everywhere/search-everywhere';
 import { speedscopeLink } from './extensions/speedscope-link/speedscope-link';
 import { stats } from './extensions/stats/stats';
@@ -31,7 +31,7 @@ const EXTENSIONS: readonly Extension[] = [
   dashboards,
   searchEverywhere,
   timeRange,
-  autoRefresh,
+  refresh,
   filters,
   debug,
   dashboardPage,

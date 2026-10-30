@@ -397,7 +397,7 @@ Built-in extensions:
 | `dashboards` | left panel "Dashboards" (groups, favorites, filter box) |
 | `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites |
 | `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7); `widget/selection` "Zoom" |
-| `auto-refresh` | title bar: auto refresh interval |
+| `refresh` | title bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
 | (log scale) | per chart, as in Grafana (decided 2026-10-30): "Log scale" in the chart's menu `widget/context` (the widgets host's command `widget.toggleLogScale`) for the charts that offer it (`ChartFrameOptions.logScale`); Go `.LogScale()` sets where it starts. Not in the URL |
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |

@@ -6,7 +6,7 @@ import type { Disposable } from '../../core/disposable/disposable';
  * those of the user's click or key.
  */
 export interface Commands {
-  /** Registers `handler` as `id` (`<extension>.<name>`, e.g. `timeRange.refresh`) until disposed; throws if `id` is taken. */
+  /** Registers `handler` as `id` (`<extension>.<name>`, e.g. `refresh.now`) until disposed; throws if `id` is taken. */
   registerCommand(id: string, handler: (...args: any[]) => unknown): Disposable;
   /** Resolves to the handler's result; rejects for an unknown `id` and when the handler throws or rejects. */
   executeCommand<T = unknown>(id: string, ...args: unknown[]): Promise<T>;
