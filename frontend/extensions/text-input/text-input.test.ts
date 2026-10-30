@@ -1,0 +1,45 @@
+// @vitest-environment jsdom
+// Tests for text-input.ts: the empty param, typing into it, the caret.
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { textInput } from './text-input';
+
+let testbed: ReturnType<typeof widgetTestbed>;
+
+beforeEach(() => {
+  testbed = widgetTestbed();
+  testbed.activate(textInput);
+});
+
+afterEach(() => testbed.dispose());
+
+function type(input: HTMLInputElement, text: string): void {
+  input.value = text;
+  input.dispatchEvent(new Event('input'));
+}
+
+describe('textInput', () => {
+  it('sets its param empty when the page has none, so a query has it', () => {
+    testbed.render({ type: 'textInput', props: { name: 'path', label: 'Path' } });
+    expect(testbed.query.params.get('path')).toBe('');
+  });
+
+  it('writes what is typed into its param', () => {
+    const { el } = testbed.render({ type: 'textInput', props: { name: 'path', label: 'Path', placeholder: '/api/' } });
+    const input = el.querySelector('input')!;
+    expect(input.placeholder).toBe('/api/');
+    type(input, '/api/orders');
+    expect(testbed.query.params.get('path')).toBe('/api/orders');
+  });
+
+  it('with prependCaret, stores the text with a leading ^ and shows it without', () => {
+    testbed.query.params.set('path', '^/api/');
+    const { el } = testbed.render({ type: 'textInput', props: { name: 'path', prependCaret: true } });
+    const input = el.querySelector('input')!;
+    expect(input.value).toBe('/api/');
+    type(input, '/checkout');
+    expect(testbed.query.params.get('path')).toBe('^/checkout');
+    type(input, '');
+    expect(testbed.query.params.get('path')).toBe('');
+  });
+});
