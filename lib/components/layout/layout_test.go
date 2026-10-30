@@ -13,9 +13,6 @@ func TestBuiltinLayouts_Registered(t *testing.T) {
 		if got.Name != want.Name {
 			t.Errorf("ByName(%q).Name = %q", want.Name, got.Name)
 		}
-		if got.Fn == nil {
-			t.Errorf("layout %q has nil Fn", want.Name)
-		}
 	}
 }
 
@@ -44,8 +41,7 @@ func TestNames_ContainsBuiltins(t *testing.T) {
 
 func TestRegister_Panics(t *testing.T) {
 	cases := map[string]Layout{
-		"empty name": {Name: "", Fn: DefaultPage.Fn},
-		"nil fn":     {Name: "x", Fn: nil},
+		"empty name": {Name: ""},
 		"duplicate":  DefaultPage,
 	}
 	for name, l := range cases {

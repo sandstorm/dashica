@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"strconv"
 
-	"github.com/a-h/templ"
 	"github.com/rs/zerolog"
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
@@ -98,5 +97,3 @@ type SearchBarOption struct {
 	IsVisible     bool
 	FilterButtons []FilterButton
 }
-
-type LayoutFunc func(renderingContext DashboardContext, searchBar SearchBarOption, content templ.Component) templ.Component

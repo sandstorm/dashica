@@ -4,24 +4,13 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
-// This file makes layouts serializable for the Explore builder
-// (see docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1 (4)).
-//
-// A layout is a function value, which is not data. So layouts become *named*:
-// JSON stores the name, and a registry resolves it back to the function. The
-// zero value of Layout has a nil Fn and no name — dashboards must set one via
-// WithLayout, exactly as they had to provide a LayoutFunc before.
-
-// Layout is a named page layout. Name is the stable wire identifier stored in
-// serialized dashboards; Fn is the render function (matching the shape of the
-// generated templ layout components, i.e. rendering.LayoutFunc).
+// Layout is the name of a page layout, as dashboards set it (`WithLayout(layout.DefaultPage)`) and serialized
+// dashboards store it. The client renders every page in the same workbench; the name stays so the dashboards and their
+// JSON keep working.
 type Layout struct {
 	Name string
-	Fn   rendering.LayoutFunc
 }
 
 var (
@@ -30,17 +19,14 @@ var (
 )
 
 // Register makes a layout resolvable by name during dashboard deserialization.
-// Called from init(); panics on an empty name, a nil Fn, or a duplicate name
-// (all programmer errors caught at startup).
+// Called from init(); panics on an empty or a duplicate name (both programmer
+// errors caught at startup).
 func Register(l Layout) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
 
 	if l.Name == "" {
 		panic("layout.Register: empty layout name")
-	}
-	if l.Fn == nil {
-		panic(fmt.Sprintf("layout.Register: layout %q has a nil Fn", l.Name))
 	}
 	if _, dup := registry[l.Name]; dup {
 		panic(fmt.Sprintf("layout.Register: duplicate layout name %q", l.Name))
@@ -69,11 +55,10 @@ func Names() []string {
 	return names
 }
 
-// The built-in named layouts. Fn points at the generated templ components
-// (now unexported: defaultPageFn / docsPageFn)
+// The built-in named layouts.
 var (
-	DefaultPage = Layout{Name: "defaultPage", Fn: defaultPageFn}
-	DocsPage    = Layout{Name: "docsPage", Fn: docsPageFn}
+	DefaultPage = Layout{Name: "defaultPage"}
+	DocsPage    = Layout{Name: "docsPage"}
 )
 
 func init() {

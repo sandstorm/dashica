@@ -40,9 +40,6 @@ func TestDashboard_RoundTrip(t *testing.T) {
 	if gi.layout.Name != "defaultPage" {
 		t.Errorf("layout = %q, want defaultPage", gi.layout.Name)
 	}
-	if gi.layout.Fn == nil {
-		t.Error("layout Fn not resolved")
-	}
 	if !reflect.DeepEqual(gi.searchBar, oi.searchBar) {
 		t.Errorf("searchBar mismatch:\n got  %+v\n want %+v", gi.searchBar, oi.searchBar)
 	}

@@ -8,7 +8,6 @@ require gopkg.in/natefinch/lumberjack.v2 v2.2.1
 
 require (
 	github.com/Azhovan/rigging v0.4.6
-	github.com/a-h/templ v0.3.977
 	github.com/adhocore/gronx v1.19.5
 	github.com/caddyserver/certmagic v0.22.2
 	github.com/goccy/go-yaml v1.17.1
@@ -59,5 +58,3 @@ require (
 	golang.org/x/tools v0.35.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-tool github.com/a-h/templ/cmd/templ
