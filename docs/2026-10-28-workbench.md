@@ -142,7 +142,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
 
 - Client extensions live only in `dashica-src`; the instances customize through Go.
-- **Extensions do not depend on each other (for now).** What several need goes into a host (e.g. `query.viewOptions`).
+- **Extensions do not depend on each other (for now).** What several need goes into a host (e.g. `query.time`).
   When that would turn a feature into a host only to share one model (Explore's tabs on `ExploreModel` are the likely
   case), take VS Code's way: `dependsOn: ['explore']`, and what `activate()` returns is its API to the dependents.
 - **Plain DOM, no Alpine, no reactivity library.** Models with private state and `onDidChange` events ("commands out,
@@ -160,7 +160,7 @@ widgets.registerWidget('timeBar', renderTimeBar);
 function renderTimeBar(el, widget: WidgetOf<'timeBar'>, ctx): Disposable   // widget: generated type (§3.3)
 
 ctx.query(): Promise<Table>                // Arrow; tracks loading / ok / error itself (status bar, Debug)
-ctx.state                                  // the QueryApi: time / filters / params / viewOptions / cursor (§3.7)
+ctx.state                                  // the QueryApi: time / filters / params / cursor (§3.7)
 ctx.state.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
@@ -182,7 +182,6 @@ ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8)
 | `time` | time range, auto refresh | `?time=1h` | per page; default declared in Go (`.DefaultTimeRange("168h")`, a Go duration as the presets send it; fallback `24h`); navigation opens the target with its own default (as Grafana) |
 | `filters` | structured filters, a time-window filter, free SQL | `?f=…&tw=…&sql=…` | per page |
 | `params` | values of form widgets | `?wp=…` | per page |
-| `viewOptions` | log scale, … | `?log=1` | global; read by every chart |
 | `cursor` | hovered timestamp | — (ephemeral) | synchronized crosshair across all time charts |
 
 Every data handler reads the same query parameters; the server parses them once in `lib/httpserver` into one
@@ -368,7 +367,6 @@ interface QueryApi {
   readonly time: TimeModel;                 // range, auto refresh; per page, URL-synced
   readonly filters: FilterModel;            // {fieldId, op, value}[] + time window + free SQL; URL-synced
   readonly params: ParamsModel;             // form widget values; URL-synced
-  readonly viewOptions: ViewOptionsModel;   // log scale, …
   readonly cursor: CursorModel;             // hovered timestamp, synchronized across time charts (step 7)
   refresh(): void;
   readonly onDidRequestRefresh: Event<void>;
@@ -400,7 +398,7 @@ Built-in extensions:
 | `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites |
 | `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7); `widget/selection` "Zoom" |
 | `auto-refresh` | title bar: auto refresh interval |
-| `log-scale` | title bar toggle; the value lives in `query.viewOptions` |
+| (log scale) | per chart, as in Grafana (decided 2026-10-30): "Log scale" in the chart's menu `widget/context` (the widgets host's command `widget.toggleLogScale`) for the charts that offer it (`ChartFrameOptions.logScale`); Go `.LogScale()` sets where it starts. Not in the URL |
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |
 | `query-status` | status bar: queries, loading, failed, timings |
