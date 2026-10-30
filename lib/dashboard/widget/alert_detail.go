@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
@@ -67,16 +68,13 @@ func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
 				http.Error(w, "unmarshalling filters: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if c := filters.SqlClause(); c != "" {
-				filterClause = "(" + c + ")"
-			}
-
-			resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
+			resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
 			if err != nil {
-				http.Error(w, "resolving time range: "+err.Error(), http.StatusInternalServerError)
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
+			filterClause = "(" + filters.SqlClause(resolvedTimeRange) + ")"
+			httpserver.WriteResolvedTimeRange(w, resolvedTimeRange)
 		}
 		query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 

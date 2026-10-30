@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
@@ -49,16 +50,13 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		if c := filters.SqlClause(); c != "" {
-			filterClause = "(" + c + ")"
-		}
-
-		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
+		resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
 		if err != nil {
-			return fmt.Errorf("resolving time range: %w", err)
+			return err
 		}
-		w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
+		filterClause = "(" + filters.SqlClause(resolvedTimeRange) + ")"
+		// so that charts also show the full range if they have no data at beginning or end
+		WriteResolvedTimeRange(w, resolvedTimeRange)
 	}
 	query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
 

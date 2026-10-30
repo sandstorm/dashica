@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -49,46 +48,24 @@ func TestParseTimeExpr_RejectsWhatItDoesNotKnow(t *testing.T) {
 	}
 }
 
-func TestSqlClause_PresetIsAnyGoDuration(t *testing.T) {
-	tests := map[string]string{
-		"1h":   "timestamp >= (now() - INTERVAL 3600 SECOND) AND timestamp <= (now())",
-		"90m":  "timestamp >= (now() - INTERVAL 5400 SECOND) AND timestamp <= (now())",
-		"168h": "timestamp >= (now() - INTERVAL 604800 SECOND) AND timestamp <= (now())",
-	}
-	for timeRange, want := range tests {
-		f := DashboardFilters{TimeRange: timeRange}
-		if got := f.SqlClause(); got != want {
-			t.Errorf("SqlClause(%q) = %q, want %q", timeRange, got, want)
-		}
-	}
-}
-
-func TestSqlClause_CustomRange(t *testing.T) {
+func TestSqlClause(t *testing.T) {
 	from := time.Date(2026, 10, 29, 10, 0, 0, 0, time.Local)
 	to := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
-	f := DashboardFilters{TimeRange: "custom", CustomTimeRange: "2026-10-29 10:00 to 2026-10-29 12:00", SqlFilter: "status >= 500"}
-	want := "timestamp >= " + strconv.FormatInt(from.Unix(), 10) + " AND timestamp <= " + strconv.FormatInt(to.Unix(), 10) + " AND (status >= 500)"
-	if got := f.SqlClause(); got != want {
-		t.Errorf("SqlClause = %q, want %q", got, want)
+	window := fmt.Sprintf("timestamp >= %d AND timestamp <= %d", from.Unix(), to.Unix())
+	tests := map[string]struct {
+		sqlFilter string
+		want      string
+	}{
+		"window only":     {want: window},
+		"with SQL filter": {sqlFilter: "status >= 500", want: window + " AND (status >= 500)"},
 	}
-}
-
-func TestSqlClause_CustomRangeRelativeToNow(t *testing.T) {
-	f := DashboardFilters{TimeRange: "custom", CustomTimeRange: "now-6h to now-1h"}
-	f.SqlClause()
-	from, to := time.Unix(int64(f.From.(float64)), 0), time.Unix(int64(f.To.(float64)), 0)
-	if got := to.Sub(from); got != 5*time.Hour {
-		t.Errorf("window = %v, want 5h", got)
-	}
-	if ago := time.Since(to); ago < time.Hour-time.Minute || ago > time.Hour+time.Minute {
-		t.Errorf("end = %v ago, want 1h", ago)
-	}
-}
-
-func TestSqlClause_InvalidCustomRangeHasNoTimeCondition(t *testing.T) {
-	f := DashboardFilters{TimeRange: "custom", CustomTimeRange: "now-6h to yesterday"}
-	if got := f.SqlClause(); got != "" {
-		t.Errorf("SqlClause = %q, want none", got)
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := DashboardFilters{SqlFilter: tt.sqlFilter}
+			if got := f.SqlClause(newTimeRange(from, to)); got != tt.want {
+				t.Errorf("SqlClause = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -108,12 +85,12 @@ func TestResolveTimeRange(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			from, to, err := tt.filters.ResolveTimeRange(now)
+			got, err := tt.filters.ResolveTimeRange(now)
 			if err != nil {
 				t.Fatalf("ResolveTimeRange: %v", err)
 			}
-			if !from.Equal(tt.from) || !to.Equal(tt.to) {
-				t.Errorf("ResolveTimeRange = %v to %v, want %v to %v", from, to, tt.from, tt.to)
+			if *got.From != tt.from.UnixMilli() || *got.To != tt.to.UnixMilli() {
+				t.Errorf("ResolveTimeRange = %d to %d, want %v to %v", *got.From, *got.To, tt.from, tt.to)
 			}
 		})
 	}
@@ -131,7 +108,7 @@ func TestResolveTimeRange_SaysWhatIsWrong(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := tt.filters.ResolveTimeRange(time.Now())
+			_, err := tt.filters.ResolveTimeRange(time.Now())
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("ResolveTimeRange: err = %v, want one saying %s", err, tt.want)
 			}
@@ -159,13 +136,5 @@ func TestTimeRangeHandler_SaysWhatIsWrong(t *testing.T) {
 	TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+filters.Encode(), nil))
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"yesterday"`) {
 		t.Errorf("got %d %q, want 400 naming \"yesterday\"", rec.Code, rec.Body)
-	}
-}
-
-func TestResolveTimeRangeFromDbAsTime_SaysWhatIsWrong(t *testing.T) {
-	f := DashboardFilters{TimeRange: "custom", CustomTimeRange: "yesterday to now"}
-	_, err := f.ResolveTimeRangeFromDbAsTime(t.Context(), nil)
-	if err == nil || !strings.Contains(err.Error(), `"yesterday"`) {
-		t.Errorf("err = %v, want one naming \"yesterday\"", err)
 	}
 }

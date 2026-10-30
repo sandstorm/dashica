@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 )
@@ -31,11 +32,13 @@ func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
 
-		//w.Header().Add("X-Dashica-Resolved-TimeTs-Range", resolvedTimeRange)
-
+		timeRange, err := filters.ResolveTimeRange(time.Now())
+		if err != nil {
+			return err
+		}
 		if err := da.batchEvaluator.EvaluateAlerts(
 			r.Context(),
-			filters.FromNew(), filters.ToNew(),
+			time.UnixMilli(*timeRange.From), time.UnixMilli(*timeRange.To),
 		); err != nil {
 			return err
 		}

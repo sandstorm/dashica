@@ -1,13 +1,11 @@
 package httpserver
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -26,131 +24,6 @@ type DashboardFilters struct {
 	TimeRange       string `json:"timeRange"`
 	CustomTimeRange string `json:"customTimeRange"`
 	SqlFilter       string `json:"sqlFilter"`
-
-	// LEGACY; WAS SENT FROM UI
-	From interface{}
-	To   interface{}
-}
-
-// SqlClause returns the AND-joined dashboard filter expression (time range + user SQL filter)
-// as a single SQL fragment, or empty string if no filters are configured. This fragment is
-// safe to inline directly into a query's WHERE clause and references the `timestamp` column
-// directly, so it assumes the surrounding query selects from a single base table that has
-// such a column.
-func (f *DashboardFilters) SqlClause() string {
-	f.calculateLegacyFilters()
-
-	queryParts := make([]string, 0, 3)
-	if fromStr, ok := f.From.(string); ok && fromStr != "" {
-		queryParts = append(queryParts, "timestamp >= ("+fromStr+")")
-	}
-	if fromFloat, ok := f.From.(float64); ok && fromFloat != 0 {
-		queryParts = append(queryParts, fmt.Sprintf("timestamp >= %d", int64(fromFloat)))
-	}
-	if toStr, ok := f.To.(string); ok && toStr != "" {
-		queryParts = append(queryParts, "timestamp <= ("+toStr+")")
-	}
-	if toFloat, ok := f.To.(float64); ok && toFloat != 0 {
-		queryParts = append(queryParts, fmt.Sprintf("timestamp <= %d", int64(toFloat)))
-	}
-	if f.SqlFilter != "" {
-		queryParts = append(queryParts, "("+f.SqlFilter+")")
-	}
-	return strings.Join(queryParts, " AND ")
-}
-
-// Unix Timestamp with microsecond precision
-func (f *DashboardFilters) FromNew() time.Time {
-	if f.TimeRange != "custom" {
-		// TODO ERROR HDL HERE
-		dur, _ := time.ParseDuration(f.TimeRange)
-		return time.Now().Add(-dur)
-	}
-
-	// TODO: parse custom times
-	return time.Now()
-}
-
-// Unix Timestamp with microsecond precision
-func (f *DashboardFilters) ToNew() time.Time {
-	if f.TimeRange != "custom" {
-		return time.Now()
-	}
-
-	// TODO: parse custom times
-	return time.Now()
-}
-
-// ResolveTimeRangeFromDb calculates the actual time range as seen by the database, such that the charts
-// can display the full range; and returns it as JSON string.
-func (f *DashboardFilters) ResolveTimeRangeFromDb(ctx context.Context, clickhouseClient *clickhouse.Client) (string, error) {
-	result, err := f.ResolveTimeRangeFromDbAsTime(ctx, clickhouseClient)
-	if err != nil {
-		return "", err
-	}
-
-	resultJson, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("JSON marshalling: %w", err)
-	}
-	return string(resultJson), nil
-}
-
-// ResolveTimeRangeFromDbAsTime calculates the actual time range as seen by the database, such that the charts
-// can display the full range; and returns it as JSON string.
-func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, clickhouseClient *clickhouse.Client) (*querying2.TimeRange, error) {
-	query := ""
-	f.calculateLegacyFilters()
-
-	fromStr, fromOk := f.From.(string)
-	toStr, toOk := f.To.(string)
-
-	fromInt, fromIntOk := f.From.(float64)
-	toInt, toIntOk := f.To.(float64)
-
-	if fromOk && fromStr != "" && toOk && toStr != "" {
-		query = fmt.Sprintf(`SELECT (%s)::Int64 * 1000 as from, (%s)::Int64 * 1000 as to`, fromStr, toStr)
-	} else if toIntOk && fromIntOk {
-		return &querying2.TimeRange{
-			From: intPtr(int64(fromInt) * 1000),
-			To:   intPtr(int64(toInt) * 1000),
-		}, nil
-	} else {
-		// the range cannot be read; say why, as the time picker does
-		if _, _, err := f.ResolveTimeRange(time.Now()); err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("no time range given")
-	}
-
-	opts := clickhouse.DefaultQueryOptions()
-	opts.Settings["output_format_json_quote_decimals"] = "0"
-	opts.Settings["output_format_json_quote_64bit_integers"] = "0"
-	opts.Settings["output_format_json_quote_64bit_floats"] = "0"
-	result, err := clickhouse.QueryJSONFirst[querying2.TimeRange](ctx, clickhouseClient, query, opts)
-	if err != nil {
-		return nil, fmt.Errorf("SQL query: %w", err)
-	}
-	return result, nil
-}
-
-func (f *DashboardFilters) calculateLegacyFilters() {
-	if f.TimeRange == "custom" {
-		if from, to, err := f.ResolveTimeRange(time.Now()); err == nil {
-			f.From = float64(from.Unix())
-			f.To = float64(to.Unix())
-		}
-		return
-	}
-	// a preset: any Go duration (`1h`, `90m`, `168h`), ending now
-	if dur, err := time.ParseDuration(f.TimeRange); err == nil && dur > 0 {
-		f.From = fmt.Sprintf("now() - INTERVAL %d SECOND", int64(dur.Seconds()))
-		f.To = "now()"
-	}
-}
-
-func intPtr(i int64) *int64 {
-	return &i
 }
 
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
@@ -186,23 +59,15 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		if clause := filters.SqlClause(); clause != "" {
-			q = queryObj.With(sql.Where(clause))
-		}
-
-		// add resolved time range to response, so that charts also show the full range if they have no data at beginning or end
-		resolvedTimeRange, err = filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		resolvedTimeRange, err = filters.ResolveTimeRange(time.Now())
 		if err != nil {
-			return fmt.Errorf("resolving time range: %w", err)
+			return err
 		}
+		q = queryObj.With(sql.Where(filters.SqlClause(resolvedTimeRange)))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
-
-		resolvedTimeRangeJson, err := json.Marshal(resolvedTimeRange)
-		if err != nil {
-			return fmt.Errorf("JSON marshalling: %w", err)
-		}
-		w.Header().Add("X-Dashica-Resolved-Time-Range", string(resolvedTimeRangeJson))
+		// so that charts also show the full range if they have no data at beginning or end
+		WriteResolvedTimeRange(w, resolvedTimeRange)
 	}
 
 	var bucketSizeMs *int64
@@ -272,16 +137,12 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		if err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		filterClause := filters.SqlClause()
-		if filterClause != "" {
-			q = queryObj.With(sql.Where(filterClause))
-		}
-
-		// add resolved time range
-		resolvedTimeRange, err = filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		resolvedTimeRange, err = filters.ResolveTimeRange(time.Now())
 		if err != nil {
-			return fmt.Errorf("resolving time range: %w", err)
+			return err
 		}
+		filterClause := filters.SqlClause(resolvedTimeRange)
+		q = queryObj.With(sql.Where(filterClause))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 

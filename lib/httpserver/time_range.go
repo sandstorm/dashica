@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sandstorm/dashica/lib/httpserver/querying"
 )
 
 // relativeTimeExpr is `now`, or `now` and an offset: `now-6h`, `now+1d` (units s m h d w).
@@ -49,31 +51,57 @@ func parseTimeExpr(text string, now time.Time) (time.Time, error) {
 	return t, nil
 }
 
-// ResolveTimeRange is the window the time range stands for at `now`: a preset (a Go duration) ends at now; a custom
-// range is "<from> to <to>", each end a time expression (parseTimeExpr). The error says what cannot be read, as the
-// time picker shows it.
-func (f *DashboardFilters) ResolveTimeRange(now time.Time) (from, to time.Time, err error) {
+// ResolveTimeRange is the window the time range stands for at `now`, in milliseconds: a preset (a Go duration) ends at
+// now; a custom range is "<from> to <to>", each end a time expression (parseTimeExpr). The error says what cannot be
+// read, as the time picker and the charts show it. Every handler resolves here, with the server's clock, so the charts
+// of a page query the same numbers.
+func (f *DashboardFilters) ResolveTimeRange(now time.Time) (*querying.TimeRange, error) {
 	if f.TimeRange != "custom" {
 		dur, err := time.ParseDuration(f.TimeRange)
 		if err != nil || dur <= 0 {
-			return time.Time{}, time.Time{}, fmt.Errorf("time range %q: neither a Go duration (`1h`) nor `custom`", f.TimeRange)
+			return nil, fmt.Errorf("time range %q: neither a Go duration (`1h`) nor `custom`", f.TimeRange)
 		}
-		return now.Add(-dur), now, nil
+		return newTimeRange(now.Add(-dur), now), nil
 	}
 	parts := strings.Split(f.CustomTimeRange, " to ")
 	if len(parts) != 2 {
-		return time.Time{}, time.Time{}, fmt.Errorf("custom range %q: want `<from> to <to>`", f.CustomTimeRange)
+		return nil, fmt.Errorf("custom range %q: want `<from> to <to>`", f.CustomTimeRange)
 	}
-	if from, err = parseTimeExpr(parts[0], now); err != nil {
-		return time.Time{}, time.Time{}, err
+	from, err := parseTimeExpr(parts[0], now)
+	if err != nil {
+		return nil, err
 	}
-	if to, err = parseTimeExpr(parts[1], now); err != nil {
-		return time.Time{}, time.Time{}, err
+	to, err := parseTimeExpr(parts[1], now)
+	if err != nil {
+		return nil, err
 	}
 	if !from.Before(to) {
-		return time.Time{}, time.Time{}, fmt.Errorf("custom range %q: from is not before to", f.CustomTimeRange)
+		return nil, fmt.Errorf("custom range %q: from is not before to", f.CustomTimeRange)
 	}
-	return from, to, nil
+	return newTimeRange(from, to), nil
+}
+
+func newTimeRange(from, to time.Time) *querying.TimeRange {
+	fromMs, toMs := from.UnixMilli(), to.UnixMilli()
+	return &querying.TimeRange{From: &fromMs, To: &toMs}
+}
+
+// SqlClause is the condition the filters add to a query's WHERE: the window `timeRange` (ResolveTimeRange) and the
+// SQL filter, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500)`. It references the `timestamp`
+// column, so it assumes the query selects from a single base table that has one.
+func (f *DashboardFilters) SqlClause(timeRange *querying.TimeRange) string {
+	clause := fmt.Sprintf("timestamp >= %d AND timestamp <= %d", *timeRange.From/1000, *timeRange.To/1000)
+	if f.SqlFilter != "" {
+		clause += " AND (" + f.SqlFilter + ")"
+	}
+	return clause
+}
+
+// WriteResolvedTimeRange tells the charts the window their query covers (X-Dashica-Resolved-Time-Range), so that they
+// show all of it, also where there is no data at its start or end.
+func WriteResolvedTimeRange(w http.ResponseWriter, timeRange *querying.TimeRange) {
+	b, _ := json.Marshal(timeRange) // two numbers; cannot fail
+	w.Header().Add("X-Dashica-Resolved-Time-Range", string(b))
 }
 
 // TimeRangeHandler serves the window of the request's `filters` (as every data handler reads them) at now, as
@@ -85,13 +113,13 @@ func TimeRangeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("filters: %v", err), http.StatusBadRequest)
 		return
 	}
-	from, to, err := filters.ResolveTimeRange(time.Now())
+	timeRange, err := filters.ResolveTimeRange(time.Now())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]int64{"from": from.UnixMilli(), "to": to.UnixMilli()}); err != nil {
+	if err := json.NewEncoder(w).Encode(timeRange); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

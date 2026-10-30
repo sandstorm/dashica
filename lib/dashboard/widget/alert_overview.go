@@ -3,6 +3,7 @@ package widget
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
@@ -70,12 +71,12 @@ func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 				http.Error(w, "unmarshalling filters: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			resolvedTimeRange, err := filters.ResolveTimeRangeFromDb(r.Context(), client)
+			resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
 			if err != nil {
-				http.Error(w, "resolving time range: "+err.Error(), http.StatusInternalServerError)
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			w.Header().Add("X-Dashica-Resolved-Time-Range", resolvedTimeRange)
+			httpserver.WriteResolvedTimeRange(w, resolvedTimeRange)
 		}
 
 		err = client.QueryToHandler(r.Context(), alertOverviewQuery, opts, w)

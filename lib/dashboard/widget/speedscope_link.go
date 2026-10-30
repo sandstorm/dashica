@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
@@ -84,13 +85,11 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 		if err := json.Unmarshal([]byte(rawFilters), &filters); err != nil {
 			return fmt.Errorf("unmarshalling filters: %w", err)
 		}
-		if clause := filters.SqlClause(); clause != "" {
-			q = query.With(sql.Where(clause))
-		}
-		resolvedTimeRange, err := filters.ResolveTimeRangeFromDbAsTime(r.Context(), client)
+		resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
 		if err != nil {
-			return fmt.Errorf("resolving time range: %w", err)
+			return err
 		}
+		q = query.With(sql.Where(filters.SqlClause(resolvedTimeRange)))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 	}
