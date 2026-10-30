@@ -39,19 +39,20 @@ func emit(m *model, outFile string) error {
 			Type:          w.TypeName,
 			WireName:      w.WireName,
 			Keys:          jsonKeys(w.Fields),
-			Marshal:       marshalStmts("r", w.Fields),
-			Props:         marshalStmts("r", clientFields(w.Fields)),
+			Marshal:       marshalStmts("r", "sql.MarshalField", w.Fields),
+			Props:         marshalStmts("r", "sql.MarshalFieldProps", clientFields(w.Fields)),
 			Computed:      w.ComputedType != "",
 			Titled:        hasTitle(w.Fields),
-			ComputedProps: marshalStmts("c", w.ComputedFields),
+			ComputedProps: marshalStmts("c", "sql.MarshalFieldProps", w.ComputedFields),
 			Unmarshal:     unmarshalStmts(w.TypeName, w.Fields),
+			Dimensions:    dimensionStmts(w.Fields),
 		})
 	}
 	for _, g := range groups {
 		data.Groups = append(data.Groups, groupView{
 			Type:      g.GroupType,
 			Keys:      jsonKeys(g.Group),
-			Marshal:   marshalStmts("r", g.Group),
+			Marshal:   marshalStmts("r", "sql.MarshalField", g.Group),
 			Unmarshal: unmarshalStmts(g.GroupType, g.Group),
 		})
 	}
@@ -84,6 +85,8 @@ type widgetView struct {
 	Computed      bool
 	ComputedProps []string
 	Unmarshal     []string
+	// Dimensions append its dimension slots that are set; no dimensions() without one.
+	Dimensions []string
 	// Titled: it has a client field `title`, which widgetTitle returns.
 	Titled bool
 }
@@ -146,11 +149,30 @@ func propsFields(w widgetInfo) []fieldInfo {
 }
 
 // marshalStmts renders the guarded marshal block for each field of the struct `recv` ("r": the widget, "c": what
-// its computeProps returned).
-func marshalStmts(recv string, fields []fieldInfo) []string {
+// its computeProps returned); `marshalField` serializes its SqlFields: sql.MarshalField all of a field (MarshalJSON,
+// read by Explore), sql.MarshalFieldProps its alias without the definition (the props in page.json).
+func marshalStmts(recv, marshalField string, fields []fieldInfo) []string {
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		out = append(out, marshalStmt(recv, f))
+		out = append(out, marshalStmt(recv, marshalField, f))
+	}
+	return out
+}
+
+// dimensionStmts append each slot tagged `role=dimension` that is set to `out`; a TimestampedField is a time axis,
+// which interprets no filter.
+func dimensionStmts(fields []fieldInfo) []string {
+	var out []string
+	for _, f := range fields {
+		if f.Role != "dimension" {
+			continue
+		}
+		switch f.Category {
+		case catField:
+			out = append(out, fmt.Sprintf("if r.%s != nil {\nout = append(out, r.%s)\n}", f.GoName, f.GoName))
+		case catOptField:
+			out = append(out, fmt.Sprintf("if r.%s != nil {\nout = append(out, *r.%s)\n}", f.GoName, f.GoName))
+		}
 	}
 	return out
 }
@@ -166,7 +188,7 @@ func unmarshalStmts(typeName string, fields []fieldInfo) []string {
 // marshalStmt emits `if <nonzero> { m[key], err = <marshal>; ... }` for one
 // field. The map is map[string]json.RawMessage, so a present key is always the
 // field's own JSON; absent keys are the omit-when-empty case.
-func marshalStmt(recv string, f fieldInfo) string {
+func marshalStmt(recv, marshalField string, f fieldInfo) string {
 	v := recv + "." + f.GoName
 	key := f.JSONKey
 	set := func(guard, expr string) string {
@@ -176,9 +198,9 @@ func marshalStmt(recv string, f fieldInfo) string {
 	case catQueryable:
 		return set(v+" != nil", "sql.MarshalQueryable("+v+")")
 	case catField, catTsField:
-		return set(v+" != nil", "sql.MarshalField("+v+")")
+		return set(v+" != nil", marshalField+"("+v+")")
 	case catOptField:
-		return set(v+" != nil", "sql.MarshalField(*"+v+")")
+		return set(v+" != nil", marshalField+"(*"+v+")")
 	case catString:
 		return set(v+` != ""`, "json.Marshal("+v+")")
 	case catInt, catInt64:
@@ -282,6 +304,13 @@ func (r *{{.Type}}) marshalProps(ctx *rendering.DashboardContext) ([]byte, error
 {{if .Titled}}
 // widgetTitle is its title, as the page's outline names it.
 func (r *{{.Type}}) widgetTitle() string { return r.title }
+{{end}}{{if .Dimensions}}
+// dimensions are its slots tagged ` + "`" + `role=dimension` + "`" + ` that are set: its own fields, by whose alias filter.Apply interprets a filter.
+func (r *{{.Type}}) dimensions() []sql.SqlField {
+	var out []sql.SqlField
+	{{range .Dimensions}}{{.}}
+	{{end}}return out
+}
 {{end}}
 func (r *{{.Type}}) UnmarshalJSON(b []byte) error {
 	var m map[string]json.RawMessage

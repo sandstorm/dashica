@@ -129,3 +129,16 @@ func Enum(field string) SqlField {
 		alias:      field,
 	}
 }
+
+// IsCategory is whether `f` holds categories a chart can be filtered by: a column, an Enum or an expression
+// (`JSONExtractString(attrs, 'host')`); a count is a measure, a time bucket (Timestamp15Min, TimestampField,
+// AutoBucket) a time axis.
+func IsCategory(f SqlField) bool {
+	switch field := f.(type) {
+	case autoBucketField:
+		return false
+	case *fieldImpl:
+		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0
+	}
+	return true
+}

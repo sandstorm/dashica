@@ -2,6 +2,7 @@ package sql
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -107,6 +108,8 @@ func New(opts ...SqlBuilderOption) *SqlQuery {
 }
 func (b *SqlQuery) With(opts ...SqlBuilderOption) SqlQueryable {
 	cloned := *b
+	// a request's Where appends to a copy, never into the spare capacity of the chart's query
+	cloned.where = slices.Clip(b.where)
 	for _, opt := range opts {
 		opt(&cloned)
 	}
@@ -251,4 +254,24 @@ func (b *SqlQuery) Build() string {
 	query += ";"
 
 	return query
+}
+
+// BaseTable is the table `q` reads (its From) and the ClickHouse server it runs on (OnDatabase, "" for "default");
+// ok only for a builder query (New), since a SQL file's tables are only in its text.
+func BaseTable(q SqlQueryable) (table, database string, ok bool) {
+	b, ok := q.(*SqlQuery)
+	if !ok {
+		return "", "", false
+	}
+	return b.from, b.database, true
+}
+
+// SelectFields are the fields of its SELECT, in order; empty for SELECT *.
+func (b *SqlQuery) SelectFields() []SqlField {
+	return b.selectF
+}
+
+// GroupByFields are the fields of its GROUP BY, in order.
+func (b *SqlQuery) GroupByFields() []SqlField {
+	return b.groupBy
 }

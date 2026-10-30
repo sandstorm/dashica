@@ -78,6 +78,34 @@ func MarshalField(f SqlField) ([]byte, error) {
 	return json.Marshal(f)
 }
 
+// sqlFieldPropsDTO is a SqlField in a widget's props in page.json: what the client draws and selects by.
+type sqlFieldPropsDTO struct {
+	// Kind tells a category, which a click selects, from a count (a measure).
+	Kind fieldKind `json:"kind"`
+	// Alias is the field's column in the query result.
+	Alias string `json:"alias"`
+	// XBucketSizeMs is a time axis' bucket size; an AutoBucket's until the server picks one for the time range.
+	XBucketSizeMs int64 `json:"xBucketSizeMs,omitempty"`
+}
+
+// MarshalFieldProps serializes `f` for a widget's props in page.json: its kind, alias and bucket size, what the
+// client draws and selects by. Generated marshalProps call this for their field members.
+func MarshalFieldProps(f SqlField) ([]byte, error) {
+	switch f := f.(type) {
+	case nil:
+		return []byte("null"), nil
+	case *autoBucketFieldImpl:
+		return json.Marshal(sqlFieldPropsDTO{Kind: kindAutoBucket, Alias: f.alias_, XBucketSizeMs: f.sizeMs})
+	case *fieldImpl:
+		kind := f.kind
+		if kind == (fieldKind{}) {
+			kind = kindExpr
+		}
+		return json.Marshal(sqlFieldPropsDTO{Kind: kind, Alias: f.alias, XBucketSizeMs: f.timestamp_xBucketSizeMs})
+	}
+	return nil, fmt.Errorf("MarshalFieldProps: unknown field type %T", f)
+}
+
 // UnmarshalField reconstructs the concrete SqlField named by the "kind"
 // discriminator. Returns nil for a JSON null (optional fields).
 func UnmarshalField(b []byte) (SqlField, error) {

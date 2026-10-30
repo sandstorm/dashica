@@ -11,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	querying2 "github.com/sandstorm/dashica/lib/httpserver/querying"
 )
@@ -21,10 +22,15 @@ type QueryHandler struct {
 	FileSystem              fs.ReadFileFS
 }
 
-func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
-	state, err := ParseQueryState(r)
-	if err != nil {
-		return err
+// HandleQuery answers `queryObj` as Arrow, filtered by `state` (ParseQueryState of `r`): its window and its SQL
+// filter; `queryObj` has the structured filters its chart interprets already, and `diagnostics` says what it did
+// (X-Dashica-Diagnostics). Every filter's value is bound (filter.Param). A skipped chart answers 204 without asking
+// ClickHouse. An unreadable custom range is ResolveTimeRange's error.
+func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	WriteDiagnostics(w, diagnostics)
+	if diagnostics.Skipped != "" {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
 	}
 	serverId := queryObj.Database()
 	if serverId == "" {
@@ -40,6 +46,7 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 	opts.Settings["date_time_input_format"] = "best_effort"          // support ISO 8601 dates (which is used in date picker by browser)
 
 	maps.Copy(opts.Parameters, state.Params)
+	bindFilters(opts.Parameters, state)
 
 	q := queryObj
 	var resolvedTimeRange *querying2.TimeRange
@@ -84,11 +91,17 @@ type DebugInfo struct {
 	Stats               map[string]interface{} `json:"stats"`
 }
 
-// HandleDebug returns debug information about the query including the SQL string and EXPLAIN output
-func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
-	state, err := ParseQueryState(r)
-	if err != nil {
-		return err
+// HandleDebug returns debug information about the query including the SQL string and EXPLAIN output, filtered as
+// HandleQuery filters it; Stats has the window and SQL filter clause, the bound parameters and `diagnostics`. A
+// skipped chart answers its Stats alone, without asking ClickHouse.
+func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	WriteDiagnostics(w, diagnostics)
+	debugInfo := DebugInfo{
+		Stats: map[string]interface{}{"diagnostics": diagnostics},
+	}
+	if diagnostics.Skipped != "" {
+		w.Header().Set("Content-Type", "application/json")
+		return json.NewEncoder(w).Encode(debugInfo)
 	}
 	serverId := queryObj.Database()
 	if serverId == "" {
@@ -103,13 +116,10 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 	opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates
 
 	maps.Copy(opts.Parameters, state.Params)
+	bindFilters(opts.Parameters, state)
 
 	q := queryObj
 	var resolvedTimeRange *querying2.TimeRange
-
-	debugInfo := DebugInfo{
-		Stats: make(map[string]interface{}),
-	}
 
 	if !queryObj.ShouldSkipFilters() {
 		resolvedTimeRange, err = state.ResolveTimeRange(time.Now())
@@ -124,6 +134,7 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		debugInfo.Stats["resolvedTimeRange"] = resolvedTimeRange
 		debugInfo.Stats["filterClause"] = filterClause
 	}
+	debugInfo.Stats["parameters"] = opts.Parameters
 
 	var bucketSizeMs *int64
 	if resolvedTimeRange != nil {
@@ -180,4 +191,12 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 	// Return as JSON
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(debugInfo)
+}
+
+// bindFilters adds the value of each of the request's filters to `params` (`__f0`, …), also of those its chart
+// ignores, so a chart's conditions name only filter.Param.
+func bindFilters(params map[string]string, state QueryState) {
+	for i, f := range state.Filters {
+		params[filter.Param(i)] = f.Value
+	}
 }

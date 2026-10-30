@@ -75,6 +75,29 @@ func TestFieldKindWireFormat(t *testing.T) {
 	}
 }
 
+func TestMarshalFieldProps_KindAliasAndBucketSizeOnly(t *testing.T) {
+	tests := []struct {
+		field SqlField
+		want  string
+	}{
+		{JsonExtractString("attrs", "host"), `{"kind":"expr","alias":"host"}`},
+		{Count().WithAlias("logs"), `{"kind":"count","alias":"logs"}`},
+		{Enum("level"), `{"kind":"enum","alias":"level"}`},
+		{Timestamp15Min(), `{"kind":"expr","alias":"time","xBucketSizeMs":900000}`},
+		{AutoBucketAs("ts", "bucket"), `{"kind":"autoBucket","alias":"bucket","xBucketSizeMs":900000}`},
+		{nil, `null`},
+	}
+	for _, tt := range tests {
+		b, err := MarshalFieldProps(tt.field)
+		if err != nil {
+			t.Fatalf("MarshalFieldProps: %v", err)
+		}
+		if string(b) != tt.want {
+			t.Errorf("got %s, want %s", b, tt.want)
+		}
+	}
+}
+
 func TestUnmarshalFieldUnknownKind(t *testing.T) {
 	_, err := UnmarshalField([]byte(`{"kind":"banana"}`))
 	if err == nil {

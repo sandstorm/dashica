@@ -22,7 +22,7 @@ type echoWidget struct{}
 func (e *echoWidget) Handler(rendering.Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, "QUERY time="+r.URL.Query().Get("time"))
+		_, _ = io.WriteString(w, "QUERY time="+r.URL.Query().Get("time")+" f="+strings.Join(r.URL.Query()["f"], ","))
 	})
 	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "DEBUG time="+r.URL.Query().Get("time"))
@@ -52,8 +52,21 @@ func TestDispatchPreview_ReachesWidgetQueryHandler(t *testing.T) {
 		t.Fatalf("handlePreviewQuery: %v", err)
 	}
 	got := rec.Body.String()
-	want := `QUERY time=24h`
+	want := `QUERY time=24h f=`
 	if got != want {
+		t.Errorf("body = %q, want %q", got, want)
+	}
+}
+
+func TestDispatchPreview_DropsTheStructuredFilters(t *testing.T) {
+	e := newTestExplore()
+	req := httptest.NewRequest(http.MethodPost, "/explore/api/preview/query?time=1h&f=status:eq:500&f=host:ne:a", strings.NewReader(`{"type":"exploreTestEcho"}`))
+	rec := httptest.NewRecorder()
+
+	if err := e.handlePreviewQuery(rec, req); err != nil {
+		t.Fatalf("handlePreviewQuery: %v", err)
+	}
+	if got, want := rec.Body.String(), "QUERY time=1h f="; got != want {
 		t.Errorf("body = %q, want %q", got, want)
 	}
 }

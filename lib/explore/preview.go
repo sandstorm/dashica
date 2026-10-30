@@ -16,7 +16,8 @@ import (
 //
 // Body: one widget envelope ({"type": ..., "props": ...}). Query args
 // (time, range, sql, wp) are the same as a compiled widget's endpoint and are read
-// by the underlying QueryHandler off the request URL.
+// by the underlying QueryHandler off the request URL; structured filters (f) are
+// dropped, see dispatchPreview.
 func (e *exploreImpl) handlePreviewQuery(w http.ResponseWriter, r *http.Request) error {
 	return e.dispatchPreview(w, r, "query")
 }
@@ -63,6 +64,11 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 	below := r.Clone(r.Context())
 	below.URL.Path = "/" + endpoint
 	below.URL.RawPath = ""
+	// The preview runs without structured filters: its widget's fields and From come from the request, and a filter
+	// would compare them and DESCRIBE that From.
+	query := below.URL.Query()
+	query.Del("f")
+	below.URL.RawQuery = query.Encode()
 	data.ServeHTTP(w, below)
 	return nil
 }

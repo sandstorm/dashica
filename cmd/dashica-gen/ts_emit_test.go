@@ -21,15 +21,16 @@ func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
 	for _, want := range []string{
 		// required fields without "?", the query and the children left out of the props
 		"export interface TimeBarProps {",
-		"  x: SqlField;\n",
+		"  x: SqlFieldProps;\n",
 		"  stack?: StackOptions;",
 		"  order?: 'value' | 'sum' | 'appearance' | 'inside-out';",
 		"export interface GridProps {\n  /**",
 		// the wire forms of fields and colors from their Go DTOs, a named string type with constants as their union
-		"export interface SqlField {\n  kind: 'expr' | 'count' | 'enum' | 'autoBucket';",
+		"export interface SqlFieldProps {\n  /** Kind tells a category, which a click selects, from a count (a measure). */\n  kind: 'expr' | 'count' | 'enum' | 'autoBucket';\n  /** Alias is the field's column in the query result. */\n  alias: string;",
 		"export interface ColorScale {\n  legend: boolean;",
 		// widget.Node per widget type: a data URL for a widget with a handler, children for a container
 		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string }",
+		"  | { type: 'speedscopeLink'; props: SpeedscopeLinkProps; dataUrl: string }",
 		"  | { type: 'grid'; props: GridProps; children?: Record<string, WidgetNode> }",
 		"  | { type: 'markdown'; props: MarkdownProps }",
 		// a DTO after the structs it references, a widget.Node as WidgetNode
@@ -40,7 +41,8 @@ func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
 			t.Errorf("missing %q", want)
 		}
 	}
-	for _, unwanted := range []string{"  sql?:", "  sql:", "  areas", "  widgets?:"} {
+	// the query and the children left out of the props, a field without its definition
+	for _, unwanted := range []string{"  sql?:", "  sql:", "  areas", "  widgets?:", "  definition?:", "  column?:"} {
 		if strings.Contains(ts, unwanted) {
 			t.Errorf("unexpected %q", unwanted)
 		}

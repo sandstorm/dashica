@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -85,5 +86,31 @@ func TestTableAppliesLimitToQuery(t *testing.T) {
 
 	if !strings.Contains(sqlStr, "LIMIT 500") {
 		t.Errorf("Expected query to contain 'LIMIT 500', got:\n%s", sqlStr)
+	}
+}
+
+func TestTable_NamesItsCategoryColumns(t *testing.T) {
+	grouped := NewTable(sql.New(sql.From("http_logs"),
+		sql.Select(sql.JsonExtractString("attrs", "host")),
+		sql.Select(sql.Timestamp15Min()),
+		sql.Select(sql.Count()),
+		sql.GroupBy(sql.Field("host")),
+		sql.GroupBy(sql.Timestamp15Min()),
+	))
+	rawRows := NewTable(sql.New(sql.From("http_logs"), sql.Select(sql.Field("status")), sql.Select(sql.Field("path"))))
+	sqlFile := NewTable(sql.FromString("SELECT host, count() AS cnt FROM http_logs GROUP BY host"))
+
+	for name, tc := range map[string]struct {
+		table *Table
+		want  []string
+	}{
+		"its GROUP BY fields but a time bucket": {grouped, []string{"host"}},
+		"all selects of raw rows":               {rawRows, []string{"status", "path"}},
+		"none of a SQL file":                    {sqlFile, nil},
+	} {
+		computed, err := tc.table.computeProps(nil)
+		if err != nil || !slices.Equal(computed.categories, tc.want) {
+			t.Errorf("%s: categories %v (%v), want %v", name, computed.categories, err, tc.want)
+		}
 	}
 }

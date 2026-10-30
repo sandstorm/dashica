@@ -2,7 +2,9 @@ package widget
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"maps"
@@ -12,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -38,6 +41,18 @@ type withProps interface {
 // Arrow) and "/debug" (the query, EXPLAIN).
 type withQuery interface {
 	Query() sql.SqlQueryable
+}
+
+// withDimensions is a chart's own fields, which filter.Apply interprets a filter id as (by alias): the slots tagged
+// `dashica-gen:"role=dimension"` that are set (generated), a table's GROUP BY or select fields.
+type withDimensions interface {
+	dimensions() []sql.SqlField
+}
+
+// withFilters is a chart that interprets the request's filters itself: `q` (its Query) with those it interprets
+// added, and what it did. Every other chart gets filter.Apply.
+type withFilters interface {
+	ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
 }
 
 // withHandler is a widget with data beyond a query (alerts, Speedscope, the schema table): its handler answers the
@@ -193,11 +208,11 @@ func (w WidgetsMap) all() iter.Seq2[string, WidgetDefinition] {
 	}
 }
 
-// DataHandler answers the requests below a widget's URL: a withQuery's query (queryHandler), a withHandler's
-// Handler; nil for a widget without data.
+// DataHandler answers the requests below a widget's URL: a withQuery's query (queryHandler, its base table's columns
+// from ClickHouse), a withHandler's Handler; nil for a widget without data.
 func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 	if chart, ok := w.(withQuery); ok {
-		return queryHandler(deps, chart.Query())
+		return queryHandler(deps, chart, deps.ClickhouseClientManager.Columns)
 	}
 	if data, ok := w.(withHandler); ok {
 		return data.Handler(deps)
@@ -205,23 +220,60 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 	return nil
 }
 
-// queryHandler serves `query`: /query (the data, Arrow) and /debug (the query, EXPLAIN).
-func queryHandler(deps rendering.Dependencies, query sql.SqlQueryable) http.Handler {
+// queryHandler serves the query of `chart`: /query (the data, Arrow) and /debug (the query, EXPLAIN), each with the
+// request's filters as the chart interprets them (applyFilters, base-table columns from `columns`); a request whose
+// query state cannot be read is a 400.
+func queryHandler(deps rendering.Dependencies, chart withQuery, columns filter.Columns) http.Handler {
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: deps.ClickhouseClientManager,
 		Logger:                  deps.Logger,
 		FileSystem:              deps.FileSystem,
 	}
+	query := chart.Query()
+	serve := func(handle func(sql.SqlQueryable, httpserver.QueryState, filter.Diagnostics, http.ResponseWriter, *http.Request) error) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			state, err := httpserver.ParseQueryState(r)
+			if err != nil {
+				httpError(w, err)
+				return
+			}
+			filtered, diagnostics, err := applyFilters(r.Context(), chart, query, state.Filters, columns)
+			if err != nil {
+				httpError(w, err)
+				return
+			}
+			httpError(w, handle(filtered, state, diagnostics, w, r))
+		}
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
-		if err := qh.HandleQuery(query, w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	})
-	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		if err := qh.HandleDebug(query, w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	})
+	mux.Handle("/query", serve(qh.HandleQuery))
+	mux.Handle("/debug", serve(qh.HandleDebug))
 	return mux
+}
+
+// applyFilters is `query` of `chart` with the filters it interprets, and what it did: its own ApplyFilters, else
+// filter.Apply on its dimensions.
+func applyFilters(ctx context.Context, chart withQuery, query sql.SqlQueryable, filters []filter.Filter, columns filter.Columns) (sql.SqlQueryable, filter.Diagnostics, error) {
+	if own, ok := chart.(withFilters); ok {
+		filtered, diagnostics := own.ApplyFilters(query, filters)
+		return filtered, diagnostics, nil
+	}
+	var fields []sql.SqlField
+	if d, ok := chart.(withDimensions); ok {
+		fields = d.dimensions()
+	}
+	return filter.Apply(ctx, query, fields, filters, columns)
+}
+
+// httpError answers `err`: 400 for a query state that cannot be read, else 500; nothing for nil.
+func httpError(w http.ResponseWriter, err error) {
+	if err == nil {
+		return
+	}
+	status := http.StatusInternalServerError
+	var bad *httpserver.QueryStateError
+	if errors.As(err, &bad) {
+		status = http.StatusBadRequest
+	}
+	http.Error(w, err.Error(), status)
 }

@@ -69,20 +69,17 @@ export const page = {
           "props": {
             "fill": {
               "kind": "expr",
-              "definition": "status",
               "alias": "status"
             },
             "height": 200,
             "title": "Requests",
             "x": {
               "kind": "expr",
-              "definition": "toStartOfFifteenMinutes(timestamp)::DateTime64",
               "alias": "time",
               "xBucketSizeMs": 900000
             },
             "y": {
               "kind": "count",
-              "definition": "count(*)",
               "alias": "cnt"
             }
           },
@@ -96,12 +93,10 @@ export const page = {
             "x": {
               "kind": "autoBucket",
               "alias": "time",
-              "column": "timestamp",
               "xBucketSizeMs": 900000
             },
             "y": {
               "kind": "count",
-              "definition": "count(*)",
               "alias": "cnt"
             }
           },
@@ -122,12 +117,10 @@ export const page = {
             "height": 200,
             "x": {
               "kind": "expr",
-              "definition": "status",
               "alias": "status"
             },
             "y": {
               "kind": "count",
-              "definition": "count(*)",
               "alias": "cnt"
             }
           },
@@ -139,12 +132,10 @@ export const page = {
             "height": 200,
             "x": {
               "kind": "count",
-              "definition": "count(*)",
               "alias": "cnt"
             },
             "y": {
               "kind": "expr",
-              "definition": "path",
               "alias": "path"
             }
           },
@@ -155,13 +146,11 @@ export const page = {
           "props": {
             "x": {
               "kind": "expr",
-              "definition": "toStartOfFifteenMinutes(timestamp)::DateTime64",
               "alias": "time",
               "xBucketSizeMs": 900000
             },
             "y": {
               "kind": "expr",
-              "definition": "duration_ms",
               "alias": "duration_ms"
             },
             "yBucketSize": 100
@@ -173,13 +162,11 @@ export const page = {
           "props": {
             "x": {
               "kind": "expr",
-              "definition": "toStartOfFifteenMinutes(timestamp)::DateTime64",
               "alias": "time",
               "xBucketSizeMs": 900000
             },
             "y": {
               "kind": "enum",
-              "definition": "status::String",
               "alias": "status"
             }
           },

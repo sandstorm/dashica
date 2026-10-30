@@ -55,8 +55,8 @@ they are**; inner API URLs may change.
 ```
 GET  /workbench.json               menu groups, each page with its outline (below; the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
 GET  /p/shop                       shell HTML (the same for every page)
-GET  /p/shop/page.json             {kind, title, defaultTime, filterBar, filterButtons, widgets}; filterFields with step 6, actions with step 7+
-GET  /p/shop/api/<id>/query        widget data (Arrow)
+GET  /p/shop/page.json             {kind, title, defaultTime, filterBar, filterButtons, widgets}; actions with step 7+
+GET  /p/shop/api/<id>/query        widget data (Arrow), what the chart did in X-Dashica-Diagnostics (§3.8)
 GET  /p/shop/api/<id>/debug        query, EXPLAIN
 POST /p/shop/action/<id>           a Go action (§3.9)                                                        ← new
 ```
@@ -168,20 +168,22 @@ collapsible groups are extensions.
 widgets.registerWidget('timeBar', renderTimeBar);
 function renderTimeBar(el, widget: WidgetOf<'timeBar'>, ctx): Disposable   // widget: generated type (§3.3)
 
-ctx.query(): Promise<Table>                // Arrow; tracks loading / ok / error itself (status bar, Debug)
+ctx.query(): Promise<QueryResult>          // Arrow table; tracks loading / ok / error itself (status bar, Debug)
+result.dashicaDiagnostics                  // {ignored: string[], skipped?: string}, from X-Dashica-Diagnostics (§3.8)
 ctx.state                                  // the QueryApi: time / filters / params / cursor (§3.7)
 ctx.state.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
 ctx.showMenu(anchor)                       // the menu `widget/context` (Debug, …)
-ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8)
+ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8); fieldId: the clicked column's alias
+ctx.select({kind, fieldId, value, anchor}) // the page's one selection (§3.8, step 6.7); ctx.clearSelection()
 ```
 
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
 - **Each widget composes itself; the host does not wrap.** Mandatory mechanism sits in `ctx` (`ctx.query()` tracks
   status, so the status bar and Debug work for every widget). The visual chart frame (render once visible, observe
-  size, spinner, error, filter status §3.8, menu button) is **one optional helper**, `new ChartFrame(el, ctx, { draw })`;
-  charts use it in one line, containers and markdown don't.
+  size, spinner, error, the chart's Diagnostics §3.8 as "ignores host" or "skipped: …", menu button) is **one optional
+  helper**, `new ChartFrame(el, ctx, { draw })`; charts use it in one line, containers and markdown don't.
 - **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write `query.params`.
 
 ### 3.7 Query state and one request format
@@ -236,59 +238,164 @@ refresh.
 handler and never `sql`: an alert chart's `{{DASHICA_FILTERS}}` is the window alone (`httpserver.TimeClause`).
 Dashboard filters do not apply to alert widgets, and alert evaluation (`lib/alerting`) is not touched.
 
-### 3.8 Filters: structured, declared, explicit
+### 3.8 Filters: structured, interpreted by the chart, explicit
 
-**Filter fields are declared, not sent as SQL. The server decides everything; the client only shows and sends ids.**
-At `Mount` (Go, once at registration) the page collects every field a chart can be filtered by, with its expression
-and id. The client receives only what it shows or sends back: the filter bar's labels (`page.json.filterFields`:
-`{id, label}`) and, inside each chart's props, the filter id behind each clickable field. The expressions never leave
-the server.
+**A filter is an id, an op and a value; the chart that runs decides what it means** (decided 2026-10-30). The page
+registers nothing: no list of filter fields, no lookup in a shared object, no check across charts. A chart's handler
+gets the request's filters as plain values (`[{id, op, value}]` from `httpserver.QueryState`), builds its query from
+them and returns what it did as **Diagnostics**, sent with its data. Everything happens in Go, per request; the client
+only shows and sends ids.
 
-- **Builder queries** (`sql.New`, `sql.Field`): dashica knows each field's `Definition()` and `Alias()`. The filter
-  field's expression is the **definition** (`status`, `JSONExtractString(attrs,'host')`), its label the alias. The
-  expression references base-table columns, so the filter works in every chart on that table.
-- **SQL files** (`sql.FromFile`, also `sql.FromString`): only output column names are known. ClickHouse resolves
-  SELECT aliases in WHERE, and `{{DASHICA_FILTERS}}` sits in the WHERE of the SELECT that defines them, so
-  `alias = value` works for that chart. ✅ (decided 2026-10-30) **A SQL-file chart accepts filters only on its own
-  output columns**: the aliases of its dimension fields, by name. The author maps nothing and declares no base table;
-  every other filter is reported as ignored. A filter on `host` reaches a SQL-file chart when its output has a
-  dimension `host`, whatever expression a builder chart declares for `host`.
-- **Which fields:** the dimension slots of a chart's props (`role=dimension` in its `dashica-gen` tag: `fill`, a bar's
-  category, an ordinal heatmap's row, `fx` / `fy`, …); a table's GROUP BY fields, or all its select fields when it has
-  no GROUP BY (raw rows). Measures and time axes are not filter fields (time selection is step 7).
-- **The id is the alias** (`host`), the label as well. The same id with two different expressions on one page is a
-  registration error naming both charts (fail fast); SQL-file fields carry no expression and never conflict.
-- **Where the client finds an id:** each chart's Node carries `filters`, a map from the alias of a clickable field to
-  its filter id (`{"host": "host"}`), beside its props; a table looks up its columns there, so it needs no field
-  props. Today both are the alias; the map keeps the client free of that rule.
-- **Ops:** `eq` (Filter by …) and `ne` (Exclude …); a NULL is not selectable. More (`in`, ranges) when a UI needs them.
+- **The id is the alias of the clicked column** (`host`, `status`): the browser sends the alias the chart's data
+  carries, and a chip's label is its id. `page.json` carries no filter fields and a chart's Node no filter ids.
+- **Ops:** `eq` (Filter by …) and `ne` (Exclude …); a NULL is not selectable. More (`in`, ranges) when a UI needs
+  them.
 
 The URL carries ids, ops and values (`?f=status:eq:500&f=host:ne:a`; the value is everything after the second colon);
-**values are bound as ClickHouse parameters** (`{__f0:String}`, beside `__from` / `__to`), never quoted into SQL. So
-the server builds the WHERE fragment only from Go-declared expressions; no per-backend quoting code, no injection
-through filters. Free SQL stays one advanced chip (`?sql=…`). Filter buttons stay SQL, written in Go, shown as toggles
-in the filter bar.
+**values are bound as ClickHouse parameters** (`{__f0:String}`, beside `__from` / `__to`), never quoted into SQL. The
+expression a value is compared with comes only from Go: a chart's own field definitions or a real column of its base
+table. No per-backend quoting code, no injection through filters, and no client SQL except the free SQL chip
+(`?sql=…`). Filter buttons stay SQL, written in Go, shown as toggles in the filter bar.
 
 ✅ Checked 2026-10-30 on ClickHouse 25.9 (`clickhouse local`): a `String` parameter compared with `UInt16`,
 `Nullable(UInt16)`, `Float64`, `DateTime` and `LowCardinality(String)` columns converts and matches (`=`, `!=`, also
 `IN {p:Array(String)}`); a value that does not convert (`abc` against `UInt16`) fails the query with `TYPE_MISMATCH`
-(code 53), which the chart shows as its error. So filter fields carry no type.
+(code 53), which the chart shows as its error. So filters carry no type.
 
-**Applicability is explicit, never silent, and decided by the server.** Each widget's query handler knows, from
-`Mount`, which filter fields apply to it: builder widgets accept every field a builder chart of the page declares on
-the same base table (`From` and database), so the handler reads the page's fields once the whole page is mounted;
-SQL-file widgets accept their own output columns; `FromFileWithoutFilters` and `SkipFilters()` accept none. The
-handler applies those and reports the rest, also ids the page does not know, in the response
-(`X-Dashica-Ignored-Filters: host`, like today's `X-Dashica-Resolved-Time-Range`). The client keeps no rule about applicability; the chart frame only shows the
-header: no badge when it is empty, otherwise "ignores `host`". The chart still renders, without the filters that do
-not apply. A runtime `UNKNOWN_IDENTIFIER` (ClickHouse
-code 47, e.g. from the free SQL chip) fails that chart only, with the column named. No query parsing.
+**A chart interprets the filters itself, optionally.** A chart may implement
+
+```go
+ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
+```
+
+and returns its query with the filters it interprets added (one more `sql.Where`, which a SQL file receives in
+`{{DASHICA_FILTERS}}`) and the Diagnostics of what it did. A chart without it gets the **default helper** (below). A
+query with `SkipFilters()` / `FromFileWithoutFilters` interprets none: every id is ignored.
+
+**Diagnostics** is what a chart tells the outside about one answer, a value returned with the query:
+
+- `Ignored []string`: the filter ids it does not interpret, each once, in URL order;
+- `Skipped string`: non-empty when the chart did not run, and why;
+- more fields later, as charts need to say more.
+
+The handler sends it as one response header, `X-Dashica-Diagnostics: {"ignored":["host"]}` (JSON; no header when it
+is empty), beside `X-Dashica-Resolved-Time-Range`. A skipped chart answers without running ClickHouse. `ChartFrame`
+shows the Diagnostics: no badge when they are empty, "ignores `host`", "skipped: …" in place of the chart. The chart
+still renders without the filters it ignores. A runtime `UNKNOWN_IDENTIFIER` (ClickHouse code 47, e.g. from the free
+SQL chip) fails that chart only, with the column named. No query parsing.
+
+**The default helper** (`lib/dashboard/filter`, a small pure package) interprets a filter id when it is, in this order:
+
+1. **one of the chart's own fields, by alias:** the field's definition (`status`, `JSONExtractString(attrs,'host')`);
+2. **a column of the chart's base table** (builder queries, `From` and database): the column itself;
+
+else the id goes into `Ignored`. A **SQL-file chart** (`sql.FromFile`, also `sql.FromString`) interprets only its own
+output columns, by name: ClickHouse resolves SELECT aliases in WHERE, and `{{DASHICA_FILTERS}}` sits in the WHERE of
+the SELECT that defines them, so `host = {__f0:String}` works for that chart. The author maps nothing and declares no
+base table. **Measures** (`count()` etc.) and **time buckets** (an `AutoBucket`, a chart's time axis) are not
+interpreted as filters, known from the field's `kind` and slot (time selection is step 7).
+
+**The base table's columns come from `DESCRIBE TABLE`**, asked at a chart's first query and cached per table and
+ClickHouse server until restart. The helper takes the column source as a function value, so its tests give it a
+fixed list and need no ClickHouse:
+
+```go
+// Columns are the names of the columns of `table` on the ClickHouse server `server` ("" for "default") that a filter
+// value compares with, as DESCRIBE TABLE gives them.
+type Columns func(ctx context.Context, server, table string) ([]string, error)
+
+// fields: the chart's own fields (its dimensions())
+func Apply(ctx context.Context, q sql.SqlQueryable, fields []sql.SqlField, filters []Filter, columns Columns) (sql.SqlQueryable, Diagnostics, error)
+```
+
+A `DESCRIBE` that fails fails the chart (500) and is not cached.
+
+✅ **Done in 6.3 / 6.4, with these deviations from the sketch above (2026-10-30):**
+
+- **`Filter` lives in `lib/dashboard/filter`**, not in `httpserver`; `QueryState.Filters` is `[]filter.Filter`. So
+  `httpserver` writes `X-Dashica-Diagnostics` and answers a skipped chart, importing `filter`; `filter` imports only
+  `sql` (with `httpserver.Filter`, `filter` would import `httpserver` and `httpserver` could not name `Diagnostics`).
+- **`Columns` has no `database`:** the server alias (`OnDatabase`) names the connection, whose database is in its
+  config, and a qualified `From` (`monitoring.full_logs`) carries its own. `clickhouse.Client.Columns(ctx, table)` keeps
+  them per table on the server's client (as `IntrospectSchema` does); `Manager.Columns` is the `filter.Columns` the
+  charts get. `DESCRIBE TABLE` is asked only when a filter is not one of the chart's own fields.
+- **`Apply` takes the chart's own fields** (`fields`): a SQL file's `With` drops `Select`, so its query does not know
+  the chart's fields. They are the chart's `dimensions()` (generated from the slots tagged `role=dimension` that are
+  set; a table's GROUP BY fields as it selects them, all its select fields without GROUP BY), not every select of the
+  query, so a measure aliased as a column (`sum(bytes) AS bytes`) never lands in WHERE.
+- **Only columns a filter value compares with:** `Client.Columns` keeps the columns of a type `ClassifyColumnType`
+  knows (numbers, strings, enums, dates, UUID, IP, Bool), so a filter on a Map, Array, Tuple or JSON column is
+  ignored. Checked 2026-10-30 on ClickHouse 25.9 (`clickhouse local`): a `String` parameter converts to such a column
+  only when it is written as ClickHouse SQL (`{'a':'b'}`, `['x']`); what a click gives (`[object Object]`) fails the
+  query (`CANNOT_PARSE_INPUT_ASSERTION_FAILED`, `CANNOT_PARSE_QUOTED_STRING`, `INCORRECT_DATA`).
+- **One `DESCRIBE` per table:** the first requests for a table share one (`singleflight`); `columns_test.go` checks
+  that, the cache, and a failed one asked again, with a stub in place of ClickHouse.
+- **A column a select aliases with another expression is ignored** (`sum(bytes) AS bytes`, `toStartOfHour(ts) AS
+  ts`): ClickHouse resolves the alias in WHERE, so the column would compare the select. Checked on 25.9: the
+  aggregate fails the query (`ILLEGAL_AGGREGATION`), the bucket matches other rows.
+- **Explore's preview drops `f`:** its widget, fields and From come from the request; without filters it asks no
+  `DESCRIBE`, so the cache holds the tables of mounted dashboards.
+- **`timeHeatmap`'s `y` is one of its own fields on the server:** its query groups by y's raw value (the client
+  buckets it into rows), so a filter by y's alias compares that raw value, as a base-table column would, and also
+  works for an expression (`JSONExtract(attrs, 'duration', 'UInt64') AS duration`). Only its click selection is off.
+- **Where it runs:** `widget.queryHandler(deps, chart, columns)` parses the `QueryState` (400 on a `QueryStateError`),
+  calls the chart's `ApplyFilters` or `filter.Apply` (500 on its error), then
+  `httpserver.QueryHandler.HandleQuery(q, state, diagnostics, w, r)` / `HandleDebug(…)`, which take the parsed state.
+  `DataHandler(deps, w)` passes `deps.ClickhouseClientManager.Columns`; the widget tests pass a fixed list.
+- `SkipFilters()` / `FromFileWithoutFilters` is `filter.Apply`'s rule; a chart with its own `ApplyFilters` decides
+  itself (none has one yet).
+- **A skipped chart** answers **204 No Content** with the header; `/debug` answers its `stats` alone. The client reads
+  204 as an empty table with its Diagnostics.
+- A base-table column that is not a plain identifier is compared in backquotes (`` `my-host` ``); every compared
+  expression is in parentheses (`(JSONExtractString(attrs, 'host')) = {__f0:String}`).
+
+**Bound values:** the condition of filter `i` of the request names `{__f<i>:String}` (`ne`: `!=`), so a chart writes
+only conditions (`filter.Condition(i, f, expression)` writes one) and the handler binds every filter's value as
+`param___f<i>`, also of the filters a chart ignores. **To check:** ClickHouse accepts a bound parameter the query does
+not name (the form widgets' `wp` values are bound so for every chart already; the integration test
+`TestHandleQuery_AValueOfAnIgnoredFilterIsBoundUnnamed` checks it, run against CI's ClickHouse, not in the sandbox).
+Debug's `stats` has `filterClause` (the window and the SQL filter; the structured conditions are in its `query`),
+`parameters` (all bound values) and `diagnostics`. Explore's preview serves the same handler and sends no `f`.
+
+`SqlQuery.With` appends a request's `Where` to its own copy of the chart's WHERE list, so concurrent requests cannot
+write into the same backing array (from the first 6.4).
+
+✅ (step 6.4) `ParseQueryState` reads each `f` into `QueryState.Filters`; an `f` without id or op, or with an op other
+than `eq` / `ne`, is a `QueryStateError`, and a chart's handler answers every `QueryStateError` (also a missing or
+unreadable `time`) with 400, other errors with 500. An unreadable custom `range` is `ResolveTimeRange`'s plain error,
+so 500 (as before 6.4). The handler calls the chart's `ApplyFilters`, else `filter.Apply`, and writes
+`X-Dashica-Diagnostics`.
+
+✅ (step 6.5) **The client keeps, shows and sends them.** A chip's label is its id. `QueryResult.dashicaDiagnostics`
+is the header's JSON (`{ignored?, skipped?}`, `{}` without it; a 204 is an empty table); `ChartFrame` shows "ignores
+host, path" below the chart, hidden while it ignores none, after a failed query and while skipped, and "skipped: …"
+(`d-chart-frame__skipped`) in place of the chart.
+`FiltersModel.fields` holds `{fieldId, op, value}[]` in the order added; `add(fieldId, op, value)` adds one (once:
+the same id, op and value again is no change), `remove(index)` and `clear()` take them away, and `add(condition)` with
+one argument still adds to the free SQL alone (filter buttons, the table's cell menu until 6.6). The URL holds each as
+one `f` (`?f=host:ne:a`), per page like `sql`: a page opens
+with the `f` of its link, and the next page without them. Loading leaves out an `f` the server would refuse (no id, no
+second colon, an op other than `eq` / `ne`). `requestParams()` sends them as `f` after `sql`. The widget context has
+`ctx.addFilter(fieldId, op, value)`. The filter bar shows one chip per filter (id, `=` / `≠`, value, × removes it)
+above the filter buttons, and is wanted while there is a chip; like the buttons, chips show only on a page with
+`filterBar`. Playwright:
+`e2e/filter-chips.spec.ts` (a chip from a link on `/clickhouse/table_sizes`, × and back); `@playwright/test` is not in
+`package.json` yet, so `npm run e2e` needs `npm i -D @playwright/test` first.
+
+✅ (step 6.6, superseded by 6.8) **A table cell adds a structured filter.** 6.6 put "Filter by" / "Exclude" into a
+cell's menu; since 6.8 a click on a cell selects instead, and the menu keeps only the SQL entries no op says: "Filter:
+Contains this value" (a SQL `LIKE`), for a timestamp column "Time ±5 minutes / ±1 hour / ±24 hours" (SQL until step
+7, "Filter to window"). Debug's table selects nothing and keeps all SQL entries. A selected cell's
+value is what Arrow gives the cell: a `DateTime` arrives as `Uint32` seconds, a `DateTime64(3)` as milliseconds; checked
+on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter equals that `DateTime` and
+`'1761730000000'` that `DateTime64(3)`. The chip shows the number as it is, not the formatted time.
 
 **Clicks select; a floating bar offers what to do** (as Zwiebelfisch's `visualEditor/selection` bar above a text
 selection). A chart only reports a *selection*; it does not know what can be done with it:
 
 - **Category** (series / fill, bar category, ordinal heatmap row, table cell): a click selects
-  `{kind: 'category', fieldId, value}`. Measures (`count()` etc., known from the field's `kind`) are not selectable.
+  `{kind: 'category', fieldId, value}`, `fieldId` the field's alias. Measures (`count()` etc., known from the field's
+  `kind`), time buckets and `timeHeatmap`'s bucketed numeric `y` are not selectable.
 - **Time axis** (time bar, time line, heatmap x): hover moves the synchronized `cursor`; dragging selects
   `{kind: 'time', from, to}`, highlighted on every time chart; clicking one bucket selects that bucket. Plot has no
   brush: the pointer handling lives in a shared time-chart helper.
@@ -307,6 +414,70 @@ with `when(context)` like any menu, so each extension adds its own:
 | Open in Explore | either | `explore` (later) |
 
 So "both zoom and filter" is no either-or: they are two entries, and later ones (drill-down, actions) need no new UI.
+
+✅ (step 6.7) **The floating bar, the selection, and bar charts select.** `ui.registerFloatingBar({id, title, order?,
+anchor})` gives a `FloatingBar<C>` its owner drives, `show(context)` / `hide()` / `dispose()` (the sketch had a
+`Disposable`: someone has to say which context it is shown for). It is a `role="toolbar"` row of the entries of the
+menu `id` whose `when` holds in the context, `title` its accessible name. It sits above the anchor's box, or below it
+where there is no room, and stays inside the viewport. It takes no focus and has no press-outside handling of its own:
+it stays until its owner hides it. It is placed again on every scroll and resize and when its menu changes, and hidden
+while `anchor` gives `null` or no entry applies. A chosen entry's command runs with the context. Of two bars, the
+higher `order` lies on top. The `widgets` host registers `widget/selection` ("Selection"), its anchor the box of the
+selection's `anchor` element while that element is in the page. The selection is `{kind: 'category', widgetId,
+fieldId, value, anchor}`: `ctx.select` takes it without `widgetId`, which the host fills in from the widget's
+`dataUrl` (`3`, as "Copy link to chart"). `WidgetsApi` has `selection` and `clearSelection()` for the extensions, and
+`ctx.clearSelection()` ends it as well. A new selection ends the one before. So do Escape, any click (listened for in
+the capture phase, so the click on another bar ends the old one and selects anew, and a click on an entry still runs
+it), and disposing the widget that holds it. `filters` registers "Filter by" (`filters.filterBySelection`) and
+"Exclude" (`filters.excludeSelection`) for `kind === 'category'`; they call `query.filters.add(fieldId, 'eq' | 'ne',
+value)` and `widgets.clearSelection()`. The entries' titles do not repeat the value: the bar sits next to the clicked
+bar. `chart-library/selectBars` (from 6.8 `selectMarks`) makes the bars of a Plot bar chart selectable. On a click
+on a bar (Plot binds each `rect` to its row's index), it selects the value in that row of the first of the given fields
+that is a category (by its alias): a bar chart's category (`x` / `y`), then its `fill`. A NULL selects nothing.
+Without such a field the bars are not selectable and get no pointer cursor. `fx` / `fy` and the color legend are
+6.8. Tests: `floating-bar.test.ts`, the selection in `widgets.test.ts`, the entries in `filters.test.ts`, a click to
+a filter in `bar-vertical.test.ts`. The widget testbed now runs a real `UiHost` and `CommandsHost`. Playwright:
+`e2e/bar-selection.spec.ts`. **Open:** a refresh redraws the chart, so the selected bar leaves the page. The bar
+then hides at the next scroll or resize, but the selection stays until Escape or a click; the selected bar is not
+highlighted.
+
+✅ (step 6.8) **Every chart and table cell selects through the same bar.** `chart-library/selectMarks(chart, data,
+fields, select)` replaces `selectBars`; a chart only says which field each of its parts selects:
+`{marks: {<Plot aria-label>: [fields…]}, legend, fx, fy}`. A field selects when it is a category: not a `count`, not
+a time bucket (`autoBucket`, or a field with `xBucketSizeMs`); its alias is the filter id. A NULL selects nothing, and
+of a mark's fields the first category wins. It reads the value
+from what Plot binds: a mark's `rect` / `path` to its row's index (a line's `path` to its points' indexes, the first
+is taken), a color legend's swatch to its value, a facet label's `text` to its facet group's `{x, y}`. Every part that
+selects gets `d-select-marks__item` (pointer cursor; the chart `d-select-marks`). The mapping per chart:
+
+| Chart | Marks | Legend | Facets |
+|---|---|---|---|
+| `barVertical` | `bar`: `x`, then `fill` | `fill`, else `x` when `fx` colors the bars by it | `fx`, `fy` |
+| `barHorizontal` | `bar`: `y`, then `fill` | `fill` | — (its drawing has no facets) |
+| `timeBar` | `rect`: `fill` | `fill` | `fx`, `fy` |
+| `timeLine` | `line`: `zField`, then `strokeField` | `strokeField` | `fx`, `fy` |
+| `timeHeatmapOrdinal` | `bar` (its cells): `y` | — (the legend is the measure) | — |
+
+`timeHeatmap` selects nothing: its `y` is a numeric bucket and its `fill` a measure. A line selects its own series
+(`zField`) before its color group (`strokeField`), as a bar its category before its fill; the legend shows the
+`strokeField`. **A time chart's drag area (`timeBrush`) lies above its marks**, so a click there lands on the area,
+not on a bar: `selectMarks` then takes the topmost selectable element below the pointer
+(`document.elementsFromPoint`). A click without moving starts no time selection, and `timeBrush` is unchanged; the
+marks below the area show no pointer cursor. The table: `drawTable(result, props, select?)`; with `select`, a click
+on a cell of a category column (Tabulator's `cellClick`) selects `{fieldId: the column's name, value: String(cell),
+anchor: the cell}`, a NULL nothing, and the category columns carry `d-table__selectable`. A table's props carry
+`categories` (step 6.9, its `computeProps`): the aliases of its own fields (`dimensions()`) that are categories, so
+its GROUP BY fields, or all its selects for raw rows, without counts and time buckets. A column Arrow types as map,
+list or struct holds no category on the client either. **Deviation:** a SQL-file table has no categories, since its
+output columns are only in its text, so its cells select nothing (open question 8). The 6.6 entries "Filter by …" /
+"Exclude …" leave the cell menu: it keeps "Filter: Contains this value", a timestamp column its "Time ±…" entries.
+`dashica-add-filter` carries only SQL conditions again. Debug's table passes no `select`, selects nothing and keeps
+all its SQL entries. Tests: a click per chart type in its extension's test (marks, swatch, facet label; the drag area
+with a stubbed `elementsFromPoint` in `time-bar.test.ts`), the cell click, the category columns and the menus in
+`table.test.ts`, the categories in `table_test.go`. Playwright: `e2e/bar-selection.spec.ts` (selector
+`d-select-marks__item`), `e2e/chart-selection.spec.ts` (a time bar's swatch, a table cell, the cell menu). **Open:** the
+ordinal heatmap's y-axis labels and a table's header do not select; a click that ends a text selection in a table cell
+also selects the cell.
 
 ### 3.9 Go actions
 
@@ -328,7 +499,7 @@ Pure UI behaviour (palette, keys, panels) stays TS.
   counted in the status bar; an action or navigation error is a notification; an unknown page shows "not found" in
   the content area. Nothing modal.
 - **Tests:** vitest (jsdom) for core, hosts and extensions through their public interface; Go golden JSON for the
-  contract (§3.3); Go tests for `QueryState` parsing and filter-field collection; Playwright specs for flows (written
+  contract (§3.3); Go tests for `QueryState` parsing and the default filter helper (a fixed column list, no ClickHouse); Playwright specs for flows (written
   by the agent, run by the maintainer: the sandbox cannot launch browsers).
 - **Comments** (as in Zwiebelfisch, checked by `mise run quality:top-comments` for `frontend/core`, `frontend/hosts`,
   `frontend/extensions`):
@@ -383,8 +554,9 @@ interface UiApi {
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
   showContextMenu(menuId: string, o: { anchor: Element | {x: number; y: number}; context?: object; args?: unknown[] }): void;
   readonly onDidChangeMenu: Event<string>;
-  registerFloatingBar<C>(o: { id: string; order?: number;
-                              anchor: (context: C) => DOMRect | null }): Disposable;   // entries via registerMenuItem(id, …)
+  registerFloatingBar<C>(o: { id: string; title: string; order?: number;
+                              anchor: (context: C) => DOMRect | null }): FloatingBar<C>;   // entries via registerMenuItem(id, …);
+                                                                                          // show(context) / hide() / dispose()
 
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere)
   // later, with their first user: showQuickPick (a fixed list, filtered by the box), showInputBox
@@ -399,7 +571,7 @@ interface Panel extends Disposable {
 
 // page — what the content area shows
 interface PageApi {
-  readonly workbench: WorkbenchJson;        // from /workbench.json (generated type)
+  readonly workbench: WorkbenchJson;        // menu groups and outlines, from /workbench.json (generated type, §3.2)
   readonly current: PageJson | undefined;   // from <url>/page.json (generated type); undefined while it failed
   readonly onDidChangePage: Event<PageJson>;
   navigate(url: string): Promise<void>;     // fetch page.json, pushState, swap content
@@ -455,8 +627,9 @@ Built-in extensions:
 Favorites stay inside `dashboards` (separating them would need a contribution point inside the Dashboards panel).
 
 **Chart titles in search everywhere** (decided 2026-10-30): the charts are the pages' outlines in `workbench.json`
-(§3.2), `{id, title, group}` per menu entry. The builder API stays as it is. A result shows `page › group › title`; pages rank before charts, the current page's charts
-before other pages' (the same titles repeat across template dashboards).
+(§3.2), `{id, title, group}` per menu entry. The builder API stays as it is. A result shows
+`page › group › title`; pages rank before charts, the current page's charts before other pages' (the same titles
+repeat across template dashboards).
 
 A result is a link `/p/shop#w=3` through `navigate`, and the same link is what "Copy link to chart" copies. When the
 page has rendered, the dashboard page opens the collapsible groups around the chart (a closed group does not query),
@@ -496,12 +669,26 @@ type withChildren interface {
 }
 
 // withQuery is a chart: Mount serves its query ("GET /query" Arrow, "GET /debug" the query and EXPLAIN) (step 6.2)
-// and collects its filter fields from it (step 6.3)
 type withQuery interface {
 	Query() sql.SqlQueryable
 }
 
 func (b *TimeBar) Query() sql.SqlQueryable { return b.sql }
+
+// withFilters is a chart that interprets the request's filters itself (§3.8); every other chart gets filter.Apply
+type withFilters interface {
+	ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
+}
+
+// lib/dashboard/filter — new, pure: what a chart did with the filters, and the default way to do it
+type Diagnostics struct {
+	Ignored []string `json:"ignored,omitempty"` // filter ids the chart does not interpret, in URL order
+	Skipped string   `json:"skipped,omitempty"` // non-empty: the chart did not run, and why
+}
+type Filter struct{ ID, Op, Value string }                                   // `f=host:eq:a`; QueryState.Filters
+type Columns func(ctx context.Context, server, table string) ([]string, error) // DESCRIBE TABLE, cached
+func Apply(ctx context.Context, q sql.SqlQueryable, fields []sql.SqlField, filters []Filter, columns Columns) (sql.SqlQueryable, Diagnostics, error)
+func Condition(i int, f Filter, expression string) string                      // `(status) = {__f0:String}`
 
 // a grid: its areas sorted by name, so the ids stay the same from one start to the next
 func (g *Grid) Children() iter.Seq2[string, WidgetDefinition] { return g.areas.all() }
@@ -520,8 +707,8 @@ type Node struct {
 
 // lib/dashboard — the Builder serves the shell, page.json and actions
 func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, h handler_collector.HandlerCollector) error {
-	nodes, err := d.widgets.Mount(ctx, h.Nested("/api"))       // widget.Mount for each: /api/<id>/…, collects filter fields
-	page := PageJson{Kind: "dashboard", Title: d.title, DefaultTime: d.defaultTime, FilterFields: ctx.FilterFields(),
+	nodes, err := d.widgets.Mount(ctx, h.Nested("/api"))       // widget.Mount for each: /api/<id>/…
+	page := PageJson{Kind: "dashboard", Title: d.title, DefaultTime: d.defaultTime,
 		FilterButtons: …, Actions: d.actions.Describe(), Widgets: nodes}
 	h.HandleRoot(shell.Handler)                                 // the one static shell HTML
 	h.Handle("page.json", jsonHandler(page))
@@ -547,9 +734,11 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 |---|---|
 | `dashica.go` | `GET /workbench.json` (§3.2): the groups as `RegisterDashboardGroup` starts them, each page's menu entry with `widget.Outline(page.Widgets)` of the `PageJson` its `CollectHandlers` returns |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
-| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; charts implement `Query()`, `Mount` collects their filter fields |
-| `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns, collects filter fields; `SearchBarOption` becomes `page.json` fields |
-| `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; filters → one WHERE fragment of declared expressions with bound values into `{{DASHICA_FILTERS}}` / `Where` |
+| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; charts implement `Query()`, optionally `ApplyFilters`; `DataHandler(deps, w)` |
+| `lib/dashboard/filter` | new, pure: `Diagnostics`, the default helper `Apply` (own fields by alias, then base-table columns; SQL files: own output columns), its column source a function value |
+| `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns; `SearchBarOption` becomes `page.json` fields |
+| `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; the query handler asks the chart for its filtered query and Diagnostics, binds every filter's value (`__f<i>`) and writes `X-Dashica-Diagnostics`; a skipped chart runs no query |
+| `lib/clickhouse` | `DESCRIBE TABLE` columns, cached per server, database and table until restart |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
 | deleted | `lib/components/**` (templ), Alpine, dockview, `lib/explore` + `frontend/explore` (rebuilt later, §6) |
 
@@ -590,16 +779,21 @@ refuses a json tag on them, and the widget's JSON (`MarshalJSON`, all fields) is
 Open in this design:
 
 1. **Positions as keys:** `CollapsibleGroup` yields "0", "1", … (`Widgets.all`, since `slices.All` yields `int`).
-2. **Filter fields** (§3.8) are collected from each chart's query at mount: `queryHandler` hides the query, so a chart
-   also says it (`Query() sql.SqlQueryable`), which the framework then turns into the handler and the filter fields;
-   then `Handler` is left for the special widgets. ✅ Done in step 6.2: each chart's `Query()` is the query it runs,
+2. **The chart's query** (§3.8): `queryHandler` hides the query, so a chart also says it (`Query() sql.SqlQueryable`),
+   which the framework turns into the handler; the handler applies the request's filters to it (`ApplyFilters`, else
+   `filter.Apply`); then `Handler` is left for the special widgets. ✅ Done in step 6.2: each chart's `Query()` is the query it runs,
    with its own selects (`Stats`' title and fill fields, `Table`'s `Limit`); `widget.DataHandler(deps, w)` is
    `queryHandler(deps, w.Query())` for a chart, `w.Handler(deps)` for the others, and both `Mount` and Explore's
-   preview serve it; dashica-gen gives a widget `dataUrl` when it has `Query` or `Handler`. The charts are eight,
+   preview serve it (✅ 6.3: the handler asks the chart for its filtered query, `ApplyFilters` or `filter.Apply` with
+   `deps.ClickhouseClientManager.Columns`); dashica-gen gives a widget `dataUrl` when it has `Query` or `Handler`. The charts are eight,
    not nine.
-3. **Field expressions:** `x` / `y` / `fill` are tagged `client` and go out as `SqlField` with their expression
-   (`JSONExtractString(attrs,'host')`), as before; §3.8 says expressions never leave the server. The client needs
-   only the column alias: reduced in step 6.9 (Explore's Go code reads the widgets' full JSON, not their props).
+3. **Field expressions:** `x` / `y` / `fill` are tagged `client` and went out as `SqlField` with their expression
+   (`JSONExtractString(attrs,'host')`); §3.8 says expressions never leave the server. ✅ Done in step 6.9: the
+   generated `marshalProps` write each field slot with `sql.MarshalFieldProps` as `{kind, alias, xBucketSizeMs?}`
+   (TS `SqlFieldProps`), never its definition or an AutoBucket's column. `kind` stays because the client reads it:
+   `selectMarks` never selects a count. The widget's JSON (`MarshalJSON`, all fields) is unchanged; Explore's Go code
+   reads that, nothing reads the props. A field without an alias (`sql.Field("lower(host)")`) is aliased by its
+   definition, as its result column is named; such an alias still shows the expression, so give it an alias.
 
 ## 4. Alternatives considered
 
@@ -616,8 +810,9 @@ Open in this design:
 | Host wraps every widget in a frame | containers and markdown don't want one; leads to `frame: false` options |
 | Filters as raw expressions in the URL | client-sent SQL everywhere; blocks permissions later (§6); ids + bound values cost little |
 | `additional_table_filters` (as Grafana's ClickHouse plugin) | ClickHouse applies it at every read of the table, also in subqueries where a filter must not apply; complex queries need to say *where* filters go, hence `{{DASHICA_FILTERS}}` |
-| Parsing queries (SQL AST) | not needed with declared filter fields; ClickHouse's JSON AST (`clickhouse_json` dialect) is unverified as released and would tie us to ClickHouse |
-| Drop non-applicable filters silently / fail the chart | silent is misleading; failing hides useful data. Declared applicability + badge instead (§3.8) |
+| Parsing queries (SQL AST) | not needed: a chart knows its own fields, `DESCRIBE TABLE` its base table's columns; ClickHouse's JSON AST (`clickhouse_json` dialect) is unverified as released and would tie us to ClickHouse |
+| Drop non-applicable filters silently / fail the chart | silent is misleading; failing hides useful data. The chart's Diagnostics + badge instead (§3.8) |
+| A page-wide registry of filter fields (collected at mount, id → expression, a conflict check across charts) | state gathered in a shared object, read per request; template dashboards over several tables give the same alias two expressions. The chart interprets the filters at execution and returns what it did (§3.8) |
 | Time range global across pages | Grafana-style per-page default is what dashboards expect; links can still carry `?time=` |
 | Tabs inside the app | browser tabs do that |
 
@@ -672,13 +867,13 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 6 | `QueryState` + structured filters (§3.8), alerts on `time`; in sub-steps, each its own commit | filters as chips, click-to-filter |
 | 6.1 ✅ | Go `QueryState` (`time`, `range`, `sql`, `wp`) parsed once per request in `lib/httpserver`; every handler (query, debug, alert overview + chart, Speedscope, `/time-range`) reads it, `DashboardFilters` / the `filters` and `params` JSON are gone; the client sends the page URL's keys (`requestParams`); alerts read only `time` | dashboards, alerts |
 | 6.2 ✅ | charts implement `Query() sql.SqlQueryable` (the query they run, with their own selects); `Mount` serves it through `queryHandler`; `Handler` is left for alerts, Speedscope, schema table | dashboards (refactor only) |
-| 6.3 | `Mount` collects filter fields (§3.8: dimension slots, table GROUP BY / select fields; id = alias; conflicts fail registration); `page.json` `filterFields: [{id, label}]`, each chart's Node `filters: {alias: id}`; generator + golden fixtures regenerated | dashboards; both instances register |
-| 6.4 | `?f=id:op:value` (`eq`, `ne`) in `QueryState`; the query handler applies the applicable filters with bound `{__fN:String}` values (builder: declared expression, same base table; SQL file: own output column) and writes `X-Dashica-Ignored-Filters`; Debug shows the filter clause and its parameters | dashboards; filters by hand-written URL |
-| 6.5 | client: `FiltersModel` holds `{fieldId, op, value}[]` (URL `f`, `requestParams`), `ctx.addFilter`; the filter bar shows them as chips (label, = / ≠, value, ×); `ChartFrame` shows "ignores `label`" from `X-Dashica-Ignored-Filters` | filters as chips (from links) |
-| 6.6 | table: a cell's menu "Filter by …" / "Exclude …" adds a structured filter for columns with a filter id; columns without one keep today's SQL entries, the timestamp entries (±5 min …) stay SQL until step 7 | click-to-filter in tables |
-| 6.7 | `ui.registerFloatingBar` (menu `widget/selection`); the selection model in the `widgets` host (one selection, Escape clears, `ctx.select`); `filters` contributes "Filter by …" / "Exclude …" for `category`; first users: bar vertical / horizontal (category, fill) | click-to-filter on bar charts |
-| 6.8 | the other charts select categories: time bar / time line series (fill, stroke, z), ordinal heatmap rows, `fx` / `fy` facets; table cells select through the same bar, replacing the cell menu's id entries of 6.6 | click-to-filter everywhere |
-| 6.9 | props carry aliases (§3.13, 3): client `SqlField` slots go out as `{alias, xBucketSizeMs?}`, never the definition; generator, TS types and fixtures regenerated | dashboards; no expression in `page.json` |
+| 6.3 ✅ | the chart interprets the filters (§3.8): optional `ApplyFilters`, the default helper `lib/dashboard/filter.Apply` (own fields by alias, then base-table columns from a cached `DESCRIBE TABLE`; SQL files: own output columns; measures and time buckets never), `Diagnostics` (`ignored`, `skipped`); no page-wide registry: `DashboardContext.AddFilterFields` / `FilterFields` / `FilterScope` / `FilterTarget`, `page.json` `filterFields` and the Nodes' `filters` go; generator + golden fixtures regenerated | dashboards; both instances register, no dashboard changes in the outer repo |
+| 6.4 ✅ | `?f=id:op:value` (`eq`, `ne`) in `QueryState` (✅ kept); the query handler calls the chart's `ApplyFilters` or `filter.Apply`, binds each filter's value as `{__f<i>:String}`, writes `X-Dashica-Diagnostics` (JSON, replacing `X-Dashica-Ignored-Filters`) and answers a skipped chart without running ClickHouse; Debug shows the filter clause, its parameters and the Diagnostics | dashboards; filters by hand-written URL |
+| 6.5 ✅ | client: `FiltersModel` holds `{fieldId, op, value}[]` (URL `f`, `requestParams`), `ctx.addFilter`; the filter bar shows them as chips (id, = / ≠, value, ×); `ChartFrame` shows "ignores `host`" / "skipped: …" from `X-Dashica-Diagnostics` | filters as chips (from links) |
+| 6.6 ✅ | table: a cell adds a structured filter; superseded by 6.8 (a click selects; the menu keeps "Contains" and the timestamp entries (±5 min …) in SQL until step 7) | click-to-filter in tables |
+| 6.7 ✅ | `ui.registerFloatingBar` (menu `widget/selection`); the selection model in the `widgets` host (one selection, Escape clears, `ctx.select`); `filters` contributes "Filter by …" / "Exclude …" for `category`; first users: bar vertical / horizontal (category, fill), selected by the field's alias | click-to-filter on bar charts |
+| 6.8 ✅ | the other charts select categories: time bar / time line series (fill, stroke, z), ordinal heatmap rows, `fx` / `fy` facets; table cells select through the same bar (every column, by its name; §7, 8), replacing the cell menu's entries of 6.6; a category field selects by its alias, never a measure or a time bucket | click-to-filter everywhere |
+| 6.9 ✅ | props carry aliases (§3.13, 3): client `SqlField` slots go out as `{kind, alias, xBucketSizeMs?}`, never the definition; generator, TS types and fixtures regenerated | dashboards; no expression in `page.json` |
 | 6a ✅ | small, any time after 5b.9: queries stop with their client (§3.7), auto refresh pauses in a hidden tab, chart titles in search everywhere and chart links (§3.11) | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
@@ -687,8 +882,9 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | Step 5b is one big switch, with blank dashboards from 5b.5 to 5b.9 | 5a lands the contract first with golden tests; the charts are ported as they behave; Playwright flows before merge |
 | Explore unavailable from step 3 until rebuilt | accepted: Explore is experimental; rebuilt after the merge (§6) |
 | Long-lived branch drifts from `main` (new dashboards in the outer repo) | dashboards are Go only and keep their builder API; rebase regularly |
-| Bound filter values typed `String` against numeric columns | ✅ checked on ClickHouse 25.9 (§3.8): converts; a value that does not convert fails that chart with `TYPE_MISMATCH`. Production runs 26.10: the integration test of 6.4 runs against CI's ClickHouse |
-| The same alias with two expressions on a page (template dashboards over several tables) | 6.3 registers both instances; a conflict there is raised before its commit (rename the alias, or scope ids by table) |
+| Bound filter values typed `String` against numeric columns | ✅ checked on ClickHouse 25.9 (§3.8): converts; a value that does not convert fails that chart with `TYPE_MISMATCH`. Production runs 26.10: the integration test of 6.4 (`lib/httpserver/query_filters_e2e_test.go`) runs against CI's ClickHouse once CI's dashica-src test job sets `APP_ENV=testing_ci` (today it reads `dashica_config.testing.yaml`, `127.0.0.1:28123`) |
+| The same alias means different things in two charts (template dashboards over several tables) | each chart interprets the id by its own definition or its base table's column; a chart without either reports it as ignored |
+| `DESCRIBE TABLE` per base table | once per table and server, cached until restart; a schema change needs a restart |
 | SELECT aliases in WHERE are ClickHouse-specific | only for SQL files, which are ClickHouse SQL anyway |
 | Bookmarked inner URLs (debug links) break | accepted; entry-point URLs stay |
 | Playwright cannot run in the sandbox | specs written by the agent, run by the maintainer |
@@ -715,7 +911,7 @@ its own.
     (time, filters, params), so you narrow further, regroup by another field or add charts from there. Builds on the
     Explore rebuild below.
 
-  What the design already gives: declared filter fields (§3.8), one `QueryState` that travels in the URL, and
+  What the design already gives: charts that interpret filters on their base table's columns (§3.8), one `QueryState` that travels in the URL, and
   `widget/context` / `table/row` menus as the entry points.
 - **Permissions per dashboard**, with or without filtering. A middleware on a page's subtree; `/workbench.json` filters
   the menu per user. What the design already gives: structured filters carry only ids and bound values, so they cannot
@@ -734,7 +930,7 @@ its own.
 ## 7. Open questions
 
 1. **Time selection:** does "Filter to window" need its own chip, or is it a second, narrower time range?
-2. ✅ **Filter fields of SQL files** (decided 2026-10-30): a SQL-file chart accepts filters only on its own output
+2. ✅ **Filters on SQL files** (decided 2026-10-30): a SQL-file chart interprets filters only on its own output
    column names, which ClickHouse resolves in WHERE; no `.FilterAs` / `.AcceptFilter` / `sql.Table`. Every other
    filter is reported as ignored (§3.8).
 3. **Alerts and filters:** should dashboard filters ever apply to alert widgets (e.g. only alerts of host `a`)? For
@@ -743,3 +939,10 @@ its own.
    What does ad hoc narrowing need beyond filters + Explore (e.g. regrouping a chart in place)?
 5. **Permission model:** roles per dashboard subtree; who may use free SQL; how roles map to ClickHouse users.
 6. **Anonymization:** declared per column in Go, or in ClickHouse; reversible (pseudonyms) or not.
+7. ✅ **Who interprets a filter** (decided 2026-10-30): the chart, when it runs, in Go; it returns its Diagnostics.
+   No page-wide registry of filter fields and no conflict check across charts (§3.8).
+8. **Table cells of a SQL file:** a builder table selects in its category columns (6.9); a SQL-file table selects in
+   none, since the server knows its output columns only from its text. Should such a table name its category
+   columns in Go (`.Categories("host", "status")`), which it then interprets as its own output columns?
+9. ✅ **A filter on a measure's alias** (6.9): a base-table column that a select of the chart's query aliases with
+   another expression (`sum(bytes) AS bytes`) is ignored (§3.8).
