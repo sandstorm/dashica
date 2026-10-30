@@ -1,7 +1,29 @@
-/* See dashboards.ts. The "…" and the star sit at an entry's right end, shown on hover (a favorite's star always). */
+/*
+ * See dashboards.ts. A dense list: 13px, one line per entry (a long name cut off, in full on hover), the group headings
+ * small; the page shown in a light tint of the primary color; flat, without daisyUI's tree lines and indents. The "…"
+ * and the star sit at an entry's right end, shown on hover (a favorite's star always).
+ */
 .dashboards-menu {
   width: 100%;
-  padding: 1rem;
+  padding: 0.5rem;
+  font-size: 13px;
+}
+
+.dashboards-menu .menu-title {
+  padding: 0.75rem 0.5rem 0.25rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dashboards-menu ul {
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+}
+
+.dashboards-menu ul::before {
+  display: none;
 }
 
 .dashboards-menu li {
@@ -9,7 +31,18 @@
 }
 
 .dashboards-menu li a {
-  padding-right: 3rem;
+  display: block;
+  padding: 0.25rem 3rem 0.25rem 0.5rem;
+  border-radius: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboards-menu li a.menu-active {
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-weight: 500;
 }
 
 .dashboards-menu__more,
@@ -45,7 +78,7 @@
 
 a.menu-active ~ .dashboards-menu__more,
 a.menu-active ~ .dashboards-menu__star {
-  color: white;
+  color: var(--color-primary);
 }
 
 .dashica-wb__brand {

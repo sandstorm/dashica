@@ -86,7 +86,7 @@ class DashboardsMenu {
 
   #link(entry: MenuGroupEntry): HTMLElement {
     const shown = entry.url === location.pathname;
-    return html`<a href=${entry.url} class=${shown ? 'menu-active' : ''}>${entry.title}</a>`;
+    return html`<a href=${entry.url} class=${shown ? 'menu-active' : ''} title=${entry.title}>${entry.title}</a>`;
   }
 
   /** The viewer's favorites, in the order they were added. */
