@@ -18,13 +18,14 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
   const ui = new UiHost(host, StorageMemento.of(doc, 'sessionStorage', 'dashica:workbench:'), commands);
   const query = new QueryHost(doc.defaultView!);
   const page = new PageHost(doc.defaultView!, options.workbench, query, ui.content);
-  const widgets = new WidgetsHost(query, ui);
+  const widgets = new WidgetsHost(query, ui, commands);
   const extensions = new ExtensionHost({ commands, ui, page, query, widgets, ownerDocument: doc });
   extensions.activate(options.extensions);
   void page.start();
   return new Disposable(() => {
     page.dispose();
     extensions.dispose();
+    widgets.dispose();
     query.dispose();
     ui.dispose();
     commands.dispose();

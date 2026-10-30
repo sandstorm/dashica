@@ -43,7 +43,7 @@ export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: Dr
       label: props.y.alias + (perSecond ? ' / s' : ''),
       grid: true,
       axis: true,
-      type: options.viewOptions.includes('VIEW_LOGARITHMIC') ? 'symlog' : undefined,
+      type: options.logScale ? 'symlog' : undefined,
       transform: perSecond,
     },
     color: props.color ?? {

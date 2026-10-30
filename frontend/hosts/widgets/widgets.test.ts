@@ -113,9 +113,10 @@ describe('ChartFrame', () => {
         new ChartFrame(el, ctx, {
           title: widget.props.title,
           height: 200,
-          draw(result, { width, viewOptions, onTimeSelect }) {
+          logScale: widget.props.logScale ?? false,
+          draw(result, { width, logScale, onTimeSelect }) {
             selectTime = onTimeSelect;
-            drawn.push({ rows: result.numRows, width, log: viewOptions.includes('VIEW_LOGARITHMIC') });
+            drawn.push({ rows: result.numRows, width, log: logScale });
             const chart = document.createElement('figure');
             chart.textContent = `${result.numRows} rows`;
             return chart;
@@ -138,7 +139,7 @@ describe('ChartFrame', () => {
     expect(body(el).textContent).toBe('2 rows');
   });
 
-  it('queries again on a refresh, and draws again for another width or the log scale', async () => {
+  it('queries again on a refresh, and draws again for another width', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3] });
     testbed.render(requests);
     testbed.resize(640);
@@ -148,10 +149,27 @@ describe('ChartFrame', () => {
     await settle();
     expect(testbed.requests).toHaveLength(2);
     testbed.resize(320);
-    testbed.query.viewOptions.setLogScale(true);
     await settle();
     expect(testbed.requests).toHaveLength(2);
-    expect(drawn.at(-1)).toEqual({ rows: 1, width: 320, log: true });
+    expect(drawn.at(-1)).toEqual({ rows: 1, width: 320, log: false });
+  });
+
+  it('starts on the log scale the chart declares, and toggles it from its menu, drawing again without a query', async () => {
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    const { el } = testbed.render({ ...requests, props: { ...requests.props, logScale: true } });
+    testbed.scrollIntoView();
+    await settle();
+    expect(drawn.at(-1)!.log).toBe(true);
+    el.querySelector<HTMLButtonElement>('.dashica-chart__menu button')!.click();
+    const chart = testbed.menus[0].options.context as WidgetMenuContext;
+    const entry = testbed.menuItems.find((registered) => registered.menuId === 'widget/context')!.item;
+    expect(entry.when!(chart)).toBe(true);
+    expect(entry.toggled!(chart)).toBe(true);
+    testbed.commands.get(entry.command)!(chart);
+    await settle();
+    expect(drawn.at(-1)!.log).toBe(false);
+    expect(entry.toggled!(chart)).toBe(false);
+    expect(testbed.requests).toHaveLength(1);
   });
 
   it('shows the error of a failed query in the chart', async () => {

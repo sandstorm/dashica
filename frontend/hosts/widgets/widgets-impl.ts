@@ -2,6 +2,7 @@
 import * as Arrow from 'apache-arrow';
 import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
+import type { Commands } from '../commands/commands';
 import type { QueryApi } from '../query/query';
 import type { UiApi } from '../ui/ui';
 import type { QueryResult, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi } from './widgets';
@@ -11,11 +12,30 @@ import './widgets.css';
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
   readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
+  readonly #registrations: Disposable[] = [];
 
   constructor(
     private readonly query: QueryApi,
-    private readonly ui: Pick<UiApi, 'showContextMenu'>,
-  ) {}
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'registerMenuItem'>,
+    commands: Pick<Commands, 'registerCommand'>,
+  ) {
+    this.#registrations.push(
+      commands.registerCommand('widget.toggleLogScale', (widget: WidgetMenuContext) => widget.setLogScale(!widget.logScale)),
+    );
+    this.#registrations.push(
+      ui.registerMenuItem<WidgetMenuContext>('widget/context', {
+        command: 'widget.toggleLogScale',
+        title: 'Log scale',
+        group: 'view',
+        when: (widget) => widget.logScale !== undefined,
+        toggled: (widget) => widget.logScale === true,
+      }),
+    );
+  }
+
+  dispose(): void {
+    for (const registration of this.#registrations) registration.dispose();
+  }
 
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
     if (this.#renderers.has(type)) throw new Error(`There is a renderer for the widget type ${type} already`);
@@ -46,12 +66,14 @@ export class WidgetsHost implements WidgetsApi {
 /** The context of one rendered widget; also what its menu `widget/context` is shown for. */
 class RenderedWidget implements WidgetContext, WidgetMenuContext {
   lastResult: QueryResult | undefined;
+  logScale: boolean | undefined;
+  #onLogScale: ((on: boolean) => void) | undefined;
 
   constructor(
     readonly widget: WidgetNode,
     private readonly host: WidgetsHost,
     readonly state: QueryApi,
-    private readonly ui: Pick<UiApi, 'showContextMenu'>,
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'registerMenuItem'>,
   ) {}
 
   url(path: string): string {
@@ -70,6 +92,17 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
 
   showMenu(anchor: HTMLElement): void {
     this.ui.showContextMenu('widget/context', { anchor, title: this.widget.type, context: this, args: [this] });
+  }
+
+  offerLogScale(on: boolean, onChange: (on: boolean) => void): void {
+    this.logScale = on;
+    this.#onLogScale = onChange;
+  }
+
+  setLogScale(on: boolean): void {
+    if (!this.#onLogScale) return;
+    this.logScale = on;
+    this.#onLogScale(on);
   }
 }
 

@@ -16,6 +16,7 @@ function renderBarVertical(el: HTMLElement, widget: WidgetOf<'barVertical'>, ctx
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
+    logScale: widget.props.logScale ?? false,
     draw: (result, options) => drawBarVertical(result, widget.props, options),
   });
 }
@@ -40,7 +41,7 @@ function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: Dr
       label: props.y.alias,
       grid: true,
       axis: true,
-      type: options.viewOptions.includes('VIEW_LOGARITHMIC') ? 'symlog' : undefined,
+      type: options.logScale ? 'symlog' : undefined,
     },
     color: props.color ?? {
       legend: true,

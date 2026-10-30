@@ -34,6 +34,8 @@ const chart: WidgetMenuContext = {
   widget: { type: 'timeBar', props: { x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: '/p/shop/api/1' },
   url: (path) => `/p/shop/api/1${path}?filters=%7B%7D`,
   lastResult: undefined,
+  logScale: undefined,
+  setLogScale: () => {},
 };
 
 describe('debug', () => {
