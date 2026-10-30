@@ -23,7 +23,7 @@ export interface TimeModel {
   readonly range: string;
   /** The custom range as the server reads it (`2026-10-29 10:00 to now-1h`); '' unless `range` is `custom`. */
   readonly custom: string;
-  /** The seconds between two automatic refreshes; `undefined`: no auto refresh. */
+  /** The seconds between two automatic refreshes, paused while the tab is hidden; `undefined`: no auto refresh. */
   readonly autoRefresh: number | undefined;
   setRange(range: string): void;
   /**

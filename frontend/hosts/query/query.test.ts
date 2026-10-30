@@ -21,6 +21,15 @@ afterEach(() => {
 
 const urlParams = () => Object.fromEntries(new URLSearchParams(location.search));
 
+function setHidden(hidden: boolean): void {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+afterEach(() => {
+  delete (document as { hidden?: boolean }).hidden;
+});
+
 describe('QueryHost', () => {
   it('takes the state from the URL, the page default for a missing time range', () => {
     history.replaceState(null, '', '/p/shop?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D&refresh=30');
@@ -117,5 +126,53 @@ describe('QueryHost', () => {
     query.time.setAutoRefresh(undefined);
     vi.advanceTimersByTime(60_000);
     expect(refreshes).toBe(2);
+  });
+
+  it('skips the auto refresh while the tab is hidden and refreshes once when it is shown again', () => {
+    query.load();
+    query.time.setAutoRefresh(30);
+    refreshes = 0;
+    setHidden(true);
+    vi.advanceTimersByTime(90_000);
+    expect(refreshes).toBe(0);
+    setHidden(false);
+    expect(refreshes).toBe(1);
+    vi.advanceTimersByTime(30_000);
+    expect(refreshes).toBe(2);
+  });
+
+  it('ticks a whole interval after the refresh when the tab is shown again', () => {
+    query.load();
+    query.time.setAutoRefresh(30);
+    refreshes = 0;
+    setHidden(true);
+    vi.advanceTimersByTime(35_000);
+    setHidden(false);
+    expect(refreshes).toBe(1);
+    vi.advanceTimersByTime(29_999);
+    expect(refreshes).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(refreshes).toBe(2);
+  });
+
+  it('waits for the next tick when none came while the tab was hidden', () => {
+    query.load();
+    query.time.setAutoRefresh(30);
+    refreshes = 0;
+    setHidden(true);
+    vi.advanceTimersByTime(10_000);
+    setHidden(false);
+    expect(refreshes).toBe(0);
+  });
+
+  it('forgets a skipped tick when auto refresh is turned off', () => {
+    query.load();
+    query.time.setAutoRefresh(30);
+    refreshes = 0;
+    setHidden(true);
+    vi.advanceTimersByTime(30_000);
+    query.time.setAutoRefresh(undefined);
+    setHidden(false);
+    expect(refreshes).toBe(0);
   });
 });

@@ -12,8 +12,19 @@ export class QueryHost implements QueryApi {
   #defaultTime = DEFAULT_TIME;
   #urlWrite: ReturnType<typeof setTimeout> | undefined;
   #autoRefresh: ReturnType<typeof setInterval> | undefined;
+  /**
+   * An auto refresh tick came while the tab was hidden; the tab refreshes once when it is shown again, the next tick a
+   * whole interval later.
+   */
+  #skippedTick = false;
+  readonly #onVisibilityChange = () => {
+    if (this.browserWindow.document.hidden || !this.#skippedTick) return;
+    this.#restartAutoRefresh();
+    this.refresh();
+  };
 
   constructor(private readonly browserWindow: Window) {
+    browserWindow.document.addEventListener('visibilitychange', this.#onVisibilityChange);
     const changed = (refresh: boolean) => {
       this.#writeUrlSoon();
       if (refresh) this.refresh();
@@ -60,6 +71,7 @@ export class QueryHost implements QueryApi {
   dispose(): void {
     clearTimeout(this.#urlWrite);
     clearInterval(this.#autoRefresh);
+    this.browserWindow.document.removeEventListener('visibilitychange', this.#onVisibilityChange);
     this.#onDidRequestRefresh.dispose();
     this.time.dispose();
     this.filters.dispose();
@@ -68,8 +80,14 @@ export class QueryHost implements QueryApi {
 
   #restartAutoRefresh(): void {
     clearInterval(this.#autoRefresh);
+    this.#skippedTick = false;
     const seconds = this.time.autoRefresh;
-    if (seconds) this.#autoRefresh = setInterval(() => this.refresh(), seconds * 1000);
+    if (seconds) this.#autoRefresh = setInterval(() => this.#tick(), seconds * 1000);
+  }
+
+  #tick(): void {
+    if (this.browserWindow.document.hidden) this.#skippedTick = true;
+    else this.refresh();
   }
 
   /** Writes the state into the URL a moment after the last change, as a new history entry when it changed. */
