@@ -2,14 +2,14 @@ import { html } from 'htl';
 import { ChevronDown, Clock, RefreshCw, createElement } from 'lucide';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
-import { isRelative, parseTimeExpr } from './time-expr';
 
 /**
  * The time range of the page's queries, in the title bar: a button showing the range ("Last 1 hour",
  * "2026-10-29 10:00 to 12:00") that opens the picker, and the refresh button (also the command `timeRange.refresh`).
- * The picker has From / To, each an absolute time or relative to now (`now-6h`, see time-expr.ts), and the quick
- * ranges (the presets), filtered by typing. A range ending at a fixed time does not move, so applying one turns auto
- * refresh off. A selection on a time chart shows here as a custom range.
+ * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
+ * filtered by typing. Only the server reads the times: Apply asks it (`/time-range`) and shows its reason when it
+ * cannot. A range ending at a fixed time does not move, so applying one turns auto refresh off. A selection on a time
+ * chart shows here as a custom range.
  */
 export const timeRange: Extension = {
   id: 'timeRange',
@@ -86,11 +86,9 @@ class TimeRangePicker {
     const refresh = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Refresh" aria-label="Refresh">${createElement(RefreshCw)}</button>`;
 
     this.#button.addEventListener('click', () => (this.#panel.hidden ? this.open() : this.close()));
-    this.#from.addEventListener('input', () => this.#validate());
-    this.#to.addEventListener('input', () => this.#validate());
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      this.#applyCustom();
+      void this.#applyCustom();
     });
     this.#search.addEventListener('input', () => this.#showQuickRanges());
     this.#panel.addEventListener('keydown', (event) => {
@@ -113,7 +111,7 @@ class TimeRangePicker {
     this.#from.value = range === 'custom' ? from : `now-${range}`;
     this.#to.value = range === 'custom' ? to : 'now';
     this.#search.value = '';
-    this.#validate();
+    this.#error.textContent = '';
     this.#showQuickRanges();
     this.#panel.hidden = false;
     this.#button.setAttribute('aria-expanded', 'true');
@@ -138,7 +136,7 @@ class TimeRangePicker {
     const [from = '', to = ''] = custom.split(' to ');
     const [fromDay] = from.split(' ');
     const [toDay, toTime] = to.split(' ');
-    if (!isRelative(from) && !isRelative(to) && fromDay === toDay) return `${from} to ${toTime}`;
+    if (!from.startsWith('now') && !to.startsWith('now') && fromDay === toDay) return `${from} to ${toTime}`;
     return custom;
   }
 
@@ -157,29 +155,30 @@ class TimeRangePicker {
     );
   }
 
-  /** Marks what is wrong with From / To; `true` while both can be applied. */
-  #validate(): boolean {
-    const now = new Date();
-    const from = parseTimeExpr(this.#from.value, now);
-    const to = parseTimeExpr(this.#to.value, now);
-    this.#from.classList.toggle('input-error', from === undefined);
-    this.#from.setAttribute('aria-invalid', String(from === undefined));
-    this.#to.classList.toggle('input-error', to === undefined);
-    this.#to.setAttribute('aria-invalid', String(to === undefined));
-    let error = '';
-    if (from === undefined || to === undefined) error = 'A time is 2026-10-29 10:00, now, or now-6h (s m h d w).';
-    else if (from >= to) error = 'From is before To.';
-    this.#error.textContent = error;
-    this.#apply.disabled = error !== '';
-    return error === '';
-  }
-
-  #applyCustom(): void {
-    if (!this.#validate()) return;
+  /** Applies From / To once the server could read them; else shows its reason ("time \"yesterday\": …"). */
+  async #applyCustom(): Promise<void> {
     const from = this.#from.value.trim();
     const to = this.#to.value.trim();
-    if (!isRelative(to)) this.query.time.setAutoRefresh(undefined);
+    this.#error.textContent = '';
+    this.#apply.disabled = true;
+    try {
+      await resolveTimeRange('custom', `${from} to ${to}`);
+    } catch (error) {
+      this.#error.textContent = error instanceof Error ? error.message : String(error);
+      return;
+    } finally {
+      this.#apply.disabled = false;
+    }
+    if (!to.startsWith('now')) this.query.time.setAutoRefresh(undefined);
     this.query.time.setCustom(from, to);
     this.close();
   }
+}
+
+/** The window a time range stands for now, in ms, as the server resolves it; throws the server's reason when it cannot. */
+async function resolveTimeRange(timeRange: string, customTimeRange: string): Promise<{ from: number; to: number }> {
+  const request = new URLSearchParams({ filters: JSON.stringify({ timeRange, customTimeRange }) });
+  const response = await fetch(`/time-range?${request}`);
+  if (!response.ok) throw new Error((await response.text()).trim());
+  return (await response.json()) as { from: number; to: number };
 }

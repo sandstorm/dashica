@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for time-range.ts: the button, the quick ranges, From / To, closing the panel, refresh.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+// Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range), closing the panel, refresh.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { timeRange } from './time-range';
@@ -25,6 +25,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   query.dispose();
   document.body.replaceChildren();
   history.replaceState(null, '', '/');
@@ -41,8 +42,20 @@ function type(label: string, value: string): void {
   input(label).dispatchEvent(new Event('input'));
 }
 
-function submit(): void {
+/** `/time-range` answers `status` and `body`; gives the `filters` asked for. */
+function serverAnswers(status: number, body: string): string[] {
+  const asked: string[] = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    asked.push(new URL(url, location.href).searchParams.get('filters')!);
+    return new Response(body, { status });
+  });
+  return asked;
+}
+
+/** Submits From / To and waits for the server's answer. */
+async function submit(): Promise<void> {
   bar.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(apply().disabled).toBe(false));
 }
 
 describe('timeRange', () => {
@@ -74,39 +87,39 @@ describe('timeRange', () => {
     expect(input('To').value).toBe('now');
   });
 
-  it('applies a range relative to now, auto refresh kept', () => {
+  it('applies a range relative to now once the server read it, auto refresh kept', async () => {
+    const asked = serverAnswers(200, '{"from":1761703200000,"to":1761721200000}');
     query.time.setAutoRefresh(30);
     rangeButton().click();
     type('From', 'now-6h');
     type('To', 'now-1h');
-    submit();
+    await submit();
+    expect(asked).toEqual(['{"timeRange":"custom","customTimeRange":"now-6h to now-1h"}']);
     expect(query.time.custom).toBe('now-6h to now-1h');
     expect(query.time.autoRefresh).toBe(30);
     expect(rangeButton().textContent).toBe('now-6h to now-1h');
     expect(panel().hidden).toBe(true);
   });
 
-  it('applies a fixed range, auto refresh off, its day once on the button', () => {
+  it('applies a fixed range, auto refresh off, its day once on the button', async () => {
+    serverAnswers(200, '{"from":1761631200000,"to":1761636600000}');
     query.time.setAutoRefresh(30);
     rangeButton().click();
     type('From', '2026-10-28 08:00');
     type('To', '2026-10-28 09:30');
-    submit();
+    await submit();
     expect(query.time.custom).toBe('2026-10-28 08:00 to 2026-10-28 09:30');
     expect(query.time.autoRefresh).toBeUndefined();
     expect(rangeButton().textContent).toBe('2026-10-28 08:00 to 09:30');
   });
 
-  it('marks what it cannot read, and a From after To; applies neither', () => {
+  it('shows the server’s reason for a range it cannot read, and applies nothing', async () => {
+    serverAnswers(400, 'time "yesterday": neither `now-…` nor `2006-01-02 15:04`\n');
     rangeButton().click();
     type('From', 'yesterday');
-    expect(input('From').getAttribute('aria-invalid')).toBe('true');
-    expect(apply().disabled).toBe(true);
-    type('From', 'now-1h');
-    type('To', 'now-2h');
-    expect(input('From').getAttribute('aria-invalid')).toBe('false');
-    expect(apply().disabled).toBe(true);
-    submit();
+    await submit();
+    expect(panel().querySelector('[role=alert]')!.textContent).toBe('time "yesterday": neither `now-…` nor `2006-01-02 15:04`');
+    expect(panel().hidden).toBe(false);
     expect(query.time.range).toBe('24h');
   });
 
