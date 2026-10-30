@@ -48,9 +48,3 @@ export function parseTimeExpr(text: string, now: Date): Date | undefined {
 export function isRelative(text: string): boolean {
   return RELATIVE.test(text.trim());
 }
-
-/** `2026-10-29 10:00` in the viewer's time zone. */
-export function formatTimeExpr(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}

@@ -135,11 +135,7 @@ class TimeState extends Model implements TimeModel {
     this.changed(true);
   }
 
-  setCustom(from: Date, to: Date): void {
-    this.setCustomRange(formatLocal(from), formatLocal(to));
-  }
-
-  setCustomRange(from: string, to: string): void {
+  setCustom(from: string, to: string): void {
     this.range = 'custom';
     this.custom = `${from} to ${to}`;
     this.fire();
@@ -230,8 +226,8 @@ function parseParams(text: string | null): Record<string, string> {
   }
 }
 
-/** `2026-10-29 10:00` in the viewer's time zone. */
-function formatLocal(date: Date): string {
+/** `2026-10-29 10:00` in the viewer's time zone: an end of a custom range, as `TimeModel.setCustom` takes it. */
+export function formatTime(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

@@ -2,6 +2,7 @@
 import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../../core/disposable/disposable';
+import { formatTime } from '../../query/query';
 import type { QueryResult, ViewOptions, WidgetContext } from '../widgets';
 import './chart-frame.css';
 
@@ -103,7 +104,7 @@ export class ChartFrame {
 
   readonly #onSchemeChange = () => void this.#draw();
 
-  readonly #onTimeSelect = (from: Date, to: Date) => this.#ctx.state.time.setCustom(from, to);
+  readonly #onTimeSelect = (from: Date, to: Date) => this.#ctx.state.time.setCustom(formatTime(from), formatTime(to));
 
   async #query(): Promise<void> {
     this.#running?.abort();

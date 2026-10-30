@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for QueryHost: the state from and into the URL, what each change asks of the widgets, auto refresh.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryHost } from './query';
+import { QueryHost, formatTime } from './query';
 
 let query: QueryHost;
 let refreshes: number;
@@ -87,7 +87,7 @@ describe('QueryHost', () => {
 
   it('writes a custom range with the viewer’s local time', () => {
     query.load();
-    query.time.setCustom(new Date(2026, 9, 29, 10, 0), new Date(2026, 9, 29, 12, 30));
+    query.time.setCustom(formatTime(new Date(2026, 9, 29, 10, 0)), formatTime(new Date(2026, 9, 29, 12, 30)));
     vi.advanceTimersByTime(200);
     expect(urlParams()).toEqual({ time: 'custom', range: '2026-10-29 10:00 to 2026-10-29 12:30' });
     expect(query.time.custom).toBe('2026-10-29 10:00 to 2026-10-29 12:30');
@@ -95,7 +95,7 @@ describe('QueryHost', () => {
 
   it('writes a custom range relative to now as it is', () => {
     query.load();
-    query.time.setCustomRange('now-6h', 'now-1h');
+    query.time.setCustom('now-6h', 'now-1h');
     vi.advanceTimersByTime(200);
     expect(urlParams()).toEqual({ time: 'custom', range: 'now-6h to now-1h' });
   });

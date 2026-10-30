@@ -1,6 +1,7 @@
 // Tests for time-expr.ts: absolute and relative ends of a custom range, as the server reads them.
 import { describe, expect, it } from 'vitest';
-import { formatTimeExpr, isRelative, parseTimeExpr } from './time-expr';
+import { formatTime } from '../../hosts/query/query';
+import { isRelative, parseTimeExpr } from './time-expr';
 
 const now = new Date(2026, 9, 29, 12, 0);
 
@@ -35,9 +36,8 @@ describe('isRelative', () => {
   });
 });
 
-describe('formatTimeExpr', () => {
+describe('formatTime', () => {
   it('writes what parseTimeExpr reads', () => {
-    expect(formatTimeExpr(new Date(2026, 0, 5, 7, 3))).toBe('2026-01-05 07:03');
-    expect(parseTimeExpr(formatTimeExpr(new Date(2026, 0, 5, 7, 3)), now)).toEqual(new Date(2026, 0, 5, 7, 3));
+    expect(parseTimeExpr(formatTime(new Date(2026, 0, 5, 7, 3)), now)).toEqual(new Date(2026, 0, 5, 7, 3));
   });
 });
