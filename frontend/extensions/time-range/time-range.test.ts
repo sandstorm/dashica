@@ -92,7 +92,11 @@ describe('timeRange', () => {
     expect(quickRanges()).toEqual(['Last 2 days', 'Last 7 days', 'Last 30 days']);
   });
 
-  it('opens with From / To of the range shown', () => {
+  it('opens with From / To of the range shown, in the unit people read it in', () => {
+    query.time.setRange('720h');
+    rangeButton().click();
+    expect(input('From').value).toBe('now-30d');
+    rangeButton().click();
     query.time.setRange('6h');
     rangeButton().click();
     expect(input('From').value).toBe('now-6h');

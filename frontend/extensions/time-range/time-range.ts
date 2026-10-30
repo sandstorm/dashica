@@ -27,18 +27,21 @@ export const timeRange: Extension = {
   },
 };
 
-/** The quick ranges, their value a Go duration as the server parses it (time.ParseDuration). */
+/**
+ * The quick ranges: `value` a Go duration as the server parses it (time.ParseDuration), `from` the same as the start
+ * of a custom range, in the unit people read it in (`now-30d`, not `now-720h`).
+ */
 const PRESETS = [
-  { label: 'Last 5 minutes', value: '5m' },
-  { label: 'Last 15 minutes', value: '15m' },
-  { label: 'Last 1 hour', value: '1h' },
-  { label: 'Last 3 hours', value: '3h' },
-  { label: 'Last 6 hours', value: '6h' },
-  { label: 'Last 12 hours', value: '12h' },
-  { label: 'Last 24 hours', value: '24h' },
-  { label: 'Last 2 days', value: '48h' },
-  { label: 'Last 7 days', value: '168h' },
-  { label: 'Last 30 days', value: '720h' },
+  { label: 'Last 5 minutes', value: '5m', from: 'now-5m' },
+  { label: 'Last 15 minutes', value: '15m', from: 'now-15m' },
+  { label: 'Last 1 hour', value: '1h', from: 'now-1h' },
+  { label: 'Last 3 hours', value: '3h', from: 'now-3h' },
+  { label: 'Last 6 hours', value: '6h', from: 'now-6h' },
+  { label: 'Last 12 hours', value: '12h', from: 'now-12h' },
+  { label: 'Last 24 hours', value: '24h', from: 'now-24h' },
+  { label: 'Last 2 days', value: '48h', from: 'now-2d' },
+  { label: 'Last 7 days', value: '168h', from: 'now-7d' },
+  { label: 'Last 30 days', value: '720h', from: 'now-30d' },
 ];
 
 /**
@@ -131,7 +134,8 @@ class TimeRangePicker {
   open(): void {
     const { range, custom } = this.query.time;
     const [from = '', to = ''] = custom.split(' to ');
-    this.#from.value = range === 'custom' ? from : `now-${range}`;
+    // a range without preset (`90m`) is a Go duration, and as such `now-90m`
+    this.#from.value = range === 'custom' ? from : (PRESETS.find((preset) => preset.value === range)?.from ?? `now-${range}`);
     this.#to.value = range === 'custom' ? to : 'now';
     this.#search.value = '';
     this.#error.textContent = '';
