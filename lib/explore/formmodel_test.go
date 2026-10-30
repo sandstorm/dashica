@@ -98,10 +98,6 @@ func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
 		t.Errorf("timeBar defaults missing height; got: %s", tb.Defaults)
 	}
 
-	if len(resp.Layouts) == 0 {
-		t.Errorf("no layouts returned")
-	}
-
 	// fieldKinds carry the intent labels + slot metadata the pickers speak.
 	byKind := map[string]fieldKind{}
 	for _, fk := range resp.FieldKinds {

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
@@ -30,7 +29,6 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 	logs := sql.New(sql.From("http_logs"))
 	d := New().
 		WithTitle("Shop").
-		WithLayout(layout.DefaultPage).
 		DefaultTimeRange("168h").
 		FilterButton("Errors", "status >= 500").
 		Widget(widget.NewMarkdown().Content("# Shop")).
@@ -60,7 +58,7 @@ func TestPageJson_DescribesThePageAsMounted(t *testing.T) {
 }
 
 func TestPageJson_RefusesADefaultTimeRangeThatIsNotADuration(t *testing.T) {
-	d := New().WithLayout(layout.DefaultPage).DefaultTimeRange("7d")
+	d := New().DefaultTimeRange("7d")
 	err := d.CollectHandlers(&rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}}, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()).Nested("/p/shop"))
 	if err == nil || !strings.Contains(err.Error(), `DefaultTimeRange("7d") is not a Go duration`) {
 		t.Errorf("err = %v", err)

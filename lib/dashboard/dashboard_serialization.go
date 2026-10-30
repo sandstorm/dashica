@@ -2,9 +2,7 @@ package dashboard
 
 import (
 	"encoding/json"
-	"fmt"
 
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
@@ -13,13 +11,10 @@ import (
 // (see docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1 (4)).
 //
 // Builder keeps its unexported fields; a DTO carries the wire form. The
-// layout is a function value, so only its registered Name is stored and
-// re-resolved via layout.ByName on unmarshal (see lib/components/layout). The
 // widgets delegate to the widget envelope/registry; searchBar is plain data.
 
 type dashboardDTO struct {
 	Title     string                    `json:"title,omitempty"`
-	Layout    string                    `json:"layout,omitempty"`
 	SearchBar rendering.SearchBarOption `json:"searchBar"`
 	Widgets   widget.Widgets            `json:"widgets"`
 }
@@ -27,7 +22,6 @@ type dashboardDTO struct {
 func (d *Builder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(dashboardDTO{
 		Title:     d.title,
-		Layout:    d.layout.Name,
 		SearchBar: d.searchBar,
 		Widgets:   d.widgets,
 	})
@@ -39,18 +33,8 @@ func (d *Builder) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	var l layout.Layout
-	if dto.Layout != "" {
-		resolved, ok := layout.ByName(dto.Layout)
-		if !ok {
-			return fmt.Errorf("dashboard: unknown layout %q", dto.Layout)
-		}
-		l = resolved
-	}
-
 	*d = Builder{
 		widgets:   dto.Widgets,
-		layout:    l,
 		title:     dto.Title,
 		searchBar: dto.SearchBar,
 	}
@@ -80,7 +64,6 @@ func (d *Builder) MarshalForExplore() ([]byte, []string, error) {
 
 	b, err := json.Marshal(dashboardDTO{
 		Title:     d.title,
-		Layout:    d.layout.Name,
 		SearchBar: d.searchBar,
 		Widgets:   d.widgets,
 	})

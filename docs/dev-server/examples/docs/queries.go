@@ -1,7 +1,6 @@
 package docs
 
 import (
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
@@ -9,7 +8,6 @@ import (
 
 func Queries() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DocsPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("Writing SQL Queries").

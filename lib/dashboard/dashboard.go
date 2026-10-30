@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -16,7 +15,7 @@ import (
 
 // Dashboard is the registration contract consumed by Dashica.RegisterDashboard:
 // something that has a title and can mount its own HTTP handlers. It is
-// deliberately small — the fluent construction API (Widget, WithLayout, ...)
+// deliberately small — the fluent construction API (Widget, DefaultTimeRange, ...)
 // lives on the concrete *Builder returned by New(), not on this interface, so
 // that alternative implementations (e.g. the Explore editor) need only satisfy
 // these two methods.
@@ -37,7 +36,6 @@ func New() *Builder {
 // construction API.
 type Builder struct {
 	widgets     widget.Widgets
-	layout      layout.Layout
 	title       string
 	defaultTime string
 	searchBar   rendering.SearchBarOption
@@ -63,12 +61,6 @@ func (d *Builder) DefaultTimeRange(duration string) *Builder {
 func (d *Builder) Widget(w widget.WidgetDefinition) *Builder {
 	cloned := *d
 	cloned.widgets = append(cloned.widgets, w)
-	return &cloned
-}
-
-func (d *Builder) WithLayout(l layout.Layout) *Builder {
-	cloned := *d
-	cloned.layout = l
 	return &cloned
 }
 

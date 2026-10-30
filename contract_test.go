@@ -12,7 +12,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
@@ -31,7 +30,6 @@ func everyWidget() *dashboard.Builder {
 	logs := sql.New(sql.From("http_logs"))
 	return dashboard.New().
 		WithTitle("Shop").
-		WithLayout(layout.DefaultPage).
 		DefaultTimeRange("168h").
 		FilterButton("Errors", "status >= 500").
 		Widget(widget.NewMarkdown().Content("# Shop")).

@@ -1,7 +1,6 @@
 package docs
 
 import (
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -10,7 +9,6 @@ import (
 
 func TimeBar() dashboard.Dashboard {
 	return dashboard.New().
-		WithLayout(layout.DefaultPage).
 		Widget(
 			widget.NewMarkdown().
 				Title("TimeBar Widget").

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -25,7 +24,6 @@ func sampleDashboard() *dashboard.Builder {
 	baseQuery := sql.New(sql.From("full_logs"), sql.Where("level = 'error'"))
 	return dashboard.New().
 		WithTitle("Demo Dashboard").
-		WithLayout(layout.DefaultPage).
 		Widget(widget.NewTimeBar(baseQuery).
 			Title("Errors over time").Height(150).
 			X(sql.AutoBucket("timestamp")).
@@ -74,7 +72,6 @@ func TestGenerateDashboardCode_fragments(t *testing.T) {
 		"func Dashboard() dashboard.Dashboard {",
 		"dashboard.New()",
 		`WithTitle("Demo Dashboard")`,
-		"WithLayout(layout.DefaultPage)",
 		"widget.NewTimeBar(",
 		`sql.From("full_logs")`,
 		`sql.Where("level = 'error'")`,

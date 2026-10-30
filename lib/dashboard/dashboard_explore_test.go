@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
@@ -29,7 +28,6 @@ func unregisteredWidget() widget.WidgetDefinition { return unregistered{} }
 func TestMarshalForExplore_SkipsTopLevelUnregistered(t *testing.T) {
 	d := New().
 		WithTitle("Mixed").
-		WithLayout(layout.DefaultPage).
 		Widget(widget.NewTable(nil)).
 		Widget(unregisteredWidget()).
 		Widget(widget.NewMarkdown())
@@ -60,7 +58,7 @@ func TestMarshalForExplore_SkipsOnlyBadChildInContainer(t *testing.T) {
 		Area("a", widget.NewTable(nil)).
 		Area("b", unregisteredWidget())
 
-	d := New().WithLayout(layout.DefaultPage).Widget(grid)
+	d := New().Widget(grid)
 
 	b, skipped, err := d.MarshalForExplore()
 	if err != nil {
@@ -93,7 +91,7 @@ func TestMarshalForExplore_SkipsOnlyBadChildInContainer(t *testing.T) {
 }
 
 func TestMarshalForExplore_NoSkipsWhenAllSupported(t *testing.T) {
-	d := New().WithLayout(layout.DefaultPage).Widget(widget.NewTable(nil))
+	d := New().Widget(widget.NewTable(nil))
 	_, skipped, err := d.MarshalForExplore()
 	if err != nil {
 		t.Fatalf("MarshalForExplore: %v", err)
@@ -105,7 +103,7 @@ func TestMarshalForExplore_NoSkipsWhenAllSupported(t *testing.T) {
 
 // The strict path must still fail loudly — leniency is confined to the export.
 func TestMarshalDashboard_StillFailsOnUnregistered(t *testing.T) {
-	d := New().WithLayout(layout.DefaultPage).Widget(unregisteredWidget())
+	d := New().Widget(unregisteredWidget())
 	if _, err := MarshalDashboard(d); err == nil {
 		t.Fatal("strict MarshalDashboard should error on an unregistered widget")
 	}

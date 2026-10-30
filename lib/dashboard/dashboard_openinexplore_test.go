@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
@@ -26,7 +25,7 @@ func ctxWithExplore(exploreURL *string) *rendering.DashboardContext {
 }
 
 func TestOpenInExplore_RedirectsWithState(t *testing.T) {
-	d := New().WithTitle("Logs").WithLayout(layout.DefaultPage).Widget(widget.NewTable(nil))
+	d := New().WithTitle("Logs").Widget(widget.NewTable(nil))
 	base := "/explore"
 	h := d.openInExploreHandler(ctxWithExplore(&base))
 
@@ -61,7 +60,7 @@ func TestOpenInExplore_RedirectsWithState(t *testing.T) {
 }
 
 func TestOpenInExplore_404WhenExploreUnregistered(t *testing.T) {
-	d := New().WithLayout(layout.DefaultPage).Widget(widget.NewTable(nil))
+	d := New().Widget(widget.NewTable(nil))
 
 	for _, tc := range []struct {
 		name string

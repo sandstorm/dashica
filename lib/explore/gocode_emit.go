@@ -99,17 +99,15 @@ var widgetGocodeTable = func() map[string]WidgetGocode {
 const (
 	pkgDashboard = "github.com/sandstorm/dashica/lib/dashboard"
 	pkgWidget    = "github.com/sandstorm/dashica/lib/dashboard/widget"
-	pkgLayout    = "github.com/sandstorm/dashica/lib/components/layout"
 	pkgSQL       = "github.com/sandstorm/dashica/lib/dashboard/sql"
 	pkgColor     = "github.com/sandstorm/dashica/lib/dashboard/color"
 )
 
 // gocodeState is the input: the editor's dashboard state, which is the dashboard
-// wire format (title + layout name + widget envelopes). The per-widget `id` (the
+// wire format (title + widget envelopes). The per-widget `id` (the
 // editor tree id) is not part of the builder API, so it is ignored.
 type gocodeState struct {
 	Title   string            `json:"title"`
-	Layout  string            `json:"layout"`
 	Widgets []json.RawMessage `json:"widgets"`
 }
 
@@ -183,10 +181,6 @@ func GenerateDashboardCode(stateJSON []byte) (string, error) {
 	b.WriteString("dashboard.New()")
 	if st.Title != "" {
 		fmt.Fprintf(&b, ".\nWithTitle(%s)", strconv.Quote(st.Title))
-	}
-	if st.Layout != "" {
-		g.imports[pkgLayout] = true
-		fmt.Fprintf(&b, ".\nWithLayout(layout.%s)", upperFirst(st.Layout))
 	}
 	for i, raw := range st.Widgets {
 		expr, err := g.emitWidget(raw)

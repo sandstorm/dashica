@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
@@ -34,7 +33,7 @@ func (e *exploreImpl) handleFormModel(w http.ResponseWriter, r *http.Request) er
 		widgets[name] = widgetFormModel{WidgetDescriptor: d, Defaults: defaults}
 	}
 
-	resp := formModelResponse{Widgets: widgets, Layouts: layout.Names(), FieldKinds: fieldKinds}
+	resp := formModelResponse{Widgets: widgets, FieldKinds: fieldKinds}
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(resp)
 }
@@ -84,6 +83,5 @@ type widgetFormModel struct {
 
 type formModelResponse struct {
 	Widgets    map[string]widgetFormModel `json:"widgets"`
-	Layouts    []string                   `json:"layouts"`
 	FieldKinds []fieldKind                `json:"fieldKinds"`
 }
