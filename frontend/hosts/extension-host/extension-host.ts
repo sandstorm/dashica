@@ -1,4 +1,5 @@
 import type { CommandContribution, Commands, CommandsHost, KeybindingContribution } from '../commands/commands';
+import type { PageApi } from '../page/page';
 import type { QueryApi } from '../query/query';
 import type { UiApi } from '../ui/ui';
 import type { WidgetsApi } from '../widgets/widgets';
@@ -36,6 +37,8 @@ export interface ExtensionContext {
   readonly commands: Commands;
   /** The workbench's regions: panels and bar items. */
   readonly ui: UiApi;
+  /** The page shown, and the way to another one. */
+  readonly page: PageApi;
   /** The state the shown page's queries depend on: time range, filter, params, view options. */
   readonly query: QueryApi;
   /** How each widget type is rendered. */
@@ -58,6 +61,7 @@ export interface ExtensionHostOptions {
   /** Takes the declared commands and keys. */
   readonly commands: CommandsHost;
   readonly ui: UiApi;
+  readonly page: PageApi;
   readonly query: QueryApi;
   readonly widgets: WidgetsApi;
   /** Whose localStorage and sessionStorage keep the stored values. */

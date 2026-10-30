@@ -33,10 +33,11 @@ export class ExtensionHost {
   }
 
   #context(id: string, subscriptions: ExtensionContext['subscriptions']): ExtensionContext {
-    const { commands, ui, query, widgets, ownerDocument } = this.options;
+    const { commands, ui, page, query, widgets, ownerDocument } = this.options;
     return {
       commands,
       ui,
+      page,
       query,
       widgets,
       subscriptions,

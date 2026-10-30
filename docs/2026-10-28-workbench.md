@@ -339,10 +339,11 @@ interface Panel extends Disposable {
 // page — what the content area shows
 interface PageApi {
   readonly workbench: WorkbenchJson;        // from /workbench.json (generated type)
-  readonly current: PageJson;               // from <url>/page.json (generated type)
+  readonly current: PageJson | undefined;   // from <url>/page.json (generated type); undefined while it failed
   readonly onDidChangePage: Event<PageJson>;
   navigate(url: string): Promise<void>;     // fetch page.json, pushState, swap content
-}
+  registerPageRenderer(kind: string, render: (el: HTMLElement, page: PageJson) => Disposable): Disposable;
+}                                           // `dashboard` by the extension dashboardPage, later `explore`
 
 // query — the state every query depends on (§3.7)
 interface QueryApi {

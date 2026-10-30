@@ -31,6 +31,7 @@ function setup() {
         activate: ({ commands, subscriptions }) => subscriptions.push(commands.registerCommand('timeRange.refresh', () => ran.push('refresh'))),
       },
     ],
+    workbench: { menu: [] },
   });
   const field = () => host.querySelector<HTMLInputElement>('.dashica-wb__quick-pick input');
   const options = () => [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);

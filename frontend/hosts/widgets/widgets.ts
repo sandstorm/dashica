@@ -12,6 +12,8 @@ import type { QueryApi } from '../query/query';
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable;
+  /** Renders `widget` (one of a page's widgets) into `el` until disposed; a type without renderer shows its error there. */
+  render(el: HTMLElement, widget: WidgetNode): Disposable;
 }
 
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
