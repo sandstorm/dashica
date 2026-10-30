@@ -130,7 +130,7 @@ What several extensions need for drawing lives in a library folder `frontend/ext
 helpers, no `Extension`, no state of its own at module level (what it builds may keep the state of the drawn element,
 a table's search box). Extensions may import a `-library` folder. `chart-library` holds the column check
 (`SchemaAnalyzer`), the time selection of the time charts (`timeBrush`: for now a drag sets the page's time range,
-through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and, later, the table.
+through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and the table (`drawTable`: the widget type `table`, the Debug panel).
 
 | Host | Offers |
 |---|---|
