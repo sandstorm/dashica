@@ -1,103 +1,94 @@
 /* The workbench's regions (see WindowLayout in window-layout.ts): the title and filter bars, the two sides (rail,
    resizable panel; the left one an overlay when narrow), between them the filter bar, the content and the bottom panel,
-   the status bar. Colors are
-   daisyUI's tokens, so the themes (light / dark) apply. */
-.dashica-wb {
-  --wb-bg: var(--color-base-100, #fff);
-  --wb-subtle: var(--color-base-200, #f4f4f5);
-  --wb-border: var(--color-base-300, #ddd);
-  --wb-hover: var(--color-base-300, #e4e4e7);
-  --wb-text: var(--color-base-content, #1f2937);
-  --wb-muted: color-mix(in srgb, var(--wb-text) 60%, transparent);
-  --wb-accent: var(--color-primary, #3b82f6);
-  --wb-selected: color-mix(in srgb, var(--wb-accent) 15%, transparent);
+   the status bar. All values are tokens (core/style/tokens.css), so light and dark apply. */
+.d-workbench {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(min(20rem, 25%), 1fr) var(--wb-right-side, auto);
+  grid-template-columns: auto minmax(min(20rem, 25%), 1fr) var(--d-workbench-right-side, auto);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100vh;
-  background: var(--wb-bg);
-  color: var(--wb-text);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 /* Above everything the title bar; above the content the filter bar. Each is hidden while it has no item. */
-.dashica-wb__title-bar,
-.dashica-wb__filter-bar {
+.d-workbench__title-bar,
+.d-workbench__filter-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--wb-border);
-  background: var(--wb-subtle);
+  padding: 0 var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-subtle);
 }
-.dashica-wb__title-bar { grid-column: 1 / -1; grid-row: 1; min-height: 36px; font-size: 13px; }
-.dashica-wb__filter-bar { flex: none; }
-.dashica-wb__title-bar[hidden],
-.dashica-wb__filter-bar[hidden],
-.dashica-wb__status-bar[hidden] { display: none; }
-.dashica-wb__bar-left,
-.dashica-wb__bar-center,
-.dashica-wb__bar-right { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.dashica-wb__bar-left { flex: 1 1 0; }
-.dashica-wb__bar-center { flex: 0 1 auto; justify-content: center; }
-.dashica-wb__bar-right { flex: 1 1 0; justify-content: flex-end; }
-.dashica-wb__filter-bar .dashica-wb__bar-left { flex: 1 1 auto; }
+.d-workbench__title-bar { grid-column: 1 / -1; grid-row: 1; min-height: 36px; font-size: var(--text-sm); }
+.d-workbench__filter-bar { flex: none; }
+.d-workbench__title-bar[hidden],
+.d-workbench__filter-bar[hidden],
+.d-workbench__status-bar[hidden] { display: none; }
+.d-workbench__bar-left,
+.d-workbench__bar-center,
+.d-workbench__bar-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.d-workbench__bar-left { flex: 1 1 0; }
+.d-workbench__bar-center { flex: 0 1 auto; justify-content: center; }
+.d-workbench__bar-right { flex: 1 1 0; justify-content: flex-end; }
+.d-workbench__filter-bar .d-workbench__bar-left { flex: 1 1 auto; }
 
 /* The sides: a rail of buttons and the shown panel. */
-.dashica-wb__side {
+.d-workbench__side {
   grid-row: 2;
   position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
-  background: var(--wb-subtle);
+  background: var(--color-surface-subtle);
 }
-.dashica-wb__side--left { grid-column: 1; border-right: 1px solid var(--wb-border); }
-.dashica-wb__side--right { grid-column: 3; border-left: 1px solid var(--wb-border); }
-.dashica-wb__side[hidden] { display: none; }
-.dashica-wb__rail {
+.d-workbench__side--left { grid-column: 1; border-right: var(--border-width) solid var(--color-border); }
+.d-workbench__side--right { grid-column: 3; border-left: var(--border-width) solid var(--color-border); }
+.d-workbench__side[hidden] { display: none; }
+.d-workbench__rail {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px 4px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
 }
 /* the rail's bottom group (side panels with alignment: 'bottom') at its far end */
-.dashica-wb__rail-bottom { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: auto; }
-.dashica-wb__rail-button {
+.d-workbench__rail-bottom { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); margin-top: auto; }
+.d-workbench__rail-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: var(--radius-field, 4px);
+  border-radius: var(--radius-md);
   padding: 0;
   background: none;
-  color: var(--wb-muted);
+  color: var(--color-text-muted);
   cursor: pointer;
 }
-.dashica-wb__rail-button[hidden] { display: none; }
-.dashica-wb__rail-button:hover { background: var(--wb-hover); color: var(--wb-text); }
-.dashica-wb__rail-button[aria-pressed='true'] { background: var(--wb-selected); color: var(--wb-accent); }
-.dashica-wb__rail-button svg { width: 16px; height: 16px; }
-.dashica-wb__panel {
+.d-workbench__rail-button[hidden] { display: none; }
+.d-workbench__rail-button:hover { background: var(--color-hover); color: var(--color-text); }
+.d-workbench__rail-button[aria-pressed='true'] { background: var(--color-accent-subtle); color: var(--color-accent); }
+.d-workbench__rail-button svg { width: 16px; height: 16px; }
+.d-workbench__panel {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: var(--wb-subtle);
+  background: var(--color-surface-subtle);
 }
-/* left: as wide as its separator says; right: fills the column (a share of the workbench, --wb-right-side) */
-.dashica-wb__side--left .dashica-wb__panel { max-width: 50vw; border-left: 1px solid var(--wb-border); }
-.dashica-wb__side--right .dashica-wb__panel { flex: 1; border-right: 1px solid var(--wb-border); }
-.dashica-wb__panel[hidden],
-.dashica-wb__panel-body[hidden] { display: none; }
-.dashica-wb__panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+/* left: as wide as its separator says; right: fills the column (a share of the workbench, --d-workbench-right-side) */
+.d-workbench__side--left .d-workbench__panel { max-width: 50vw; border-left: var(--border-width) solid var(--color-border); }
+.d-workbench__side--right .d-workbench__panel { flex: 1; border-right: var(--border-width) solid var(--color-border); }
+.d-workbench__panel[hidden],
+.d-workbench__panel-body[hidden] { display: none; }
+.d-workbench__panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 /* the separator on the panel's inner edge */
-.dashica-wb__resizer {
+.d-workbench__resizer {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -105,25 +96,25 @@
   z-index: 5;
   cursor: col-resize;
 }
-.dashica-wb__side--left .dashica-wb__resizer { right: -3px; }
-.dashica-wb__side--right .dashica-wb__resizer { left: -3px; }
-.dashica-wb__resizer:hover,
-.dashica-wb__resizer:focus-visible,
-.dashica-wb--resizing .dashica-wb__resizer { background: var(--wb-accent); outline: none; }
-.dashica-wb--resizing { cursor: col-resize; user-select: none; }
+.d-workbench__side--left .d-workbench__resizer { right: -3px; }
+.d-workbench__side--right .d-workbench__resizer { left: -3px; }
+.d-workbench__resizer:hover,
+.d-workbench__resizer:focus-visible,
+.d-workbench--resizing .d-workbench__resizer { background: var(--color-accent); outline: none; }
+.d-workbench--resizing { cursor: col-resize; user-select: none; }
 /* Narrow workbench: the left side's open panel lies over the content. */
-.dashica-wb--narrow .dashica-wb__side--left .dashica-wb__panel {
+.d-workbench--narrow .d-workbench__side--left .d-workbench__panel {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 100%;
   z-index: 10;
   max-width: calc(100vw - 48px);
-  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--shadow-overlay);
 }
 
 /* The centre column: the filter bar, the content (it scrolls), the bottom panel. */
-.dashica-wb__center {
+.d-workbench__center {
   grid-column: 2;
   grid-row: 2;
   display: flex;
@@ -131,45 +122,45 @@
   min-width: 0;
   min-height: 0;
 }
-.dashica-wb__content { flex: 1; min-height: 0; overflow: auto; }
-.dashica-wb__bottom {
+.d-workbench__content { flex: 1; min-height: 0; overflow: auto; }
+.d-workbench__bottom {
   position: relative;
   display: flex;
   flex-direction: column;
   flex: none;
   max-height: 80%;
-  border-top: 1px solid var(--wb-border);
-  background: var(--wb-bg);
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
 }
-.dashica-wb__bottom[hidden],
-.dashica-wb__bottom-body[hidden],
-.dashica-wb__bottom-tab[hidden] { display: none; }
-.dashica-wb__bottom-header {
+.d-workbench__bottom[hidden],
+.d-workbench__bottom-body[hidden],
+.d-workbench__bottom-tab[hidden] { display: none; }
+.d-workbench__bottom-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--wb-border);
-  background: var(--wb-subtle);
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-subtle);
 }
-.dashica-wb__bottom-tabs { display: flex; gap: 4px; flex: 1; }
-.dashica-wb__bottom-tab,
-.dashica-wb__bottom-close {
+.d-workbench__bottom-tabs { display: flex; gap: var(--space-1); flex: 1; }
+.d-workbench__bottom-tab,
+.d-workbench__bottom-close {
   border: 1px solid transparent;
-  border-radius: var(--radius-field, 4px);
-  padding: 2px 10px;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
   background: none;
-  color: var(--wb-text);
+  color: var(--color-text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
-.dashica-wb__bottom-tab[aria-selected='true'] { background: var(--wb-bg); border-color: var(--wb-border); }
-.dashica-wb__bottom-tab:hover,
-.dashica-wb__bottom-close:hover { background: var(--wb-hover); }
-.dashica-wb__bottom-body { flex: 1; min-height: 0; overflow: auto; }
+.d-workbench__bottom-tab[aria-selected='true'] { background: var(--color-surface); border-color: var(--color-border); }
+.d-workbench__bottom-tab:hover,
+.d-workbench__bottom-close:hover { background: var(--color-hover); }
+.d-workbench__bottom-body { flex: 1; min-height: 0; overflow: auto; }
 /* the separator on the top edge */
-.dashica-wb__bottom-resizer {
+.d-workbench__bottom-resizer {
   position: absolute;
   top: -3px;
   left: 0;
@@ -178,20 +169,20 @@
   z-index: 5;
   cursor: row-resize;
 }
-.dashica-wb__bottom-resizer:hover,
-.dashica-wb__bottom-resizer:focus-visible,
-.dashica-wb--resizing-rows .dashica-wb__bottom-resizer { background: var(--wb-accent); outline: none; }
-.dashica-wb--resizing-rows { cursor: row-resize; user-select: none; }
+.d-workbench__bottom-resizer:hover,
+.d-workbench__bottom-resizer:focus-visible,
+.d-workbench--resizing-rows .d-workbench__bottom-resizer { background: var(--color-accent); outline: none; }
+.d-workbench--resizing-rows { cursor: row-resize; user-select: none; }
 
 /* Below everything: the status bar. */
-.dashica-wb__status-bar {
+.d-workbench__status-bar {
   grid-column: 1 / -1;
   grid-row: 3;
   display: flex;
   min-width: 0;
   min-height: 24px;
-  padding: 0 8px;
-  border-top: 1px solid var(--wb-border);
-  background: var(--wb-subtle);
-  font-size: 12px;
+  padding: 0 var(--space-2);
+  border-top: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-subtle);
+  font-size: var(--text-xs);
 }

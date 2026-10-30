@@ -13,17 +13,14 @@
     "d3-brush": "^3.0.0",
     "d3-selection": "^3.0.0",
     "esbuild": "^0.27.2",
-    "esbuild-plugin-tailwindcss": "^2.1.0",
     "htl": "^0.3.1",
     "lucide": "^0.563.0",
     "tabulator-tables": "^6.3.0"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.19",
     "@types/d3-brush": "^3.0.6",
     "@types/d3-selection": "^3.0.12",
     "@types/tabulator-tables": "^6.2.0",
-    "daisyui": "^5.5.14",
     "jsdom": "27.0.0",
     "vitest": "5.0.3"
   }

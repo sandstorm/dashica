@@ -1,8 +1,9 @@
 /* See WidgetsApi in widgets.ts. */
 
 /* a widget's error in place of the widget: a failed query, a type without renderer */
-.dashica-widget-error {
-    font-weight: bold;
-    color: var(--color-error);
+.d-widget-error {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-bold);
+    color: var(--color-danger);
     white-space: pre-wrap;
 }

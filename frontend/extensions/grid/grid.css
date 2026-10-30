@@ -1,0 +1,9 @@
+/* See grid.ts: the areas and columns come inline from the grid's template; a cell may shrink below its chart's width. */
+.d-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.d-grid > * {
+  min-width: 0;
+}

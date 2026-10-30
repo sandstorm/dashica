@@ -1,88 +1,56 @@
 /*
- * See dashboards.ts. A dense list: 13px, one line per entry (a long name cut off, in full on hover), the group headings
- * small; the page shown in a light tint of the primary color; flat, without daisyUI's tree lines and indents. The "…"
- * and the star sit at an entry's right end, shown on hover (a favorite's star always).
+ * See dashboards.ts. A dense list (d-list): one line per entry (a long name cut off, in full on hover), the group
+ * headings small, the page shown tinted. The "…" and the star sit at an entry's right end, shown on hover (a favorite's
+ * star always).
  */
-.dashboards-menu {
+.d-dashboards-menu {
   width: 100%;
-  padding: 0.5rem;
-  font-size: 13px;
+  padding: var(--space-2);
 }
 
-.dashboards-menu .menu-title {
-  padding: 0.75rem 0.5rem 0.25rem;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.dashboards-menu ul {
-  margin-inline-start: 0;
-  padding-inline-start: 0;
-}
-
-.dashboards-menu ul::before {
-  display: none;
-}
-
-.dashboards-menu li {
+.d-dashboards-menu__entry {
   position: relative;
 }
 
-.dashboards-menu li a {
-  display: block;
-  padding: 0.25rem 3rem 0.25rem 0.5rem;
-  border-radius: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.d-dashboards-menu__entry > .d-list__item {
+  padding-right: var(--space-8);
 }
 
-.dashboards-menu li a.menu-active {
-  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
-  color: var(--color-primary);
-  font-weight: 500;
-}
-
-.dashboards-menu__more,
-.dashboards-menu__star {
+.d-dashboards-menu__more,
+.d-dashboards-menu__star {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 0.25rem;
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
   line-height: 1;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 
-.dashboards-menu__more {
-  right: 1.5rem;
+.d-dashboards-menu__more {
+  right: var(--space-6);
 }
 
-.dashboards-menu__star {
-  right: 0.25rem;
-  font-size: 0.85em;
+.d-dashboards-menu__star {
+  right: var(--space-1);
 }
 
-.dashboards-menu li:hover > .dashboards-menu__more,
-.dashboards-menu__more:focus-visible,
-.dashboards-menu li:hover > .dashboards-menu__star,
-.dashboards-menu__star:focus-visible,
-.dashboards-menu__star--active {
+.d-dashboards-menu__entry:hover > .d-dashboards-menu__more,
+.d-dashboards-menu__more:focus-visible,
+.d-dashboards-menu__entry:hover > .d-dashboards-menu__star,
+.d-dashboards-menu__star:focus-visible,
+.d-dashboards-menu__star--active {
   opacity: 1;
 }
 
-a.menu-active ~ .dashboards-menu__more,
-a.menu-active ~ .dashboards-menu__star {
-  color: var(--color-primary);
+.d-list__item--active ~ .d-dashboards-menu__more,
+.d-list__item--active ~ .d-dashboards-menu__star {
+  color: var(--color-accent);
 }
 
-.dashica-wb__brand {
-  font-weight: 600;
-  text-decoration: none;
-  color: inherit;
+/* the brand at the title bar's start */
+.d-brand {
+  font-weight: var(--weight-bold);
 }

@@ -148,7 +148,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 - **Plain DOM, no Alpine, no reactivity library.** Models with private state and `onDidChange` events ("commands out,
   events back"); consumers re-render their region coarsely on change. If derived state across many sources gets
   painful, we add a small observable primitive of our own.
-- **Styling:** Tailwind + daisyUI stay; the workbench chrome uses daisyUI's tokens (dark mode via daisyUI themes).
+- **Styling:** BEM classes with the prefix `d-` and a fixed set of tokens, without Tailwind and daisyUI (decided 2026-10-30, `docs/2026-10-30-styling.md`).
 
 ### 3.6 Widgets
 

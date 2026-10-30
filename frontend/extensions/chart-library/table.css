@@ -1,257 +1,220 @@
-/* See table.ts. */
+/* See table.ts: the search above the grid (Tabulator, its own CSS), the panel of the selected records sliding up from the
+   bottom, the sticky tooltips of the cells. */
 
-/* Search-term highlight (CSS Custom Highlight API — see applySearchHighlight). */
+/* the search term, wherever it shows (CSS Custom Highlight API, see applySearchHighlight) */
 ::highlight(tableSearch) {
-    background-color: #fde68a; /* amber-200 */
-    color: #1a1a1a;
+    background-color: var(--color-highlight);
+    color: var(--color-text);
 }
 
-@media (prefers-color-scheme: dark) {
-    ::highlight(tableSearch) {
-        background-color: #b45309; /* amber-700 */
-        color: #fff;
-    }
-}
-
-/* Table with details container */
-.table-with-details {
+.d-table {
     display: flex;
     flex-direction: column;
 }
 
-/* Timestamp formatting */
-.autoTable__timestampDate {
+.d-table__search {
+    margin-bottom: var(--space-2);
+}
+
+/* the day after a timestamp's time */
+.d-table__date {
     opacity: 0.6;
     font-size: 0.9em;
 }
 
-/* Record details panel */
-.record-details-panel {
+/* The selected records: fixed at the bottom, beside the left side (its usual width), full height when toggled */
+.d-record-panel {
     position: fixed;
     bottom: 0;
-    left: 250px; /* Account for sidebar width */
+    left: 250px;
     right: 0;
+    z-index: var(--z-panel);
     max-height: 40vh;
     overflow-y: auto;
-    background: white;
-    border-top: 1px solid #ddd;
-    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-    z-index: 10;
+    border-top: var(--border-width) solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-popover);
     transform: translateY(100%);
-    transition: transform 0.3s ease-in-out, max-height 0.3s ease-in-out;
+    transition: transform var(--duration-slow) ease-in-out, max-height var(--duration-slow) ease-in-out;
 }
 
-.record-details-panel.hidden {
-    display: none;
-}
-
-.record-details-panel.open {
+.d-record-panel--open {
     transform: translateY(0);
 }
 
-.record-details-panel.fullscreen {
-    max-height: calc(100vh - 60px); /* Leave space for header */
+.d-record-panel--fullscreen {
     top: 60px;
-    bottom: 0;
+    max-height: calc(100vh - 60px);
 }
 
-.record-details-header {
+.d-record-panel__header {
     position: sticky;
     top: 0;
     z-index: 1;
-}
-
-@media (prefers-color-scheme: dark) {
-    .record-details-panel {
-        background: #1a1a1a;
-        border-top-color: #333;
-    }
-}
-
-/* Record details layout */
-.recordDetails {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    justify-content: flex-start;
-}
-
-.recordDetails__record {
-    flex-grow: 0;
-    align-items: stretch;
-    flex-basis: 30%;
-    max-width: 30%;
-    padding: 10px;
-    background-color: white;
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    overflow: auto;
-    transition: box-shadow 300ms;
-}
-
-@media (prefers-color-scheme: dark) {
-    .recordDetails__record {
-        background-color: #2a2a2a;
-    }
-}
-
-.recordDetails__record p {
-    margin: 0;
-}
-
-.recordDetails__record:hover {
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* Sticky, copyable, draggable cell tooltip */
-.stickyTooltip {
-    position: fixed;
-    z-index: 9999;
-    max-width: 640px;
-    max-height: 50vh;
-    display: flex;
-    flex-direction: column;
-    background: white;
-    color: #1a1a1a;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
-    font-size: 12px;
-    overflow: hidden;
-    /* Manually resizable (drag bottom-right corner). */
-    resize: both;
-    min-width: 160px;
-    min-height: 60px;
-}
-
-.stickyTooltip--transient {
-    z-index: 10000; /* transient hover tooltip floats above pinned ones */
-    resize: none;   /* only pinned tooltips are resizable */
-}
-
-.stickyTooltip__header {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 6px;
-    border-bottom: 1px solid #eee;
-    background: #f6f6f6;
+    justify-content: space-between;
+    padding: var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-surface-subtle);
+}
+
+.d-record-panel__summary {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-bold);
+}
+
+.d-record-panel__actions {
+    display: flex;
+    gap: var(--space-1);
+}
+
+.d-record-panel__records {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    padding: var(--space-4);
+}
+
+.d-record-panel__record {
+    flex: 0 0 30%;
+    max-width: 30%;
+    padding: var(--space-2);
+    overflow: auto;
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+}
+
+.d-record-panel__field {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+}
+
+.d-record-panel__key {
+    font-weight: var(--weight-bold);
+}
+
+.d-record-panel__value {
+    word-break: break-all;
+}
+
+/* Sticky, copyable, draggable cell tooltip; resizable by its bottom right corner while pinned */
+.d-sticky-tooltip {
+    position: fixed;
+    z-index: var(--z-tooltip);
+    display: flex;
+    flex-direction: column;
+    min-width: 160px;
+    max-width: 640px;
+    min-height: 60px;
+    max-height: 50vh;
+    overflow: hidden;
+    border: var(--border-width) solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-popover);
+    color: var(--color-text);
+    font-size: var(--text-xs);
+    resize: both;
+}
+
+/* the hover tooltip floats above the pinned ones; only pinned ones resize */
+.d-sticky-tooltip--transient {
+    z-index: calc(var(--z-tooltip) + 1);
+    resize: none;
+}
+
+.d-sticky-tooltip__header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-surface-subtle);
     cursor: default;
 }
 
-.stickyTooltip--pinned .stickyTooltip__header {
+.d-sticky-tooltip--pinned .d-sticky-tooltip__header {
     cursor: move;
 }
 
-.stickyTooltip__spacer {
+.d-sticky-tooltip__spacer {
     flex: 1;
 }
 
-/* Index badge shown in a pinned tooltip's header ([1], [2], …) */
-.stickyTooltip__index {
+/* the pin's number in its header ([1], [2], …), colored inline per pin */
+.d-sticky-tooltip__index {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: 18px;
     height: 18px;
-    padding: 0 5px;
-    margin-right: 4px;
-    border-radius: 9px;
-    color: white;
-    font-size: 11px;
-    font-weight: 700;
+    margin-right: var(--space-1);
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-on-accent);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
     line-height: 1;
 }
 
-/* Marker injected into a pinned source cell ([1], [2], …) */
-.stickyTooltip__badge {
+/* the same number in the pinned source cell */
+.d-sticky-tooltip__badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: 15px;
     height: 15px;
-    padding: 0 4px;
-    margin-right: 5px;
-    border-radius: 8px;
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
+    margin-right: var(--space-1);
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-on-accent);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
     line-height: 1;
     vertical-align: middle;
 }
 
-/* Pinned source row highlight (color set inline per pin) */
-.stickyTooltip__pinnedRow {
-    transition: background-color 150ms;
+/* the pinned source row (colored inline per pin) */
+.d-sticky-tooltip__pinned-row {
+    transition: background-color var(--duration-fast);
 }
 
-.stickyTooltip__btn {
+.d-sticky-tooltip__btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 22px;
     height: 22px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: #555;
-    cursor: pointer;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
 }
 
-.stickyTooltip__btn:hover {
-    background: #e2e2e2;
-    color: #000;
+.d-sticky-tooltip__btn:hover {
+    background: var(--color-hover);
+    color: var(--color-text);
 }
 
-.stickyTooltip__btn svg {
-    width: 14px;
-    height: 14px;
+.d-sticky-tooltip__btn--ok {
+    color: var(--color-success);
 }
 
-.stickyTooltip__btn--ok {
-    color: #16a34a;
+.d-sticky-tooltip--pinned .d-sticky-tooltip__pin {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent);
 }
 
-.stickyTooltip--pinned .stickyTooltip__pin {
-    background: #dbeafe;
-    color: #1d4ed8;
-}
-
-.stickyTooltip__body {
-    margin: 0;
-    padding: 8px 10px;
+/* selectable, to copy from; shrinks and scrolls inside a resized tooltip */
+.d-sticky-tooltip__body {
     flex: 1 1 auto;
-    min-height: 0; /* allow body to shrink + scroll inside a resized tooltip */
+    min-height: 0;
+    padding: var(--space-2) var(--space-3);
     overflow: auto;
+    font-family: var(--font-mono);
+    line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
-    /* Text must be selectable so it can be copied out. */
-    user-select: text;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    line-height: 1.4;
     tab-size: 2;
-}
-
-@media (prefers-color-scheme: dark) {
-    .stickyTooltip {
-        background: #1f1f1f;
-        color: #eaeaea;
-        border-color: #444;
-    }
-    .stickyTooltip__header {
-        background: #2a2a2a;
-        border-bottom-color: #3a3a3a;
-    }
-    .stickyTooltip__btn {
-        color: #bbb;
-    }
-    .stickyTooltip__btn:hover {
-        background: #3a3a3a;
-        color: #fff;
-    }
-    .stickyTooltip--pinned .stickyTooltip__pin {
-        background: #1e3a8a;
-        color: #bfdbfe;
-    }
+    user-select: text;
 }

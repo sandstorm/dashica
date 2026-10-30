@@ -26,7 +26,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 const x = { kind: 'expr' as const, alias: 'time', xBucketSizeMs: QUARTER };
 
@@ -36,7 +36,7 @@ describe('heatmap', () => {
     const { el } = testbed.render({ type: 'timeHeatmap', props: { x, y: { kind: 'expr', alias: 'duration_ms' }, fill: { kind: 'count', alias: 'cnt' }, yBucketSize: 100 }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
   it('refuses a time heatmap without a positive y bucket size', () => {
@@ -49,6 +49,6 @@ describe('heatmap', () => {
     const { el } = testbed.render({ type: 'timeHeatmapOrdinal', props: { x, y: { kind: 'enum', alias: 'status' }, fill: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 });

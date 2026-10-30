@@ -33,7 +33,7 @@ function setup() {
     ],
     workbench: { menu: [] },
   });
-  const field = () => host.querySelector<HTMLInputElement>('.dashica-wb__quick-pick input');
+  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input');
   const options = () => [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);
   const press = (init: KeyboardEventInit) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
   return { host, ran, field, options, press };
@@ -42,7 +42,7 @@ function setup() {
 describe('searchEverywhere', () => {
   it('opens with Ctrl+K and from its title bar button, which names the key', () => {
     const { host, field, press } = setup();
-    const button = host.querySelector<HTMLButtonElement>('.dashica-wb__search-button')!;
+    const button = host.querySelector<HTMLButtonElement>('.d-search-button')!;
     expect(button.textContent).toBe('Search Ctrl+K');
     button.click();
     expect(document.activeElement).toBe(field());

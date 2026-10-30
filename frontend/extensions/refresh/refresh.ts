@@ -14,11 +14,11 @@ export const refresh: Extension = {
   activate({ ui, query, commands, subscriptions }) {
     const button: HTMLButtonElement = html`<button
       type="button"
-      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      class="d-button d-button--icon d-segmented__item"
       title="Refresh"
-      aria-label="Refresh">${createElement(RefreshCw, { class: 'w-4 h-4' })}</button>`;
+      aria-label="Refresh">${createElement(RefreshCw, { width: 16, height: 16 })}</button>`;
     const interval: HTMLSelectElement = html`<select
-      class="select select-sm join-item w-auto border-base-300 bg-base-100"
+      class="d-field d-segmented__item"
       aria-label="Auto refresh"></select>`;
     button.addEventListener('click', () => query.refresh());
     interval.addEventListener('change', () => query.time.setAutoRefresh(interval.value === '' ? undefined : Number(interval.value)));
@@ -33,7 +33,7 @@ export const refresh: Extension = {
     show();
     subscriptions.push(query.time.onDidChange(show));
     subscriptions.push(commands.registerCommand('refresh.now', () => query.refresh()));
-    subscriptions.push(ui.registerBarItem('title', html`<div class="join">${button}${interval}</div>`, { alignment: 'right', priority: 20 }));
+    subscriptions.push(ui.registerBarItem('title', html`<div class="d-segmented">${button}${interval}</div>`, { alignment: 'right', priority: 20 }));
   },
 };
 

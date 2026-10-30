@@ -4,6 +4,7 @@ import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
+import './filters.css';
 
 /**
  * The filters of a page that has them (`page.json`'s `filterBar`): a funnel button in the title bar, marked while there
@@ -48,24 +49,23 @@ export const filters: Extension = {
 
 /**
  * The funnel button (`toggle`) and the filter bar's content (`el`); `showButtons` takes the page's buttons, `showSql`
- * the SQL filter of `query`. `onDidChangeWanted` is called when the SQL filter opens or closes. The page's buttons are
- * outlined: a plain daisyUI button has the filter bar's own background (base-200).
+ * the SQL filter of `query`. `onDidChangeWanted` is called when the SQL filter opens or closes.
  */
 class FilterBar {
-  readonly #buttons: HTMLElement = html`<div class="flex flex-wrap items-center gap-2"></div>`;
-  readonly #active: HTMLElement = html`<span class="badge badge-primary badge-xs absolute -top-0.5 -right-0.5 p-0 w-2 h-2" aria-hidden="true"></span>`;
+  readonly #buttons: HTMLElement = html`<div class="d-filter-bar__buttons"></div>`;
+  readonly #active: HTMLElement = html`<span class="d-badge d-badge--dot d-filter-bar__dot" aria-hidden="true"></span>`;
   readonly toggle: HTMLButtonElement = html`<button
     type="button"
-    class="btn btn-sm btn-circle btn-ghost relative"
+    class="d-button d-button--ghost d-button--icon d-filter-bar__toggle"
     title="Filters"
     aria-label="Filters"
-    aria-expanded="false">${createElement(Filter)}${this.#active}</button>`;
+    aria-expanded="false">${createElement(Filter, { width: 16, height: 16 })}${this.#active}</button>`;
   readonly #sql: HTMLTextAreaElement = html`<textarea
-    class="textarea textarea-bordered textarea-xs w-full font-mono"
+    class="d-field d-field--full d-field--mono"
     placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
     rows="2"
     hidden></textarea>`;
-  readonly el: HTMLElement = html`<div class="flex-1 min-w-0 flex flex-col gap-2 px-4 py-2">${this.#buttons}${this.#sql}</div>`;
+  readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#buttons}${this.#sql}</div>`;
   #hasButtons = false;
 
   constructor(
@@ -90,7 +90,7 @@ class FilterBar {
     this.#buttons.hidden = !this.#hasButtons;
     this.#buttons.replaceChildren(
       ...buttons.map((button) => {
-        const el: HTMLButtonElement = html`<button type="button" class="btn btn-sm btn-outline">${button.title}</button>`;
+        const el: HTMLButtonElement = html`<button type="button" class="d-button">${button.title}</button>`;
         el.addEventListener('click', () => this.#add(button.queryPart));
         return el;
       }),
@@ -107,7 +107,6 @@ class FilterBar {
 
   #setOpen(open: boolean): void {
     this.#sql.hidden = !open;
-    this.toggle.classList.toggle('btn-active', open);
     this.toggle.setAttribute('aria-expanded', String(open));
     this.onDidChangeWanted();
   }

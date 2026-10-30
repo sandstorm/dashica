@@ -1,0 +1,18 @@
+/* See schema-table.ts: the table's CREATE statement in a scrolling block; red when it cannot be read. */
+.d-schema-table__title {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.d-schema-table__statement {
+  overflow-x: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  font-size: var(--text-xs);
+}
+
+.d-schema-table__statement--error {
+  color: var(--color-danger);
+}

@@ -1,0 +1,73 @@
+/* See TimeRangePicker in time-range.ts: the segmented group in the title bar, the panel below it (custom range on the
+   left, quick ranges on the right; one column when narrow). */
+.d-time-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.d-time-picker__chevron {
+  opacity: 0.6;
+}
+
+.d-time-picker__panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: var(--z-popover);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  width: 544px;
+  max-width: calc(100vw - var(--space-4));
+  margin-top: var(--space-1);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+}
+
+@media (max-width: 640px) {
+  .d-time-picker__panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+.d-time-picker__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.d-time-picker__heading {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.d-time-picker__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.d-time-picker__hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.d-time-picker__error {
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+}
+
+.d-time-picker__error:empty {
+  display: none;
+}
+
+.d-time-picker__quick-ranges {
+  max-height: 288px;
+  overflow-y: auto;
+}

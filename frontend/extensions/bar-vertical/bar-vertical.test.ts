@@ -20,7 +20,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 describe('barVertical', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -28,7 +28,7 @@ describe('barVertical', () => {
     const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
   it('sorts the categories by their measure when asked, descending for sortReverse', async () => {

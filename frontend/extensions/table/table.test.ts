@@ -20,7 +20,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 describe('table', () => {
   it('draws the rows below its title', async () => {
@@ -28,12 +28,12 @@ describe('table', () => {
     const { el } = testbed.render({ type: 'table', props: { title: 'Latest', height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelector('.table-with-details h2')!.textContent).toBe('Latest');
+    expect(el.querySelector('.d-table h2')!.textContent).toBe('Latest');
   });
 
   it('adds a cell’s filter to the page’s SQL filter', () => {
     const { el } = testbed.render({ type: 'table', props: {}, dataUrl: '/p/shop/api/1' });
-    el.querySelector('.dashica-chart__body')!.dispatchEvent(new CustomEvent('dashica-add-filter', { bubbles: true, detail: "path = '/api'" }));
+    el.querySelector('.d-chart-frame__body')!.dispatchEvent(new CustomEvent('dashica-add-filter', { bubbles: true, detail: "path = '/api'" }));
     expect(testbed.query.filters.sql).toBe("path = '/api'");
   });
 });

@@ -36,7 +36,7 @@ function setup({ observe = false, key = `test-${Math.random()}` } = {}) {
   const body = sidePanel.body;
   body.textContent = 'menu';
   const toggle = host.querySelector<HTMLButtonElement>('[data-testid=wb-panel-toggle-dashboards]')!;
-  const panel = host.querySelector<HTMLElement>('.dashica-wb__side--left .dashica-wb__panel')!;
+  const panel = host.querySelector<HTMLElement>('.d-workbench__side--left .d-workbench__panel')!;
   const setWidth = (width: number) => {
     Object.defineProperty(host, 'clientWidth', { value: width, configurable: true });
     resize?.();
@@ -58,14 +58,14 @@ describe('WindowLayout', () => {
   it('puts the title bar, the left side, the filter bar, content and bottom panel between the sides, the right side and the status bar into the host', () => {
     const { host, layout } = setup();
     expect([...host.children].map((c) => c.className)).toEqual([
-      'dashica-wb__title-bar',
-      'dashica-wb__side dashica-wb__side--left',
-      'dashica-wb__center',
-      'dashica-wb__side dashica-wb__side--right',
-      'dashica-wb__status-bar',
+      'd-workbench__title-bar',
+      'd-workbench__side d-workbench__side--left',
+      'd-workbench__center',
+      'd-workbench__side d-workbench__side--right',
+      'd-workbench__status-bar',
     ]);
-    expect([...host.querySelector('.dashica-wb__center')!.children].map((c) => c.className)).toEqual(['dashica-wb__filter-bar', 'dashica-wb__content', 'dashica-wb__bottom']);
-    expect(layout.content.className).toBe('dashica-wb__content');
+    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__filter-bar', 'd-workbench__content', 'd-workbench__bottom']);
+    expect(layout.content.className).toBe('d-workbench__content');
   });
 
   it('places rail buttons by order, equal orders in registration order', () => {
@@ -74,7 +74,7 @@ describe('WindowLayout', () => {
     layout.addSidePanel('favorites', { label: 'Favorites', icon: icon(), order: -10 });
     layout.addSidePanel('search', { label: 'Search', icon: icon(), order: 20 });
     layout.addSidePanel('alerts', { label: 'Alerts', icon: icon() });
-    const rail = [...host.querySelectorAll<HTMLElement>('.dashica-wb__rail-button')].map((button) => button.title);
+    const rail = [...host.querySelectorAll<HTMLElement>('.d-workbench__rail-button')].map((button) => button.title);
     expect(rail).toEqual(['Favorites', 'Dashboards', 'Alerts', 'Search']);
   });
 
@@ -86,10 +86,10 @@ describe('WindowLayout', () => {
     layout.addSidePanel('account', { label: 'Account', icon: icon(), alignment: 'bottom' });
     layout.addSidePanel('alerts', { label: 'Alerts', icon: icon(), order: 15 });
     const titles = (selector: string) => [...host.querySelectorAll<HTMLElement>(selector)].map((button) => button.title);
-    expect(titles('.dashica-wb__rail > .dashica-wb__rail-button')).toEqual(['Dashboards', 'Alerts', 'Help']);
-    expect(titles('.dashica-wb__rail-bottom > .dashica-wb__rail-button')).toEqual(['Account', 'Settings']);
+    expect(titles('.d-workbench__rail > .d-workbench__rail-button')).toEqual(['Dashboards', 'Alerts', 'Help']);
+    expect(titles('.d-workbench__rail-bottom > .d-workbench__rail-button')).toEqual(['Account', 'Settings']);
     // the bottom group comes after every top button
-    expect(host.querySelector('.dashica-wb__rail')!.lastElementChild!.className).toBe('dashica-wb__rail-bottom');
+    expect(host.querySelector('.d-workbench__rail')!.lastElementChild!.className).toBe('d-workbench__rail-bottom');
   });
 
   it('removes a panel and its rail button', () => {
@@ -98,14 +98,14 @@ describe('WindowLayout', () => {
     sidePanel.dispose();
     expect(host.querySelector('[data-panel=dashboards]')).toBeNull();
     expect(host.querySelector('[data-testid=wb-panel-toggle-dashboards]')).toBeNull();
-    expect(host.querySelector<HTMLElement>('.dashica-wb__side--left')!.hidden).toBe(true);
+    expect(host.querySelector<HTMLElement>('.d-workbench__side--left')!.hidden).toBe(true);
   });
 
   it('the right side column is a share of the workbench, so an opening left panel narrows only the content column', () => {
     // with `1fr 1fr` the panel's width would come out of both columns and the right side would move
     const css = readFileSync('frontend/hosts/ui/layout/window-layout.css', 'utf8');
-    const columns = /\.dashica-wb \{[^}]*grid-template-columns:\s*([^;]+);/.exec(css)?.[1].trim();
-    expect(columns).toBe('auto minmax(min(20rem, 25%), 1fr) var(--wb-right-side, auto)');
+    const columns = /\.d-workbench \{[^}]*grid-template-columns:\s*([^;]+);/.exec(css)?.[1].trim();
+    expect(columns).toBe('auto minmax(min(20rem, 25%), 1fr) var(--d-workbench-right-side, auto)');
   });
 
   it('a panel is closed until its default says open; the rail button toggles it', () => {
@@ -136,8 +136,8 @@ describe('WindowLayout', () => {
     sidePanel.setAvailable(false);
     expect(toggle.hidden).toBe(true);
     expect(isOpen()).toBe(false);
-    expect(host.querySelector<HTMLElement>('.dashica-wb__side--left')!.hidden).toBe(true);
-    expect(host.querySelector<HTMLElement>('.dashica-wb__side--right')!.hidden).toBe(true);
+    expect(host.querySelector<HTMLElement>('.d-workbench__side--left')!.hidden).toBe(true);
+    expect(host.querySelector<HTMLElement>('.d-workbench__side--right')!.hidden).toBe(true);
   });
 
   it("a right panel goes on the right rail; one panel per side shows: the viewer's pick, else the side's default", () => {
@@ -145,16 +145,16 @@ describe('WindowLayout', () => {
     sidePanel.setDefault(true);
     const inspector = right();
     const details = right('details', 'Details');
-    const rail = (side: string) => [...host.querySelectorAll<HTMLElement>(`.dashica-wb__side--${side} .dashica-wb__rail-button`)].map((button) => button.title);
+    const rail = (side: string) => [...host.querySelectorAll<HTMLElement>(`.d-workbench__side--${side} .d-workbench__rail-button`)].map((button) => button.title);
     expect(rail('left')).toEqual(['Dashboards']);
     expect(rail('right')).toEqual(['Inspector', 'Details']);
-    expect(host.querySelector<HTMLElement>('.dashica-wb__side--right')!.hidden).toBe(false);
+    expect(host.querySelector<HTMLElement>('.d-workbench__side--right')!.hidden).toBe(false);
     // no default named, none asked for: the right side is only its rail
     expect([inspector.body.hidden, details.body.hidden]).toEqual([true, true]);
-    expect(host.style.getPropertyValue('--wb-right-side')).toBe('');
+    expect(host.style.getPropertyValue('--d-workbench-right-side')).toBe('');
     layout.setDefaultPanel('right', 'inspector');
     expect(inspector.body.hidden).toBe(false);
-    expect(host.style.getPropertyValue('--wb-right-side')).toBe('minmax(0, 50%)');
+    expect(host.style.getPropertyValue('--d-workbench-right-side')).toBe('minmax(0, 50%)');
     host.querySelector<HTMLElement>('[data-testid=wb-panel-toggle-details]')!.click();
     expect([inspector.body.hidden, details.body.hidden]).toEqual([true, false]);
     expect(isOpen()).toBe(true); // the left side is apart
@@ -168,7 +168,7 @@ describe('WindowLayout', () => {
     toggle.click();
     expect(inspector.body.hidden).toBe(true);
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    expect(host.style.getPropertyValue('--wb-right-side')).toBe('');
+    expect(host.style.getPropertyValue('--d-workbench-right-side')).toBe('');
     const next = setup({ key });
     const again = next.right();
     next.layout.setDefaultPanel('right', 'inspector');
@@ -194,19 +194,19 @@ describe('WindowLayout', () => {
     const { host, layout, key, right } = setup();
     right();
     layout.setDefaultPanel('right', 'inspector');
-    const split = host.querySelector<HTMLElement>('.dashica-wb__side--right [role=separator]')!;
+    const split = host.querySelector<HTMLElement>('.d-workbench__side--right [role=separator]')!;
     expect(split.getAttribute('aria-label')).toBe('Right panel width');
     expect(split.tabIndex).toBe(0);
     split.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-    expect(host.style.getPropertyValue('--wb-right-side')).toBe('minmax(0, 55%)');
+    expect(host.style.getPropertyValue('--d-workbench-right-side')).toBe('minmax(0, 55%)');
     for (let i = 0; i < 20; i++) split.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    expect(host.style.getPropertyValue('--wb-right-side')).toBe('minmax(0, 20%)');
+    expect(host.style.getPropertyValue('--d-workbench-right-side')).toBe('minmax(0, 20%)');
     expect(split.getAttribute('aria-valuenow')).toBe('20');
     expect(JSON.parse(sessionStorage.getItem(`${key}:layout`)!).right.size).toBe(20);
     const next = setup({ key });
     next.right();
     next.layout.setDefaultPanel('right', 'inspector');
-    expect(next.host.style.getPropertyValue('--wb-right-side')).toBe('minmax(0, 20%)');
+    expect(next.host.style.getPropertyValue('--d-workbench-right-side')).toBe('minmax(0, 20%)');
   });
 
   it('ignores a remembered layout of another shape', () => {
@@ -221,7 +221,7 @@ describe('WindowLayout', () => {
   it('the left separator changes the width (keys), within bounds, remembered', () => {
     const { host, sidePanel, panel, key } = setup();
     sidePanel.setDefault(true);
-    const separator = host.querySelector<HTMLElement>('.dashica-wb__side--left [role=separator]')!;
+    const separator = host.querySelector<HTMLElement>('.d-workbench__side--left [role=separator]')!;
     expect(separator.getAttribute('aria-label')).toBe('Left panel width');
     expect(panel.style.width).toBe('300px');
     separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
@@ -236,17 +236,17 @@ describe('WindowLayout', () => {
     const { host, layout, sidePanel, toggle, setWidth, isOpen } = setup({ observe: true });
     sidePanel.setDefault(true);
     setWidth(600);
-    expect(host.classList.contains('dashica-wb--narrow')).toBe(true);
+    expect(host.classList.contains('d-workbench--narrow')).toBe(true);
     expect(isOpen()).toBe(false);
     toggle.click();
     expect(isOpen()).toBe(true);
     sidePanel.dismiss();
     expect(isOpen()).toBe(false);
     toggle.click();
-    host.querySelector('.dashica-wb__panel-body')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    host.querySelector('.d-workbench__panel-body')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(isOpen()).toBe(false);
     toggle.click();
-    host.querySelector('.dashica-wb__panel-body')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    host.querySelector('.d-workbench__panel-body')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(isOpen()).toBe(true);
     layout.content.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(isOpen()).toBe(false);

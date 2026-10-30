@@ -72,7 +72,7 @@ window.Dashica = {
       workbench = await response.json();
     } catch (error) {
       host.textContent = error instanceof Error ? error.message : String(error);
-      host.className = 'alert alert-error m-4';
+      host.className = 'd-notice d-notice--error';
       return;
     }
     createWorkbench(host, { extensions: EXTENSIONS, workbench });

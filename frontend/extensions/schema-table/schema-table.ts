@@ -2,6 +2,7 @@ import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetOf } from '../../hosts/widgets/widgets';
+import './schema-table.css';
 
 /**
  * The widget type `schemaTable`: its title and the `CREATE TABLE` statement of its ClickHouse table, as the server
@@ -13,9 +14,9 @@ export const schemaTable: Extension = {
 };
 
 function renderSchemaTable(el: HTMLElement, widget: WidgetOf<'schemaTable'>): Disposable {
-  const statement: HTMLElement = html`<pre class="text-xs overflow-x-auto p-3 bg-base-200 rounded"></pre>`;
-  const shown: HTMLElement = html`<div>${statement}</div>`;
-  if (widget.props.title) statement.before(html`<h2 class="text-2xl font-bold mb-4">${widget.props.title}</h2>`);
+  const statement: HTMLElement = html`<pre class="d-schema-table__statement"></pre>`;
+  const shown: HTMLElement = html`<div class="d-schema-table">${statement}</div>`;
+  if (widget.props.title) statement.before(html`<h2 class="d-schema-table__title">${widget.props.title}</h2>`);
   el.replaceChildren(shown);
   const controller = new AbortController();
   void showStatement(statement, `${widget.dataUrl}/schema`, controller.signal);
@@ -27,10 +28,10 @@ async function showStatement(statement: HTMLElement, url: string, signal: AbortS
   try {
     const response = await fetch(url, { signal });
     statement.textContent = await response.text();
-    if (!response.ok) statement.classList.add('text-error');
+    if (!response.ok) statement.classList.add('d-schema-table__statement--error');
   } catch (error) {
     if (signal.aborted) return;
     statement.textContent = error instanceof Error ? error.message : String(error);
-    statement.classList.add('text-error');
+    statement.classList.add('d-schema-table__statement--error');
   }
 }

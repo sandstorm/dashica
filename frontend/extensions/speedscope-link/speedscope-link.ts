@@ -14,14 +14,14 @@ export const speedscopeLink: Extension = {
 };
 
 function renderSpeedscopeLink(el: HTMLElement, widget: WidgetOf<'speedscopeLink'>, ctx: WidgetContext): Disposable {
-  const link: HTMLAnchorElement = html`<a target="_blank" class="btn btn-primary btn-sm">${widget.props.title || 'Open Speedscope'}</a>`;
+  const link: HTMLAnchorElement = html`<a target="_blank" class="d-button d-button--primary">${widget.props.title || 'Open Speedscope'}</a>`;
   const showHref = () => {
     const origin = el.ownerDocument.location.origin;
     const profile = origin + ctx.url('/speedscope-query');
     link.href = `${origin}${widget.dataUrl}/viewer/#profileURL=${encodeURIComponent(profile)}`;
   };
   showHref();
-  el.replaceChildren(html`<div class="my-4">${link}</div>`);
+  el.replaceChildren(html`<div>${link}</div>`);
   // the time range, filter or a param changed
   return ctx.state.onDidRequestRefresh(showHref);
 }

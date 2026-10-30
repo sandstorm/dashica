@@ -58,7 +58,7 @@ afterEach(() => {
 const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === title)!;
 const funnel = () => titleBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
 const sql = () => bar.querySelector('textarea')!;
-const active = () => !funnel().querySelector<HTMLElement>('.badge')!.hidden;
+const active = () => !funnel().querySelector<HTMLElement>('.d-badge')!.hidden;
 
 describe('filters', () => {
   it('adds a filter button’s condition to the SQL filter', () => {

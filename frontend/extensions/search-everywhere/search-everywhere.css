@@ -1,16 +1,22 @@
-/* See searchEverywhere in search-everywhere.ts: its button in the title bar, with the key. */
-.dashica-wb__search-button {
+/* See searchEverywhere in search-everywhere.ts: its button in the title bar, as wide as a field, with the key. */
+.d-search-button {
   display: inline-flex;
   align-items: center;
-  gap: 24px;
+  gap: var(--space-6);
   min-width: min(280px, 40vw);
-  padding: 2px 8px;
-  border: 1px solid var(--color-base-300, #ddd);
-  border-radius: 6px;
-  background: var(--color-base-100, #fff);
-  color: color-mix(in srgb, var(--color-base-content, #1f2937) 60%, transparent);
-  font: inherit;
-  cursor: pointer;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
 }
-.dashica-wb__search-button:hover { color: var(--color-base-content, #1f2937); }
-.dashica-wb__search-button kbd { margin-left: auto; font: inherit; font-size: 12px; }
+
+.d-search-button:hover {
+  color: var(--color-text);
+}
+
+.d-search-button .d-kbd {
+  margin-left: auto;
+}

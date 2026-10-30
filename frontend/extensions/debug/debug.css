@@ -1,0 +1,44 @@
+/* See debug.ts: the bottom panel "Debug", its sections one below the other, each opened and closed by its title. */
+.d-debug {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.d-debug__section {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.d-debug__summary {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.d-debug__content {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.d-debug__parts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.d-debug__heading {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.d-debug__block {
+  overflow-x: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  font-size: var(--text-xs);
+}

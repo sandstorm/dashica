@@ -121,9 +121,9 @@ class OnePicker<T extends QuickPickItem> {
   /** A group under a heading, which names it. */
   #group(separator: QuickPickSeparator): HTMLElement {
     const id = `${this.parts.listbox.id}-${++this.#rows}`;
-    const description = separator.description ? html.fragment` <span class="dashica-wb__quick-pick-heading-description">${separator.description}</span>` : null;
-    return html`<div class="dashica-wb__quick-pick-group" role="group" aria-labelledby=${id}>
-      <div class="dashica-wb__quick-pick-heading" id=${id} role="presentation">${separator.label}${description}</div>
+    const description = separator.description ? html.fragment` <span class="d-workbench__quick-pick-heading-description">${separator.description}</span>` : null;
+    return html`<div class="d-workbench__quick-pick-group" role="group" aria-labelledby=${id}>
+      <div class="d-workbench__quick-pick-heading" id=${id} role="presentation">${separator.label}${description}</div>
     </div>`;
   }
 
@@ -179,13 +179,13 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
       hide(box: HTMLElement): void;
     },
   ) {
-    this.#field = html<HTMLInputElement>`<input type="text" class="dashica-wb__quick-pick-field" role="combobox" aria-autocomplete="list" aria-expanded="true"
+    this.#field = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" role="combobox" aria-autocomplete="list" aria-expanded="true"
       oninput=${() => this.#changed.fire(this.#field.value)} onkeydown=${(event: KeyboardEvent) => this.#picker.key(event)}>`;
-    this.#progress = html`<div class="dashica-wb__quick-pick-progress"></div>`;
-    const listbox = html`<div class="dashica-wb__quick-pick-list" role="listbox"></div>`;
-    this.#empty = html`<div class="dashica-wb__quick-pick-empty">No results</div>`;
-    this.#prompt = html`<div class="dashica-wb__quick-pick-hint"></div>`;
-    this.#box = html`<div class="dashica-wb__quick-pick" role="dialog">${this.#field}${this.#progress}${listbox}${this.#empty}${this.#prompt}</div>`;
+    this.#progress = html`<div class="d-workbench__quick-pick-progress"></div>`;
+    const listbox = html`<div class="d-workbench__quick-pick-list" role="listbox"></div>`;
+    this.#empty = html`<div class="d-workbench__quick-pick-empty">No results</div>`;
+    this.#prompt = html`<div class="d-workbench__quick-pick-hint"></div>`;
+    this.#box = html`<div class="d-workbench__quick-pick" role="dialog">${this.#field}${this.#progress}${listbox}${this.#empty}${this.#prompt}</div>`;
     this.#picker = new OnePicker<T>({ listbox, input: this.#field }, (item) => {
       this.#selected = [item];
       this.#accepted.fire();
@@ -291,10 +291,10 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 function itemElement(item: QuickPickItem): HTMLElement {
   const highlights = item.highlights ?? {};
   const space = (part: Node | null) => (part ? html.fragment` ${part}` : null);
-  return html`<div class="dashica-wb__quick-pick-item">${highlighted('dashica-wb__quick-pick-label', item.label, highlights.label)}${space(
-    item.description ? highlighted('dashica-wb__quick-pick-description', item.description, highlights.description) : null,
-  )}${space(item.keybinding ? html`<kbd class="dashica-wb__quick-pick-keybinding">${item.keybinding}</kbd>` : null)}${space(
-    item.detail ? highlighted('dashica-wb__quick-pick-detail', item.detail, highlights.detail) : null,
+  return html`<div class="d-workbench__quick-pick-item">${highlighted('d-workbench__quick-pick-label', item.label, highlights.label)}${space(
+    item.description ? highlighted('d-workbench__quick-pick-description', item.description, highlights.description) : null,
+  )}${space(item.keybinding ? html`<kbd class="d-workbench__quick-pick-keybinding">${item.keybinding}</kbd>` : null)}${space(
+    item.detail ? highlighted('d-workbench__quick-pick-detail', item.detail, highlights.detail) : null,
   )}</div>`;
 }
 
@@ -304,7 +304,7 @@ function highlighted(className: string, text: string, ranges: QuickPickHighlight
   let last = 0;
   for (const [start, end] of ranges) {
     if (start < last || end > text.length) continue;
-    parts.push(text.slice(last, start), html`<mark class="dashica-wb__quick-pick-match">${text.slice(start, end)}</mark>`);
+    parts.push(text.slice(last, start), html`<mark class="d-workbench__quick-pick-match">${text.slice(start, end)}</mark>`);
     last = end;
   }
   parts.push(text.slice(last));

@@ -20,9 +20,9 @@ describe('timeBar', () => {
     testbed.resize(640);
     testbed.scrollIntoView();
     await settle();
-    expect(el.querySelector('.dashica-widget-error')?.textContent).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelector('.d-widget-error')?.textContent).toBeUndefined();
+    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
     // the time selection: an area to drag across
-    expect(el.querySelector('.dashica-chart__body svg .overlay')).not.toBeNull();
+    expect(el.querySelector('.d-chart-frame__body svg .overlay')).not.toBeNull();
   });
 });

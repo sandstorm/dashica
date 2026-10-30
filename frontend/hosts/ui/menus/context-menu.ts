@@ -64,9 +64,9 @@ class MenuList {
     const rows = entries.flatMap((entry, index) => {
       const item = this.#item(entry);
       const startsGroup = index > 0 && (entry.group ?? '') !== (entries[index - 1].group ?? '');
-      return startsGroup ? [html`<div class="dashica-wb__context-menu-separator" role="separator"></div>`, item] : [item];
+      return startsGroup ? [html`<div class="d-workbench__context-menu-separator" role="separator"></div>`, item] : [item];
     });
-    this.#element = html`<div class="dashica-wb__context-menu ${checks ? 'dashica-wb__context-menu--checks' : ''}" role="menu"
+    this.#element = html`<div class="d-workbench__context-menu ${checks ? 'd-workbench__context-menu--checks' : ''}" role="menu"
       aria-label=${label} onkeydown=${(event: KeyboardEvent) => this.#key(event)}>${rows}</div>`;
     container.append(this.#element);
     this.#place(anchor);
@@ -90,10 +90,10 @@ class MenuList {
       this.close();
       entry.run();
     };
-    const check = html`<span class="dashica-wb__context-menu-check" aria-hidden="true">${entry.checked ? '✓' : ''}</span>`;
+    const check = html`<span class="d-workbench__context-menu-check" aria-hidden="true">${entry.checked ? '✓' : ''}</span>`;
     // a space before the key: the entry's accessible name reads as words
-    const key = entry.keybinding ? html.fragment` <kbd class="dashica-wb__context-menu-keybinding">${entry.keybinding}</kbd>` : null;
-    const item = html<HTMLButtonElement>`<button type="button" class="dashica-wb__context-menu-item" tabindex="-1"
+    const key = entry.keybinding ? html.fragment` <kbd class="d-workbench__context-menu-keybinding">${entry.keybinding}</kbd>` : null;
+    const item = html<HTMLButtonElement>`<button type="button" class="d-workbench__context-menu-item" tabindex="-1"
       role=${checkbox ? 'menuitemcheckbox' : 'menuitem'} aria-checked=${checkbox ? String(entry.checked) : null}
       onclick=${onclick}>${check}${entry.label}${key}</button>`;
     this.#items.push(item);

@@ -40,7 +40,7 @@ afterEach(() => {
 describe('dashboardPage', () => {
   it('renders the widgets one below the other', async () => {
     await page.start();
-    expect([...content.querySelectorAll('.markdown-widget')].map((w) => w.textContent)).toEqual(['Orders', 'Payments']);
+    expect([...content.querySelectorAll('.d-markdown')].map((w) => w.textContent)).toEqual(['Orders', 'Payments']);
   });
 
   it('takes the widgets down with the page', async () => {

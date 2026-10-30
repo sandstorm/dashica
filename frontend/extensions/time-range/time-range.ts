@@ -2,6 +2,7 @@ import { html } from 'htl';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement } from 'lucide';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
 import { formatTime, type QueryApi } from '../../hosts/query/query';
+import './time-range.css';
 
 /**
  * The time range of the page's queries, in the title bar: a button showing the range ("Last 1 hour",
@@ -47,22 +48,22 @@ const PRESETS = [
 class TimeRangePicker {
   readonly #button: HTMLButtonElement = html`<button
     type="button"
-    class="btn btn-sm join-item gap-1.5 border-base-300 bg-base-100 font-medium shadow-none"
+    class="d-button d-segmented__item"
     aria-haspopup="dialog"
     aria-expanded="false"></button>`;
-  readonly #from: HTMLInputElement = html`<input class="input input-sm w-full font-mono" aria-label="From" spellcheck="false">`;
-  readonly #to: HTMLInputElement = html`<input class="input input-sm w-full font-mono" aria-label="To" spellcheck="false">`;
-  readonly #error: HTMLElement = html`<div class="text-error text-xs" role="alert"></div>`;
-  readonly #apply: HTMLButtonElement = html`<button type="submit" class="btn btn-sm btn-primary">Apply time range</button>`;
+  readonly #from: HTMLInputElement = html`<input class="d-field d-field--full d-field--mono" aria-label="From" spellcheck="false">`;
+  readonly #to: HTMLInputElement = html`<input class="d-field d-field--full d-field--mono" aria-label="To" spellcheck="false">`;
+  readonly #error: HTMLElement = html`<div class="d-time-picker__error" role="alert"></div>`;
+  readonly #apply: HTMLButtonElement = html`<button type="submit" class="d-button d-button--primary">Apply time range</button>`;
   readonly #search: HTMLInputElement = html`<input
     type="search"
-    class="input input-sm w-full"
+    class="d-field d-field--full"
     placeholder="Search quick ranges"
     aria-label="Search quick ranges">`;
-  readonly #quickRanges: HTMLElement = html`<ul class="menu menu-sm w-full p-0"></ul>`;
-  readonly #recent: HTMLElement = html`<ul class="menu menu-sm w-full p-0"></ul>`;
-  readonly #recentSection: HTMLElement = html`<div class="flex flex-col gap-1">
-    <div class="font-semibold">Recently used</div>
+  readonly #quickRanges: HTMLElement = html`<ul class="d-list"></ul>`;
+  readonly #recent: HTMLElement = html`<ul class="d-list"></ul>`;
+  readonly #recentSection: HTMLElement = html`<div class="d-time-picker__section">
+    <div class="d-time-picker__heading">Recently used</div>
     ${this.#recent}
   </div>`;
   readonly #panel: HTMLElement;
@@ -72,42 +73,42 @@ class TimeRangePicker {
     private readonly query: QueryApi,
     private readonly globalState: Memento,
   ) {
-    const form: HTMLFormElement = html`<form class="flex flex-col gap-2">
-      <div class="font-semibold">Custom range</div>
-      <label class="flex flex-col gap-1 text-xs">From ${this.#from}</label>
-      <label class="flex flex-col gap-1 text-xs">To ${this.#to}</label>
-      <div class="text-xs opacity-60">e.g. <code>2026-10-29 10:00</code> or <code>now-6h</code></div>
+    const form: HTMLFormElement = html`<form class="d-time-picker__section">
+      <div class="d-time-picker__heading">Custom range</div>
+      <label class="d-time-picker__label">From ${this.#from}</label>
+      <label class="d-time-picker__label">To ${this.#to}</label>
+      <div class="d-time-picker__hint">e.g. <code>2026-10-29 10:00</code> or <code>now-6h</code></div>
       ${this.#error}
       ${this.#apply}
       ${this.#recentSection}
     </form>`;
     this.#panel = html`<div
-      class="absolute right-0 top-full z-50 mt-1 grid w-[34rem] max-w-[calc(100vw-1rem)] gap-4 rounded-box border border-base-300 bg-base-100 p-4 shadow-lg sm:grid-cols-2"
+      class="d-time-picker__panel"
       role="dialog"
       aria-label="Time range">
       ${form}
-      <div class="flex min-w-0 flex-col gap-2">
+      <div class="d-time-picker__section">
         ${this.#search}
-        <div class="max-h-72 overflow-y-auto">${this.#quickRanges}</div>
+        <div class="d-time-picker__quick-ranges">${this.#quickRanges}</div>
       </div>
     </div>`;
     this.#panel.hidden = true;
-    // one segmented group: the range and what moves it; white, as a plain button has the title bar's background
+    // one segmented group: the range and what moves it
     const back = html`<button
       type="button"
-      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      class="d-button d-button--icon d-segmented__item"
       title="Shift back"
-      aria-label="Shift back">${createElement(ChevronLeft, { class: 'w-4 h-4' })}</button>`;
+      aria-label="Shift back">${createElement(ChevronLeft, { width: 16, height: 16 })}</button>`;
     const forward = html`<button
       type="button"
-      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      class="d-button d-button--icon d-segmented__item"
       title="Shift forward"
-      aria-label="Shift forward">${createElement(ChevronRight, { class: 'w-4 h-4' })}</button>`;
+      aria-label="Shift forward">${createElement(ChevronRight, { width: 16, height: 16 })}</button>`;
     const zoomOut = html`<button
       type="button"
-      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      class="d-button d-button--icon d-segmented__item"
       title="Zoom out"
-      aria-label="Zoom out">${createElement(ZoomOut, { class: 'w-4 h-4' })}</button>`;
+      aria-label="Zoom out">${createElement(ZoomOut, { width: 16, height: 16 })}</button>`;
 
     this.#button.addEventListener('click', () => (this.#panel.hidden ? this.open() : this.close()));
     form.addEventListener('submit', (event) => {
@@ -123,8 +124,8 @@ class TimeRangePicker {
     back.addEventListener('click', () => void this.#shift(-1));
     forward.addEventListener('click', () => void this.#shift(1));
     zoomOut.addEventListener('click', () => void this.#zoomOut());
-    this.el = html`<div class="relative flex items-center gap-2">
-      <div class="join">
+    this.el = html`<div class="d-time-picker">
+      <div class="d-segmented">
         ${this.#button}
         ${back}
         ${forward}
@@ -135,7 +136,7 @@ class TimeRangePicker {
   }
 
   show(): void {
-    this.#button.replaceChildren(createElement(Clock, { class: 'w-4 h-4' }), this.#label(), createElement(ChevronDown, { class: 'w-3.5 h-3.5 opacity-60' }));
+    this.#button.replaceChildren(createElement(Clock, { width: 16, height: 16 }), this.#label(), createElement(ChevronDown, { width: 14, height: 14, class: 'd-time-picker__chevron' }));
     this.#showQuickRanges();
   }
 
@@ -180,8 +181,8 @@ class TimeRangePicker {
     const search = this.#search.value.trim().toLowerCase();
     this.#quickRanges.replaceChildren(
       ...PRESETS.filter((preset) => preset.label.toLowerCase().includes(search)).map((preset) => {
-        const item: HTMLButtonElement = html`<button type="button">${preset.label}</button>`;
-        item.classList.toggle('menu-active', preset.value === this.query.time.range);
+        const item: HTMLButtonElement = html`<button type="button" class="d-list__item">${preset.label}</button>`;
+        item.classList.toggle('d-list__item--active', preset.value === this.query.time.range);
         item.addEventListener('click', () => {
           this.query.time.setRange(preset.value);
           this.close();
@@ -224,7 +225,7 @@ class TimeRangePicker {
     this.#recentSection.hidden = ranges.length === 0;
     this.#recent.replaceChildren(
       ...ranges.map((range) => {
-        const item: HTMLButtonElement = html`<button type="button">${range}</button>`;
+        const item: HTMLButtonElement = html`<button type="button" class="d-list__item">${range}</button>`;
         item.addEventListener('click', () => {
           const [from = '', to = ''] = range.split(' to ');
           this.#from.value = from;

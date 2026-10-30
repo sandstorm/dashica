@@ -3,6 +3,7 @@ import { ChevronRight, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import './collapsible.css';
 
 /**
  * The widget type `collapsibleGroup`: its widgets one below the other under a title the viewer clicks to open or close
@@ -15,10 +16,10 @@ export const collapsible: Extension = {
 };
 
 function renderCollapsible(el: HTMLElement, widget: WidgetOf<'collapsibleGroup'>, ctx: WidgetContext): Disposable {
-  const content: HTMLElement = html`<div class="flex flex-col gap-6 pt-2 pb-2"></div>`;
-  const group: HTMLDetailsElement = html`<details class="group border-t border-base-300">
-    <summary class="flex cursor-pointer list-none items-center gap-1.5 py-2 text-sm font-semibold select-none">
-      ${createElement(ChevronRight, { class: 'w-4 h-4 opacity-60 transition-transform group-open:rotate-90' })}
+  const content: HTMLElement = html`<div class="d-collapsible__content"></div>`;
+  const group: HTMLDetailsElement = html`<details class="d-collapsible">
+    <summary class="d-collapsible__title">
+      ${createElement(ChevronRight, { width: 16, height: 16, class: 'd-collapsible__chevron' })}
       <span>${widget.props.title ?? ''}</span>
     </summary>
     ${content}

@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+//MISE description="Fail on a raw color or a raw size of a tokened kind outside the tokens, or on a class in the markup that no stylesheet defines"
+// The styling rules of docs/2026-10-30-styling.md §3.6: colors, font sizes, spaces and radii come from
+// frontend/core/style/tokens.css. Checks the stylesheets in frontend/ (not tokens.css, not the third party themes) for
+// a raw color (`#…`, `rgb(`, `hsl(`) and for a `px` font size, padding, margin, gap or radius; and the TypeScript in
+// frontend/ for a class in a `class="…"`, `className = '…'` or `classList.…('…')` whose block no stylesheet defines (a
+// leftover utility class, a typo); an element that only marks a node for the code (`d-record-panel__count`) is fine
+// when its block is styled. Classes of Tabulator (`tabulator-…`), Observable Plot (`plot-…`) and the server's
+// markdown HTML are not ours. Prints each finding and exits 1.
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const list = (...globs) =>
+  execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', ...globs.map((glob) => `:(glob)${glob}`)], { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean);
+
+const stylesheets = list('frontend/**/*.css').filter((file) => !file.endsWith('tabulator-theme.css'));
+const sources = list('frontend/**/*.ts').filter((file) => !file.includes('/generated/') && !/\.(test|spec)\.ts$/.test(file) && !file.endsWith('-testing.ts'));
+const findings = [];
+
+const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;
+const RAW_SIZE = /^\s*(font-size|padding|padding-[a-z]+|margin|margin-[a-z]+|gap|row-gap|column-gap|border-radius)\s*:[^;]*\b\d+px/;
+const defined = new Set();
+for (const file of stylesheets) {
+  const lines = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' ')).split('\n');
+  lines.forEach((line, i) => {
+    for (const match of line.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)) {
+      defined.add(match[1]);
+      defined.add(match[1].split(/__|--/)[0]);
+    }
+    if (file.endsWith('core/style/tokens.css')) return;
+    if (RAW_COLOR.test(line)) findings.push(`${file}:${i + 1}: a raw color; take a --color-… token`);
+    if (RAW_SIZE.test(line)) findings.push(`${file}:${i + 1}: a raw size; take a --text-…, --space-… or --radius-… token`);
+  });
+}
+
+const FOREIGN = /^(tabulator-|plot-|hljs|chroma)/;
+const CLASS_ATTRIBUTE = /class="([^"$]*)"|className\s*=\s*'([^']*)'|classList\.(?:add|remove|toggle|contains)\(([^)]*)\)/g;
+for (const file of sources) {
+  const lines = readFileSync(file, 'utf8').split('\n');
+  lines.forEach((line, i) => {
+    for (const match of line.matchAll(CLASS_ATTRIBUTE)) {
+      const names = match[1] ?? match[2] ?? [...match[3].matchAll(/'([^']*)'|"([^"]*)"/g)].map((quoted) => quoted[1] ?? quoted[2]).join(' ');
+      for (const name of names.split(/\s+/).filter(Boolean)) {
+        const block = name.split(/__|--/)[0];
+        if (!FOREIGN.test(name) && !defined.has(name) && !defined.has(block)) findings.push(`${file}:${i + 1}: the class ${name} is in no stylesheet`);
+      }
+    }
+  });
+}
+
+for (const finding of findings) console.log(finding);
+if (findings.length > 0) process.exit(1);
+console.log(`css: ${stylesheets.length} stylesheets use the tokens, every class of ${sources.length} sources is defined`);

@@ -10,15 +10,14 @@ type Grid struct {
 	template []string `dashica-gen:"client"`
 	// areas maps area name to the widget rendered in that area, set via Area().
 	areas WidgetsMap `dashica-gen:"method=Area"`
-	// gap is the spacing between grid items (Tailwind spacing scale). Zero
-	// value from NewGrid(): "4px".
+	// gap is the spacing between grid items, a CSS length ("8px"). Zero value:
+	// the page's spacing between widgets (16px).
 	gap string `dashica-gen:"client"`
 }
 
 func NewGrid() *Grid {
 	return &Grid{
 		areas: make(map[string]WidgetDefinition),
-		gap:   "4px",
 	}
 }
 
@@ -45,7 +44,7 @@ func (g *Grid) Area(name string, widget WidgetDefinition) *Grid {
 	return &cloned
 }
 
-// Gap sets the gap between grid items (Tailwind spacing scale)
+// Gap sets the gap between grid items, a CSS length ("8px").
 func (g *Grid) Gap(gap string) *Grid {
 	cloned := *g
 	cloned.gap = gap

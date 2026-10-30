@@ -25,7 +25,7 @@ const methods: WidgetNode = {
 };
 
 function checkbox(el: HTMLElement, option: string): HTMLInputElement {
-  const label = [...el.querySelectorAll('label.cursor-pointer')].find((l) => l.textContent!.includes(option))!;
+  const label = [...el.querySelectorAll('label.d-form-field__option')].find((l) => l.textContent!.includes(option))!;
   return label.querySelector('input')!;
 }
 

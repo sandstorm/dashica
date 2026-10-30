@@ -121,7 +121,7 @@ export class PageHost implements PageApi {
     this.#path = path;
     this.current = undefined;
     const shown = this.browserWindow.document.createElement('div');
-    shown.className = 'alert alert-error m-4';
+    shown.className = 'd-notice d-notice--error';
     shown.textContent = error instanceof Error ? error.message : String(error);
     this.content.replaceChildren(shown);
   }

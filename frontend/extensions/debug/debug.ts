@@ -3,6 +3,7 @@ import { instance as viz } from '@viz-js/viz';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { drawTable } from '../chart-library/table';
+import './debug.css';
 
 /**
  * The bottom panel "Debug": what a chart queried, from its menu's "Debug" (`widget/context`). The SQL query as sent,
@@ -41,7 +42,7 @@ interface DebugInfo {
 
 /** Fills `el` with what `widget` queried; a failed request shows its error there. */
 async function showDebug(el: HTMLElement, widget: WidgetMenuContext, signal: AbortSignal): Promise<void> {
-  el.replaceChildren(html`<div class="p-4"><span class="loading loading-spinner loading-sm"></span></div>`);
+  el.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
   let info: DebugInfo;
   try {
     const response = await fetch(widget.url('/debug'), { signal });
@@ -49,34 +50,34 @@ async function showDebug(el: HTMLElement, widget: WidgetMenuContext, signal: Abo
     info = await response.json();
   } catch (error) {
     if (signal.aborted) return;
-    el.replaceChildren(html`<div class="alert alert-error m-4">${error instanceof Error ? error.message : String(error)}</div>`);
+    el.replaceChildren(html`<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div>`);
     return;
   }
   if (signal.aborted) return;
 
-  const pipeline: HTMLElement = html`<div class="bg-base-300 p-4 rounded overflow-x-auto"></div>`;
-  const results: HTMLElement = html`<div class="mt-2"></div>`;
-  el.replaceChildren(html`<div class="space-y-6 bg-base-200 p-4">
-    ${section('SQL Query', true, pre(info.query, ''))}
+  const pipeline: HTMLElement = html`<div class="d-debug__block"></div>`;
+  const results: HTMLElement = html`<div></div>`;
+  el.replaceChildren(html`<div class="d-debug">
+    ${section('SQL Query', true, pre(info.query))}
     ${section('EXPLAIN PLAN (with indexes & actions)', true, pre(info.explainPlan))}
     ${section(
       'EXPLAIN PIPELINE (execution pipeline)',
       false,
-      html`<div class="space-y-4">
+      html`<div class="d-debug__parts">
         <div>
-          <h3 class="font-semibold mb-2">Visual Graph:</h3>
+          <h3 class="d-debug__heading">Visual Graph:</h3>
           ${pipeline}
         </div>
         <div>
-          <h3 class="font-semibold mb-2">Detailed Steps:</h3>
+          <h3 class="d-debug__heading">Detailed Steps:</h3>
           ${pre(info.explainPipelineText)}
         </div>
       </div>`,
     )}
     ${section('EXPLAIN SYNTAX (optimized query)', false, pre(info.explainSyntax))}
-    ${section('Query Stats', false, pre(JSON.stringify(info.stats, null, 2), 'text-sm'))}
+    ${section('Query Stats', false, pre(JSON.stringify(info.stats, null, 2)))}
     ${section('Query Results', true, results)}
-    ${section('Clickhouse Summary (Legacy)', false, pre(JSON.stringify(widget.lastResult?.clickhouseSummary ?? null, null, 4), 'text-sm'))}
+    ${section('Clickhouse Summary (Legacy)', false, pre(JSON.stringify(widget.lastResult?.clickhouseSummary ?? null, null, 4)))}
   </div>`);
 
   if (widget.lastResult) results.append(drawTable(widget.lastResult, { height: 400 }));
@@ -86,16 +87,16 @@ async function showDebug(el: HTMLElement, widget: WidgetMenuContext, signal: Abo
 
 /** A section the viewer opens and closes, open at first when `open`. */
 function section(title: string, open: boolean, content: HTMLElement): HTMLElement {
-  const shown: HTMLDetailsElement = html`<details class="collapse collapse-arrow bg-base-100">
-    <summary class="collapse-title text-xl font-medium">${title}</summary>
-    <div class="collapse-content">${content}</div>
+  const shown: HTMLDetailsElement = html`<details class="d-debug__section">
+    <summary class="d-debug__summary">${title}</summary>
+    <div class="d-debug__content">${content}</div>
   </details>`;
   shown.open = open;
   return shown;
 }
 
-function pre(text: string, classes = 'text-sm font-mono'): HTMLElement {
-  return html`<pre class=${`bg-base-300 p-4 rounded overflow-x-auto ${classes}`}>${text}</pre>`;
+function pre(text: string): HTMLElement {
+  return html`<pre class="d-debug__block">${text}</pre>`;
 }
 
 /** The pipeline as a graph when ClickHouse gave a DOT graph, else as text; also as text when the graph cannot be drawn. */

@@ -21,7 +21,7 @@ function renderTextInput(el: HTMLElement, widget: WidgetOf<'textInput'>, ctx: Wi
 
   const input: HTMLInputElement = html`<input
     type="text"
-    class="input input-sm input-bordered w-full max-w-md font-mono"
+    class="d-field d-field--full d-field--mono"
     placeholder=${widget.props.placeholder ?? ''}>`;
   input.addEventListener('input', () => {
     const text = input.value;
@@ -35,10 +35,10 @@ function renderTextInput(el: HTMLElement, widget: WidgetOf<'textInput'>, ctx: Wi
   };
   showText();
 
-  el.replaceChildren(html`<div class="form-control">
-    <label class="label"><span class="label-text font-medium">${widget.props.label ?? ''}</span></label>
+  el.replaceChildren(html`<label class="d-form-field">
+    <span class="d-form-field__label">${widget.props.label ?? ''}</span>
     ${input}
-  </div>`);
+  </label>`);
   // the browser's back button, a shared link
   return params.onDidChange(showText);
 }

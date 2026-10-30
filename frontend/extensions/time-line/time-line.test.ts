@@ -20,7 +20,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 describe('timeLine', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -28,7 +28,7 @@ describe('timeLine', () => {
     const { el } = testbed.render({ type: 'timeLine', props: { x: { kind: 'autoBucket', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg path').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.d-chart-frame__body svg path').length).toBeGreaterThan(0);
   });
 
   it('draws a line in the color stroke, or one per value of strokeField, which wins', async () => {

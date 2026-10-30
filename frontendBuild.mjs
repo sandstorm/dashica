@@ -1,5 +1,4 @@
 import esbuild from "esbuild";
-import tailwindPlugin from "esbuild-plugin-tailwindcss";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -15,7 +14,6 @@ await esbuild.build({
     entryPoints: ["frontend/index.ts"],
     outdir: outDir,
     bundle: true,
-    plugins: [tailwindPlugin()],
 });
 
 // Build the embedded Speedscope viewer (served per-widget by SpeedscopeLink).

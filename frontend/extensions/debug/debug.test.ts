@@ -69,6 +69,6 @@ describe('debug', () => {
   it('shows the server’s error in the panel', async () => {
     vi.stubGlobal('fetch', async () => new Response('Code: 60. Table default.http_logs does not exist', { status: 500 }));
     await showDebug(chart);
-    expect(body.querySelector('.alert-error')!.textContent).toContain('does not exist');
+    expect(body.querySelector('.d-notice--error')!.textContent).toContain('does not exist');
   });
 });

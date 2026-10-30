@@ -49,19 +49,18 @@ export class ChartFrame {
     this.#ctx = ctx;
     this.#options = options;
     const browserWindow = el.ownerDocument.defaultView!;
-    const menuIcon = createElement(EllipsisVertical);
-    menuIcon.classList.add('w-4', 'h-4');
-    this.#spinner = html`<div class="dashica-chart__spinner" title="Refreshing…" hidden><span class="loading loading-spinner loading-xs opacity-70"></span></div>`;
-    this.#shimmer = html`<div class="chart-shimmer absolute inset-0 rounded pointer-events-none"></div>`;
-    this.#body = html`<div class="dashica-chart__body" style=${options.height ? { 'min-height': `${options.height}px` } : {}}></div>`;
-    const frame: HTMLElement = html`<div class="dashica-chart not-prose relative group">
+    const menuIcon = createElement(EllipsisVertical, { width: 16, height: 16 });
+    this.#spinner = html`<div class="d-chart-frame__spinner" title="Refreshing…" hidden><span class="d-spinner"></span></div>`;
+    this.#shimmer = html`<div class="d-chart-frame__shimmer"></div>`;
+    this.#body = html`<div class="d-chart-frame__body" style=${options.height ? { 'min-height': `${options.height}px` } : {}}></div>`;
+    const frame: HTMLElement = html`<div class="d-chart-frame">
       ${this.#spinner}
-      <div class="dashica-chart__menu">
-        <button type="button" class="btn btn-sm btn-circle" title="More" aria-label="More" aria-haspopup="menu" onclick=${(event: MouseEvent) => ctx.showMenu(event.currentTarget as HTMLElement)}>${menuIcon}</button>
+      <div class="d-chart-frame__menu">
+        <button type="button" class="d-button d-button--icon" title="More" aria-label="More" aria-haspopup="menu" onclick=${(event: MouseEvent) => ctx.showMenu(event.currentTarget as HTMLElement)}>${menuIcon}</button>
       </div>
-      <div class="relative">${this.#shimmer}${this.#body}</div>
+      <div class="d-chart-frame__stage">${this.#shimmer}${this.#body}</div>
     </div>`;
-    if (options.title) this.#body.append(html`<h2 class="dashica-chart__title">${options.title}</h2>`);
+    if (options.title) this.#body.append(html`<h2 class="d-chart-frame__title">${options.title}</h2>`);
     el.replaceChildren(frame);
 
     this.#darkScheme = browserWindow.matchMedia('(prefers-color-scheme: dark)');
@@ -135,7 +134,7 @@ export class ChartFrame {
 
   #showError(error: unknown): void {
     const shown = this.#body.ownerDocument.createElement('div');
-    shown.className = 'dashica-widget-error';
+    shown.className = 'd-widget-error';
     shown.textContent = error instanceof Error ? error.message : String(error);
     this.#body.replaceChildren(shown);
     this.#shimmer.hidden = true;

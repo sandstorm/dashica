@@ -13,14 +13,14 @@ function setup(...providers: SearchProvider[]) {
   const ui = new UiHost(host, { get: () => undefined, update: async () => {} }, new CommandsHost(host));
   const search = new SearchPick(ui);
   for (const provider of providers) ui.registerSearchProvider(provider);
-  const field = () => host.querySelector<HTMLInputElement>('.dashica-wb__quick-pick input')!;
+  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
   const type = (value: string) => {
     field().value = value;
     field().dispatchEvent(new Event('input'));
   };
   /** The rows shown: `# Heading` for a group's heading, else the item's text. */
   const rows = () =>
-    [...host.querySelectorAll<HTMLElement>('.dashica-wb__quick-pick-heading, [role=option]')].map((row) =>
+    [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick-heading, [role=option]')].map((row) =>
       row.getAttribute('role') === 'option' ? row.textContent : `# ${row.textContent}`,
     );
   const marked = () => [...host.querySelectorAll('mark')].map((mark) => mark.textContent);
@@ -50,7 +50,7 @@ describe('SearchPick', () => {
     expect(marked()).toEqual(['Sho', 'Sho']);
     type('nothing like it');
     expect(rows()).toEqual([]);
-    expect(document.querySelector<HTMLElement>('.dashica-wb__quick-pick-empty')!.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>('.d-workbench__quick-pick-empty')!.hidden).toBe(false);
   });
 
   it('matches the description when the label does not match, ranked below label matches', () => {
@@ -71,7 +71,7 @@ describe('SearchPick', () => {
     const labels = Array.from({ length: 8 }, (_, i) => `Refresh ${i + 1}`);
     const { host, search, type, rows } = setup(provider('Commands', labels, { prefix: '>', order: 10 }), provider('Dashboards', ['Refresh rates']));
     search.show();
-    expect(host.querySelector('.dashica-wb__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
+    expect(host.querySelector('.d-workbench__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
     expect(rows()[0]).toBe('# Commands 3 more · type >');
     expect(rows()).toHaveLength(5 + 1 + 2);
     type('>refr');
@@ -83,7 +83,7 @@ describe('SearchPick', () => {
   it('narrows a prefix to every provider sharing it, and names it once in the hint', () => {
     const { host, search, type, rows } = setup(provider('Commands', ['Refresh now'], { prefix: '>', order: 40 }), provider('Actions', ['Refresh cache'], { prefix: '>', order: 41 }));
     search.show();
-    expect(host.querySelector('.dashica-wb__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
+    expect(host.querySelector('.d-workbench__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
     type('>refresh');
     expect(rows()).toEqual(['# Commands', 'Refresh now', '# Actions', 'Refresh cache']);
   });
@@ -109,7 +109,7 @@ describe('SearchPick', () => {
     const { host, search, type, rows, marked } = setup(server, provider('Dashboards', ['Shop overview']));
     search.show();
     type('login');
-    const progress = host.querySelector<HTMLElement>('.dashica-wb__quick-pick-progress')!;
+    const progress = host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
     expect(progress.hidden).toBe(false);
     expect(tokens.map((token) => token.isCancellationRequested)).toEqual([true, false]);
     await tick();
@@ -124,7 +124,7 @@ describe('SearchPick', () => {
     const { host, ui, search, field, rows } = setup(provider('Dashboards', ['Shop overview', 'Billing']));
     const button = host.appendChild(document.createElement('button'));
     button.focus();
-    const picked = vi.fn(() => expect([document.activeElement, host.querySelector('.dashica-wb__quick-pick')]).toEqual([button, null]));
+    const picked = vi.fn(() => expect([document.activeElement, host.querySelector('.d-workbench__quick-pick')]).toEqual([button, null]));
     ui.registerSearchProvider({ id: 'more', label: 'More', provideItems: () => [{ label: 'Billing alerts', accept: picked }] });
     search.show();
     expect(rows()).toContain('Billing alerts');

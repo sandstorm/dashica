@@ -40,12 +40,12 @@ export class WindowLayout {
       right: new SideBar(host, 'right', restoreSideBarState(saved, 'right'), { save, commands }),
     };
     this.#bottom = new BottomPanel(host, BottomPanel.restoreState(saved), { save, commands });
-    this.titleBar = html`<div class="dashica-wb__title-bar" data-testid="wb-title-bar"></div>`;
-    this.filterBar = html`<div class="dashica-wb__filter-bar" data-testid="wb-filter-bar"></div>`;
-    this.content = html`<div class="dashica-wb__content"></div>`;
-    this.#center = html`<div class="dashica-wb__center">${this.filterBar}${this.content}${this.#bottom.element}</div>`;
-    this.statusBar = html`<div class="dashica-wb__status-bar"></div>`;
-    host.classList.add('dashica-wb');
+    this.titleBar = html`<div class="d-workbench__title-bar" data-testid="wb-title-bar"></div>`;
+    this.filterBar = html`<div class="d-workbench__filter-bar" data-testid="wb-filter-bar"></div>`;
+    this.content = html`<div class="d-workbench__content"></div>`;
+    this.#center = html`<div class="d-workbench__center">${this.filterBar}${this.content}${this.#bottom.element}</div>`;
+    this.statusBar = html`<div class="d-workbench__status-bar"></div>`;
+    host.classList.add('d-workbench');
     host.append(this.titleBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
     this.#watchWidth();
   }
@@ -82,7 +82,7 @@ export class WindowLayout {
     this.titleBar.remove();
     this.#center.remove();
     this.statusBar.remove();
-    this.host.classList.remove('dashica-wb', 'dashica-wb--narrow');
+    this.host.classList.remove('d-workbench', 'd-workbench--narrow');
   }
 
   #refuseTaken(id: string): void {
@@ -98,7 +98,7 @@ export class WindowLayout {
       const now = this.host.clientWidth > 0 && this.host.clientWidth < NARROW;
       if (now === narrow) return;
       narrow = now;
-      this.host.classList.toggle('dashica-wb--narrow', narrow);
+      this.host.classList.toggle('d-workbench--narrow', narrow);
       this.#sides.left.setOverlay(narrow);
     });
     observer.observe(this.host);

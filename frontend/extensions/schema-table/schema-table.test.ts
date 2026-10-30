@@ -26,7 +26,7 @@ describe('schemaTable', () => {
     testbed.serveText('/p/shop/api/1/schema', 'SHOW CREATE TABLE http_logs: Table default.http_logs does not exist', 500);
     const { el } = testbed.render({ type: 'schemaTable', props: { table: 'http_logs' }, dataUrl: '/p/shop/api/1' });
     await settle();
-    expect(el.querySelector('pre')!.classList.contains('text-error')).toBe(true);
+    expect(el.querySelector('pre')!.classList.contains('d-schema-table__statement--error')).toBe(true);
     expect(el.querySelector('pre')!.textContent).toContain('does not exist');
   });
 });

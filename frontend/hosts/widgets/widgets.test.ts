@@ -124,7 +124,7 @@ describe('ChartFrame', () => {
     );
   });
 
-  const body = (el: HTMLElement) => el.querySelector('.dashica-chart__body')!;
+  const body = (el: HTMLElement) => el.querySelector('.d-chart-frame__body')!;
 
   it('shows the title until it is drawn, and queries only once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3, 4] });
@@ -173,7 +173,7 @@ describe('ChartFrame', () => {
 
   it('opens the widget’s menu from its button', () => {
     const { el } = testbed.render(requests);
-    el.querySelector<HTMLButtonElement>('.dashica-chart__menu button')!.click();
+    el.querySelector<HTMLButtonElement>('.d-chart-frame__menu button')!.click();
     expect(testbed.menus.map((menu) => menu.menuId)).toEqual(['widget/context']);
   });
 });

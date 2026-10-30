@@ -37,14 +37,14 @@ function drawStats(data: QueryResult, props: StatsProps): HTMLElement {
   schema.requiredColumn('value');
   const rows = data.toArray() as Stat[];
 
-  return html`<dl class="dashica-stats">
+  return html`<dl class="d-stats">
     ${rows.map((stat) => drawStat(stat, props))}
   </dl>`;
 }
 
 function drawStat(stat: Stat, props: StatsProps): HTMLElement {
   const color = stat.color ?? props.fillField?.alias ?? 'oklch(0.21 0.034 264.665)';
-  return html`<div class="dashica-stats__stat">
+  return html`<div class="d-stats__stat">
     <dt>${stat.label ?? props.titleField?.alias}</dt>
     <dd style=${{ color }}>${Math.round(stat.value * 100) / 100}</dd>
   </div>`;

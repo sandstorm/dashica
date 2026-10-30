@@ -1,0 +1,27 @@
+/* See FilterBar in filters.ts: the funnel button with its dot while a SQL filter is set, the bar's buttons and the SQL
+   filter. The funnel is tinted while the SQL filter is open (aria-expanded, see controls.css). */
+.d-filter-bar {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+}
+
+.d-filter-bar__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.d-filter-bar__toggle {
+  position: relative;
+}
+
+.d-filter-bar__dot {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+}

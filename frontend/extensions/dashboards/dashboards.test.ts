@@ -43,37 +43,37 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const menu = () => host.querySelector<HTMLElement>('.dashboards-menu')!;
+const menu = () => host.querySelector<HTMLElement>('.d-dashboards-menu')!;
 const link = (title: string) => [...menu().querySelectorAll('a')].find((a) => a.textContent === title)!;
 const titles = (selector: string) => [...menu().querySelectorAll(selector)].map((el) => el.textContent);
 
 describe('dashboards', () => {
   it('lists the groups and marks the page shown', () => {
-    expect(titles('.menu-title')).toEqual(['Shop']);
+    expect(titles('.d-list__heading')).toEqual(['Shop']);
     expect(titles('a')).toEqual(['Orders', 'Checkout']);
-    expect(titles('a.menu-active')).toEqual(['Orders']);
+    expect(titles('a.d-list__item--active')).toEqual(['Orders']);
   });
 
   it('opens a dashboard in the content area and marks it', async () => {
     link('Checkout').click();
     await settle();
     expect(location.pathname).toBe('/p/checkout');
-    expect(titles('a.menu-active')).toEqual(['Checkout']);
+    expect(titles('a.d-list__item--active')).toEqual(['Checkout']);
   });
 
   it('keeps a starred dashboard among the favorites, for the next visit too; a second click removes it', () => {
-    const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.dashboards-menu__star')][1];
+    const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')][1];
     star().click();
-    expect(titles('.menu-title')).toEqual(['Favorites', 'Shop']);
+    expect(titles('.d-list__heading')).toEqual(['Favorites', 'Shop']);
     expect(titles('a')).toEqual(['Checkout', 'Orders', 'Checkout']);
     expect(JSON.parse(localStorage.getItem('dashica:global:dashboards:favorites')!)).toEqual([{ url: '/p/checkout', title: 'Checkout' }]);
 
     star().click();
-    expect(titles('.menu-title')).toEqual(['Shop']);
+    expect(titles('.d-list__heading')).toEqual(['Shop']);
   });
 
   it('finds the dashboards in search everywhere, with their group', async () => {
-    host.querySelector<HTMLButtonElement>('.dashica-wb__search-button')!.click();
+    host.querySelector<HTMLButtonElement>('.d-search-button')!.click();
     await settle();
     const options = [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);
     expect(options).toContain('Orders Shop');

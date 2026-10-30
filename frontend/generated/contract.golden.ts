@@ -37,7 +37,6 @@ export const page = {
     {
       "type": "grid",
       "props": {
-        "gap": "4px",
         "template": [
           "a b"
         ]

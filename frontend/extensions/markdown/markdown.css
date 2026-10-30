@@ -1,42 +1,128 @@
-/* See markdown.ts. Section-style headings for markdown widgets — balanced with chart titles,
-   not as heavy as Tailwind Typography defaults */
-.markdown-widget .prose h1 {
-    font-weight: 600;
-    font-size: 1.25rem;
-    line-height: 1.75rem;
-    letter-spacing: -0.01em;
-    margin-top: 2rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0;
+/* See markdown.ts: the server's HTML (goldmark: headings, paragraphs, lists, tables, code highlighted by chroma, quotes)
+   at the content's text size, the headings balanced with the chart titles; the first and the last element without
+   margin, as the page and the grid space the widgets. */
+.d-markdown__title {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
 }
 
-.markdown-widget .prose h2 {
-    font-weight: 600;
-    font-size: 1rem;
-    line-height: 1.5rem;
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
+.d-markdown__body {
+  font-size: var(--text-md);
+  line-height: 1.6;
 }
 
-.markdown-widget .prose h3 {
-    font-weight: 600;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    margin-top: 1.25rem;
-    margin-bottom: 0.25rem;
+.d-markdown__body > :first-child {
+  margin-top: 0;
 }
 
-/* The first and the last element carry no margin: the page and the grid space the widgets */
-.markdown-widget > .prose > :first-child {
-    margin-top: 0;
+.d-markdown__body > :last-child {
+  margin-bottom: 0;
 }
 
-.markdown-widget > .prose > :last-child {
-    margin-bottom: 0;
+.d-markdown__body h1,
+.d-markdown__body h2,
+.d-markdown__body h3,
+.d-markdown__body h4 {
+  font-weight: var(--weight-bold);
+  line-height: 1.3;
 }
 
-@media (prefers-color-scheme: dark) {
-    .markdown-widget .prose h1 {
-        border-bottom-color: rgba(255, 255, 255, 0.1);
-    }
+.d-markdown__body h1 {
+  margin: var(--space-8) 0 var(--space-2);
+  font-size: var(--text-xl);
+}
+
+.d-markdown__body h2 {
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.d-markdown__body h3,
+.d-markdown__body h4 {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: var(--text-md);
+}
+
+.d-markdown__body p,
+.d-markdown__body ul,
+.d-markdown__body ol,
+.d-markdown__body pre,
+.d-markdown__body table,
+.d-markdown__body blockquote {
+  margin: var(--space-3) 0;
+}
+
+.d-markdown__body ul,
+.d-markdown__body ol {
+  padding-left: var(--space-6);
+}
+
+.d-markdown__body ul {
+  list-style: disc;
+}
+
+.d-markdown__body ol {
+  list-style: decimal;
+}
+
+.d-markdown__body li + li {
+  margin-top: var(--space-1);
+}
+
+.d-markdown__body a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.d-markdown__body strong {
+  font-weight: var(--weight-bold);
+}
+
+.d-markdown__body code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-subtle);
+  font-size: 0.9em;
+}
+
+.d-markdown__body pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
+  font-size: var(--text-sm);
+}
+
+.d-markdown__body pre code {
+  padding: 0;
+  background: none;
+}
+
+.d-markdown__body blockquote {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.d-markdown__body table {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.d-markdown__body th,
+.d-markdown__body td {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+}
+
+.d-markdown__body th {
+  font-weight: var(--weight-bold);
+}
+
+.d-markdown__body hr {
+  margin: var(--space-6) 0;
+  border-top: var(--border-width) solid var(--color-border);
 }

@@ -1,0 +1,80 @@
+/*
+ * The design tokens (docs/2026-10-30-styling.md §3.1): the only place with raw values. Components take colors, spaces,
+ * type sizes, radii and depths from here; dark mode redefines the colors only.
+ */
+:root {
+  color-scheme: light dark;
+
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f4f5f7;
+  --color-surface-raised: #ffffff;
+  --color-border: #e1e4e8;
+  --color-border-strong: #c9ced6;
+  --color-text: #1f2328;
+  --color-text-muted: #656d76;
+  --color-text-on-accent: #ffffff;
+  --color-accent: #2563eb;
+  --color-accent-subtle: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  --color-danger: #c62828;
+  --color-danger-subtle: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  --color-success: #16a34a;
+  --color-hover: color-mix(in srgb, var(--color-text) 7%, transparent);
+  --color-highlight: #fde68a;
+  --color-backdrop-shimmer: color-mix(in srgb, var(--color-text) 6%, transparent);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-display: 40px;
+  --leading: 1.45;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+
+  --control-height: 28px;
+  --control-padding-x: 8px;
+  --icon-size: 16px;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --border-width: 1px;
+
+  --shadow-popover: 0 6px 20px rgb(0 0 0 / 0.16);
+  --shadow-overlay: 4px 0 16px rgb(0 0 0 / 0.16);
+  --z-panel: 10;
+  --z-popover: 50;
+  --z-tooltip: 9999;
+
+  --duration-fast: 150ms;
+  --duration-slow: 300ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #16191f;
+    --color-surface-subtle: #1d2129;
+    --color-surface-raised: #232833;
+    --color-border: #313744;
+    --color-border-strong: #424a5a;
+    --color-text: #e6e8eb;
+    --color-text-muted: #9aa3ae;
+    --color-text-on-accent: #0b1220;
+    --color-accent: #60a5fa;
+    --color-danger: #f87171;
+    --color-success: #4ade80;
+    --color-highlight: #b45309;
+    --shadow-popover: 0 6px 20px rgb(0 0 0 / 0.5);
+    --shadow-overlay: 4px 0 16px rgb(0 0 0 / 0.5);
+  }
+}

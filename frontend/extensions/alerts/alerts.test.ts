@@ -20,7 +20,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 describe('alerts', () => {
   it('draws the statuses of the group’s alerts once it is in view', async () => {
@@ -28,7 +28,7 @@ describe('alerts', () => {
     const { el } = testbed.render({ type: 'alertOverview', props: { alertGroupPattern: 'shop%' }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelector('.dashica-chart__body svg')).not.toBeNull();
+    expect(el.querySelector('.d-chart-frame__body svg')).not.toBeNull();
   });
 
   it('draws an alert’s history with its threshold', async () => {
@@ -36,7 +36,7 @@ describe('alerts', () => {
     const { el } = testbed.render({ type: 'alertDetail', props: { alertGroup: 'shop', alertKey: 'login_events', title: 'shop#login_events' }, dataUrl: '/p/shop/api/2' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
-    expect(el.querySelectorAll('.dashica-chart__body svg g[stroke="red"] line')).toHaveLength(1);
+    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.d-chart-frame__body svg g[stroke="red"] line')).toHaveLength(1);
   });
 });

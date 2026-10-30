@@ -20,7 +20,7 @@ function renderCheckboxGroup(el: HTMLElement, widget: WidgetOf<'checkboxGroup'>,
   if (params.get(name) === undefined) params.set(name, JSON.stringify(widget.props.defaults ?? []));
 
   const checkboxes = (widget.props.options ?? []).map((option) => {
-    const checkbox: HTMLInputElement = html`<input type="checkbox" class="checkbox checkbox-sm">`;
+    const checkbox: HTMLInputElement = html`<input type="checkbox" class="d-checkbox">`;
     checkbox.addEventListener('change', () => {
       const checked = checkedOptions(params.get(name)).filter((o) => o !== option);
       if (checkbox.checked) checked.push(option);
@@ -34,12 +34,12 @@ function renderCheckboxGroup(el: HTMLElement, widget: WidgetOf<'checkboxGroup'>,
   };
   showChecked();
 
-  el.replaceChildren(html`<div class="form-control">
-    <label class="label"><span class="label-text font-medium">${widget.props.label ?? ''}</span></label>
-    <div class="flex flex-wrap items-center gap-2">
-      ${checkboxes.map(({ option, checkbox }) => html`<label class="label cursor-pointer gap-1">
-        <span class="label-text">${option}</span>
+  el.replaceChildren(html`<div class="d-form-field">
+    <span class="d-form-field__label">${widget.props.label ?? ''}</span>
+    <div class="d-form-field__options">
+      ${checkboxes.map(({ option, checkbox }) => html`<label class="d-form-field__option">
         ${checkbox}
+        <span>${option}</span>
       </label>`)}
     </div>
   </div>`);

@@ -1,0 +1,9 @@
+/* See dashboard-page.ts: the widgets one below the other, 24px apart, on the content's surface. */
+.d-dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-height: 100%;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface);
+}

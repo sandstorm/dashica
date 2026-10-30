@@ -77,7 +77,7 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
 export function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
   const message = error instanceof Error ? error.message : String(error);
   const shown = el.ownerDocument.createElement('div');
-  shown.className = 'dashica-widget-error';
+  shown.className = 'd-widget-error';
   shown.textContent = `${message} (${widget.type})`;
   el.replaceChildren(shown);
 }

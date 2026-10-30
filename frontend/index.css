@@ -1,22 +1,4 @@
-@import "tailwindcss";
-@plugin "@tailwindcss/typography";
-@plugin "daisyui" {
-    themes: winter --default, night --prefersdark;
-}
-
-/* Angular rather than round: small corners on boxes, fields and toggles, in both themes */
-@plugin "daisyui/theme" {
-    name: "winter";
-    default: true;
-    --radius-box: 0.25rem;
-    --radius-field: 0.25rem;
-    --radius-selector: 0.125rem;
-}
-
-@plugin "daisyui/theme" {
-    name: "night";
-    prefersdark: true;
-    --radius-box: 0.25rem;
-    --radius-field: 0.25rem;
-    --radius-selector: 0.125rem;
-}
+/* The page's styles: the tokens, the base, the shared controls; each component imports its own CSS next to its code. */
+@import "./core/style/tokens.css";
+@import "./core/style/base.css";
+@import "./core/style/controls.css";

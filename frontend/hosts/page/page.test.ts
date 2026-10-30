@@ -106,13 +106,13 @@ describe('PageHost', () => {
   it('shows a page it cannot load in the content area', async () => {
     history.replaceState(null, '', '/p/gone');
     await host.start();
-    expect(content.querySelector('.alert-error')!.textContent).toContain('/p/gone: 404');
+    expect(content.querySelector('.d-notice--error')!.textContent).toContain('/p/gone: 404');
     expect(host.current).toBeUndefined();
   });
 
   it('shows a page of a kind without renderer in the content area', async () => {
     pages['/p/shop/page.json'] = { ...page('Docs'), kind: 'docs' };
     await host.start();
-    expect(content.querySelector('.alert-error')!.textContent).toBe('no renderer for the page kind docs');
+    expect(content.querySelector('.d-notice--error')!.textContent).toBe('no renderer for the page kind docs');
   });
 });

@@ -1,0 +1,31 @@
+/* See collapsible.ts: a flat row with a rule above, the chevron turned while open, the widgets below as on the page. */
+.d-collapsible {
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.d-collapsible__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  user-select: none;
+}
+
+.d-collapsible__chevron {
+  opacity: 0.6;
+  transition: transform var(--duration-fast);
+}
+
+.d-collapsible[open] > .d-collapsible__title > .d-collapsible__chevron {
+  transform: rotate(90deg);
+}
+
+.d-collapsible__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-2) 0;
+}

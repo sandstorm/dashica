@@ -13,7 +13,7 @@ export const dashboards: Extension = {
   id: 'dashboards',
   activate(context) {
     const { ui, page, commands, subscriptions } = context;
-    const brand = html`<a href="/" class="dashica-wb__brand">Dashica</a>`;
+    const brand = html`<a href="/" class="d-brand">Dashica</a>`;
     subscriptions.push(ui.registerBarItem('title', brand, { alignment: 'left' }));
 
     const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
@@ -54,14 +54,14 @@ class DashboardsMenu {
   render(): void {
     const favorites = this.#favorites();
     const groups = this.context.page.workbench.menu.map((group) => html`<li>
-      <h2 class="menu-title">${group.title}</h2>
-      <ul>${group.entries.map((entry) => this.#entry(entry, favorites))}</ul>
+      <h2 class="d-list__heading">${group.title}</h2>
+      <ul class="d-list">${group.entries.map((entry) => this.#entry(entry, favorites))}</ul>
     </li>`);
     const favoriteGroup = favorites.length === 0 ? '' : html`<li>
-      <h2 class="menu-title">Favorites</h2>
-      <ul>${favorites.map((favorite) => html`<li>${this.#link(favorite)}</li>`)}</ul>
+      <h2 class="d-list__heading">Favorites</h2>
+      <ul class="d-list">${favorites.map((favorite) => html`<li class="d-dashboards-menu__entry">${this.#link(favorite)}</li>`)}</ul>
     </li>`;
-    this.el.replaceChildren(html`<ul class="menu dashboards-menu">${favoriteGroup}${groups}</ul>`);
+    this.el.replaceChildren(html`<ul class="d-dashboards-menu">${favoriteGroup}${groups}</ul>`);
   }
 
   #entry(entry: MenuGroupEntry, favorites: readonly MenuGroupEntry[]): HTMLElement {
@@ -73,12 +73,12 @@ class DashboardsMenu {
         context: { url: entry.url, title: entry.title },
         args: [entry.url],
       });
-    return html`<li>
+    return html`<li class="d-dashboards-menu__entry">
       ${this.#link(entry)}
-      <button type="button" class="dashboards-menu__more" aria-label=${`More for ${entry.title}`} title="More" aria-haspopup="menu" onclick=${showMenu}>…</button>
+      <button type="button" class="d-dashboards-menu__more" aria-label=${`More for ${entry.title}`} title="More" aria-haspopup="menu" onclick=${showMenu}>…</button>
       <button
         type="button"
-        class=${isFavorite ? 'dashboards-menu__star dashboards-menu__star--active' : 'dashboards-menu__star'}
+        class=${isFavorite ? 'd-dashboards-menu__star d-dashboards-menu__star--active' : 'd-dashboards-menu__star'}
         aria-label=${isFavorite ? `Remove ${entry.title} from the favorites` : `Add ${entry.title} to the favorites`}
         onclick=${() => this.#toggleFavorite(entry)}>${isFavorite ? '★' : '☆'}</button>
     </li>`;
@@ -86,7 +86,7 @@ class DashboardsMenu {
 
   #link(entry: MenuGroupEntry): HTMLElement {
     const shown = entry.url === location.pathname;
-    return html`<a href=${entry.url} class=${shown ? 'menu-active' : ''} title=${entry.title}>${entry.title}</a>`;
+    return html`<a href=${entry.url} class=${shown ? 'd-list__item d-list__item--active' : 'd-list__item'} title=${entry.title}>${entry.title}</a>`;
   }
 
   /** The viewer's favorites, in the order they were added. */

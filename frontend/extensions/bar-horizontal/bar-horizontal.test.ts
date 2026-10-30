@@ -20,7 +20,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 describe('barHorizontal', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -28,6 +28,6 @@ describe('barHorizontal', () => {
     const { el } = testbed.render({ type: 'barHorizontal', props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' } }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.dashica-chart__body svg rect').length).toBeGreaterThan(0);
+    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 });

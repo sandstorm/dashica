@@ -37,7 +37,7 @@ function setup() {
     commandsWith({ executeCommand: async (command, ...args) => void ran.push([command, document.activeElement === trigger, ...args]), keybindingLabel: (command) => (command === 'dashboards.copyLink' ? '⌘C' : undefined) }),
   );
   const show = (favorite = true) => menus.show('dashboards/entry', { anchor: { x: 10, y: 20 }, title: 'Shop', context: { favorite }, args: ['/p/shop'] });
-  const items = () => [...host.querySelectorAll<HTMLElement>('.dashica-wb__context-menu-item')];
+  const items = () => [...host.querySelectorAll<HTMLElement>('.d-workbench__context-menu-item')];
   const key = (key: string) => (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
   const isOpen = () => host.querySelector('[role=menu]') !== null;
   return { host, trigger, menus, show, ran, items, key, isOpen };
@@ -64,14 +64,14 @@ describe('ContextMenu', () => {
     ];
     const menus = new ContextMenu(host, menusWith('page/title', items), commandsWith());
     menus.show('page/title', { anchor: host, title: 'Shop', context: { favorite: true } });
-    const entries = [...host.querySelectorAll<HTMLElement>('.dashica-wb__context-menu-item')];
+    const entries = [...host.querySelectorAll<HTMLElement>('.d-workbench__context-menu-item')];
     expect(entries.map((entry) => [entry.getAttribute('role'), entry.getAttribute('aria-checked'), entry.textContent])).toEqual([
       ['menuitemcheckbox', 'true', '✓Favorite'],
       ['menuitemcheckbox', 'false', 'Pinned'],
       ['menuitem', null, 'Copy link'],
     ]);
     expect(shown).toEqual([{ favorite: true }]);
-    expect(host.querySelector('[role=menu]')!.classList.contains('dashica-wb__context-menu--checks')).toBe(true);
+    expect(host.querySelector('[role=menu]')!.classList.contains('d-workbench__context-menu--checks')).toBe(true);
   });
 
   it('moves with the arrow keys, Home and End', () => {

@@ -24,7 +24,7 @@ const shellHTML = `<!DOCTYPE html>
 	<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon/favicon-16x16.png">
 	<script src="/public/dist/index.js"></script>
 </head>
-<body class="bg-base-200">
+<body>
 	<div id="workbench"></div>
 	<script>window.Dashica.boot();</script>
 </body>

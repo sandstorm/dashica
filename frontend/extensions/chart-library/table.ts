@@ -54,9 +54,9 @@ function renderRecordDetails(records: Record<string, any>[]): string {
       const formatted = tryPrettyJson(valueStr);
       if (formatted !== null) {
         return `
-          <p class="font-mono">
-            <span class="font-bold">${key}</span>:
-            <span class="break-all"><pre>${formatted}</pre></span>
+          <p class="d-record-panel__field">
+            <span class="d-record-panel__key">${key}</span>:
+            <span class="d-record-panel__value"><pre>${formatted}</pre></span>
           </p>
         `;
       }
@@ -64,23 +64,23 @@ function renderRecordDetails(records: Record<string, any>[]): string {
       // Handle multiline values
       if (valueStr.trim().includes('\n')) {
         return `
-          <p class="font-mono">
-            <span class="font-bold">${key}</span>:
-            <span class="break-all"><pre>${valueStr}</pre></span>
+          <p class="d-record-panel__field">
+            <span class="d-record-panel__key">${key}</span>:
+            <span class="d-record-panel__value"><pre>${valueStr}</pre></span>
           </p>
         `;
       }
 
       // Regular values
       return `
-        <p class="font-mono">
-          <span class="font-bold">${key}</span>:
-          <span class="break-all">${valueStr}</span>
+        <p class="d-record-panel__field">
+          <span class="d-record-panel__key">${key}</span>:
+          <span class="d-record-panel__value">${valueStr}</span>
         </p>
       `;
     }).join('');
 
-    return `<div class="recordDetails__record">${fields}</div>`;
+    return `<div class="d-record-panel__record">${fields}</div>`;
   }).join('');
 }
 
@@ -127,24 +127,24 @@ function createTooltipEl(): TooltipEl {
   // Build the static skeleton with htl (same pattern as `panelHeader` below);
   // grab element refs afterwards. Behaviour (drag/position/pin) is wired
   // imperatively — see the note in `drawTable()`.
-  const root = html`<div class="stickyTooltip">
-    <div class="stickyTooltip__header">
-      <span class="stickyTooltip__index" style="display:none"></span>
-      <button class="stickyTooltip__btn stickyTooltip__json" title="Toggle JSON pretty-print">${createElement(Braces)}</button>
-      <button class="stickyTooltip__btn stickyTooltip__copy" title="Copy to clipboard">${createElement(Copy)}</button>
-      <span class="stickyTooltip__spacer"></span>
-      <button class="stickyTooltip__btn stickyTooltip__pin" title="Pin (keeps this open + marks the source; drag header to move)">${createElement(Pin)}</button>
-      <button class="stickyTooltip__btn stickyTooltip__close" title="Close">${createElement(X)}</button>
+  const root = html`<div class="d-sticky-tooltip">
+    <div class="d-sticky-tooltip__header">
+      <span class="d-sticky-tooltip__index" style="display:none"></span>
+      <button class="d-sticky-tooltip__btn d-sticky-tooltip__json" title="Toggle JSON pretty-print">${createElement(Braces, { width: 14, height: 14 })}</button>
+      <button class="d-sticky-tooltip__btn d-sticky-tooltip__copy" title="Copy to clipboard">${createElement(Copy, { width: 14, height: 14 })}</button>
+      <span class="d-sticky-tooltip__spacer"></span>
+      <button class="d-sticky-tooltip__btn d-sticky-tooltip__pin" title="Pin (keeps this open + marks the source; drag header to move)">${createElement(Pin, { width: 14, height: 14 })}</button>
+      <button class="d-sticky-tooltip__btn d-sticky-tooltip__close" title="Close">${createElement(X, { width: 14, height: 14 })}</button>
     </div>
-    <pre class="stickyTooltip__body"><code></code></pre>
+    <pre class="d-sticky-tooltip__body"><code></code></pre>
   </div>` as HTMLElement;
 
-  const header = root.querySelector('.stickyTooltip__header') as HTMLElement;
-  const indexLabel = root.querySelector('.stickyTooltip__index') as HTMLElement;
-  const jsonBtn = root.querySelector('.stickyTooltip__json') as HTMLButtonElement;
-  const copyBtn = root.querySelector('.stickyTooltip__copy') as HTMLButtonElement;
-  const pinBtn = root.querySelector('.stickyTooltip__pin') as HTMLButtonElement;
-  const closeBtn = root.querySelector('.stickyTooltip__close') as HTMLButtonElement;
+  const header = root.querySelector('.d-sticky-tooltip__header') as HTMLElement;
+  const indexLabel = root.querySelector('.d-sticky-tooltip__index') as HTMLElement;
+  const jsonBtn = root.querySelector('.d-sticky-tooltip__json') as HTMLButtonElement;
+  const copyBtn = root.querySelector('.d-sticky-tooltip__copy') as HTMLButtonElement;
+  const pinBtn = root.querySelector('.d-sticky-tooltip__pin') as HTMLButtonElement;
+  const closeBtn = root.querySelector('.d-sticky-tooltip__close') as HTMLButtonElement;
   const code = root.querySelector('code') as HTMLElement;
 
   let currentRaw = '';
@@ -175,8 +175,8 @@ function createTooltipEl(): TooltipEl {
   copyBtn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(currentText());
-      copyBtn.classList.add('stickyTooltip__btn--ok');
-      window.setTimeout(() => copyBtn.classList.remove('stickyTooltip__btn--ok'), 800);
+      copyBtn.classList.add('d-sticky-tooltip__btn--ok');
+      window.setTimeout(() => copyBtn.classList.remove('d-sticky-tooltip__btn--ok'), 800);
     } catch (e) {
       console.warn('Clipboard write failed', e);
     }
@@ -201,10 +201,10 @@ function createTooltipEl(): TooltipEl {
 
   header.addEventListener('pointerdown', (e) => {
     // Transient (unpinned) tooltip is not draggable.
-    if (!root.classList.contains('stickyTooltip--pinned')) {
+    if (!root.classList.contains('d-sticky-tooltip--pinned')) {
       return;
     }
-    if ((e.target as HTMLElement).closest('.stickyTooltip__btn')) {
+    if ((e.target as HTMLElement).closest('.d-sticky-tooltip__btn')) {
       return; // don't start a drag from a button
     }
     const rect = root.getBoundingClientRect();
@@ -256,7 +256,7 @@ interface Pin {
 // so markers survive scrolling/filtering (Tabulator recycles row DOM).
 function createTooltipManager(table: Tabulator, notifyRendered: () => void = () => {}) {
   const transient = createTooltipEl();
-  transient.root.classList.add('stickyTooltip--transient');
+  transient.root.classList.add('d-sticky-tooltip--transient');
   transient.root.style.display = 'none';
   document.body.appendChild(transient.root);
 
@@ -308,10 +308,10 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   function decorate() {
     const tableEl = (table as any).element as HTMLElement | undefined;
     if (!tableEl) return;
-    tableEl.querySelectorAll('.stickyTooltip__badge').forEach(n => n.remove());
-    tableEl.querySelectorAll('.stickyTooltip__pinnedRow').forEach(n => {
+    tableEl.querySelectorAll('.d-sticky-tooltip__badge').forEach(n => n.remove());
+    tableEl.querySelectorAll('.d-sticky-tooltip__pinned-row').forEach(n => {
       const row = n as HTMLElement;
-      row.classList.remove('stickyTooltip__pinnedRow');
+      row.classList.remove('d-sticky-tooltip__pinned-row');
       row.style.removeProperty('box-shadow');
       row.querySelectorAll('.tabulator-cell').forEach(c => {
         (c as HTMLElement).style.removeProperty('background-color');
@@ -329,7 +329,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
         return; // row no longer exists / not rendered
       }
       if (rowEl) {
-        rowEl.classList.add('stickyTooltip__pinnedRow');
+        rowEl.classList.add('d-sticky-tooltip__pinned-row');
         rowEl.style.boxShadow = `inset 3px 0 0 0 ${pin.color}`;
         // Tint only the scrolling cells, never the frozen (checkbox)
         // column. The frozen column is position:sticky and hides the
@@ -343,9 +343,9 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
           (c as HTMLElement).style.backgroundColor = pin.color + '14'; // ~8% alpha
         });
       }
-      if (cellEl && !cellEl.querySelector('.stickyTooltip__badge')) {
+      if (cellEl && !cellEl.querySelector('.d-sticky-tooltip__badge')) {
         const badge = document.createElement('span');
-        badge.className = 'stickyTooltip__badge';
+        badge.className = 'd-sticky-tooltip__badge';
         badge.textContent = String(pin.index);
         badge.style.backgroundColor = pin.color;
         cellEl.insertBefore(badge, cellEl.firstChild);
@@ -366,7 +366,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
     if (!transientCell) return;
     const cell = transientCell;
     const pinned = createTooltipEl();
-    pinned.root.classList.add('stickyTooltip--pinned');
+    pinned.root.classList.add('d-sticky-tooltip--pinned');
     pinned.pinBtn.style.display = 'none'; // already pinned
 
     const index = nextIndex++;
@@ -585,7 +585,7 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
             year: '2-digit',
           });
           const el = document.createElement('div');
-          el.innerHTML = `${time} &nbsp; <span class="autoTable__timestampDate">${date}</span>`;
+          el.innerHTML = `${time} &nbsp; <span class="d-table__date">${date}</span>`;
           return el;
         },
         contextMenu: timestampContextMenu(field.name)
@@ -601,15 +601,13 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
 
   // Create container structure
   const container = document.createElement('div');
-  container.classList.add('table-with-details');
+  container.classList.add('d-table');
 
-  // Render the title, styled like the <h2> Observable Plot generates for
-  // the other chart types (and like the loading placeholder in chart.ts).
+  // the title, as the chart frame shows it for the other chart types
   if (typeof props.title === 'string' && props.title.length > 0) {
     const title = document.createElement('h2');
+    title.className = 'd-chart-frame__title';
     title.textContent = props.title;
-    title.style.font = 'bold 14pt sans-serif';
-    title.style.margin = '1.5em 0 1em 0';
     container.appendChild(title);
   }
 
@@ -617,7 +615,7 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
   const searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.placeholder = 'Search records...';
-  searchInput.classList.add('input', 'input-bordered', 'w-full', 'mb-2');
+  searchInput.classList.add('d-field', 'd-field--full', 'd-table__search');
   searchInput.addEventListener('input', (e) => {
     searchTerm = (e.target as HTMLInputElement).value;
     applySearch();
@@ -645,7 +643,7 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
 
   // Create table element
   const tableRoot = document.createElement('div');
-  tableRoot.classList.add("tabulatorTable");
+  tableRoot.classList.add("d-table__grid");
 
   // Highlight the search term everywhere it appears in the widget: visible
   // table cells, the sticky tooltips, and the record-details panel. Uses the
@@ -667,7 +665,7 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
       detailsPanel,
       // All live tooltips (transient + every pin) — they append to <body>,
       // so query them fresh each run rather than plumbing refs.
-      ...document.querySelectorAll('.stickyTooltip'),
+      ...document.querySelectorAll('.d-sticky-tooltip'),
     ].filter((el): el is Element => !!el);
     const ranges: Range[] = [];
     for (const root of roots) {
@@ -764,41 +762,37 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
 
   // Create record details panel with header
   const detailsPanel = document.createElement('div');
-  detailsPanel.classList.add('record-details-panel');
+  detailsPanel.classList.add('d-record-panel');
 
   // Panel header with controls
-  const fullscreenIcon = createElement(Maximize2);
-  fullscreenIcon.classList.add('w-4', 'h-4');
+  const fullscreenIcon = createElement(Maximize2, { width: 16, height: 16 });
 
-  const closeIcon = createElement(X);
-  closeIcon.classList.add('w-4', 'h-4');
+  const closeIcon = createElement(X, { width: 16, height: 16 });
 
-  const panelHeader = html`<div class="record-details-header">
-    <div class="flex items-center justify-between p-2 border-b border-base-300 bg-base-200">
-      <span class="font-semibold text-sm">
-        <span class="selected-count">0</span> record(s) selected
-      </span>
-      <div class="flex gap-2">
-        <button class="btn btn-xs btn-ghost fullscreen-btn" title="Toggle fullscreen">
-          ${fullscreenIcon}
-        </button>
-        <button class="btn btn-xs btn-ghost close-btn" title="Close">
-          ${closeIcon}
-        </button>
-      </div>
+  const panelHeader = html`<div class="d-record-panel__header">
+    <span class="d-record-panel__summary">
+      <span class="d-record-panel__count">0</span> record(s) selected
+    </span>
+    <div class="d-record-panel__actions">
+      <button class="d-button d-button--ghost d-button--icon d-record-panel__fullscreen" title="Toggle fullscreen">
+        ${fullscreenIcon}
+      </button>
+      <button class="d-button d-button--ghost d-button--icon d-record-panel__close" title="Close">
+        ${closeIcon}
+      </button>
     </div>
   </div>`;
 
   const detailsContainer = document.createElement('div');
-  detailsContainer.classList.add('recordDetails');
+  detailsContainer.classList.add('d-record-panel__records');
 
   detailsPanel.appendChild(panelHeader);
   detailsPanel.appendChild(detailsContainer);
 
   // Setup button handlers
-  const fullscreenBtn = panelHeader.querySelector('.fullscreen-btn') as HTMLButtonElement;
-  const closeBtn = panelHeader.querySelector('.close-btn') as HTMLButtonElement;
-  const selectedCountSpan = panelHeader.querySelector('.selected-count') as HTMLSpanElement;
+  const fullscreenBtn = panelHeader.querySelector('.d-record-panel__fullscreen') as HTMLButtonElement;
+  const closeBtn = panelHeader.querySelector('.d-record-panel__close') as HTMLButtonElement;
+  const selectedCountSpan = panelHeader.querySelector('.d-record-panel__count') as HTMLSpanElement;
 
   fullscreenBtn.addEventListener('click', () => {
     panelFullscreen = !panelFullscreen;
@@ -819,27 +813,27 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
 
     // Toggle panel visibility with animation
     if (hasSelection) {
-      detailsPanel.classList.remove('hidden');
+      detailsPanel.hidden = false;
       // Force reflow to enable CSS transition
       void detailsPanel.offsetHeight;
-      detailsPanel.classList.add('open');
+      detailsPanel.classList.add('d-record-panel--open');
       detailsContainer.innerHTML = renderRecordDetails(selectedRecords);
       applySearchHighlight(searchTerm); // highlight term in record panel
     } else {
-      detailsPanel.classList.remove('open');
+      detailsPanel.classList.remove('d-record-panel--open');
       // Wait for animation before hiding
       setTimeout(() => {
         if (selectedRecords.length === 0) {
-          detailsPanel.classList.add('hidden');
+          detailsPanel.hidden = true;
         }
       }, 300);
     }
 
     // Toggle fullscreen class
     if (panelFullscreen) {
-      detailsPanel.classList.add('fullscreen');
+      detailsPanel.classList.add('d-record-panel--fullscreen');
     } else {
-      detailsPanel.classList.remove('fullscreen');
+      detailsPanel.classList.remove('d-record-panel--fullscreen');
     }
   }
   showSelection();

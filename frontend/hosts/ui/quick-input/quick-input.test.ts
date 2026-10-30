@@ -15,7 +15,7 @@ function setup() {
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   };
-  const field = () => host.querySelector<HTMLInputElement>('.dashica-wb__quick-pick input')!;
+  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
   return { host, button, quickInput, key, type, field };
 }
 
@@ -37,17 +37,17 @@ describe('createQuickPick', () => {
     pick.onDidHide(() => hidden++);
     pick.show();
     pick.value = 'a';
-    expect([document.activeElement, field().getAttribute('aria-label'), host.querySelector('.dashica-wb__quick-pick-hint')!.textContent]).toEqual([field(), 'Search everywhere', 'Narrow with > Commands']);
+    expect([document.activeElement, field().getAttribute('aria-label'), host.querySelector('.d-workbench__quick-pick-hint')!.textContent]).toEqual([field(), 'Search everywhere', 'Narrow with > Commands']);
     type(field(), 'shop');
     expect(values).toEqual(['a', 'shop']);
-    expect(host.querySelector('.dashica-wb__quick-pick-heading')!.textContent).toBe('Dashboards 2 more');
+    expect(host.querySelector('.d-workbench__quick-pick-heading')!.textContent).toBe('Dashboards 2 more');
     expect([host.querySelector('[role=option]')!.textContent, host.querySelector('mark')!.textContent]).toEqual(['shop overview ⌘K', 'shop']);
     pick.busy = true;
-    expect(host.querySelector<HTMLElement>('.dashica-wb__quick-pick-progress')!.hidden).toBe(false);
+    expect(host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!.hidden).toBe(false);
     key(field(), 'Enter');
-    expect([accepted, hidden, host.querySelector('.dashica-wb__quick-pick') !== null]).toEqual([['shop overview'], 0, true]);
+    expect([accepted, hidden, host.querySelector('.d-workbench__quick-pick') !== null]).toEqual([['shop overview'], 0, true]);
     pick.hide();
-    expect([hidden, host.querySelector('.dashica-wb__quick-pick'), document.activeElement]).toEqual([1, null, button]);
+    expect([hidden, host.querySelector('.d-workbench__quick-pick'), document.activeElement]).toEqual([1, null, button]);
     pick.show();
     key(field(), 'Escape');
     expect(hidden).toBe(2);
@@ -67,7 +67,7 @@ describe('createQuickPick', () => {
     pick.items = [];
     type(field(), 'zzz');
     pick.items = [];
-    expect(host.querySelector<HTMLElement>('.dashica-wb__quick-pick-empty')!.hidden).toBe(false);
+    expect(host.querySelector<HTMLElement>('.d-workbench__quick-pick-empty')!.hidden).toBe(false);
   });
 
   it('hides on a press elsewhere, and an open box when another one shows', () => {
@@ -84,7 +84,7 @@ describe('createQuickPick', () => {
     first.show();
     second.show();
     expect(hidden).toBe(2);
-    expect([...host.querySelectorAll('.dashica-wb__quick-pick')].map((box) => box.getAttribute('aria-label'))).toEqual(['Second']);
+    expect([...host.querySelectorAll('.d-workbench__quick-pick')].map((box) => box.getAttribute('aria-label'))).toEqual(['Second']);
   });
 
   it("gives each box's ids their own name: two quick picks on one page do not collide", () => {
@@ -94,7 +94,7 @@ describe('createQuickPick', () => {
       pick.items = [{ label: 'Shop' }];
       pick.show();
       const listbox = host.querySelector('[role=listbox]')!;
-      expect([field().getAttribute('aria-controls'), field().getAttribute('aria-describedby')]).toEqual([listbox.id, host.querySelector('.dashica-wb__quick-pick-hint')!.id]);
+      expect([field().getAttribute('aria-controls'), field().getAttribute('aria-describedby')]).toEqual([listbox.id, host.querySelector('.d-workbench__quick-pick-hint')!.id]);
       return [listbox.id, field().getAttribute('aria-describedby'), host.querySelector('[role=option]')!.id];
     });
     const ids = picks.flat();

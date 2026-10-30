@@ -40,16 +40,16 @@ export class SideBar {
   ) {
     this.#size = SIZES[side];
     this.state.size = this.#clamp(state.size);
-    this.#bottom = html`<div class="dashica-wb__rail-bottom"></div>`;
-    this.#rail = html`<div class="dashica-wb__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.#bottom}</div>`;
+    this.#bottom = html`<div class="d-workbench__rail-bottom"></div>`;
+    this.#rail = html`<div class="d-workbench__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.#bottom}</div>`;
     this.#resizer = this.#createResizer();
-    this.#panel = html`<div class="dashica-wb__panel">${this.#resizer}</div>`;
+    this.#panel = html`<div class="d-workbench__panel">${this.#resizer}</div>`;
     const onkeydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && this.#overlay && this.#shown) this.#closeFromKeyboard();
     };
     // the rail on the workbench's outer edge
     const [first, second] = side === 'left' ? [this.#rail, this.#panel] : [this.#panel, this.#rail];
-    this.element = html`<div class="dashica-wb__side dashica-wb__side--${side}" onkeydown=${onkeydown}>${first}${second}</div>`;
+    this.element = html`<div class="d-workbench__side d-workbench__side--${side}" onkeydown=${onkeydown}>${first}${second}</div>`;
     this.#listen(host.ownerDocument, 'pointerdown', (event) => {
       if (this.#overlay && this.#shown && !event.composedPath().includes(this.element)) this.show(null);
     });
@@ -62,13 +62,13 @@ export class SideBar {
 
   addPanel(id: string, options: SidePanelOptions): Panel {
     const command = `workbench.view.${id}`;
-    const body = html`<div class="dashica-wb__panel-body" id=${`wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`} data-panel=${id}></div>`;
+    const body = html`<div class="d-workbench__panel-body" id=${`wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`} data-panel=${id}></div>`;
     // the key may be bound after the panel is added: named anew whenever the tooltip may show
     const describe = () => {
       const key = this.owner.commands.keybindingLabel(command);
       button.title = key ? `${options.label} (${key})` : options.label;
     };
-    const button = html<HTMLButtonElement>`<button type="button" class="dashica-wb__rail-button" aria-label=${options.label}
+    const button = html<HTMLButtonElement>`<button type="button" class="d-workbench__rail-button" aria-label=${options.label}
       aria-controls=${body.id} data-testid=${`wb-panel-toggle-${id}`} onpointerenter=${describe} onfocus=${describe}
       onclick=${() => this.#choose(this.#shown === id ? null : id)}></button>`;
     describe();
@@ -137,7 +137,7 @@ export class SideBar {
   dispose(): void {
     for (const stop of this.#cleanup) stop();
     this.element.remove();
-    this.host.style.removeProperty('--wb-right-side');
+    this.host.style.removeProperty('--d-workbench-right-side');
   }
 
   /** Inserts `button` into the rail's top or bottom group, before the first of its buttons with a higher order. */
@@ -228,8 +228,8 @@ export class SideBar {
   #applySize(): void {
     const size = this.state.size;
     if (this.#size.unit === 'px') this.#panel.style.width = `${size}px`;
-    else if (this.#shown === null) this.host.style.removeProperty('--wb-right-side');
-    else this.host.style.setProperty('--wb-right-side', `minmax(0, ${size}%)`);
+    else if (this.#shown === null) this.host.style.removeProperty('--d-workbench-right-side');
+    else this.host.style.setProperty('--d-workbench-right-side', `minmax(0, ${size}%)`);
     this.#resizer.setAttribute('aria-valuenow', String(size));
   }
 
@@ -259,7 +259,7 @@ export class SideBar {
       const perPixel = this.#size.unit === 'px' ? 1 : 100 / start.width;
       this.#track(event, (e) => this.#resize(start.size + (e.clientX - start.x) * outwards * perPixel));
     };
-    return html`<div class="dashica-wb__resizer" role="separator" aria-orientation="vertical" aria-label=${label}
+    return html`<div class="d-workbench__resizer" role="separator" aria-orientation="vertical" aria-label=${label}
       aria-valuemin=${min} aria-valuemax=${max} tabindex="0" onkeydown=${onkeydown} onpointerdown=${onpointerdown}></div>`;
   }
 
@@ -270,9 +270,9 @@ export class SideBar {
     const up = () => {
       doc.removeEventListener('pointermove', move);
       doc.removeEventListener('pointerup', up);
-      this.host.classList.remove('dashica-wb--resizing');
+      this.host.classList.remove('d-workbench--resizing');
     };
-    this.host.classList.add('dashica-wb--resizing');
+    this.host.classList.add('d-workbench--resizing');
     doc.addEventListener('pointermove', move);
     doc.addEventListener('pointerup', up);
   }
@@ -324,7 +324,7 @@ interface PanelEntry {
 
 /**
  * How a side is sized: the left one in pixels (the panel's width), the right one as a share of the workbench in percent
- * (the grid column `--wb-right-side`), so opening the left side narrows only the content.
+ * (the grid column `--d-workbench-right-side`), so opening the left side narrows only the content.
  */
 const SIZES = {
   left: { unit: 'px', min: 200, max: 640, initial: 300, step: 16, label: 'Left panel width' },

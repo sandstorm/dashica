@@ -20,14 +20,14 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.dashica-widget-error')?.textContent;
+const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 
 describe('stats', () => {
   it('shows a number per row under its label', async () => {
     testbed.serve('/p/shop/api/shop_stats/query', { label: ['Requests', 'Errors'], value: [1234, 5.678] });
     const { el } = testbed.render({ type: 'stats', props: {}, dataUrl: '/p/shop/api/shop_stats' });
     await inView();
-    const shown = [...el.querySelectorAll('.dashica-stats__stat')].map((stat) => [stat.querySelector('dt')!.textContent, stat.querySelector('dd')!.textContent]);
+    const shown = [...el.querySelectorAll('.d-stats__stat')].map((stat) => [stat.querySelector('dt')!.textContent, stat.querySelector('dd')!.textContent]);
     expect(shown).toEqual([
       ['Requests', '1234'],
       ['Errors', '5.68'],
