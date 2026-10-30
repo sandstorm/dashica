@@ -389,7 +389,7 @@ Built-in extensions:
 |---|---|
 | `dashboards` | left panel "Dashboards" (groups, favorites, filter box) |
 | `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites |
-| `time-range` | title bar: presets, custom range, refresh; `widget/selection` "Zoom" |
+| `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7); `widget/selection` "Zoom" |
 | `auto-refresh` | title bar: auto refresh interval |
 | `log-scale` | title bar toggle; the value lives in `query.viewOptions` |
 | `theme` | light / dark toggle |
