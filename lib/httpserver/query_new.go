@@ -32,18 +32,6 @@ type DashboardFilters struct {
 	To   interface{}
 }
 
-// SqlStringForAllTables is the legacy per-table filter map used by the deprecated query
-// handler (which relies on ClickHouse's `additional_table_filters` setting). New code paths
-// should use SqlClause() instead and inline the filter into the query body explicitly.
-func (f *DashboardFilters) SqlStringForAllTables(tables []string) map[string]string {
-	result := make(map[string]string)
-	clause := f.SqlClause()
-	for _, table := range tables {
-		result[table] = clause
-	}
-	return result
-}
-
 // SqlClause returns the AND-joined dashboard filter expression (time range + user SQL filter)
 // as a single SQL fragment, or empty string if no filters are configured. This fragment is
 // safe to inline directly into a query's WHERE clause and references the `timestamp` column
@@ -235,22 +223,6 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 	}
 
 	return nil
-}
-
-// FormatClickhouseMap formats a per-table filter map for ClickHouse's `additional_table_filters`
-// setting. Only used by the legacy file-based query handler (query_deprecated.go); new code paths
-// inline filters explicitly via the SqlBuilder Where() option or the DASHICA_FILTERS placeholder.
-func FormatClickhouseMap(input map[string]string) string {
-	var outputParts []string
-	for k, v := range input {
-		outputParts = append(outputParts, fmt.Sprintf("'%s': '%s'",
-			escapeString(k), escapeString(v)))
-	}
-	return fmt.Sprintf("{%s}", strings.Join(outputParts, ", "))
-}
-
-func escapeString(s string) string {
-	return strings.ReplaceAll(s, "'", "\\'")
 }
 
 type DebugInfo struct {
