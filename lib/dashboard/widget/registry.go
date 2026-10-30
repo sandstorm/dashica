@@ -57,9 +57,9 @@ var (
 )
 
 var (
-	registryMu     sync.RWMutex
-	typeToFactory  = map[string]WidgetFactory{}
-	goTypeToName   = map[reflect.Type]string{}
+	registryMu    sync.RWMutex
+	typeToFactory = map[string]WidgetFactory{}
+	goTypeToName  = map[reflect.Type]string{}
 )
 
 // Register makes a widget type serializable under the given wire name, tagged
