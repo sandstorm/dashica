@@ -46,11 +46,27 @@
     opacity: 1;
 }
 
-/* the title until the chart is drawn: as Observable Plot draws its own */
-.d-chart-frame__title {
+/* the title until the chart is drawn, and Observable Plot's own above the chart: one style for both */
+.d-chart-frame__title,
+.d-chart-frame__body figure > h2 {
     margin: 0 0 var(--space-2) 0;
     font-size: var(--text-md);
     font-weight: var(--weight-bold);
+}
+
+/*
+ * Observable Plot's charts in the page's font, the axes in --text-xs. Plot draws a tooltip's box with the fill
+ * `var(--plot-background)` (white unless set) and its text in `currentColor`: on the raised surface with the page's
+ * border, the tooltips read in light and dark as the other popovers do.
+ */
+.d-chart-frame__body svg {
+    --plot-background: var(--color-surface-raised);
+    font-family: var(--font-sans);
+    font-size: var(--text-xs);
+}
+
+.d-chart-frame__body [aria-label="tip"] path {
+    stroke: var(--color-border-strong);
 }
 
 /* a diagonal shimmer over the chart until it is drawn first */
