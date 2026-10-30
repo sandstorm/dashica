@@ -8,11 +8,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/layout"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
-	"github.com/sandstorm/dashica/lib/util"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
@@ -95,7 +93,6 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 			return fmt.Errorf("DefaultTimeRange(%q) is not a Go duration (\"168h\" for 7 days): %w", d.defaultTime, err)
 		}
 	}
-	// first: it gives the widgets their ids and URLs, which BuildComponents renders
 	nodes, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api"))
 	if err != nil {
 		return fmt.Errorf("mounting widgets: %w", err)
@@ -115,14 +112,8 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 		return fmt.Errorf("registering page.json handler: %w", err)
 	}
 
-	components, err := util.MapHandleError(d.widgets, func(w widget.WidgetDefinition) (templ.Component, error) { return w.BuildComponents(ctx) })
-	if err != nil {
-		return fmt.Errorf("building components: %w", err)
-	}
-
-	err = handlerCollector.HandleRoot(templ.Handler(d.layout.Fn(*ctx, d.searchBar, templ.Join(components...))))
-	if err != nil {
-		return fmt.Errorf("registering layout handler: %w", err)
+	if err := handlerCollector.HandleRoot(shellHandler); err != nil {
+		return fmt.Errorf("registering the shell: %w", err)
 	}
 
 	// "Open in Explore": redirect to the Explore editor pre-loaded with this

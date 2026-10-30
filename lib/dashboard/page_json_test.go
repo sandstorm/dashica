@@ -66,3 +66,14 @@ func TestPageJson_RefusesADefaultTimeRangeThatIsNotADuration(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+func TestShell_IsWhatThePageURLServes(t *testing.T) {
+	rec := httptest.NewRecorder()
+	serve(t, New().WithTitle("Shop")).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/shop", nil))
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("status %d, content type %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `<div id="workbench"></div>`) || !strings.Contains(body, "window.Dashica.boot()") {
+		t.Errorf("not the shell: %s", body)
+	}
+}

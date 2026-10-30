@@ -40,7 +40,7 @@ func TestCollectHandlers_RegistersAllRoutes(t *testing.T) {
 	}
 }
 
-func TestEditorPage_ServesHTML(t *testing.T) {
+func TestEditorPage_ShowsTheRebuildNotice(t *testing.T) {
 	mux := http.NewServeMux()
 	collector := handler_collector.NewValidatingCollector(mux, zerolog.Nop())
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/explore", MainMenu: &[]rendering.MenuGroup{}}
@@ -50,14 +50,13 @@ func TestEditorPage_ServesHTML(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/explore", nil))
+	if ct := rec.Header().Get("Content-Type"); rec.Code != http.StatusOK || !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("/explore: status %d, Content-Type %q; want the shell, 200 text/html", rec.Code, ct)
+	}
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
-	}
-	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
-		t.Errorf("Content-Type = %q, want text/html", ct)
-	}
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/explore/page.json", nil))
 	if !strings.Contains(rec.Body.String(), "Explore is being rebuilt") {
-		t.Errorf("body missing the rebuild notice: %q", rec.Body.String())
+		t.Errorf("page.json missing the rebuild notice: %s", rec.Body.String())
 	}
 }

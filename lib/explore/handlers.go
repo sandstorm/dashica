@@ -7,9 +7,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/layout"
+	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
@@ -17,7 +17,7 @@ import (
 // mirrors docs section 4.3. Everything lives under the registration URL; the
 // API routes hang off a "/api" nested collector.
 func (e *exploreImpl) registerHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) error {
-	if err := collector.HandleRoot(templ.Handler(e.editorPage(ctx))); err != nil {
+	if err := rebuildNotice.CollectHandlers(ctx, collector); err != nil {
 		return err
 	}
 
@@ -83,7 +83,8 @@ func (h apiHandler) asHTTP() http.Handler {
 	})
 }
 
-// editorPage is the page /explore shows: the rebuild notice, inside the dashboard chrome.
-func (e *exploreImpl) editorPage(ctx *rendering.DashboardContext) templ.Component {
-	return layout.DefaultPage.Fn(*ctx, rendering.SearchBarOption{}, RebuildNotice())
-}
+// rebuildNotice is the page /explore shows until Explore is rebuilt on the workbench.
+var rebuildNotice = dashboard.New().
+	WithTitle("Explore").
+	HasSearchBar(false).
+	Widget(widget.NewMarkdown().Content("# Explore is being rebuilt\n\nExplore moves onto the new workbench. Until it is back, use the dashboards."))
