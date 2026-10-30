@@ -55,17 +55,13 @@ func parseTimeExpr(text string, now time.Time) (time.Time, error) {
 // now; a custom range is "<from> to <to>", each end a time expression (parseTimeExpr). The error says what cannot be
 // read, as the time picker and the charts show it. Every handler resolves here, with the server's clock, so the charts
 // of a page query the same numbers.
-func (f *DashboardFilters) ResolveTimeRange(now time.Time) (*querying.TimeRange, error) {
-	if f.TimeRange != "custom" {
-		dur, err := time.ParseDuration(f.TimeRange)
-		if err != nil || dur <= 0 {
-			return nil, fmt.Errorf("time range %q: neither a Go duration (`1h`) nor `custom`", f.TimeRange)
-		}
-		return newTimeRange(now.Add(-dur), now), nil
+func (s QueryState) ResolveTimeRange(now time.Time) (*querying.TimeRange, error) {
+	if s.Time != "custom" {
+		return newTimeRange(now.Add(-s.preset), now), nil
 	}
-	parts := strings.Split(f.CustomTimeRange, " to ")
+	parts := strings.Split(s.Range, " to ")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("custom range %q: want `<from> to <to>`", f.CustomTimeRange)
+		return nil, fmt.Errorf("custom range %q: want `<from> to <to>`", s.Range)
 	}
 	from, err := parseTimeExpr(parts[0], now)
 	if err != nil {
@@ -76,7 +72,7 @@ func (f *DashboardFilters) ResolveTimeRange(now time.Time) (*querying.TimeRange,
 		return nil, err
 	}
 	if !from.Before(to) {
-		return nil, fmt.Errorf("custom range %q: from is not before to", f.CustomTimeRange)
+		return nil, fmt.Errorf("custom range %q: from is not before to", s.Range)
 	}
 	return newTimeRange(from, to), nil
 }
@@ -86,15 +82,21 @@ func newTimeRange(from, to time.Time) *querying.TimeRange {
 	return &querying.TimeRange{From: &fromMs, To: &toMs}
 }
 
-// SqlClause is the condition the filters add to a query's WHERE: the window `timeRange` (ResolveTimeRange) and the
-// SQL filter, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500)`. It references the `timestamp`
-// column, so it assumes the query selects from a single base table that has one.
-func (f *DashboardFilters) SqlClause(timeRange *querying.TimeRange) string {
-	clause := fmt.Sprintf("timestamp >= %d AND timestamp <= %d", *timeRange.From/1000, *timeRange.To/1000)
-	if f.SqlFilter != "" {
-		clause += " AND (" + f.SqlFilter + ")"
+// SqlClause is the condition the query state adds to a query's WHERE: the window `timeRange` (TimeClause) and the
+// SQL filter, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500)`.
+func (s QueryState) SqlClause(timeRange *querying.TimeRange) string {
+	clause := TimeClause(timeRange)
+	if s.Sql != "" {
+		clause += " AND (" + s.Sql + ")"
 	}
 	return clause
+}
+
+// TimeClause is the condition of the window `timeRange` alone, `timestamp >= 1761724800 AND timestamp <= 1761746400`,
+// as the alert charts add it. It references the `timestamp` column, so it assumes the query selects from a single
+// base table that has one.
+func TimeClause(timeRange *querying.TimeRange) string {
+	return fmt.Sprintf("timestamp >= %d AND timestamp <= %d", *timeRange.From/1000, *timeRange.To/1000)
 }
 
 // WriteResolvedTimeRange tells the charts the window their query covers (X-Dashica-Resolved-Time-Range), so that they
@@ -104,16 +106,16 @@ func WriteResolvedTimeRange(w http.ResponseWriter, timeRange *querying.TimeRange
 	w.Header().Add("X-Dashica-Resolved-Time-Range", string(b))
 }
 
-// TimeRangeHandler serves the window of the request's `filters` (as every data handler reads them) at now, as
-// `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be read. The time picker asks it before it applies a range,
-// and for the window it shifts or zooms out.
+// TimeRangeHandler serves the window of the request's query state (ParseQueryState, as every data handler reads it)
+// at now, as `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be read. The time picker asks it before it applies
+// a range, and for the window it shifts or zooms out.
 func TimeRangeHandler(w http.ResponseWriter, r *http.Request) {
-	var filters DashboardFilters
-	if err := json.Unmarshal([]byte(r.URL.Query().Get("filters")), &filters); err != nil {
-		http.Error(w, fmt.Sprintf("filters: %v", err), http.StatusBadRequest)
+	state, err := ParseQueryState(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	timeRange, err := filters.ResolveTimeRange(time.Now())
+	timeRange, err := state.ResolveTimeRange(time.Now())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

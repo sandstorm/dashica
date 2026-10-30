@@ -16,7 +16,7 @@ import (
 // existing `chart` frontend component consumes it unchanged.
 //
 // Body: one widget envelope ({"type": ..., "props": ...}). Query args
-// (filters, params) are the same as a compiled widget's endpoint and are read
+// (time, range, sql, wp) are the same as a compiled widget's endpoint and are read
 // by the underlying QueryHandler off the request URL.
 func (e *exploreImpl) handlePreviewQuery(w http.ResponseWriter, r *http.Request) error {
 	return e.dispatchPreview(w, r, "query")

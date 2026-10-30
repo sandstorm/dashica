@@ -1,7 +1,6 @@
 package httpserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -59,21 +58,16 @@ func (qa queryAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) e
 	opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
 	opts.Settings["date_time_input_format"] = "best_effort"          // support ISO 8601 dates (which is used in date picker by browser)
 
-	rawFilters := r.URL.Query().Get("filters")
-	if rawFilters != "" {
-		var filters DashboardFilters
-		err = json.Unmarshal([]byte(rawFilters), &filters)
-		if err != nil {
-			return fmt.Errorf("unmarshalling filters: %w", err)
-		}
-
-		resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
-		if err != nil {
-			return err
-		}
-		// so that charts also show the full range if they have no data at beginning or end
-		WriteResolvedTimeRange(w, resolvedTimeRange)
+	state, err := ParseQueryState(r)
+	if err != nil {
+		return err
 	}
+	resolvedTimeRange, err := state.ResolveTimeRange(time.Now())
+	if err != nil {
+		return err
+	}
+	// so that charts also show the full range if they have no data at beginning or end
+	WriteResolvedTimeRange(w, resolvedTimeRange)
 	if qa.devMode {
 		w.Header().Add("X-Dashica-DevMode", "1")
 	}

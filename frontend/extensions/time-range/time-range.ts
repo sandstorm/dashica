@@ -269,8 +269,9 @@ function formatGoDuration(ms: number): string {
 }
 
 /** The window a time range stands for now, in ms, as the server resolves it; throws the server's reason when it cannot. */
-async function resolveTimeRange(timeRange: string, customTimeRange: string): Promise<{ from: number; to: number }> {
-  const request = new URLSearchParams({ filters: JSON.stringify({ timeRange, customTimeRange }) });
+async function resolveTimeRange(time: string, range: string): Promise<{ from: number; to: number }> {
+  const request = new URLSearchParams({ time });
+  if (time === 'custom') request.set('range', range);
   const response = await fetch(`/time-range?${request}`);
   if (!response.ok) throw new Error((await response.text()).trim());
   return (await response.json()) as { from: number; to: number };

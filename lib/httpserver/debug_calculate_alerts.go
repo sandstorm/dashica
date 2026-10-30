@@ -1,8 +1,6 @@
 package httpserver
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -19,29 +17,19 @@ func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 		return err
 	}
 
-	rawFilters := r.URL.Query().Get("filters")
-	if rawFilters != "" {
-		err := da.alertResultStore.ClearAll()
-		if err != nil {
-			return err
-		}
-
-		var filters DashboardFilters
-		err = json.Unmarshal([]byte(rawFilters), &filters)
-		if err != nil {
-			return fmt.Errorf("unmarshalling filters: %w", err)
-		}
-
-		timeRange, err := filters.ResolveTimeRange(time.Now())
-		if err != nil {
-			return err
-		}
-		if err := da.batchEvaluator.EvaluateAlerts(
-			r.Context(),
-			time.UnixMilli(*timeRange.From), time.UnixMilli(*timeRange.To),
-		); err != nil {
-			return err
-		}
+	state, err := ParseQueryState(r)
+	if err != nil {
+		return err
+	}
+	timeRange, err := state.ResolveTimeRange(time.Now())
+	if err != nil {
+		return err
+	}
+	if err := da.batchEvaluator.EvaluateAlerts(
+		r.Context(),
+		time.UnixMilli(*timeRange.From), time.UnixMilli(*timeRange.To),
+	); err != nil {
+		return err
 	}
 
 	returnToReferer(w, r)

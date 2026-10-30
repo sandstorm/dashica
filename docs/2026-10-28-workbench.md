@@ -197,8 +197,15 @@ Every data handler reads the same query parameters; the server parses them once 
 `QueryState` (time, filters, params). Params stay what they are today: ClickHouse parameters (`param_<name>`); the
 client owns the UI, the server only binds.
 
+✅ (step 6.1) **The request carries the page URL's own keys:** `time`, `range`, `sql`, `wp` (no JSON parameters
+`filters` / `params`). `requestParams()` sends `time` also when it is the page's default, since the server does not
+know the page's default. `httpserver.ParseQueryState(r)` reads them once per request; a missing `time`, a `time` that
+is neither a Go duration nor `custom`, or a `wp` that is not a JSON object of strings fails the request with that
+reason (chart error, 400 from `/time-range` and the alert widgets). A chart with `FromFileWithoutFilters` /
+`SkipFilters()` still needs `time` in its request, but its query ignores it.
+
 ✅ (2026-10-30, with the time picker) **The time range is resolved once per request, in Go:**
-`DashboardFilters.ResolveTimeRange(time.Now())` gives the window in ms, and every handler passes it to `SqlClause` and
+`QueryState.ResolveTimeRange(time.Now())` gives the window in ms, and every handler passes it to `SqlClause` and
 `X-Dashica-Resolved-Time-Range`. Presets use the server's clock (not ClickHouse's `now()`), so the charts of a page
 query the same numbers. The legacy `From` / `To` and the ClickHouse query for `now()` are gone. `GET /time-range`
 answers the same window for the picker.
@@ -225,9 +232,9 @@ query.
 and refreshes once when the tab is shown again if it skipped one; the next tick follows a whole interval after that
 refresh.
 
-**Alerts:** alert widgets only need the time range (the handler uses `filters` only to resolve it), so they read
-`time` like every other handler. Dashboard filters do not apply to alert widgets, and alert evaluation
-(`lib/alerting`) is not touched. Until step 6.1 (§5) alerts keep the JSON parameter.
+✅ (step 6.1) **Alerts:** alert widgets only need the time range, so they read `time` / `range` like every other
+handler and never `sql`: an alert chart's `{{DASHICA_FILTERS}}` is the window alone (`httpserver.TimeClause`).
+Dashboard filters do not apply to alert widgets, and alert evaluation (`lib/alerting`) is not touched.
 
 ### 3.8 Filters: structured, declared, explicit
 
@@ -659,7 +666,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 5b.9 ✅ | **the switch:** `/p/<page>` serves the shell, the client renders `page.json` | dashboards, now client-rendered |
 | 5b.10 ✅ | `BuildComponents` (the widgets' old server props) and templ removed | dashboards |
 | 6 | `QueryState` + structured filters (§3.8), alerts on `time`; in sub-steps, each its own commit | filters as chips, click-to-filter |
-| 6.1 | Go `QueryState` (`time`, `range`, `sql`, `wp`) parsed once per request in `lib/httpserver`; every handler (query, debug, alert overview + chart, Speedscope, `/time-range`) reads it, `DashboardFilters` / the `filters` and `params` JSON are gone; the client sends the page URL's keys (`requestParams`); alerts read only `time` | dashboards, alerts |
+| 6.1 ✅ | Go `QueryState` (`time`, `range`, `sql`, `wp`) parsed once per request in `lib/httpserver`; every handler (query, debug, alert overview + chart, Speedscope, `/time-range`) reads it, `DashboardFilters` / the `filters` and `params` JSON are gone; the client sends the page URL's keys (`requestParams`); alerts read only `time` | dashboards, alerts |
 | 6.2 | charts implement `Query() sql.SqlQueryable` (the query they run, with their own selects); `Mount` serves it through `queryHandler`; `Handler` is left for alerts, Speedscope, schema table | dashboards (refactor only) |
 | 6.3 | `Mount` collects filter fields (§3.8: dimension slots, table GROUP BY / select fields; id = alias; conflicts fail registration); `page.json` `filterFields: [{id, label}]`, each chart's Node `filters: {alias: id}`; generator + golden fixtures regenerated | dashboards; both instances register |
 | 6.4 | `?f=id:op:value` (`eq`, `ne`) in `QueryState`; the query handler applies the applicable filters with bound `{__fN:String}` values (builder: declared expression, same base table; SQL file: own output column) and writes `X-Dashica-Ignored-Filters`; Debug shows the filter clause and its parameters | dashboards; filters by hand-written URL |

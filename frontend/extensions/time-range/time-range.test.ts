@@ -51,11 +51,11 @@ const at = (hours: number, minutes: number) => new Date(2026, 9, 29, hours, minu
 
 const click = (label: string) => bar.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
 
-/** `/time-range` answers `status` and `body`; gives the `filters` asked for. */
+/** `/time-range` answers `status` and `body`; gives the query strings asked with. */
 function serverAnswers(status: number, body: string): string[] {
   const asked: string[] = [];
   vi.stubGlobal('fetch', async (url: string) => {
-    asked.push(new URL(url, location.href).searchParams.get('filters')!);
+    asked.push(new URL(url, location.href).searchParams.toString());
     return new Response(body, { status });
   });
   return asked;
@@ -107,7 +107,7 @@ describe('timeRange', () => {
     type('From', 'now-6h');
     type('To', 'now-1h');
     await submit();
-    expect(asked).toEqual(['{"timeRange":"custom","customTimeRange":"now-6h to now-1h"}']);
+    expect(asked).toEqual([new URLSearchParams({ time: 'custom', range: 'now-6h to now-1h' }).toString()]);
     expect(query.time.custom).toBe('now-6h to now-1h');
     expect(query.time.autoRefresh).toBe(30);
     expect(rangeButton().textContent).toBe('now-6h to now-1h');
@@ -169,7 +169,7 @@ describe('timeRange', () => {
     query.time.setAutoRefresh(30);
     click('Shift back');
     await vi.waitFor(() => expect(query.time.custom).toBe('2026-10-29 10:00 to 2026-10-29 11:00'));
-    expect(asked).toEqual(['{"timeRange":"1h","customTimeRange":""}']);
+    expect(asked).toEqual(['time=1h']);
     expect(query.time.autoRefresh).toBeUndefined();
     serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(11, 0) }));
     click('Shift forward');

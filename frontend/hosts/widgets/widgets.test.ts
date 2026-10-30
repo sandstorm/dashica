@@ -74,7 +74,7 @@ describe('WidgetsHost', () => {
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);
       expect(result.dashicaBucketSize).toBe(900000);
       expect(result.dashicaResolvedTimeRange).toEqual({ from: 1, to: 2 });
-      expect(JSON.parse(testbed.requests[0].searchParams.get('filters')!).sqlFilter).toBe('status >= 500');
+      expect(testbed.requests[0].searchParams.get('sql')).toBe('status >= 500');
     });
 
     it('rejects with the server’s message', async () => {
@@ -83,7 +83,7 @@ describe('WidgetsHost', () => {
     });
 
     it('names URLs below the widget’s handler with the page’s query state', () => {
-      expect(ctx.url('/speedscope-query')).toMatch(/^\/p\/shop\/api\/1\/speedscope-query\?filters=/);
+      expect(ctx.url('/speedscope-query')).toMatch(/^\/p\/shop\/api\/1\/speedscope-query\?time=24h$/);
     });
 
     it('shows the menu widget/context for the widget, with what it queried last', async () => {

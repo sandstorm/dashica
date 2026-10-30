@@ -1,9 +1,9 @@
 package widget
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"time"
 
@@ -71,25 +71,19 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 	opts.Settings["format_custom_field_delimiter"] = " "
 	opts.Settings["date_time_input_format"] = "best_effort"
 
-	if paramsStr := r.URL.Query().Get("params"); paramsStr != "" {
-		var params map[string]string
-		if err := json.Unmarshal([]byte(paramsStr), &params); err != nil {
-			return fmt.Errorf("unmarshalling params: %w", err)
-		}
-		opts.Parameters = params
+	state, err := httpserver.ParseQueryState(r)
+	if err != nil {
+		return err
 	}
+	maps.Copy(opts.Parameters, state.Params)
 
 	q := query
-	if rawFilters := r.URL.Query().Get("filters"); rawFilters != "" && !query.ShouldSkipFilters() {
-		var filters httpserver.DashboardFilters
-		if err := json.Unmarshal([]byte(rawFilters), &filters); err != nil {
-			return fmt.Errorf("unmarshalling filters: %w", err)
-		}
-		resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
+	if !query.ShouldSkipFilters() {
+		resolvedTimeRange, err := state.ResolveTimeRange(time.Now())
 		if err != nil {
 			return err
 		}
-		q = query.With(sql.Where(filters.SqlClause(resolvedTimeRange)))
+		q = query.With(sql.Where(state.SqlClause(resolvedTimeRange)))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 	}

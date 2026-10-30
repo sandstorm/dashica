@@ -28,8 +28,8 @@ describe('speedscopeLink', () => {
     expect(link.textContent).toBe('Open Speedscope');
     const profile = profileUrl(link);
     expect(profile.pathname).toBe('/p/shop/api/4/speedscope-query');
-    expect(JSON.parse(profile.searchParams.get('filters')!).timeRange).toBe('24h');
-    expect(JSON.parse(profile.searchParams.get('params')!)).toEqual({ path: '^/api/' });
+    expect(profile.searchParams.get('time')).toBe('24h');
+    expect(JSON.parse(profile.searchParams.get('wp')!)).toEqual({ path: '^/api/' });
   });
 
   it('follows a change of the time range', () => {
@@ -37,6 +37,6 @@ describe('speedscopeLink', () => {
     testbed.query.time.setRange('1h');
     const link = el.querySelector('a')!;
     expect(link.textContent).toBe('Flame graph');
-    expect(JSON.parse(profileUrl(link).searchParams.get('filters')!).timeRange).toBe('1h');
+    expect(profileUrl(link).searchParams.get('time')).toBe('1h');
   });
 });

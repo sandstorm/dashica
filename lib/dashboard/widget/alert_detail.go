@@ -59,24 +59,18 @@ func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
 		opts.Parameters = alertDef.Params
 
 		query := alertDef.Query
-		filterClause := "1=1"
-		rawFilters := r.URL.Query().Get("filters")
-		if rawFilters != "" {
-			var filters httpserver.DashboardFilters
-			err = json.Unmarshal([]byte(rawFilters), &filters)
-			if err != nil {
-				http.Error(w, "unmarshalling filters: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			filterClause = "(" + filters.SqlClause(resolvedTimeRange) + ")"
-			httpserver.WriteResolvedTimeRange(w, resolvedTimeRange)
+		state, err := httpserver.ParseQueryState(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
+		resolvedTimeRange, err := state.ResolveTimeRange(time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		httpserver.WriteResolvedTimeRange(w, resolvedTimeRange)
+		query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, "("+httpserver.TimeClause(resolvedTimeRange)+")")
 
 		// Add threshold info so frontend can draw threshold lines
 		resolvedAlertIf, err := json.Marshal(alertDef.AlertIf)

@@ -53,39 +53,46 @@ func TestSqlClause(t *testing.T) {
 	to := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
 	window := fmt.Sprintf("timestamp >= %d AND timestamp <= %d", from.Unix(), to.Unix())
 	tests := map[string]struct {
-		sqlFilter string
-		want      string
+		query string
+		want  string
 	}{
-		"window only":     {want: window},
-		"with SQL filter": {sqlFilter: "status >= 500", want: window + " AND (status >= 500)"},
+		"window only":     {query: "time=1h", want: window},
+		"with SQL filter": {query: "time=1h&sql=status+%3E%3D+500", want: window + " AND (status >= 500)"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			f := DashboardFilters{SqlFilter: tt.sqlFilter}
-			if got := f.SqlClause(newTimeRange(from, to)); got != tt.want {
+			if got := parseQueryState(t, tt.query).SqlClause(newTimeRange(from, to)); got != tt.want {
 				t.Errorf("SqlClause = %q, want %q", got, tt.want)
 			}
 		})
 	}
 }
 
+func TestTimeClause_LeavesOutTheSqlFilter(t *testing.T) {
+	from := time.Date(2026, 10, 29, 10, 0, 0, 0, time.Local)
+	to := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
+	if got, want := TimeClause(newTimeRange(from, to)), fmt.Sprintf("timestamp >= %d AND timestamp <= %d", from.Unix(), to.Unix()); got != want {
+		t.Errorf("TimeClause = %q, want %q", got, want)
+	}
+}
+
 func TestResolveTimeRange(t *testing.T) {
 	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.Local)
 	tests := map[string]struct {
-		filters  DashboardFilters
+		query    url.Values
 		from, to time.Time
 	}{
-		"preset":   {filters: DashboardFilters{TimeRange: "90m"}, from: now.Add(-90 * time.Minute), to: now},
-		"relative": {filters: DashboardFilters{TimeRange: "custom", CustomTimeRange: "now-6h to now-1h"}, from: now.Add(-6 * time.Hour), to: now.Add(-time.Hour)},
+		"preset":   {query: url.Values{"time": {"90m"}}, from: now.Add(-90 * time.Minute), to: now},
+		"relative": {query: url.Values{"time": {"custom"}, "range": {"now-6h to now-1h"}}, from: now.Add(-6 * time.Hour), to: now.Add(-time.Hour)},
 		"absolute": {
-			filters: DashboardFilters{TimeRange: "custom", CustomTimeRange: "2026-10-28 08:00 to 2026-10-28 09:30"},
-			from:    time.Date(2026, 10, 28, 8, 0, 0, 0, time.Local),
-			to:      time.Date(2026, 10, 28, 9, 30, 0, 0, time.Local),
+			query: url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00 to 2026-10-28 09:30"}},
+			from:  time.Date(2026, 10, 28, 8, 0, 0, 0, time.Local),
+			to:    time.Date(2026, 10, 28, 9, 30, 0, 0, time.Local),
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := tt.filters.ResolveTimeRange(now)
+			got, err := parseQueryState(t, tt.query.Encode()).ResolveTimeRange(now)
 			if err != nil {
 				t.Fatalf("ResolveTimeRange: %v", err)
 			}
@@ -98,17 +105,18 @@ func TestResolveTimeRange(t *testing.T) {
 
 func TestResolveTimeRange_SaysWhatIsWrong(t *testing.T) {
 	tests := map[string]struct {
-		filters DashboardFilters
-		want    string
+		customRange string
+		want        string
 	}{
-		"unreadable end": {filters: DashboardFilters{TimeRange: "custom", CustomTimeRange: "yesterday to now"}, want: `"yesterday"`},
-		"one end":        {filters: DashboardFilters{TimeRange: "custom", CustomTimeRange: "now-1h"}, want: `<from> to <to>`},
-		"from after to":  {filters: DashboardFilters{TimeRange: "custom", CustomTimeRange: "now-1h to now-2h"}, want: "before"},
-		"no duration":    {filters: DashboardFilters{TimeRange: "2d"}, want: `"2d"`},
+		"unreadable end": {customRange: "yesterday to now", want: `"yesterday"`},
+		"one end":        {customRange: "now-1h", want: `<from> to <to>`},
+		"no range":       {customRange: "", want: `<from> to <to>`},
+		"from after to":  {customRange: "now-1h to now-2h", want: "before"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := tt.filters.ResolveTimeRange(time.Now())
+			query := url.Values{"time": {"custom"}, "range": {tt.customRange}}
+			_, err := parseQueryState(t, query.Encode()).ResolveTimeRange(time.Now())
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("ResolveTimeRange: err = %v, want one saying %s", err, tt.want)
 			}
@@ -117,9 +125,9 @@ func TestResolveTimeRange_SaysWhatIsWrong(t *testing.T) {
 }
 
 func TestTimeRangeHandler(t *testing.T) {
-	filters := url.Values{"filters": {`{"timeRange":"custom","customTimeRange":"2026-10-28 08:00 to 2026-10-28 09:30"}`}}
+	query := url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00 to 2026-10-28 09:30"}}
 	rec := httptest.NewRecorder()
-	TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+filters.Encode(), nil))
+	TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+query.Encode(), nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
@@ -131,10 +139,20 @@ func TestTimeRangeHandler(t *testing.T) {
 }
 
 func TestTimeRangeHandler_SaysWhatIsWrong(t *testing.T) {
-	filters := url.Values{"filters": {`{"timeRange":"custom","customTimeRange":"yesterday to now"}`}}
-	rec := httptest.NewRecorder()
-	TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+filters.Encode(), nil))
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"yesterday"`) {
-		t.Errorf("got %d %q, want 400 naming \"yesterday\"", rec.Code, rec.Body)
+	tests := map[string]struct {
+		query url.Values
+		want  string
+	}{
+		"unreadable range": {query: url.Values{"time": {"custom"}, "range": {"yesterday to now"}}, want: `"yesterday"`},
+		"no duration":      {query: url.Values{"time": {"2d"}}, want: `"2d"`},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+tt.query.Encode(), nil))
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), tt.want) {
+				t.Errorf("got %d %q, want 400 naming %s", rec.Code, rec.Body, tt.want)
+			}
+		})
 	}
 }

@@ -70,9 +70,10 @@ export class QueryHost implements QueryApi {
   }
 
   requestParams(): URLSearchParams {
-    const request = new URLSearchParams();
-    request.set('filters', JSON.stringify({ timeRange: this.time.range, customTimeRange: this.time.custom, sqlFilter: this.filters.sql }));
-    if (Object.keys(this.params.values).length > 0) request.set('params', JSON.stringify(this.params.values));
+    const request = new URLSearchParams({ time: this.time.range });
+    if (this.time.range === 'custom') request.set('range', this.time.custom);
+    if (this.filters.sql) request.set('sql', this.filters.sql);
+    if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
     return request;
   }
 

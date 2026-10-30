@@ -32,7 +32,7 @@ afterEach(() => {
 
 const chart: WidgetMenuContext = {
   widget: { type: 'timeBar', props: { x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: '/p/shop/api/1' },
-  url: (path) => `/p/shop/api/1${path}?filters=%7B%7D`,
+  url: (path) => `/p/shop/api/1${path}?time=24h`,
   lastResult: undefined,
 };
 
@@ -58,7 +58,7 @@ describe('debug', () => {
     });
     await showDebug(chart);
     expect(shown).toBe(1);
-    expect(requested).toEqual(['/p/shop/api/1/debug?filters=%7B%7D']);
+    expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
     const sections = [...body.querySelectorAll('details')].map((d) => d.querySelector('summary')!.textContent);
     expect(sections[0]).toBe('SQL Query');
     expect(body.querySelector('pre')!.textContent).toBe('SELECT count() FROM http_logs');

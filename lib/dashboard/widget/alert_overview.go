@@ -63,21 +63,17 @@ func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 			"alert_group_pattern": pattern,
 		}
 
-		rawFilters := r.URL.Query().Get("filters")
-		if rawFilters != "" {
-			var filters httpserver.DashboardFilters
-			err = json.Unmarshal([]byte(rawFilters), &filters)
-			if err != nil {
-				http.Error(w, "unmarshalling filters: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			httpserver.WriteResolvedTimeRange(w, resolvedTimeRange)
+		state, err := httpserver.ParseQueryState(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
+		resolvedTimeRange, err := state.ResolveTimeRange(time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		httpserver.WriteResolvedTimeRange(w, resolvedTimeRange)
 
 		err = client.QueryToHandler(r.Context(), alertOverviewQuery, opts, w)
 		if err != nil {

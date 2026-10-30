@@ -42,23 +42,17 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	opts.Parameters = alertDefinition.Params
 
 	query := alertDefinition.Query
-	filterClause := "1=1"
-	rawFilters := r.URL.Query().Get("filters")
-	if rawFilters != "" {
-		var filters DashboardFilters
-		err = json.Unmarshal([]byte(rawFilters), &filters)
-		if err != nil {
-			return fmt.Errorf("unmarshalling filters: %w", err)
-		}
-		resolvedTimeRange, err := filters.ResolveTimeRange(time.Now())
-		if err != nil {
-			return err
-		}
-		filterClause = "(" + filters.SqlClause(resolvedTimeRange) + ")"
-		// so that charts also show the full range if they have no data at beginning or end
-		WriteResolvedTimeRange(w, resolvedTimeRange)
+	state, err := ParseQueryState(r)
+	if err != nil {
+		return err
 	}
-	query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, filterClause)
+	resolvedTimeRange, err := state.ResolveTimeRange(time.Now())
+	if err != nil {
+		return err
+	}
+	// so that charts also show the full range if they have no data at beginning or end
+	WriteResolvedTimeRange(w, resolvedTimeRange)
+	query = strings.ReplaceAll(query, sql.DashicaFiltersPlaceholder, "("+TimeClause(resolvedTimeRange)+")")
 
 	resolvedAlertIf, err := json.Marshal(alertDefinition.AlertIf)
 	if err != nil {

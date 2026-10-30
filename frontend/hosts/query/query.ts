@@ -14,7 +14,10 @@ export interface QueryApi {
   readonly onDidRequestRefresh: Event<void>;
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
   refresh(): void;
-  /** What a data handler reads from the query string: `filters` (time range and SQL filter) and `params`. */
+  /**
+   * What a data handler reads from the query string: the keys of the page's URL (`time`, `range`, `sql`, `wp`), with
+   * `time` also when it is the page's default.
+   */
   requestParams(): URLSearchParams;
 }
 

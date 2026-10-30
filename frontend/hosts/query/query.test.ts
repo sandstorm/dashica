@@ -48,18 +48,26 @@ describe('QueryHost', () => {
     expect(query.params.values).toEqual({});
   });
 
-  it('sends the time range, the SQL filter and the params the way the data handlers read them', () => {
+  it('sends the keys of the page URL, the default time range included', () => {
     query.load();
     query.filters.setSql('status >= 500');
     query.params.set('path', '^/api');
     const sent = query.requestParams();
-    expect(JSON.parse(sent.get('filters')!)).toEqual({ timeRange: '24h', customTimeRange: '', sqlFilter: 'status >= 500' });
-    expect(JSON.parse(sent.get('params')!)).toEqual({ path: '^/api' });
+    expect([...sent.keys()]).toEqual(['time', 'sql', 'wp']);
+    expect(sent.get('time')).toBe('24h');
+    expect(sent.get('sql')).toBe('status >= 500');
+    expect(JSON.parse(sent.get('wp')!)).toEqual({ path: '^/api' });
   });
 
-  it('leaves out the params while there are none', () => {
+  it('sends a custom range with its ends', () => {
     query.load();
-    expect(query.requestParams().has('params')).toBe(false);
+    query.time.setCustom('now-6h', 'now-1h');
+    expect(query.requestParams().toString()).toBe(new URLSearchParams({ time: 'custom', range: 'now-6h to now-1h' }).toString());
+  });
+
+  it('sends only the time range while there is no SQL filter and no param', () => {
+    query.load();
+    expect(query.requestParams().toString()).toBe('time=24h');
   });
 
   it('asks the widgets to query again when the time, the filter or a param changes, but not for auto refresh', () => {

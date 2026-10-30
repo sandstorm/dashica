@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"time"
 
@@ -20,13 +21,11 @@ type QueryHandler struct {
 	FileSystem              fs.ReadFileFS
 }
 
-type DashboardFilters struct {
-	TimeRange       string `json:"timeRange"`
-	CustomTimeRange string `json:"customTimeRange"`
-	SqlFilter       string `json:"sqlFilter"`
-}
-
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
+	state, err := ParseQueryState(r)
+	if err != nil {
+		return err
+	}
 	serverId := queryObj.Database()
 	if serverId == "" {
 		serverId = "default"
@@ -40,30 +39,16 @@ func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, w http.ResponseWri
 	opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
 	opts.Settings["date_time_input_format"] = "best_effort"          // support ISO 8601 dates (which is used in date picker by browser)
 
-	paramsStr := r.URL.Query().Get("params")
-	if paramsStr != "" {
-		var params map[string]string
-		err = json.Unmarshal([]byte(paramsStr), &params)
-		if err != nil {
-			return fmt.Errorf("unmarshalling params: %w", err)
-		}
-		opts.Parameters = params
-	}
+	maps.Copy(opts.Parameters, state.Params)
 
-	rawFilters := r.URL.Query().Get("filters")
 	q := queryObj
 	var resolvedTimeRange *querying2.TimeRange
-	if rawFilters != "" && !queryObj.ShouldSkipFilters() {
-		var filters DashboardFilters
-		err = json.Unmarshal([]byte(rawFilters), &filters)
-		if err != nil {
-			return fmt.Errorf("unmarshalling filters: %w", err)
-		}
-		resolvedTimeRange, err = filters.ResolveTimeRange(time.Now())
+	if !queryObj.ShouldSkipFilters() {
+		resolvedTimeRange, err = state.ResolveTimeRange(time.Now())
 		if err != nil {
 			return err
 		}
-		q = queryObj.With(sql.Where(filters.SqlClause(resolvedTimeRange)))
+		q = queryObj.With(sql.Where(state.SqlClause(resolvedTimeRange)))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 		// so that charts also show the full range if they have no data at beginning or end
@@ -101,6 +86,10 @@ type DebugInfo struct {
 
 // HandleDebug returns debug information about the query including the SQL string and EXPLAIN output
 func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWriter, r *http.Request) error {
+	state, err := ParseQueryState(r)
+	if err != nil {
+		return err
+	}
 	serverId := queryObj.Database()
 	if serverId == "" {
 		serverId = "default"
@@ -113,17 +102,8 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 	opts := clickhouse.DefaultQueryOptions()
 	opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates
 
-	paramsStr := r.URL.Query().Get("params")
-	if paramsStr != "" {
-		var params map[string]string
-		err = json.Unmarshal([]byte(paramsStr), &params)
-		if err != nil {
-			return fmt.Errorf("unmarshalling params: %w", err)
-		}
-		opts.Parameters = params
-	}
+	maps.Copy(opts.Parameters, state.Params)
 
-	rawFilters := r.URL.Query().Get("filters")
 	q := queryObj
 	var resolvedTimeRange *querying2.TimeRange
 
@@ -131,17 +111,12 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, w http.ResponseWri
 		Stats: make(map[string]interface{}),
 	}
 
-	if rawFilters != "" && !queryObj.ShouldSkipFilters() {
-		var filters DashboardFilters
-		err = json.Unmarshal([]byte(rawFilters), &filters)
-		if err != nil {
-			return fmt.Errorf("unmarshalling filters: %w", err)
-		}
-		resolvedTimeRange, err = filters.ResolveTimeRange(time.Now())
+	if !queryObj.ShouldSkipFilters() {
+		resolvedTimeRange, err = state.ResolveTimeRange(time.Now())
 		if err != nil {
 			return err
 		}
-		filterClause := filters.SqlClause(resolvedTimeRange)
+		filterClause := state.SqlClause(resolvedTimeRange)
 		q = queryObj.With(sql.Where(filterClause))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)

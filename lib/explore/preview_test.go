@@ -14,7 +14,7 @@ import (
 )
 
 // echoWidget is a fake widget with a query registered only for these tests. Its
-// query handler echoes the request's `filters` query arg, letting us assert
+// query handler echoes the request's `time` query arg, letting us assert
 // that dispatchPreview reaches the widget's own /query handler with the
 // original request intact — without a ClickHouse connection.
 type echoWidget struct{}
@@ -22,10 +22,10 @@ type echoWidget struct{}
 func (e *echoWidget) Handler(rendering.Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, "QUERY filters="+r.URL.Query().Get("filters"))
+		_, _ = io.WriteString(w, "QUERY time="+r.URL.Query().Get("time"))
 	})
 	mux.HandleFunc("/debug", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, "DEBUG filters="+r.URL.Query().Get("filters"))
+		_, _ = io.WriteString(w, "DEBUG time="+r.URL.Query().Get("time"))
 	})
 	return mux
 }
@@ -45,14 +45,14 @@ func newTestExplore() *exploreImpl {
 func TestDispatchPreview_ReachesWidgetQueryHandler(t *testing.T) {
 	e := newTestExplore()
 	body := `{"type":"exploreTestEcho"}`
-	req := httptest.NewRequest(http.MethodPost, "/explore/api/preview/query?filters=%7B%22timeRange%22%3A%2224h%22%7D", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/explore/api/preview/query?time=24h", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	if err := e.handlePreviewQuery(rec, req); err != nil {
 		t.Fatalf("handlePreviewQuery: %v", err)
 	}
 	got := rec.Body.String()
-	want := `QUERY filters={"timeRange":"24h"}`
+	want := `QUERY time=24h`
 	if got != want {
 		t.Errorf("body = %q, want %q", got, want)
 	}
@@ -66,8 +66,8 @@ func TestDispatchPreview_ReachesWidgetDebugHandler(t *testing.T) {
 	if err := e.handlePreviewDebug(rec, req); err != nil {
 		t.Fatalf("handlePreviewDebug: %v", err)
 	}
-	if got := rec.Body.String(); got != "DEBUG filters=" {
-		t.Errorf("body = %q, want %q", got, "DEBUG filters=")
+	if got := rec.Body.String(); got != "DEBUG time=" {
+		t.Errorf("body = %q, want %q", got, "DEBUG time=")
 	}
 }
 
