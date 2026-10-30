@@ -189,6 +189,15 @@ Every data handler reads the same query parameters; the server parses them once 
 `QueryState` (time, filters, params) and drops the legacy `From` / `To`. Params stay what they are today: ClickHouse
 parameters (`param_<name>`); the client owns the UI, the server only binds.
 
+**Time range as in Grafana (decided 2026-10-30):** the title bar shows one button with the range ("Last 1h",
+"29.10. 10:00 – 12:00"), and beside it ‹ › (shift by the window's length) and ⊖ (zoom out to twice the window). The
+button opens a panel below it: on the left From / To and "Apply", and the custom ranges used last (3, per viewer); on
+the right the quick ranges (the presets), filtered by typing. From and To are each an absolute time
+(`2026-10-29 10:00`, in the viewer's time zone) or a time relative to now (`now`, `now-6h`; units `s m h d w`). The
+**server** understands these expressions, as Grafana does, so a relative range moves with auto refresh and a shared
+link stays relative: `?time=custom&range=now-6h to now-1h`. A preset is any Go duration (`?time=90m`). No calendar in
+the first version.
+
 **Alerts:** alert widgets only need the time range (the handler uses `filters` only to resolve it), so they read
 `time` like every other handler. Dashboard filters do not apply to alert widgets, and alert evaluation
 (`lib/alerting`) is not touched. Until the filter step (§5) alerts keep the JSON parameter.
