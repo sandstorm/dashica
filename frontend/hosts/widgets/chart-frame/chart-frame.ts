@@ -49,7 +49,8 @@ export class ChartFrame {
     this.#ctx = ctx;
     this.#options = options;
     const browserWindow = el.ownerDocument.defaultView!;
-    const menuIcon = createElement(EllipsisVertical, { width: 16, height: 16 });
+    // its three dots thicker than lucide's: at 16px they are ~2.7px wide and barely show on the dark raised surface
+    const menuIcon = createElement(EllipsisVertical, { width: 16, height: 16, 'stroke-width': 3 });
     this.#spinner = html`<div class="d-chart-frame__spinner" title="Refreshing…" hidden><span class="d-spinner"></span></div>`;
     this.#shimmer = html`<div class="d-chart-frame__shimmer"></div>`;
     this.#body = html`<div class="d-chart-frame__body" style=${options.height ? { 'min-height': `${options.height}px` } : {}}></div>`;
