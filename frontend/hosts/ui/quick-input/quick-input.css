@@ -13,7 +13,7 @@
   width: min(560px, calc(100% - 16px));
   padding: 8px;
   border: 1px solid var(--color-base-300, #ddd);
-  border-radius: 8px;
+  border-radius: var(--radius-box, 4px);
   background: var(--color-base-100, #fff);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
   color: var(--color-base-content, #1f2937);
@@ -23,7 +23,7 @@
 .dashica-wb__quick-pick-field {
   padding: 4px 8px;
   border: 1px solid var(--color-base-300, #ddd);
-  border-radius: 6px;
+  border-radius: var(--radius-field, 4px);
   background: var(--color-base-100, #fff);
   color: inherit;
   font: inherit;
@@ -47,7 +47,7 @@
   align-items: baseline;
   gap: 0 8px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-field, 4px);
   cursor: pointer;
 }
 .dashica-wb__quick-pick-item:hover { background: var(--color-base-200, #f4f4f5); }

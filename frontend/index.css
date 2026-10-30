@@ -4,4 +4,19 @@
     themes: winter --default, night --prefersdark;
 }
 
+/* Angular rather than round: small corners on boxes, fields and toggles, in both themes */
+@plugin "daisyui/theme" {
+    name: "winter";
+    default: true;
+    --radius-box: 0.25rem;
+    --radius-field: 0.25rem;
+    --radius-selector: 0.125rem;
+}
 
+@plugin "daisyui/theme" {
+    name: "night";
+    prefersdark: true;
+    --radius-box: 0.25rem;
+    --radius-field: 0.25rem;
+    --radius-selector: 0.125rem;
+}

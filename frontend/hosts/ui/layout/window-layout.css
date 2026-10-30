@@ -72,7 +72,7 @@
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-field, 4px);
   padding: 0;
   background: none;
   color: var(--wb-muted);
@@ -156,7 +156,7 @@
 .dashica-wb__bottom-tab,
 .dashica-wb__bottom-close {
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-field, 4px);
   padding: 2px 10px;
   background: none;
   color: var(--wb-text);
