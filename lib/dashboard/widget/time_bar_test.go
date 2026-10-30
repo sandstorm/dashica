@@ -277,7 +277,7 @@ ORDER BY
 			widget := NewTimeBar(newTimeBarTestBaseQuery())
 			widget = tt.setup(widget)
 
-			query := widget.buildQuery()
+			query := widget.Query()
 			actualSQL := query.Build()
 
 			if actualSQL != tt.expectedSQL {
@@ -351,7 +351,7 @@ ORDER BY
 			widget := NewTimeBar(newTimeBarTestBaseQuery())
 			widget = tt.setup(widget)
 
-			query := widget.buildQuery()
+			query := widget.Query()
 			actualSQL := query.Build()
 
 			if actualSQL != tt.expectedSQL {

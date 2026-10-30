@@ -1,10 +1,6 @@
 package widget
 
 import (
-	"net/http"
-
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
@@ -52,10 +48,8 @@ func NewStats(sql sql.SqlQueryable) *Stats {
 	}
 }
 
-func (s *Stats) Handler(deps rendering.Dependencies) http.Handler {
-	// Build the SQL query - select all stat fields
+func (s *Stats) Query() sql.SqlQueryable {
 	query := s.sql
-	// Add optional fields
 	if s.titleField != nil {
 		query = query.With(sql.Select(*s.titleField))
 	}
@@ -63,7 +57,7 @@ func (s *Stats) Handler(deps rendering.Dependencies) http.Handler {
 		query = query.With(sql.Select(*s.fillField))
 	}
 
-	return queryHandler(deps, query)
+	return query
 }
 
 func (s *Stats) explicitId() string { return s.id }

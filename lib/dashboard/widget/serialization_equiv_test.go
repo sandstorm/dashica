@@ -21,7 +21,7 @@ import (
 //     the runtime actually renders/executes.
 //
 // The test lives in package widget on purpose so it can reach the unexported
-// buildChartProps / buildQuery without copying any production logic into it.
+// buildChartProps without copying any production logic into it.
 
 func roundTrip(t *testing.T, w WidgetDefinition) WidgetDefinition {
 	t.Helper()
@@ -164,7 +164,7 @@ func TestRoundTrip_propsAndSQL(t *testing.T) {
 	if !bytes.Equal(got, want) {
 		t.Errorf("props differ after round trip:\n want: %s\n got:  %s", want, got)
 	}
-	if got, want := tb2.buildQuery().Build(), tb.buildQuery().Build(); got != want {
+	if got, want := tb2.Query().Build(), tb.Query().Build(); got != want {
 		t.Errorf("built SQL differs after round trip:\n want: %s\n got:  %s", want, got)
 	}
 }

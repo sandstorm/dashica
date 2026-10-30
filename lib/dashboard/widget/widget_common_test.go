@@ -6,9 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -76,6 +79,31 @@ func TestMount_TheHandlerSeesThePathBelowTheWidgetsURL(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/p/shop/api/1/viewer/index.html", nil))
 	if rec.Body.String() != "/viewer/index.html" {
 		t.Errorf("handler saw %q", rec.Body)
+	}
+}
+
+func TestMount_ServesTheQueryAChartRunsWithItsOwnAdjustments(t *testing.T) {
+	table := NewTable(sql.New(sql.From("http_logs"), sql.Select(sql.Field("host")))).Limit(25)
+	stats := NewStats(sql.New(sql.From("payments"), sql.Select(sql.Field("sum(amount)").WithAlias("value")))).
+		TitleField(sql.Field("currency"))
+	// /debug answers the built query; its EXPLAINs fail against the unreachable server and stay unchecked.
+	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
+	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
+		ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()),
+	}}
+	mux := http.NewServeMux()
+	nodes, err := Widgets{table, stats}.Mount(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop/api"))
+	if err != nil {
+		t.Fatalf("Mount: %v", err)
+	}
+
+	for i, want := range []string{"LIMIT 25", "currency"} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, nodes[i].DataURL+"/debug?time=1h", nil))
+		var debug struct{ Query string }
+		if err := json.Unmarshal(rec.Body.Bytes(), &debug); err != nil || !strings.Contains(debug.Query, want) {
+			t.Errorf("%s: want %q in the query, got %d %s (%v)", nodes[i].Type, want, rec.Code, rec.Body, err)
+		}
 	}
 }
 

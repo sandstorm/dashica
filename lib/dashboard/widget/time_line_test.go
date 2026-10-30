@@ -105,7 +105,7 @@ ORDER BY
 			widget := NewTimeLine(newTimeLineTestBaseQuery())
 			widget = tt.setup(widget)
 
-			actualSQL := widget.buildQuery().Build()
+			actualSQL := widget.Query().Build()
 			if actualSQL != tt.expectedSQL {
 				t.Errorf("SQL mismatch\n\nExpected:\n%s\n\nActual:\n%s\n\nDiff:\n%s",
 					tt.expectedSQL,

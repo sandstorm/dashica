@@ -24,8 +24,8 @@ type Widgets []WidgetDefinition
 // WidgetsMap maps an area/slot name to its widget, e.g. Grid's named areas.
 type WidgetsMap map[string]WidgetDefinition
 
-// WidgetDefinition is a widget of a page: what it has beyond its props it implements as withHandler and withChildren,
-// and Mount describes it for page.json by the type it is registered as (Register).
+// WidgetDefinition is a widget of a page: what it has beyond its props it implements as withQuery, withHandler and
+// withChildren, and Mount describes it for page.json by the type it is registered as (Register).
 type WidgetDefinition interface{}
 
 // withProps is a widget's props in page.json, its fields tagged `dashica-gen:"client"` and what its computeProps
@@ -34,7 +34,14 @@ type withProps interface {
 	marshalProps(ctx *rendering.DashboardContext) ([]byte, error)
 }
 
-// withHandler is a widget with data: its handler answers the requests below its URL ("/query", "/viewer/index.html").
+// withQuery is a chart: Mount serves the query it runs, with its own selects and limits, at "/query" (the data,
+// Arrow) and "/debug" (the query, EXPLAIN).
+type withQuery interface {
+	Query() sql.SqlQueryable
+}
+
+// withHandler is a widget with data beyond a query (alerts, Speedscope, the schema table): its handler answers the
+// requests below its URL ("/viewer/index.html", "/schema").
 type withHandler interface {
 	Handler(deps rendering.Dependencies) http.Handler
 }
@@ -69,9 +76,10 @@ type Node struct {
 	Title string `json:"-"`
 }
 
-// Mount is the Node of `w` for page.json. A withHandler gets its handler mounted at "<page>/api/<id>/" below `api`,
-// the id chosen by its author (`.Id(…)`) or else the page's next (ctx.WidgetHandlers), and that URL as its DataURL;
-// a withChildren's children are mounted the same way, in the order it yields them.
+// Mount is the Node of `w` for page.json. A withQuery or withHandler gets its DataHandler mounted at
+// "<page>/api/<id>/" below `api`, the id chosen by its author (`.Id(…)`) or else the page's next
+// (ctx.WidgetHandlers), and that URL as its DataURL; a withChildren's children are mounted the same way, in the order
+// it yields them.
 func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollector, w WidgetDefinition) (Node, error) {
 	typ, err := typeName(w)
 	if err != nil {
@@ -89,13 +97,13 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 	if titled, ok := w.(withTitle); ok {
 		node.Title = titled.widgetTitle()
 	}
-	if data, ok := w.(withHandler); ok {
+	if data := DataHandler(ctx.Deps, w); data != nil {
 		id := ""
 		if chosen, ok := w.(withExplicitId); ok {
 			id = chosen.explicitId()
 		}
 		own := ctx.WidgetHandlers(api, w, id)
-		if err := own.Handle("/", http.StripPrefix(own.Path(), data.Handler(ctx.Deps))); err != nil {
+		if err := own.Handle("/", http.StripPrefix(own.Path(), data)); err != nil {
 			return Node{}, fmt.Errorf("%s: %w", typ, err)
 		}
 		node.DataURL = own.Path()
@@ -183,6 +191,18 @@ func (w WidgetsMap) all() iter.Seq2[string, WidgetDefinition] {
 			}
 		}
 	}
+}
+
+// DataHandler answers the requests below a widget's URL: a withQuery's query (queryHandler), a withHandler's
+// Handler; nil for a widget without data.
+func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
+	if chart, ok := w.(withQuery); ok {
+		return queryHandler(deps, chart.Query())
+	}
+	if data, ok := w.(withHandler); ok {
+		return data.Handler(deps)
+	}
+	return nil
 }
 
 // queryHandler serves `query`: /query (the data, Arrow) and /debug (the query, EXPLAIN).

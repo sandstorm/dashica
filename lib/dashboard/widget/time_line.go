@@ -1,10 +1,7 @@
 package widget
 
 import (
-	"net/http"
-
 	"github.com/sandstorm/dashica/lib/dashboard/color"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -194,7 +191,7 @@ func (b *TimeLine) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeLine {
 	return &cloned
 }
 
-func (b *TimeLine) buildQuery() sql.SqlQueryable {
+func (b *TimeLine) Query() sql.SqlQueryable {
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
 		sql.GroupBy(b.x),
@@ -240,10 +237,6 @@ func (b *TimeLine) buildQuery() sql.SqlQueryable {
 	}
 
 	return query
-}
-
-func (b *TimeLine) Handler(deps rendering.Dependencies) http.Handler {
-	return queryHandler(deps, b.buildQuery())
 }
 
 func (b *TimeLine) explicitId() string { return b.id }

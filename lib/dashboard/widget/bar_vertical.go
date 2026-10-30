@@ -1,10 +1,7 @@
 package widget
 
 import (
-	"net/http"
-
 	"github.com/sandstorm/dashica/lib/dashboard/color"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -169,7 +166,7 @@ func (b *BarVertical) AdjustQuery(opts ...sql.SqlBuilderOption) *BarVertical {
 	return &cloned
 }
 
-func (b *BarVertical) buildQuery() sql.SqlQueryable {
+func (b *BarVertical) Query() sql.SqlQueryable {
 	// Build the SQL query
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
@@ -197,10 +194,6 @@ func (b *BarVertical) buildQuery() sql.SqlQueryable {
 	}
 
 	return query
-}
-
-func (b *BarVertical) Handler(deps rendering.Dependencies) http.Handler {
-	return queryHandler(deps, b.buildQuery())
 }
 
 func (b *BarVertical) explicitId() string { return b.id }

@@ -1,10 +1,6 @@
 package widget
 
 import (
-	"net/http"
-
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
-
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
@@ -60,13 +56,8 @@ func (b *Table) AdjustQuery(opts ...sql.SqlBuilderOption) *Table {
 	return &cloned
 }
 
-func (b *Table) Handler(deps rendering.Dependencies) http.Handler {
-	// Build the SQL query
-	query := b.sql.With(
-		sql.Limit(b.limit),
-	)
-
-	return queryHandler(deps, query)
+func (b *Table) Query() sql.SqlQueryable {
+	return b.sql.With(sql.Limit(b.limit))
 }
 
 func (b *Table) explicitId() string { return b.id }

@@ -495,8 +495,8 @@ type withChildren interface {
 	Children() iter.Seq2[string, WidgetDefinition]
 }
 
-// withQuery is a chart: Mount serves its query ("GET /query" Arrow, "GET /debug" the query and EXPLAIN) and collects
-// its filter fields from it (step 6.2)
+// withQuery is a chart: Mount serves its query ("GET /query" Arrow, "GET /debug" the query and EXPLAIN) (step 6.2)
+// and collects its filter fields from it (step 6.3)
 type withQuery interface {
 	Query() sql.SqlQueryable
 }
@@ -564,7 +564,7 @@ A widget has at most three things the page needs, and each is a standard library
 | What | Interface | Who |
 |---|---|---|
 | props | its fields tagged `dashica-gen:"client"` (the generated `marshalProps`) | every widget |
-| data | a chart: `Query() sql.SqlQueryable`, served by the framework's `queryHandler` (from 6.2); else `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | `Query`: the nine charts; `Handler`: `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `SchemaTable` (`/schema`) |
+| data | a chart: `Query() sql.SqlQueryable`, served by the framework's `queryHandler` (from 6.2); else `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | `Query`: the eight charts (`TimeBar`, `TimeLine`, `BarVertical`, `BarHorizontal`, `TimeHeatmap`, `TimeHeatmapOrdinal`, `Stats`, `Table`); `Handler`: `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `SchemaTable` (`/schema`) |
 | children | `Children() iter.Seq2[string, WidgetDefinition]` | `Grid` (areas by name, sorted), `CollapsibleGroup` ("0", "1", …) |
 
 Everything else is **one** framework function, `widget.Mount`: the type name from the registry, the id, the URL, the
@@ -592,7 +592,11 @@ Open in this design:
 1. **Positions as keys:** `CollapsibleGroup` yields "0", "1", … (`Widgets.all`, since `slices.All` yields `int`).
 2. **Filter fields** (§3.8) are collected from each chart's query at mount: `queryHandler` hides the query, so a chart
    also says it (`Query() sql.SqlQueryable`), which the framework then turns into the handler and the filter fields;
-   then `Handler` is left for the special widgets. Decided: step 6.2.
+   then `Handler` is left for the special widgets. ✅ Done in step 6.2: each chart's `Query()` is the query it runs,
+   with its own selects (`Stats`' title and fill fields, `Table`'s `Limit`); `widget.DataHandler(deps, w)` is
+   `queryHandler(deps, w.Query())` for a chart, `w.Handler(deps)` for the others, and both `Mount` and Explore's
+   preview serve it; dashica-gen gives a widget `dataUrl` when it has `Query` or `Handler`. The charts are eight,
+   not nine.
 3. **Field expressions:** `x` / `y` / `fill` are tagged `client` and go out as `SqlField` with their expression
    (`JSONExtractString(attrs,'host')`), as before; §3.8 says expressions never leave the server. The client needs
    only the column alias: reduced in step 6.9 (Explore's Go code reads the widgets' full JSON, not their props).
@@ -667,7 +671,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 5b.10 ✅ | `BuildComponents` (the widgets' old server props) and templ removed | dashboards |
 | 6 | `QueryState` + structured filters (§3.8), alerts on `time`; in sub-steps, each its own commit | filters as chips, click-to-filter |
 | 6.1 ✅ | Go `QueryState` (`time`, `range`, `sql`, `wp`) parsed once per request in `lib/httpserver`; every handler (query, debug, alert overview + chart, Speedscope, `/time-range`) reads it, `DashboardFilters` / the `filters` and `params` JSON are gone; the client sends the page URL's keys (`requestParams`); alerts read only `time` | dashboards, alerts |
-| 6.2 | charts implement `Query() sql.SqlQueryable` (the query they run, with their own selects); `Mount` serves it through `queryHandler`; `Handler` is left for alerts, Speedscope, schema table | dashboards (refactor only) |
+| 6.2 ✅ | charts implement `Query() sql.SqlQueryable` (the query they run, with their own selects); `Mount` serves it through `queryHandler`; `Handler` is left for alerts, Speedscope, schema table | dashboards (refactor only) |
 | 6.3 | `Mount` collects filter fields (§3.8: dimension slots, table GROUP BY / select fields; id = alias; conflicts fail registration); `page.json` `filterFields: [{id, label}]`, each chart's Node `filters: {alias: id}`; generator + golden fixtures regenerated | dashboards; both instances register |
 | 6.4 | `?f=id:op:value` (`eq`, `ne`) in `QueryState`; the query handler applies the applicable filters with bound `{__fN:String}` values (builder: declared expression, same base table; SQL file: own output column) and writes `X-Dashica-Ignored-Filters`; Debug shows the filter clause and its parameters | dashboards; filters by hand-written URL |
 | 6.5 | client: `FiltersModel` holds `{fieldId, op, value}[]` (URL `f`, `requestParams`), `ctx.addFilter`; the filter bar shows them as chips (label, = / ≠, value, ×); `ChartFrame` shows "ignores `label`" from `X-Dashica-Ignored-Filters` | filters as chips (from links) |

@@ -31,7 +31,7 @@ ORDER BY
     amount_of_traces desc
 LIMIT 5;`
 
-	got := bh.buildQuery().Build()
+	got := bh.Query().Build()
 	if got != want {
 		t.Errorf("SQL mismatch\nExpected:\n%s\n\nActual:\n%s\n\nDiff:\n%s",
 			want, got, diffStrings(want, got))
@@ -53,7 +53,7 @@ func TestBarHorizontal_Immutability(t *testing.T) {
 // nil pointer, not a non-nil pointer wrapping a nil interface. The editor emits
 // `"fill": null` when the user switches Fill back to "(none)"; the old generated
 // unmarshal did `r.fill = &f` unconditionally, so `b.fill != nil` was true and
-// buildQuery dereferenced the nil interface (panic seen as
+// Query dereferenced the nil interface (panic seen as
 // "preview render: widget is incomplete or invalid (nil pointer dereference)").
 func TestBarHorizontal_FillNullUnmarshalsToNil(t *testing.T) {
 	jsonIn := `{"sql":{"kind":"table","table":"events"},` +
@@ -70,5 +70,5 @@ func TestBarHorizontal_FillNullUnmarshalsToNil(t *testing.T) {
 	}
 
 	// Must not panic (the reported bug).
-	_ = bh.buildQuery().Build()
+	_ = bh.Query().Build()
 }

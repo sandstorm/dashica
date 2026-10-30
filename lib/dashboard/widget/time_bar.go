@@ -1,10 +1,7 @@
 package widget
 
 import (
-	"net/http"
-
 	"github.com/sandstorm/dashica/lib/dashboard/color"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -220,7 +217,7 @@ func NewTimeBar(sql sql.SqlQueryable) *TimeBar {
 	}
 }
 
-func (b *TimeBar) buildQuery() sql.SqlQueryable {
+func (b *TimeBar) Query() sql.SqlQueryable {
 	// Build the SQL query
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
@@ -250,10 +247,6 @@ func (b *TimeBar) buildQuery() sql.SqlQueryable {
 	}
 
 	return query
-}
-
-func (b *TimeBar) Handler(deps rendering.Dependencies) http.Handler {
-	return queryHandler(deps, b.buildQuery())
 }
 
 func (b *TimeBar) explicitId() string { return b.id }

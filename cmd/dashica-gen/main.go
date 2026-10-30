@@ -107,8 +107,8 @@ type widgetInfo struct {
 	// (ComputedFields) are what the server computes when the page is mounted, in the props in page.json only.
 	ComputedType   string
 	ComputedFields []fieldInfo
-	// HasHandler: it has a Handler method, so Mount gives it a data URL (withHandler).
-	HasHandler bool
+	// HasData: it has a Query or a Handler method, so Mount gives it a data URL (withQuery, withHandler).
+	HasData bool
 }
 
 // fieldCategory names how a field is (de)serialized and rendered. It is the

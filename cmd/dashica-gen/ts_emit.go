@@ -226,7 +226,7 @@ func (e *dtoEmitter) emit(named *types.Named) error {
 	return nil
 }
 
-// widgetNode writes WidgetNode, widget.Node per widget type: its props, `dataUrl` when it has a handler, `children`
+// widgetNode writes WidgetNode, widget.Node per widget type: its props, `dataUrl` when it has data, `children`
 // when it has children fields (both as Mount sets them).
 func (e *dtoEmitter) widgetNode(m *model) error {
 	named, err := e.lookup(widgetNode)
@@ -237,7 +237,7 @@ func (e *dtoEmitter) widgetNode(m *model) error {
 	fmt.Fprintf(&e.out, "/** %s */\nexport type WidgetNode =", e.typeDoc(named))
 	for _, w := range m.widgets {
 		fmt.Fprintf(&e.out, "\n  | { type: '%s'; props: %sProps", w.WireName, w.TypeName)
-		if w.HasHandler {
+		if w.HasData {
 			e.out.WriteString("; dataUrl: string")
 		}
 		if hasChildren(w) {

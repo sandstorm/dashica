@@ -346,7 +346,7 @@ GROUP BY
 			widget := NewBarVertical(newTestBaseQuery())
 			widget = tt.setup(widget)
 
-			query := widget.buildQuery()
+			query := widget.Query()
 			actualSQL := query.Build()
 
 			if actualSQL != tt.expectedSQL {
@@ -437,7 +437,7 @@ ORDER BY
 			widget := NewBarVertical(newTestBaseQuery())
 			widget = tt.setup(widget)
 
-			query := widget.buildQuery()
+			query := widget.Query()
 			actualSQL := query.Build()
 
 			if actualSQL != tt.expectedSQL {

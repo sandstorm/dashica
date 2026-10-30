@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
@@ -30,11 +29,11 @@ func (e *exploreImpl) handlePreviewDebug(w http.ResponseWriter, r *http.Request)
 
 // dispatchPreview deserializes the widget from the request body and hands the
 // request to the widget's own handler at "/<endpoint>". This reuses the *exact*
-// compiled query path (the widget's Handler → QueryHandler) — no parallel
+// compiled query path (widget.DataHandler → QueryHandler) — no parallel
 // execution logic to drift.
 func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, endpoint string) (err error) {
 	// The widget arrives from the browser and is often incomplete (e.g. a
-	// freshly-added chart with no x/y yet); its buildQuery/buildChartProps then
+	// freshly-added chart with no x/y yet); its Query/buildChartProps then
 	// dereference nil fields and panic. Turn that into a normal error so an
 	// unfinished widget shows a preview error instead of crashing the server.
 	defer recoverToError("preview "+endpoint, &err)
@@ -56,17 +55,15 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 		return fmt.Errorf("preview: empty widget")
 	}
 
-	// The widget's Handler, as widget.Mount mounts it: a chart's "/query" and "/debug".
-	data, ok := wd.(interface {
-		Handler(deps rendering.Dependencies) http.Handler
-	})
-	if !ok {
+	// The widget's handler, as widget.Mount mounts it: a chart's "/query" and "/debug".
+	data := widget.DataHandler(e.deps, wd)
+	if data == nil {
 		return fmt.Errorf("preview: widget type %T has no %s to preview", wd, endpoint)
 	}
 	below := r.Clone(r.Context())
 	below.URL.Path = "/" + endpoint
 	below.URL.RawPath = ""
-	data.Handler(e.deps).ServeHTTP(w, below)
+	data.ServeHTTP(w, below)
 	return nil
 }
 

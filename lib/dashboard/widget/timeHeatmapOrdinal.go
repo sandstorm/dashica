@@ -1,10 +1,7 @@
 package widget
 
 import (
-	"net/http"
-
 	"github.com/sandstorm/dashica/lib/dashboard/color"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -131,7 +128,7 @@ func NewTimeHeatmapOrdinal(sql *sql.SqlQuery) *TimeHeatmapOrdinal {
 	}
 }
 
-func (h *TimeHeatmapOrdinal) buildQuery() sql.SqlQueryable {
+func (h *TimeHeatmapOrdinal) Query() sql.SqlQueryable {
 	// Build the SQL query
 	query := h.sql.With(
 		sql.PrependSelect(h.x),
@@ -149,10 +146,6 @@ func (h *TimeHeatmapOrdinal) buildQuery() sql.SqlQueryable {
 	}
 
 	return query
-}
-
-func (h *TimeHeatmapOrdinal) Handler(deps rendering.Dependencies) http.Handler {
-	return queryHandler(deps, h.buildQuery())
 }
 
 func (h *TimeHeatmapOrdinal) explicitId() string { return h.id }
