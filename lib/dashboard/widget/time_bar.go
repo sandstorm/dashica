@@ -29,8 +29,6 @@ type TimeBar struct {
 	id string
 	// height is the chart height in pixels.
 	height int `dashica-gen:"client"`
-	// logScale starts the chart on a log scale; the viewer turns it on and off in the chart's menu. Zero value: linear.
-	logScale bool `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
 	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
@@ -81,7 +79,7 @@ var (
 	// OrderValue stacks by ascending value (descending with StackOptions.Reverse).
 	OrderValue = StackOrder{"value"}
 	// OrderSum orders series by their total value — smallest total at the
-	// bottom, which keeps a symlog y-axis readable.
+	// bottom.
 	OrderSum = StackOrder{"sum"}
 	// OrderAppearance orders series by the position of their maximum value.
 	OrderAppearance = StackOrder{"appearance"}
@@ -154,12 +152,6 @@ func (b *TimeBar) Height(height int) *TimeBar {
 	return &cloned
 }
 
-func (b *TimeBar) LogScale() *TimeBar {
-	cloned := *b
-	cloned.logScale = true
-	return &cloned
-}
-
 func (b *TimeBar) Width(width int) *TimeBar {
 	cloned := *b
 	cloned.width = &width
@@ -201,8 +193,7 @@ func (b *TimeBar) Color(opts ...color.ColorScaleOption) *TimeBar {
 
 // StackOptions sets the stacking options (order, offset, reverse) for the fill
 // series. E.g. StackOptions(widget.StackOptions{Order: widget.OrderSum}) stacks the
-// series with the smallest total at the bottom, keeping a symlog y-axis
-// readable.
+// series with the smallest total at the bottom.
 func (b *TimeBar) StackOptions(stack StackOptions) *TimeBar {
 	cloned := *b
 	cloned.stack = stack

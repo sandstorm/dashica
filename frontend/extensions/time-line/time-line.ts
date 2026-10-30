@@ -18,7 +18,6 @@ function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: Widg
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    logScale: widget.props.logScale ?? false,
     draw: (result, options) => drawTimeLine(result, widget.props, options),
   });
 }
@@ -52,7 +51,6 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
       label: props.y.alias,
       grid: true,
       axis: true,
-      type: options.logScale ? 'symlog' : undefined,
     },
     color: props.color ?? {
       legend: true,

@@ -108,7 +108,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 
 | Region | Holds |
 |---|---|
-| Title bar | breadcrumb, search everywhere, time range, refresh, log scale; always visible |
+| Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
 | Filter bar | above the content, between the side panels: active filters as removable chips, the page's filter buttons as toggles, "edit SQL" |
 | Left side panel | "Dashboards" (menu groups, favorites, search); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -398,7 +398,7 @@ Built-in extensions:
 | `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites |
 | `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7); `widget/selection` "Zoom" |
 | `refresh` | title bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
-| (log scale) | per chart, as in Grafana (decided 2026-10-30): "Log scale" in the chart's menu `widget/context` (the widgets host's command `widget.toggleLogScale`) for the charts that offer it (`ChartFrameOptions.logScale`); Go `.LogScale()` sets where it starts. Not in the URL |
+| (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |
 | `query-status` | status bar: queries, loading, failed, timings |
@@ -607,8 +607,6 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 **Bugs the ports keep:** a chart is ported as it behaves; a bug found on the way is listed here and fixed in a commit of
 its own.
 
-- Bar horizontal: the log scale (`VIEW_LOGARITHMIC`) is on the y axis, the categories, not on x, the measure
-  (`frontend/extensions/bar-horizontal/bar-horizontal.ts`).
 - Ordinal time heatmap: `color` and `colorScheme` are not used, the cells are always blues (inferno in dark mode)
   (`frontend/extensions/heatmap/heatmap.ts`).
 - Stats: `fillField` is meant as a column with each number's color, but its alias is taken as the color itself

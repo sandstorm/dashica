@@ -13,12 +13,10 @@ function renderBarHorizontal(el: HTMLElement, widget: WidgetOf<'barHorizontal'>,
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    logScale: widget.props.logScale ?? false,
     draw: (result, options) => drawBarHorizontal(result, widget.props, options),
   });
 }
 
-/** The log scale makes y symlog: a bug the port keeps (docs/2026-10-28-workbench.md §5). */
 function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options: DrawOptions) {
   return Plot.plot({
     title: props.title,
@@ -37,7 +35,6 @@ function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options
       label: props.y.alias,
       grid: false,
       axis: true,
-      type: options.logScale ? 'symlog' : undefined,
     },
     color: props.color ?? {
       legend: true,

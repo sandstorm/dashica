@@ -11,12 +11,7 @@ export interface ChartFrameOptions {
   readonly title?: string;
   /** The chart's height in pixels, kept while it loads. */
   readonly height?: number;
-  /**
-   * For a chart that can draw on a log scale: whether it starts on one (Go `.LogScale()`); the viewer toggles it in
-   * the chart's menu. `undefined`: it cannot.
-   */
-  readonly logScale?: boolean;
-  /** The chart for the queried data (an SVG, a table); asked again when the width, the color scheme or the log scale change. */
+  /** The chart for the queried data (an SVG, a table); asked again when the width or the color scheme change. */
   draw(result: QueryResult, options: DrawOptions): Element | Promise<Element>;
 }
 
@@ -24,8 +19,6 @@ export interface DrawOptions {
   /** The frame's width in pixels. */
   readonly width: number;
   readonly colorSchemeDark: boolean;
-  /** Whether to draw the measure on a log scale (symlog). */
-  readonly logScale: boolean;
   /** Sets the page's time range to the range the viewer dragged across a time chart. */
   readonly onTimeSelect: (from: Date, to: Date) => void;
 }
@@ -46,7 +39,6 @@ export class ChartFrame {
   readonly #resize: ResizeObserver;
   readonly #onDidRequestRefresh: Disposable;
   #visible = false;
-  #logScale = false;
   #width = 0;
   #result: QueryResult | undefined;
   #running: AbortController | undefined;
@@ -81,13 +73,6 @@ export class ChartFrame {
     this.#onDidRequestRefresh = ctx.state.onDidRequestRefresh(() => {
       if (this.#visible) void this.#query();
     });
-    if (options.logScale !== undefined) {
-      this.#logScale = options.logScale;
-      ctx.offerLogScale(options.logScale, (on) => {
-        this.#logScale = on;
-        void this.#draw();
-      });
-    }
   }
 
   dispose(): void {
@@ -138,7 +123,6 @@ export class ChartFrame {
       const chart = await this.#options.draw(this.#result, {
         width: this.#width,
         colorSchemeDark: this.#darkScheme.matches,
-        logScale: this.#logScale,
         onTimeSelect: this.#onTimeSelect,
       });
       if (turn !== this.#drawn) return;

@@ -58,19 +58,19 @@ describe('ContextMenu', () => {
     const host = document.body.appendChild(document.createElement('div'));
     const shown: MenuContext[] = [];
     const items: MenuItem[] = [
-      { command: 'viewOptions.logScale', title: 'Log scale', toggled: (context) => (shown.push(context), context.logScale === true) },
-      { command: 'viewOptions.legend', title: 'Legend', toggled: () => false },
-      { command: 'viewOptions.reset', title: 'Reset', group: 'z' },
+      { command: 'dashboards.toggleFavorite', title: 'Favorite', toggled: (context) => (shown.push(context), context.favorite === true) },
+      { command: 'dashboards.togglePinned', title: 'Pinned', toggled: () => false },
+      { command: 'dashboards.copyLink', title: 'Copy link', group: 'z' },
     ];
     const menus = new ContextMenu(host, menusWith('page/title', items), commandsWith());
-    menus.show('page/title', { anchor: host, title: 'View', context: { logScale: true } });
+    menus.show('page/title', { anchor: host, title: 'Shop', context: { favorite: true } });
     const entries = [...host.querySelectorAll<HTMLElement>('.dashica-wb__context-menu-item')];
     expect(entries.map((entry) => [entry.getAttribute('role'), entry.getAttribute('aria-checked'), entry.textContent])).toEqual([
-      ['menuitemcheckbox', 'true', '✓Log scale'],
-      ['menuitemcheckbox', 'false', 'Legend'],
-      ['menuitem', null, 'Reset'],
+      ['menuitemcheckbox', 'true', '✓Favorite'],
+      ['menuitemcheckbox', 'false', 'Pinned'],
+      ['menuitem', null, 'Copy link'],
     ]);
-    expect(shown).toEqual([{ logScale: true }]);
+    expect(shown).toEqual([{ favorite: true }]);
     expect(host.querySelector('[role=menu]')!.classList.contains('dashica-wb__context-menu--checks')).toBe(true);
   });
 

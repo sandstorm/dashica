@@ -12,7 +12,6 @@ function renderTimeBar(el: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: Widget
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    logScale: widget.props.logScale ?? false,
     draw: (result, options) => drawTimeBars(result, widget.props, options),
   });
 }

@@ -86,12 +86,12 @@ describe('StorageMemento', () => {
   });
 
   it('forgets a value updated to undefined', async () => {
-    const memento = StorageMemento.of(document, 'localStorage', 'dashica:global:logScale:');
+    const memento = StorageMemento.of(document, 'localStorage', 'dashica:global:refresh:');
     await memento.update('on', false);
     expect(memento.get('on', true)).toBe(false);
     await memento.update('on', undefined);
     expect(memento.get('on', true)).toBe(true);
-    expect(localStorage.getItem('dashica:global:logScale:on')).toBeNull();
+    expect(localStorage.getItem('dashica:global:refresh:on')).toBeNull();
   });
 
   it('gives defaults and keeps nothing without storage', async () => {

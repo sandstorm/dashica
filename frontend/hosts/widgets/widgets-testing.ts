@@ -1,9 +1,7 @@
 // See WidgetsApi in widgets.ts.
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { vi } from 'vitest';
-import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { MenuItem } from '../commands/commands';
 import type { Extension, ExtensionContext } from '../extension-host/extension-host';
 import { QueryHost } from '../query/query';
 import type { ContextMenuOptions } from '../ui/ui';
@@ -12,31 +10,13 @@ import { WidgetsHost } from './widgets';
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `QueryHost`, with the browser parts jsdom lacks stubbed.
  * `activate` activates widget extensions on it (they get `widgets` and `query`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
- * chart visible, `resize` sets every chart's width; `menus` are the context menus shown, `menuItems` the entries
- * registered, `commands` the commands registered. `dispose` in `afterEach`.
+ * chart visible, `resize` sets every chart's width; `menus` are the context menus shown. `dispose` in `afterEach`.
  */
 export function widgetTestbed() {
   history.replaceState(null, '', '/p/shop');
   const query = new QueryHost(window);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
-  const menuItems: { menuId: string; item: MenuItem<any> }[] = [];
-  const commands = new Map<string, (...args: any[]) => unknown>();
-  const widgets = new WidgetsHost(
-    query,
-    {
-      showContextMenu: (menuId, options) => menus.push({ menuId, options }),
-      registerMenuItem: (menuId, item) => {
-        menuItems.push({ menuId, item });
-        return new Disposable(() => {});
-      },
-    },
-    {
-      registerCommand: (id, handler) => {
-        commands.set(id, handler);
-        return new Disposable(() => commands.delete(id));
-      },
-    },
-  );
+  const widgets = new WidgetsHost(query, { showContextMenu: (menuId, options) => menus.push({ menuId, options }) });
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -75,8 +55,6 @@ export function widgetTestbed() {
     query,
     widgets,
     menus,
-    menuItems,
-    commands,
     /** The URLs fetched, in order. */
     requests,
     /** Answers `path` with the Arrow table of `columns`, and `headers`. */
@@ -104,7 +82,6 @@ export function widgetTestbed() {
       for (const callback of resizes) callback([{ contentRect: { width } }]);
     },
     dispose() {
-      widgets.dispose();
       query.dispose();
       vi.unstubAllGlobals();
       document.body.replaceChildren();

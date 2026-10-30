@@ -37,7 +37,7 @@ func everyWidget() *dashboard.Builder {
 			Area("a", widget.NewTimeBar(logs).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status")).Title("Requests")).
 			Area("b", widget.NewTimeLine(logs).X(sql.AutoBucket("timestamp")).Y(sql.Count()).Title("Requests over time"))).
 		Widget(widget.NewCollapsibleGroup().Title("Details").Open().
-			Widget(widget.NewBarVertical(logs).X(sql.Field("status")).Y(sql.Count()).LogScale()).
+			Widget(widget.NewBarVertical(logs).X(sql.Field("status")).Y(sql.Count())).
 			Widget(widget.NewBarHorizontal(logs).X(sql.Count()).Y(sql.Field("path"))).
 			Widget(widget.NewTimeHeatmap(logs).X(sql.Timestamp15Min()).Y(sql.Field("duration_ms")).YBucketSize(100)).
 			Widget(widget.NewTimeHeatmapOrdinal(logs).X(sql.Timestamp15Min()).Y(sql.Enum("status"))).

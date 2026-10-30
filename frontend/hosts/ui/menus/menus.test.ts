@@ -9,7 +9,7 @@ describe('Menus', () => {
     menus.register('dashboards/entry', { command: 'favorites.add', title: 'Add to favorites', group: 'favorites' });
     menus.register('dashboards/entry', { command: 'dashboards.copyLink', title: 'Copy link', group: 'navigation', order: 2 });
     menus.register('dashboards/entry', { command: 'dashboards.openInNewTab', title: 'Open in new tab', group: 'navigation', order: 1 });
-    menus.register('dashboards/entry', { command: 'debug.showQuery', title: 'Show query', group: 'debug' });
+    menus.register('dashboards/entry', { command: 'debug.showWidget', title: 'Show query', group: 'debug' });
     expect(menus.items('dashboards/entry').map((item) => item.title)).toEqual(['Open in new tab', 'Copy link', 'Show query', 'Add to favorites']);
   });
 
@@ -24,10 +24,10 @@ describe('Menus', () => {
     const declared: CommandContribution[] = [{ command: 'timeRange.refresh', title: 'Refresh', icon: '<svg></svg>' }];
     const menus = new Menus(() => declared);
     menus.register('page/title', { command: 'timeRange.refresh' });
-    menus.register('page/title', { command: 'viewOptions.logScale' });
+    menus.register('page/title', { command: 'debug.showWidget' });
     expect(menus.items('page/title').map(({ title, icon }) => [title, icon])).toEqual([
       ['Refresh', '<svg></svg>'],
-      ['viewOptions.logScale', undefined],
+      ['debug.showWidget', undefined],
     ]);
   });
 
