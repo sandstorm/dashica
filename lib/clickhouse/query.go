@@ -39,6 +39,9 @@ func NewClient(serverConfig *config.ClickHouseConfig, id string, logger zerolog.
 	}
 }
 
+// cancelOnClientCloseSetting is sent with every query; a caller's own value in QueryOptions.Settings wins.
+const cancelOnClientCloseSetting = "cancel_http_readonly_queries_on_client_close"
+
 // QueryOptions represents options that can be set when making a query
 type QueryOptions struct {
 	Format      string            // Output format (default: JSONEachRow)
@@ -100,6 +103,10 @@ func (c *Client) queryInternal(ctx context.Context, method string, query string,
 	// Add settings
 	for setting, value := range options.Settings {
 		params.Add(setting, value)
+	}
+	// ClickHouse stops a SELECT when its HTTP client goes away, so a chart that is refreshed or left stops its query
+	if _, ok := options.Settings[cancelOnClientCloseSetting]; !ok {
+		params.Add(cancelOnClientCloseSetting, "1")
 	}
 
 	// Add query parameters
