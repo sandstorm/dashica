@@ -32,9 +32,11 @@ runtime, without recompiling.
 Rejected approaches (for the record): embedded Go interpreter (yaegi) — RCE by
 design, and a form UI needs a structured model anyway; hand-written parallel
 JSON schema — drift; frontend-only Go-snippet generator — no live preview.
-Also rejected: SQL parsers (sqlglot/polyglot) — **ClickHouse itself is the SQL
-brain** (`DESCRIBE` for result schemas, `EXPLAIN` for validation); our SQL
-contains placeholders/params no parser handles.
+Not used for the editor's first version: SQL parsers (sqlglot/polyglot) —
+there **ClickHouse itself is the SQL brain** (`DESCRIBE` for result schemas,
+`EXPLAIN` for validation). This is not a decision against parsers; they are
+open for other uses (other databases, query understanding:
+`docs/2026-10-30-other-databases.md`).
 
 ## 2. Architecture (as built)
 
