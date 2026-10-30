@@ -16,6 +16,7 @@ import (
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/logging"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 	"github.com/sandstorm/dashica/public"
@@ -132,7 +133,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	return newDashicaImpl(cfg, logger, mux, deps)
 }
 
-// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json and no dashboards yet.
+// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json and /time-range and no dashboards yet.
 func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
 	d := &DashicaImpl{
 		cfg:              cfg,
@@ -143,6 +144,9 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 	}
 	if err := d.handlerCollector.Handle("/workbench.json", http.HandlerFunc(d.serveWorkbenchJson)); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /workbench.json")
+	}
+	if err := d.handlerCollector.Handle("/time-range", http.HandlerFunc(httpserver.TimeRangeHandler)); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /time-range")
 	}
 	return d
 }

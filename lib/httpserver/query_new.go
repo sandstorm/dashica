@@ -144,16 +144,9 @@ func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, cli
 
 func (f *DashboardFilters) calculateLegacyFilters() {
 	if f.TimeRange == "custom" {
-		// "<from> to <to>", each end a time expression (parseTimeExpr): `2026-10-29 10:00 to now`
-		parts := strings.Split(f.CustomTimeRange, " to ")
-		if len(parts) == 2 {
-			now := time.Now()
-			from, errFrom := parseTimeExpr(parts[0], now)
-			to, errTo := parseTimeExpr(parts[1], now)
-			if errFrom == nil && errTo == nil {
-				f.From = float64(from.Unix())
-				f.To = float64(to.Unix())
-			}
+		if from, to, err := f.ResolveTimeRange(time.Now()); err == nil {
+			f.From = float64(from.Unix())
+			f.To = float64(to.Unix())
 		}
 		return
 	}

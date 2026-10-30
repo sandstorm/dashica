@@ -1,7 +1,9 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -45,4 +47,51 @@ func parseTimeExpr(text string, now time.Time) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("time %q: neither `now-…` nor `2006-01-02 15:04`", text)
 	}
 	return t, nil
+}
+
+// ResolveTimeRange is the window the time range stands for at `now`: a preset (a Go duration) ends at now; a custom
+// range is "<from> to <to>", each end a time expression (parseTimeExpr). The error says what cannot be read, as the
+// time picker shows it.
+func (f *DashboardFilters) ResolveTimeRange(now time.Time) (from, to time.Time, err error) {
+	if f.TimeRange != "custom" {
+		dur, err := time.ParseDuration(f.TimeRange)
+		if err != nil || dur <= 0 {
+			return time.Time{}, time.Time{}, fmt.Errorf("time range %q: neither a Go duration (`1h`) nor `custom`", f.TimeRange)
+		}
+		return now.Add(-dur), now, nil
+	}
+	parts := strings.Split(f.CustomTimeRange, " to ")
+	if len(parts) != 2 {
+		return time.Time{}, time.Time{}, fmt.Errorf("custom range %q: want `<from> to <to>`", f.CustomTimeRange)
+	}
+	if from, err = parseTimeExpr(parts[0], now); err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if to, err = parseTimeExpr(parts[1], now); err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !from.Before(to) {
+		return time.Time{}, time.Time{}, fmt.Errorf("custom range %q: from is not before to", f.CustomTimeRange)
+	}
+	return from, to, nil
+}
+
+// TimeRangeHandler serves the window of the request's `filters` (as every data handler reads them) at now, as
+// `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be read. The time picker asks it before it applies a range,
+// and for the window it shifts or zooms out.
+func TimeRangeHandler(w http.ResponseWriter, r *http.Request) {
+	var filters DashboardFilters
+	if err := json.Unmarshal([]byte(r.URL.Query().Get("filters")), &filters); err != nil {
+		http.Error(w, fmt.Sprintf("filters: %v", err), http.StatusBadRequest)
+		return
+	}
+	from, to, err := filters.ResolveTimeRange(time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]int64{"from": from.UnixMilli(), "to": to.UnixMilli()}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
