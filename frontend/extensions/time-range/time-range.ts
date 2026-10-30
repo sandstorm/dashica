@@ -1,11 +1,12 @@
 import { html } from 'htl';
-import { ChevronDown, Clock, RefreshCw, createElement } from 'lucide';
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, RefreshCw, ZoomOut, createElement } from 'lucide';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { QueryApi } from '../../hosts/query/query';
+import { formatTime, type QueryApi } from '../../hosts/query/query';
 
 /**
  * The time range of the page's queries, in the title bar: a button showing the range ("Last 1 hour",
- * "2026-10-29 10:00 to 12:00") that opens the picker, and the refresh button (also the command `timeRange.refresh`).
+ * "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the window by its length, ⊖ zooming out to twice the
+ * window, and the refresh button (also the command `timeRange.refresh`).
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
  * filtered by typing. Only the server reads the times: Apply asks it (`/time-range`) and shows its reason when it
  * cannot. A range ending at a fixed time does not move, so applying one turns auto refresh off. A selection on a time
@@ -41,7 +42,7 @@ const PRESETS = [
 ];
 
 /**
- * The range button with its panel, and the refresh button; `show` shows `query.time`. The panel closes on Escape, on a
+ * The range button with its panel, shift, zoom out and refresh; `show` shows `query.time`. The panel closes on Escape, on a
  * click outside, and once a range is picked or applied.
  */
 class TimeRangePicker {
@@ -83,6 +84,9 @@ class TimeRangePicker {
       </div>
     </div>`;
     this.#panel.hidden = true;
+    const back = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Shift back" aria-label="Shift back">${createElement(ChevronLeft)}</button>`;
+    const forward = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Shift forward" aria-label="Shift forward">${createElement(ChevronRight)}</button>`;
+    const zoomOut = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Zoom out" aria-label="Zoom out">${createElement(ZoomOut)}</button>`;
     const refresh = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Refresh" aria-label="Refresh">${createElement(RefreshCw)}</button>`;
 
     this.#button.addEventListener('click', () => (this.#panel.hidden ? this.open() : this.close()));
@@ -96,8 +100,18 @@ class TimeRangePicker {
       this.close();
       this.#button.focus();
     });
+    back.addEventListener('click', () => void this.#shift(-1));
+    forward.addEventListener('click', () => void this.#shift(1));
+    zoomOut.addEventListener('click', () => void this.#zoomOut());
     refresh.addEventListener('click', () => query.refresh());
-    this.el = html`<div class="relative flex items-center gap-2">${this.#button}${this.#panel}${refresh}</div>`;
+    this.el = html`<div class="relative flex items-center gap-1">
+      ${this.#button}
+      ${this.#panel}
+      ${back}
+      ${forward}
+      ${zoomOut}
+      ${refresh}
+    </div>`;
   }
 
   show(): void {
@@ -173,6 +187,36 @@ class TimeRangePicker {
     this.query.time.setCustom(from, to);
     this.close();
   }
+
+  /** Moves the window by its length, back (`-1`) or forward (`1`); a moved window is fixed, so auto refresh goes off. */
+  async #shift(direction: -1 | 1): Promise<void> {
+    const { from, to } = await resolveTimeRange(this.query.time.range, this.query.time.custom);
+    const by = direction * (to - from);
+    this.query.time.setAutoRefresh(undefined);
+    this.query.time.setCustom(formatTime(new Date(from + by)), formatTime(new Date(to + by)));
+  }
+
+  /**
+   * Doubles the window: one ending now stays so, as a preset (`Last 1 hour` → `Last 2h`); a fixed one grows by half its
+   * length on each side.
+   */
+  async #zoomOut(): Promise<void> {
+    const { range, custom } = this.query.time;
+    const { from, to } = await resolveTimeRange(range, custom);
+    const length = to - from;
+    if (range !== 'custom' || custom.endsWith(' to now')) {
+      this.query.time.setRange(formatGoDuration(2 * length));
+      return;
+    }
+    this.query.time.setCustom(formatTime(new Date(from - length / 2)), formatTime(new Date(to + length / 2)));
+  }
+}
+
+/** `ms` as a Go duration in its largest whole unit, as a preset: `2h`, `90m`, `45s`. */
+function formatGoDuration(ms: number): string {
+  if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
+  if (ms % 60_000 === 0) return `${ms / 60_000}m`;
+  return `${Math.round(ms / 1000)}s`;
 }
 
 /** The window a time range stands for now, in ms, as the server resolves it; throws the server's reason when it cannot. */

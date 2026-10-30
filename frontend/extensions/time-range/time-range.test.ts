@@ -42,6 +42,11 @@ function type(label: string, value: string): void {
   input(label).dispatchEvent(new Event('input'));
 }
 
+/** 2026-10-29 `hours`:`minutes` in the viewer's time zone, in ms. */
+const at = (hours: number, minutes: number) => new Date(2026, 9, 29, hours, minutes).getTime();
+
+const click = (label: string) => bar.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click();
+
 /** `/time-range` answers `status` and `body`; gives the `filters` asked for. */
 function serverAnswers(status: number, body: string): string[] {
   const asked: string[] = [];
@@ -132,6 +137,34 @@ describe('timeRange', () => {
     expect(panel().hidden).toBe(false);
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     expect(panel().hidden).toBe(true);
+  });
+
+  it('shifts the window by its length, auto refresh off', async () => {
+    const asked = serverAnswers(200, JSON.stringify({ from: at(11, 0), to: at(12, 0) }));
+    query.time.setRange('1h');
+    query.time.setAutoRefresh(30);
+    click('Shift back');
+    await vi.waitFor(() => expect(query.time.custom).toBe('2026-10-29 10:00 to 2026-10-29 11:00'));
+    expect(asked).toEqual(['{"timeRange":"1h","customTimeRange":""}']);
+    expect(query.time.autoRefresh).toBeUndefined();
+    serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(11, 0) }));
+    click('Shift forward');
+    await vi.waitFor(() => expect(query.time.custom).toBe('2026-10-29 11:00 to 2026-10-29 12:00'));
+  });
+
+  it('zooms a window ending now out to the preset twice as long', async () => {
+    serverAnswers(200, JSON.stringify({ from: at(11, 0), to: at(12, 0) }));
+    query.time.setRange('1h');
+    click('Zoom out');
+    await vi.waitFor(() => expect(query.time.range).toBe('2h'));
+    expect(rangeButton().textContent).toBe('Last 2h');
+  });
+
+  it('zooms a fixed window out by half its length on each side', async () => {
+    serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(12, 0) }));
+    query.time.setCustom('2026-10-29 10:00', '2026-10-29 12:00');
+    click('Zoom out');
+    await vi.waitFor(() => expect(query.time.custom).toBe('2026-10-29 09:00 to 2026-10-29 13:00'));
   });
 
   it('refreshes from its button and its command', () => {
