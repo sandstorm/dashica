@@ -623,6 +623,9 @@ its own.
 - **MCP server with built-in anonymization**: sensitive data must never reach the cloud provider. What the design
   already gives: dashboards are machine-readable (`page.json`), and every query goes through one path (`QueryState` →
   handler), the single place where an anonymization step on results would sit.
+- **Perspective instead of the Tabulator table** ([perspective-dev.github.io](https://perspective-dev.github.io/)):
+  it reads Arrow, which the query results already are, and pivots, groups and filters in the browser. To check: what
+  the table's own features (search highlight, sticky tooltips, record details, add-filter menus) cost to rebuild on it.
 - Tabs inside the app; client extensions from the instances (outer repo); other database backends; query
   understanding (AST).
 
