@@ -24,7 +24,7 @@ describe('collapsible', () => {
     await settle();
     const group = el.querySelector('details')!;
     expect(group.open).toBe(true);
-    expect(group.querySelector('summary')!.textContent).toBe('Details');
+    expect(group.querySelector('summary span')!.textContent).toBe('Details');
     expect([...group.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual(['CREATE TABLE t1', 'CREATE TABLE t2', 'CREATE TABLE t10']);
   });
 

@@ -17,10 +17,10 @@ export const collapsible: Extension = {
 function renderCollapsible(el: HTMLElement, widget: WidgetOf<'collapsibleGroup'>, ctx: WidgetContext): Disposable {
   const content: HTMLElement = html`<div class="flex flex-col gap-6 pt-2 pb-2"></div>`;
   const group: HTMLDetailsElement = html`<details class="group border-t border-base-300">
-    <summary class="flex cursor-pointer list-none items-center gap-1.5 py-2 text-sm font-semibold select-none"
-      >${createElement(ChevronRight, { class: 'w-4 h-4 opacity-60 transition-transform group-open:rotate-90' })}<span
-        >${widget.props.title ?? ''}</span
-      ></summary>
+    <summary class="flex cursor-pointer list-none items-center gap-1.5 py-2 text-sm font-semibold select-none">
+      ${createElement(ChevronRight, { class: 'w-4 h-4 opacity-60 transition-transform group-open:rotate-90' })}
+      <span>${widget.props.title ?? ''}</span>
+    </summary>
     ${content}
   </details>`;
   group.open = widget.props.open ?? false;
