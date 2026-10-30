@@ -1,0 +1,28 @@
+/* A floating bar (see FloatingBars in floating-bar.ts): a row of buttons fixed next to its anchor, below the context
+   menu. Its values are tokens, as the context menu's. */
+.d-workbench__floating-bar {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+.d-workbench__floating-bar[hidden] { display: none; }
+.d-workbench__floating-bar-item {
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.d-workbench__floating-bar-item:hover,
+.d-workbench__floating-bar-item:focus-visible { background: var(--color-hover); outline: none; }

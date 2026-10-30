@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Tests for QueryHost: the state from and into the URL, what each change asks of the widgets, auto refresh.
+// Tests for QueryHost: the state from and into the URL, the structured filters, what each change asks of the widgets,
+// auto refresh.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryHost, formatTime } from './query';
 
@@ -86,6 +87,64 @@ describe('QueryHost', () => {
     query.filters.add("status >= 500");
     query.filters.add("path = '/api'");
     expect(query.filters.sql).toBe("status >= 500 \nAND path = '/api'");
+    expect(query.filters.fields).toEqual([]);
+  });
+
+  it('takes the structured filters from the URL’s f, the value everything after the second colon', () => {
+    history.replaceState(null, '', '/p/shop?f=status:eq:500&f=path:ne:/api:v2&f=host:gt:a&f=:eq:a&f=host:eq');
+    query.load();
+    expect(query.filters.fields).toEqual([
+      { fieldId: 'status', op: 'eq', value: '500' },
+      { fieldId: 'path', op: 'ne', value: '/api:v2' },
+    ]);
+  });
+
+  it('writes the structured filters into the URL as one f each, and reads them back', () => {
+    query.load();
+    query.filters.add('status', 'eq', '500');
+    query.filters.add('path', 'ne', '/api:v2');
+    vi.advanceTimersByTime(200);
+    expect(new URLSearchParams(location.search).getAll('f')).toEqual(['status:eq:500', 'path:ne:/api:v2']);
+    const written = query.filters.fields;
+    query.load();
+    expect(query.filters.fields).toEqual(written);
+  });
+
+  it('sends the structured filters as one f each', () => {
+    query.load();
+    query.filters.add('status', 'eq', '500');
+    query.filters.add('host', 'ne', 'a');
+    const sent = query.requestParams();
+    expect([...sent.keys()]).toEqual(['time', 'f', 'f']);
+    expect(sent.getAll('f')).toEqual(['status:eq:500', 'host:ne:a']);
+  });
+
+  it('adds a structured filter once, removes one by its index and clears them, keeping the SQL filter', () => {
+    query.load();
+    query.filters.setSql('status >= 500');
+    refreshes = 0;
+    query.filters.add('host', 'eq', 'a');
+    query.filters.add('host', 'eq', 'a');
+    query.filters.add('host', 'ne', 'b');
+    query.filters.add('path', 'eq', '/api');
+    expect(refreshes).toBe(3);
+    query.filters.remove(1);
+    expect(query.filters.fields).toEqual([
+      { fieldId: 'host', op: 'eq', value: 'a' },
+      { fieldId: 'path', op: 'eq', value: '/api' },
+    ]);
+    query.filters.clear();
+    expect(query.filters.fields).toEqual([]);
+    expect(refreshes).toBe(5);
+    expect(query.filters.sql).toBe('status >= 500');
+  });
+
+  it('keeps the structured filters of a page out of the next page', () => {
+    history.replaceState(null, '', '/p/shop?f=host:eq:a');
+    query.load();
+    history.pushState(null, '', '/p/billing');
+    query.load();
+    expect(query.filters.fields).toEqual([]);
   });
 
   it('writes the URL after a pause, leaving out what is the default', () => {

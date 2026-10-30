@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for context-menu.ts, over menus of its own and commands faked.
+// Tests for context-menu.ts, over menus of its own and commands faked, and for entries of the moment.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandsHost, MenuContext, MenuItem } from '../../commands/commands';
 import { ContextMenu } from './context-menu';
@@ -105,8 +105,9 @@ describe('ContextMenu', () => {
     error.mockRestore();
   });
 
-  it('shows nothing for a menu without entries that apply', () => {
-    const { menus, isOpen } = setup();
+  it('shows nothing for a menu without entries that apply, and closes the open one', () => {
+    const { menus, show, isOpen } = setup();
+    show();
     menus.show('widget/context', { anchor: { x: 0, y: 0 }, title: 'Chart' });
     expect(isOpen()).toBe(false);
   });
@@ -126,5 +127,26 @@ describe('ContextMenu', () => {
     menus.dispose();
     expect(isOpen()).toBe(false);
     expect(ran).toEqual([]);
+  });
+
+  it('shows entries of the moment as a menu of its own, runs a chosen one after closing, replaces the open menu; none leave it open', () => {
+    const { host, menus, show, trigger, items, isOpen } = setup();
+    const ran: [string, boolean][] = [];
+    const entry = (label: string) => ({ label, run: () => ran.push([label, document.activeElement === trigger]) });
+    show();
+    menus.showEntries([entry('instance = web-1'), entry('status = 500')], { anchor: { x: 10, y: 20 }, title: 'Select' });
+    expect(host.querySelectorAll('[role=menu]')).toHaveLength(1);
+    expect(host.querySelector('[role=menu]')!.getAttribute('aria-label')).toBe('Select');
+    expect(items().map((item) => [item.getAttribute('role'), item.textContent])).toEqual([
+      ['menuitem', 'instance = web-1'],
+      ['menuitem', 'status = 500'],
+    ]);
+    expect(document.activeElement).toBe(items()[0]);
+    items()[1].click();
+    expect(ran).toEqual([['status = 500', true]]);
+    expect(isOpen()).toBe(false);
+    show();
+    menus.showEntries([], { anchor: { x: 0, y: 0 }, title: 'Select' });
+    expect(isOpen()).toBe(true);
   });
 });

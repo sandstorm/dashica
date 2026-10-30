@@ -4,7 +4,7 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import type { CellComponent, ColumnDefinition, RowComponent } from 'tabulator-tables';
 import { Braces, Copy, Maximize2, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
-import type { QueryResult } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import './table.css';
 
 const canvas = document.createElement('canvas');
@@ -458,10 +458,16 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
 
 /**
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
- * tooltips that can be pinned, and a details panel for the selected rows. A cell's menu "Filter: …" dispatches
- * `dashica-add-filter` with its condition, bubbling up from the cell: the widget type `table` adds it to the SQL filter.
+ * tooltips that can be pinned, and a details panel for the selected rows. With `select`, a click on a cell of a
+ * column in `props.categories` selects its value, its column's name the field id; a NULL selects nothing, and a Map,
+ * Array or Tuple column (Arrow's map, list, struct) holds no category. A cell's menu "Filter: …" dispatches
+ * `dashica-add-filter` with its SQL condition, bubbling up from the cell.
  */
-export function drawTable(queryResult: QueryResult, props: TableProps) {
+export function drawTable(
+  queryResult: QueryResult,
+  props: TableProps,
+  select?: WidgetContext['select'],
+) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
   const data = queryResult.toArray().map((row: any) => row.toJSON());
@@ -483,6 +489,11 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
         }));
       }
     },
+    ...timeWindowMenuItems(fieldName)
+  ];
+
+  // The SQL entries of a timestamp's menu that filter to a window around it
+  const timeWindowMenuItems = (fieldName: string) => [
     {
       label: "Filter: Time ±5 minutes",
       action: function(e: any, cell: CellComponent) {
@@ -546,17 +557,30 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
         }));
       }
     },
-    {
-      label: "Filter: Contains this value",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} LIKE '%${value}%'`
-        }));
-      }
-    }
+    containsMenuItem(fieldName)
   ];
+
+  const containsMenuItem = (fieldName: string) => ({
+    label: "Filter: Contains this value",
+    action: function(e: any, cell: CellComponent) {
+      const value = cell.getValue();
+      cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
+        bubbles: true,
+        detail:`${fieldName} LIKE '%${value}%'`
+      }));
+    }
+  });
+
+  // With `select`, a click on a cell of a category column selects (see the cellClick handler below); the menus of a
+  // table that selects keep the SQL entries no filter op says
+  const selecting = select !== undefined;
+  const categories = new Set(
+    (queryResult?.schema?.fields ?? [])
+      .filter((field: any) => props.categories?.includes(field.name))
+      .filter((field: any) => !DataType.isMap(field) && !DataType.isList(field) && !DataType.isFixedSizeList(field) && !DataType.isStruct(field))
+      .map((field: any) => field.name as string),
+  );
+  const selectable = (fieldName: string) => selecting && categories.has(fieldName);
 
   // Build columns with timestamp formatting
   const columns: ColumnDefinition[] = [];
@@ -588,13 +612,15 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
           el.innerHTML = `${time} &nbsp; <span class="d-table__date">${date}</span>`;
           return el;
         },
-        contextMenu: timestampContextMenu(field.name)
+        cssClass: selectable(field.name) ? 'd-table__selectable' : undefined,
+        contextMenu: selecting ? timeWindowMenuItems(field.name) : timestampContextMenu(field.name)
       });
     } else {
       columns.push({
         title: field.name,
         field: field.name,
-        contextMenu: generalContextMenu(field.name)
+        cssClass: selectable(field.name) ? 'd-table__selectable' : undefined,
+        contextMenu: selecting ? [containsMenuItem(field.name)] : generalContextMenu(field.name)
       });
     }
   });
@@ -733,6 +759,13 @@ export function drawTable(queryResult: QueryResult, props: TableProps) {
   tabulatorTable.on("rowSelectionChanged", (data, rows) => {
     selectedRecords = data;
     showSelection();
+  });
+
+  tabulatorTable.on("cellClick", (e: UIEvent, cell: CellComponent) => {
+    const fieldName = cell.getField();
+    const value = cell.getValue();
+    if (!select || !selectable(fieldName) || value === null || value === undefined) return;
+    select({ kind: 'category', fieldId: fieldName, value: String(value), anchor: cell.getElement() });
   });
 
   // Re-paint search highlights after every (re)render — covers filter changes,

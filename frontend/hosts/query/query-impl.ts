@@ -1,6 +1,6 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
+import type { FieldFilter, FilterOp, FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
 
 /** The workbench's `QueryApi`, kept in the URL of `browserWindow`. `load` takes the state from the URL. */
 export class QueryHost implements QueryApi {
@@ -51,7 +51,7 @@ export class QueryHost implements QueryApi {
     const url = new URLSearchParams(this.#search);
     const refresh = Number(url.get('refresh'));
     this.time.load(url.get('time') || this.#defaultTime, url.get('range') ?? '', refresh > 0 ? refresh : undefined);
-    this.filters.load(url.get('sql') ?? '');
+    this.filters.load(url.get('sql') ?? '', url.getAll('f'));
     this.params.load(parseParams(url.get('wp')));
     this.#restartAutoRefresh();
     this.time.fire();
@@ -73,6 +73,7 @@ export class QueryHost implements QueryApi {
     const request = new URLSearchParams({ time: this.time.range });
     if (this.time.range === 'custom') request.set('range', this.time.custom);
     if (this.filters.sql) request.set('sql', this.filters.sql);
+    for (const filter of this.filters.fields) request.append('f', formatFieldFilter(filter));
     if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
     return request;
   }
@@ -113,6 +114,8 @@ export class QueryHost implements QueryApi {
       else url.delete('refresh');
       if (this.filters.sql) url.set('sql', this.filters.sql);
       else url.delete('sql');
+      url.delete('f');
+      for (const filter of this.filters.fields) url.append('f', formatFieldFilter(filter));
       if (Object.keys(this.params.values).length > 0) url.set('wp', JSON.stringify(this.params.values));
       else url.delete('wp');
       const search = url.toString();
@@ -173,13 +176,16 @@ class TimeState extends Model implements TimeModel {
 
 class FiltersState extends Model implements FiltersModel {
   sql = '';
+  fields: readonly FieldFilter[] = [];
 
   constructor(private readonly changed: () => void) {
     super();
   }
 
-  load(sql: string): void {
+  /** `fields`: the URL's `f` values (`host:ne:a`); one the server would refuse (not `<id>:eq:<value>` or `<id>:ne:<value>`) is left out. */
+  load(sql: string, fields: readonly string[]): void {
     this.sql = sql;
+    this.fields = fields.map(parseFieldFilter).filter((filter) => filter !== undefined);
   }
 
   setSql(sql: string): void {
@@ -189,9 +195,44 @@ class FiltersState extends Model implements FiltersModel {
     this.changed();
   }
 
-  add(condition: string): void {
-    this.setSql(this.sql ? `${this.sql} \nAND ${condition}` : condition);
+  add(condition: string): void;
+  add(fieldId: string, op: FilterOp, value: string): void;
+  add(conditionOrFieldId: string, op?: FilterOp, value?: string): void {
+    if (op === undefined || value === undefined) {
+      this.setSql(this.sql ? `${this.sql} \nAND ${conditionOrFieldId}` : conditionOrFieldId);
+      return;
+    }
+    const added: FieldFilter = { fieldId: conditionOrFieldId, op, value };
+    if (this.fields.some((filter) => filter.fieldId === added.fieldId && filter.op === op && filter.value === value)) return;
+    this.#setFields([...this.fields, added]);
   }
+
+  remove(index: number): void {
+    if (index < 0 || index >= this.fields.length) return;
+    this.#setFields(this.fields.filter((_, i) => i !== index));
+  }
+
+  clear(): void {
+    if (this.fields.length > 0) this.#setFields([]);
+  }
+
+  #setFields(fields: readonly FieldFilter[]): void {
+    this.fields = fields;
+    this.fire();
+    this.changed();
+  }
+}
+
+/** `host:ne:a` as the server reads an `f`: the value is everything after the second colon. */
+function formatFieldFilter({ fieldId, op, value }: FieldFilter): string {
+  return `${fieldId}:${op}:${value}`;
+}
+
+/** The filter of an `f` (`host:ne:a`); `undefined` without an id, a second colon, or an op `eq` / `ne`. */
+function parseFieldFilter(text: string): FieldFilter | undefined {
+  const [fieldId, op, ...value] = text.split(':');
+  if (!fieldId || (op !== 'eq' && op !== 'ne') || value.length === 0) return undefined;
+  return { fieldId, op, value: value.join(':') };
 }
 
 class ParamsState extends Model implements ParamsModel {

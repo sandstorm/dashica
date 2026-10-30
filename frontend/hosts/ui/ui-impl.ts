@@ -5,11 +5,13 @@ import type { Memento } from '../extension-host/extension-host';
 import { Bar } from './bar/bar';
 import { WindowLayout } from './layout/window-layout';
 import { ContextMenu } from './menus/context-menu';
+import { FloatingBars } from './menus/floating-bar';
 import { Menus } from './menus/menus';
 import { QuickInput } from './quick-input/quick-input';
-import type { BarPlacement, BottomPanelOptions, ContextMenuOptions, Panel, QuickPick, QuickPickItem, SearchProvider, SidePanelOptions, UiApi } from './ui';
+import type { BarPlacement, BottomPanelOptions, Choice, ContextMenuOptions, FloatingBar, FloatingBarOptions, Panel, QuickPick, QuickPickItem, SearchProvider, SidePanelOptions, UiApi } from './ui';
 import './layout/window-layout.css';
 import './menus/context-menu.css';
+import './menus/floating-bar.css';
 import './quick-input/quick-input.css';
 
 /** The workbench's `UiApi`, laid out in `host`. `content`: the region the shown page goes into. */
@@ -18,6 +20,7 @@ export class UiHost implements UiApi {
   readonly #bars: Record<'title' | 'filter' | 'status', Bar>;
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
+  readonly #floatingBars: FloatingBars;
   readonly #quickInput: QuickInput;
   readonly #searchProviders = new Set<SearchProvider>();
   readonly onDidChangeMenu;
@@ -27,6 +30,7 @@ export class UiHost implements UiApi {
     this.#bars = { title: new Bar(this.#layout.titleBar), filter: new Bar(this.#layout.filterBar), status: new Bar(this.#layout.statusBar) };
     this.#menus = new Menus(() => commands.getCommands());
     this.#contextMenu = new ContextMenu(host, this.#menus, commands);
+    this.#floatingBars = new FloatingBars(host, this.#menus, commands);
     this.onDidChangeMenu = this.#menus.onDidChange;
     this.#quickInput = new QuickInput(host);
   }
@@ -59,6 +63,14 @@ export class UiHost implements UiApi {
     this.#contextMenu.show(menuId, options);
   }
 
+  showChoices(entries: readonly Choice[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void {
+    this.#contextMenu.showEntries(entries, options);
+  }
+
+  registerFloatingBar<C extends object>(options: FloatingBarOptions<C>): FloatingBar<C> {
+    return this.#floatingBars.register(options);
+  }
+
   createQuickPick<T extends QuickPickItem>(): QuickPick<T> {
     return this.#quickInput.createQuickPick<T>();
   }
@@ -77,6 +89,7 @@ export class UiHost implements UiApi {
     this.#searchProviders.clear();
     this.#quickInput.dispose();
     this.#contextMenu.dispose();
+    this.#floatingBars.dispose();
     this.#menus.dispose();
     this.#layout.dispose();
   }

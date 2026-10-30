@@ -69,6 +69,24 @@
     stroke: var(--color-border-strong);
 }
 
+/* below the chart: the page's filters it does not interpret */
+.d-chart-frame__ignored {
+    margin-top: var(--space-1);
+    background: var(--color-surface-subtle);
+    color: var(--color-text-muted);
+    font-weight: var(--weight-normal);
+}
+
+.d-chart-frame__ignored[hidden] {
+    display: none;
+}
+
+/* in place of the chart: why it did not run */
+.d-chart-frame__skipped {
+    padding: var(--space-2);
+    color: var(--color-text-muted);
+}
+
 /* a diagonal shimmer over the chart until it is drawn first */
 .d-chart-frame__shimmer {
     position: absolute;

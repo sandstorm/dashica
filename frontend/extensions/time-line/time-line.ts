@@ -3,11 +3,13 @@ import type { TimeLineProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from '../chart-library/schema';
+import { selectOnClick } from '../chart-library/select-on-click';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
  * The widget type `timeLine`: a line over time (`x`) through its measure (`y`), over the time range the server queried;
- * a line per value of `strokeField` (or of `zField`, in one color), else one in the color `stroke`.
+ * a line per value of `strokeField` (or of `zField`, in one color), else one in the color `stroke`. A click on a line
+ * offers its `zField`, `strokeField` and facets to select.
  */
 export const timeLine: Extension = {
   id: 'timeLine',
@@ -18,17 +20,30 @@ function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: Widg
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeLine(result, widget.props, options),
+    draw: (result, options) => drawTimeLine(result, widget.props, options, (at, candidates) => ctx.choose(at, candidates)),
   });
 }
 
-function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions) {
+function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, choose: WidgetContext['choose']) {
   const schema = new SchemaAnalyzer(data);
   if (!(data.dashicaBucketSize ?? props.x.xBucketSizeMs)) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
   }
   const range = data.dashicaResolvedTimeRange;
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
+  const lines: Plot.LineOptions = {
+    x: schema.requiredColumn(props.x.alias, 'x'),
+    y: schema.requiredColumn(props.y.alias, 'y'),
+    z: props.zField?.alias,
+    fx: props.fx?.alias,
+    fy: props.fy?.alias,
+    marginRight: 150,
+    stroke: props.strokeField?.alias ?? (props.stroke || '#4682B4'),
+    // The first bucket start (e.g. toStartOfHour) can round below the
+    // domain start, so the line's first point plots left of the frame
+    // and bleeds over the y-axis. Clip crops it to the frame.
+    clip: true,
+  };
 
   return Plot.plot({
     title: props.title,
@@ -56,20 +71,8 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
       legend: true,
     },
     marks: [
-      Plot.line(data, {
-        x: schema.requiredColumn(props.x.alias, 'x'),
-        y: schema.requiredColumn(props.y.alias, 'y'),
-        z: props.zField?.alias,
-        fx: props.fx?.alias,
-        fy: props.fy?.alias,
-        marginRight: 150,
-        stroke: props.strokeField?.alias ?? (props.stroke || '#4682B4'),
-        // The first bucket start (e.g. toStartOfHour) can round below the
-        // domain start, so the line's first point plots left of the frame
-        // and bleeds over the y-axis. Clip crops it to the frame.
-        clip: true,
-        tip: tipChannels ? { channels: tipChannels } : true,
-      }),
+      Plot.line(data, { ...lines, tip: tipChannels ? { channels: tipChannels } : true }),
+      selectOnClick(Plot.line, data, { ...lines, fields: [props.zField, props.strokeField, props.fx, props.fy], choose }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

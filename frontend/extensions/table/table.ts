@@ -5,7 +5,8 @@ import { drawTable } from '../chart-library/table';
 
 /**
  * The widget type `table`: the result rows (Tabulator) with a search box, filters per column, sticky tooltips that can
- * be pinned, and a details panel for the selected rows. A cell's menu adds its value to the page's SQL filter.
+ * be pinned, and a details panel for the selected rows. A click on a cell selects its value (by its column's name); a
+ * cell's menu adds a condition to the page's SQL filter.
  */
 export const table: Extension = {
   id: 'table',
@@ -13,13 +14,13 @@ export const table: Extension = {
 };
 
 function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext): Disposable {
-  // a cell's "Filter: …" sends its condition up from the cell
+  // a cell's menu "Filter: …" sends its condition up from the cell
   const addFilter = (event: Event) => ctx.state.filters.add((event as CustomEvent<string>).detail);
   el.addEventListener('dashica-add-filter', addFilter);
   const frame = new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result) => drawTable(result, widget.props),
+    draw: (result) => drawTable(result, widget.props, (selection) => ctx.select(selection)),
   });
   return Disposable.from(frame, new Disposable(() => el.removeEventListener('dashica-add-filter', addFilter)));
 }

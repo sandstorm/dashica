@@ -5,12 +5,12 @@ import type { ContextMenuOptions, MenuAnchor } from '../ui';
 import type { Menus } from './menus';
 
 /**
- * What `showContextMenu` shows. One menu at a time (a new one closes the open one): a `role="menu"` list of the menu's
- * entries, a separator between groups, an entry with `toggled` as a checkbox entry (a check mark while it holds), an
- * entry's key at its end, fixed at its anchor and kept inside the viewport. The first entry gets the focus; arrow keys,
- * Home and End move it. Choosing an entry, Escape, Tab or a press elsewhere closes the menu and gives the focus back to
- * the element that had it; a chosen entry's command runs after that (a failing one is logged). A menu without entries
- * is not shown.
+ * What `showContextMenu` and `showChoices` show. One menu at a time (a new one closes the open one): a `role="menu"`
+ * list of the menu's entries, a separator between groups, an entry with `toggled` as a checkbox entry (a check mark
+ * while it holds), an entry's key at its end, fixed at its anchor and kept inside the viewport. The first entry gets
+ * the focus; arrow keys, Home and End move it. Choosing an entry, Escape, Tab or a press elsewhere closes the menu and
+ * gives the focus back to the element that had it; a chosen entry's command runs after that (a failing one is logged).
+ * A registered menu without entries closes the open one and is not shown; no entries of the moment change nothing.
  */
 export class ContextMenu {
   #open: MenuList | null = null;
@@ -24,19 +24,23 @@ export class ContextMenu {
   ) {}
 
   show(menuId: string, options: ContextMenuOptions): void {
-    this.#open?.close();
-    this.#open = null;
+    this.dispose();
     const context = options.context ?? {};
-    const items = this.menus.items(menuId, context);
-    if (items.length === 0) return;
     const args = options.args ?? [];
-    const entries = items.map((item) => ({
+    const entries = this.menus.items(menuId, context).map((item) => ({
       label: item.title ?? item.command,
       group: item.group,
       keybinding: this.commands.keybindingLabel(item.command),
       checked: item.toggled?.(context),
       run: () => this.#run(item.command, args),
     }));
+    this.showEntries(entries, options);
+  }
+
+  /** Shows `entries` in place of the open menu, nothing without entries; a chosen one's `run` runs after it closed. */
+  showEntries(entries: readonly Entry[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void {
+    if (entries.length === 0) return;
+    this.dispose();
     this.#open = new MenuList(this.host, options.title, entries, options.anchor);
   }
 
@@ -127,7 +131,8 @@ class MenuList {
   }
 }
 
-interface Entry {
+/** An entry of the menu shown: a registered menu's item, or one of `showChoices`. */
+export interface Entry {
   readonly label: string;
   readonly group?: string;
   readonly keybinding?: string;

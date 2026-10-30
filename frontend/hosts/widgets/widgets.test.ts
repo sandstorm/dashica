@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-// Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu), the chart frame.
+// Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu, filters), the
+// selection, the chart frame.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { ChartFrame, type WidgetContext, type WidgetMenuContext } from './widgets';
+import { ChartFrame, type Selection, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -77,6 +78,28 @@ describe('WidgetsHost', () => {
       expect(testbed.requests[0].searchParams.get('sql')).toBe('status >= 500');
     });
 
+    it('reads the chart’s diagnostics, empty without the header', async () => {
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host","status"]}' });
+      expect((await ctx.query()).dashicaDiagnostics).toEqual({ ignored: ['host', 'status'] });
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+      expect((await ctx.query()).dashicaDiagnostics).toEqual({});
+    });
+
+    it('answers a chart that did not run with no rows and why', async () => {
+      testbed.serveNothing('/p/shop/api/1/query', { 'X-Dashica-Diagnostics': '{"skipped":"pick a host"}' });
+      const result = await ctx.query();
+      expect(result.numRows).toBe(0);
+      expect(result.dashicaDiagnostics).toEqual({ skipped: 'pick a host' });
+    });
+
+    it('adds a structured filter to the page, and sends it with the next query', async () => {
+      ctx.addFilter('host', 'ne', 'a');
+      expect(testbed.query.filters.fields).toEqual([{ fieldId: 'host', op: 'ne', value: 'a' }]);
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+      await ctx.query();
+      expect(testbed.requests[0].searchParams.getAll('f')).toEqual(['host:ne:a']);
+    });
+
     it('rejects with the server’s message', async () => {
       testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
       await expect(ctx.query()).rejects.toThrow('Unknown identifier status');
@@ -97,6 +120,87 @@ describe('WidgetsHost', () => {
       const context = options.args![0] as WidgetMenuContext;
       expect(context.widget).toBe(requests);
       expect(context.lastResult?.numRows).toBe(1);
+    });
+  });
+
+  describe('the selection', () => {
+    const contexts: WidgetContext[] = [];
+    const bar = () => document.body.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'rect'));
+    const statusBar = (value: string) => ({ kind: 'category', fieldId: 'status', value, anchor: bar() }) as const;
+
+    beforeEach(() => {
+      contexts.length = 0;
+      testbed.widgets.registerWidget('barVertical', (_el, _widget, given) => {
+        contexts.push(given);
+        return new Disposable(() => {});
+      });
+      testbed.ui.registerMenuItem<Selection>('widget/selection', { command: 'test.filter', title: 'Filter by', when: (selection) => selection.kind === 'category' });
+      testbed.ui.registerMenuItem<Selection>('widget/selection', { command: 'test.zoom', title: 'Zoom', when: (selection) => selection.kind !== 'category' });
+    });
+
+    const byStatus: WidgetNode = { type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/3' };
+    const entries = () => [...(testbed.floatingBar()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
+
+    it('is one at a time: selecting on another widget ends the selection before', () => {
+      testbed.render(byStatus);
+      testbed.render({ ...byStatus, dataUrl: '/p/shop/api/4' });
+      contexts[0].select(statusBar('500'));
+      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '3', fieldId: 'status', value: '500' });
+      contexts[1].select(statusBar('404'));
+      expect(testbed.widgets.selection).toMatchObject({ widgetId: '4', value: '404' });
+      expect(document.querySelectorAll('.d-workbench__floating-bar')).toHaveLength(1);
+    });
+
+    it('shows the floating bar widget/selection with the entries for its kind', () => {
+      testbed.render(byStatus);
+      contexts[0].select(statusBar('500'));
+      expect(testbed.floatingBar()!.getAttribute('aria-label')).toBe('Selection');
+      expect(entries()).toEqual(['Filter by']);
+    });
+
+    it('ends on Escape, on a click elsewhere, on clearSelection, and when its widget goes away', () => {
+      const { rendered } = testbed.render(byStatus);
+      const select = () => contexts[0].select(statusBar('500'));
+      select();
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(testbed.widgets.selection).toBeUndefined();
+      expect(testbed.floatingBar()).toBeNull();
+      select();
+      document.body.click();
+      expect(testbed.widgets.selection).toBeUndefined();
+      select();
+      contexts[0].clearSelection();
+      expect(testbed.widgets.selection).toBeUndefined();
+      select();
+      rendered.dispose();
+      expect(testbed.widgets.selection).toBeUndefined();
+      expect(testbed.floatingBar()).toBeNull();
+    });
+
+    it('pops up candidates to choose from, in order, also a single one; choosing one selects it; none change nothing', () => {
+      testbed.render(byStatus);
+      const anchor = bar();
+      contexts[0].choose({ x: 10, y: 20 }, [statusBar('500'), { kind: 'category', fieldId: 'instance', value: 'web-1', anchor }]);
+      expect(testbed.choices()).toEqual(['status = 500', 'instance = web-1']);
+      expect(testbed.widgets.selection).toBeUndefined();
+      testbed.choose('instance = web-1');
+      expect(testbed.choices()).toEqual([]);
+      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '3', fieldId: 'instance', value: 'web-1', anchor });
+      expect(entries()).toEqual(['Filter by']);
+      contexts[0].choose({ x: 10, y: 20 }, [statusBar('404')]);
+      expect(testbed.choices()).toEqual(['status = 404']);
+      contexts[0].choose({ x: 10, y: 20 }, []);
+      expect(testbed.choices()).toEqual(['status = 404']);
+      (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(testbed.choices()).toEqual([]);
+    });
+
+    it('keeps the selection made by the click that is under way', () => {
+      testbed.render(byStatus);
+      const target = bar();
+      target.addEventListener('click', () => contexts[0].select({ kind: 'category', fieldId: 'status', value: '500', anchor: target }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(testbed.widgets.selection?.value).toBe('500');
     });
   });
 });
@@ -159,6 +263,33 @@ describe('ChartFrame', () => {
     testbed.scrollIntoView();
     await settle();
     expect(body(el).textContent).toBe('Unknown identifier status');
+  });
+
+  it('names the page’s filters the chart ignores, by their ids, until it ignores none', async () => {
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host","path"]}' });
+    const { el } = testbed.render(requests);
+    testbed.scrollIntoView();
+    await settle();
+    const ignored = el.querySelector<HTMLElement>('.d-chart-frame__ignored')!;
+    expect(ignored.hidden).toBe(false);
+    expect(ignored.textContent).toBe('ignores host, path');
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    testbed.query.refresh();
+    await settle();
+    expect(ignored.hidden).toBe(true);
+  });
+
+  it('shows why a chart did not run in place of it, and draws it again once it runs', async () => {
+    testbed.serveNothing('/p/shop/api/1/query', { 'X-Dashica-Diagnostics': '{"skipped":"pick a host","ignored":["path"]}' });
+    const { el } = testbed.render(requests);
+    testbed.scrollIntoView();
+    await settle();
+    expect(body(el).textContent).toBe('skipped: pick a host');
+    expect(el.querySelector<HTMLElement>('.d-chart-frame__ignored')!.hidden).toBe(true);
+    testbed.serve('/p/shop/api/1/query', { time: [1], cnt: [3] });
+    testbed.query.refresh();
+    await settle();
+    expect(body(el).textContent).toBe('1 rows');
   });
 
   it('sets the page’s time range to the range dragged across the chart', async () => {

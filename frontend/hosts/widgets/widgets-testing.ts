@@ -1,22 +1,35 @@
 // See WidgetsApi in widgets.ts.
-import { tableFromArrays, tableToIPC } from 'apache-arrow';
+import { Table, tableFromArrays, tableToIPC } from 'apache-arrow';
 import { vi } from 'vitest';
-import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { Extension, ExtensionContext } from '../extension-host/extension-host';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
+import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica';
+import { CommandsHost } from '../commands/commands';
+import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
 import { QueryHost } from '../query/query';
-import type { ContextMenuOptions } from '../ui/ui';
+import { UiHost, type ContextMenuOptions } from '../ui/ui';
 import { WidgetsHost } from './widgets';
 
 /**
- * For the tests of a widget renderer: a `WidgetsHost` on a `QueryHost`, with the browser parts jsdom lacks stubbed.
- * `activate` activates widget extensions on it (they get `widgets` and `query`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
- * chart visible, `resize` sets every chart's width; `menus` are the context menus shown. `dispose` in `afterEach`.
+ * For the tests of a widget renderer: a `WidgetsHost` on a `QueryHost` and a `UiHost`, with the browser parts jsdom
+ * lacks stubbed. `activate` activates extensions on it (they get `widgets`, `query`, `ui`, `commands` and `page`);
+ * `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
+ * chart visible, `resize` sets every chart's width; `menus` are the context menus shown, `choices()` / `choose` the
+ * choices `ctx.choose` shows, `floatingBar()` the floating bar shown. `dispose` in `afterEach`.
  */
 export function widgetTestbed() {
   history.replaceState(null, '', '/p/shop');
   const query = new QueryHost(window);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
-  const widgets = new WidgetsHost(query, { showContextMenu: (menuId, options) => menus.push({ menuId, options }) });
+  const pageChanged = new EventEmitter<PageJson>();
+  const page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson>['event'] } = { current: undefined, onDidChangePage: pageChanged.event };
+  const workbench = document.body.appendChild(document.createElement('div'));
+  const commands = new CommandsHost(workbench);
+  const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
+  const widgets = new WidgetsHost(query, {
+    showContextMenu: (menuId, options) => menus.push({ menuId, options }),
+    showChoices: (entries, options) => ui.showChoices(entries, options),
+    registerFloatingBar: (options) => ui.registerFloatingBar(options),
+  });
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -54,19 +67,39 @@ export function widgetTestbed() {
   return {
     query,
     widgets,
+    ui,
+    commands,
     menus,
+    /** The labels of the choices `ctx.choose` shows, `[]` while it shows none. */
+    choices: () => [...workbench.querySelectorAll('[role=menu][aria-label="Select"] [role=menuitem]')].map((item) => item.textContent),
+    /** Chooses the choice `label` that `ctx.choose` shows, as a click does. */
+    choose(label: string) {
+      const items = [...workbench.querySelectorAll<HTMLElement>('[role=menu][aria-label="Select"] [role=menuitem]')];
+      const item = items.find((candidate) => candidate.textContent === label);
+      if (!item) throw new Error(`no choice ${label} among ${items.map((candidate) => candidate.textContent).join(', ')}`);
+      item.click();
+    },
+    /** The floating bar shown, `null` while none is. */
+    floatingBar: () => workbench.querySelector<HTMLElement>('[role=toolbar].d-workbench__floating-bar'),
+    /** The page shown, for the extensions that read it. */
+    page,
     /** The URLs fetched, in order. */
     requests,
-    /** Answers `path` with the Arrow table of `columns`, and `headers`. */
-    serve(path: string, columns: Record<string, readonly unknown[]>, headers: Record<string, string> = {}) {
-      answers.set(path, () => new Response(tableToIPC(tableFromArrays(columns)) as Uint8Array<ArrayBuffer>, { headers }));
+    /** Answers `path` with the Arrow table of `columns` (a Table for list or map columns), and `headers`. */
+    serve(path: string, columns: Record<string, readonly unknown[]> | Table, headers: Record<string, string> = {}) {
+      const table = columns instanceof Table ? columns : tableFromArrays(columns);
+      answers.set(path, () => new Response(tableToIPC(table) as Uint8Array<ArrayBuffer>, { headers }));
+    },
+    /** Answers `path` with 204 and `headers`: a chart that did not run. */
+    serveNothing(path: string, headers: Record<string, string>) {
+      answers.set(path, () => new Response(null, { status: 204, headers }));
     },
     /** Answers `path` with `status` and `text`. */
     serveText(path: string, text: string, status = 200) {
       answers.set(path, () => new Response(text, { status }));
     },
     activate(...extensions: Extension[]) {
-      const context = { widgets, query, subscriptions: [] } as unknown as ExtensionContext;
+      const context = { widgets, query, ui, commands, page, subscriptions: [] } as unknown as ExtensionContext;
       for (const extension of extensions) extension.activate(context);
     },
     /** Renders `widget` into a new element in the document. */
@@ -83,6 +116,9 @@ export function widgetTestbed() {
     },
     dispose() {
       query.dispose();
+      ui.dispose();
+      commands.dispose();
+      pageChanged.dispose();
       vi.unstubAllGlobals();
       document.body.replaceChildren();
       history.replaceState(null, '', '/');

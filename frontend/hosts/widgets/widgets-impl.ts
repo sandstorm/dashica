@@ -2,20 +2,61 @@
 import * as Arrow from 'apache-arrow';
 import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
-import type { QueryApi } from '../query/query';
-import type { UiApi } from '../ui/ui';
-import type { QueryResult, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi } from './widgets';
+import type { FilterOp, QueryApi } from '../query/query';
+import type { FloatingBar, MenuAnchor, UiApi } from '../ui/ui';
+import type { QueryResult, Selection, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi } from './widgets';
 import './widgets.css';
 
-/** The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). */
+/**
+ * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). It shows the floating bar
+ * `widget/selection` for the selection, and listens for Escape and clicks while there is one.
+ */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
   readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
+  readonly #selectionBar: FloatingBar<Selection>;
+  #selection: { selection: Selection; owner: RenderedWidget; listening: Disposable } | undefined;
 
   constructor(
     private readonly query: QueryApi,
-    private readonly ui: Pick<UiApi, 'showContextMenu'>,
-  ) {}
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices' | 'registerFloatingBar'>,
+  ) {
+    this.#selectionBar = ui.registerFloatingBar<Selection>({
+      id: 'widget/selection',
+      title: 'Selection',
+      anchor: ({ anchor }) => (anchor.isConnected ? anchor.getBoundingClientRect() : null),
+    });
+  }
+
+  get selection(): Selection | undefined {
+    return this.#selection?.selection;
+  }
+
+  /** Selects `selection` of `owner`, ending the one before. */
+  select(owner: RenderedWidget, selection: Selection): void {
+    this.clearSelection();
+    const doc = selection.anchor.ownerDocument;
+    // the click that selected is past the document already; the next one, wherever it lands, ends the selection
+    const onClick = () => this.clearSelection();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') this.clearSelection();
+    };
+    doc.addEventListener('click', onClick, true);
+    doc.addEventListener('keydown', onKey);
+    const listening = new Disposable(() => {
+      doc.removeEventListener('click', onClick, true);
+      doc.removeEventListener('keydown', onKey);
+    });
+    this.#selection = { selection, owner, listening };
+    this.#selectionBar.show(selection);
+  }
+
+  clearSelection(): void {
+    if (!this.#selection) return;
+    this.#selection.listening.dispose();
+    this.#selection = undefined;
+    this.#selectionBar.hide();
+  }
 
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
     if (this.#renderers.has(type)) throw new Error(`There is a renderer for the widget type ${type} already`);
@@ -32,8 +73,10 @@ export class WidgetsHost implements WidgetsApi {
       return new Disposable(() => el.replaceChildren());
     }
     try {
-      const rendered = renderer(el, widget, new RenderedWidget(widget, this, this.query, this.ui));
+      const ctx = new RenderedWidget(widget, this, this.query, this.ui);
+      const rendered = renderer(el, widget, ctx);
       return new Disposable(() => {
+        if (this.#selection?.owner === ctx) this.clearSelection();
         rendered.dispose();
         el.replaceChildren();
       });
@@ -52,7 +95,7 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
     readonly widget: WidgetNode,
     private readonly host: WidgetsHost,
     readonly state: QueryApi,
-    private readonly ui: Pick<UiApi, 'showContextMenu'>,
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices'>,
   ) {}
 
   url(path: string): string {
@@ -72,6 +115,24 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   showMenu(anchor: HTMLElement): void {
     this.ui.showContextMenu('widget/context', { anchor, title: this.widget.type, context: this, args: [this] });
   }
+
+  addFilter(fieldId: string, op: FilterOp, value: string): void {
+    this.state.filters.add(fieldId, op, value);
+  }
+
+  select(selection: Omit<Selection, 'widgetId'>): void {
+    const widgetId = 'dataUrl' in this.widget ? this.widget.dataUrl.split('/').pop()! : '';
+    this.host.select(this, { ...selection, widgetId });
+  }
+
+  choose(at: MenuAnchor, candidates: readonly Omit<Selection, 'widgetId'>[]): void {
+    const entries = candidates.map((candidate) => ({ label: `${candidate.fieldId} = ${candidate.value}`, run: () => this.select(candidate) }));
+    this.ui.showChoices(entries, { anchor: at, title: 'Select' });
+  }
+
+  clearSelection(): void {
+    this.host.clearSelection();
+  }
 }
 
 /** Shows `error` in `el` in place of the widget: its message and the widget's type. */
@@ -83,15 +144,19 @@ export function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<Wi
   el.replaceChildren(shown);
 }
 
-/** The Arrow table at `url`, with what the server said about it in the headers (resolved time range, bucket size, …). */
+/**
+ * The Arrow table at `url`, with what the server said about it in the headers (resolved time range, bucket size, …);
+ * an empty table for a chart that did not run (204, its Diagnostics say why).
+ */
 async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<QueryResult> {
   const response = await fetch(url, { signal });
-  if (response.status !== 200) throw new Error(await response.text());
-  const result = (await Arrow.tableFromIPC(response)) as QueryResult;
+  if (response.status !== 200 && response.status !== 204) throw new Error(await response.text());
+  const result = (response.status === 204 ? new Arrow.Table() : await Arrow.tableFromIPC(response)) as QueryResult;
   result.dashicaResolvedTimeRange = JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null');
   const bucketSize = response.headers.get('X-Dashica-Bucket-Size');
   if (bucketSize != null) result.dashicaBucketSize = parseInt(bucketSize);
   result.clickhouseSummary = JSON.parse(response.headers.get('X-Clickhouse-Summary') || 'null');
   result.dashicaAlertIf = JSON.parse(response.headers.get('X-Dashica-Alert-If') || 'null');
+  result.dashicaDiagnostics = JSON.parse(response.headers.get('X-Dashica-Diagnostics') || '{}');
   return result;
 }

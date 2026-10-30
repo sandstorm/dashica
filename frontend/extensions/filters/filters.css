@@ -1,5 +1,5 @@
-/* See FilterBar in filters.ts: the funnel button with its dot while a SQL filter is set, the bar's buttons and the SQL
-   filter. The funnel is tinted while the SQL filter is open (aria-expanded, see controls.css). */
+/* See FilterBar in filters.ts: the funnel button with its dot while a SQL filter is set, the chips of the structured
+   filters, the bar's buttons and the SQL filter. The funnel is tinted while the SQL filter is open (aria-expanded, see controls.css). */
 .d-filter-bar {
   display: flex;
   flex: 1;
@@ -9,11 +9,61 @@
   padding: var(--space-2) var(--space-4);
 }
 
+.d-filter-bar__chips,
 .d-filter-bar__buttons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* a structured filter: its field's label, = or ≠, the value, and a × that removes it */
+.d-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-height);
+  padding: 0 var(--space-1) 0 var(--control-padding-x);
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent-subtle);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.d-filter-chip__label {
+  font-weight: var(--weight-medium);
+}
+
+.d-filter-chip__op {
+  color: var(--color-text-muted);
+}
+
+.d-filter-chip__value {
+  font-family: var(--font-mono);
+}
+
+.d-filter-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.d-filter-chip__remove:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.d-filter-chip__remove:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 .d-filter-bar__toggle {

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// Tests for time-line.ts: a line drawn from the widget’s data, in its stroke color or one per strokeField value.
+// Tests for time-line.ts: a line drawn from the widget’s data, in its stroke color or one per strokeField value; a
+// click on a line offering its zField and strokeField, also through the drag area above it.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { clickMark } from '../chart-library/plot-testing';
 import { timeLine } from './time-line';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -41,5 +43,41 @@ describe('timeLine', () => {
     expect(colored.querySelector('svg g[stroke="#ff0000"] path')).not.toBeNull();
     expect(perHost.querySelector('svg g[stroke="#ff0000"]')).toBeNull();
     expect(perHost.querySelectorAll('svg [aria-label="line"] path')).toHaveLength(2);
+  });
+
+  describe('a click', () => {
+    const x = { kind: 'expr' as const, alias: 'time', xBucketSizeMs: QUARTER };
+    const y = { kind: 'count' as const, alias: 'cnt' };
+    const rows = { time: [T0, T0 + QUARTER, T0, T0 + QUARTER], cnt: [3, 5, 1, 2], host: ['a', 'a', 'b', 'b'], session: ['s1', 's1', 's2', 's2'] };
+    const lines = (el: HTMLElement) => [...el.querySelectorAll<SVGPathElement>('[aria-label="line"] path')];
+
+    it('on a line offers its zField, then its strokeField; choosing one selects it', async () => {
+      testbed.serve('/p/shop/api/1/query', rows);
+      testbed.serve('/p/shop/api/2/query', rows);
+      const strokeField = { kind: 'expr' as const, alias: 'host' };
+      const zField = { kind: 'expr' as const, alias: 'session' };
+      const both = testbed.render({ type: 'timeLine', props: { x, y, strokeField, zField }, dataUrl: '/p/shop/api/1' }).el;
+      const strokeOnly = testbed.render({ type: 'timeLine', props: { x, y, strokeField }, dataUrl: '/p/shop/api/2' }).el;
+      await inView();
+      await clickMark(lines(both)[1]);
+      expect(testbed.choices()).toEqual(['session = s2', 'host = b']);
+      testbed.choose('session = s2');
+      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '1', fieldId: 'session', value: 's2' });
+      await clickMark(lines(strokeOnly)[1]);
+      expect(testbed.choices()).toEqual(['host = b']);
+      testbed.choose('host = b');
+      expect(testbed.widgets.selection).toMatchObject({ widgetId: '2', fieldId: 'host', value: 'b' });
+    });
+
+    it('on the drag area offers the line Plot points at below it', async () => {
+      testbed.serve('/p/shop/api/1/query', rows);
+      const { el } = testbed.render({ type: 'timeLine', props: { x, y, strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1' });
+      await inView();
+      const overlay = el.querySelector('svg .overlay')!;
+      await clickMark(lines(el)[0], overlay);
+      expect(testbed.choices()).toEqual(['host = a']);
+      testbed.choose('host = a');
+      expect(testbed.widgets.selection).toMatchObject({ fieldId: 'host', value: 'a', anchor: overlay });
+    });
   });
 });

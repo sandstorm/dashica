@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// Tests for heatmap.ts: both heatmaps’ cells drawn from the widget’s data; a time heatmap needs its y bucket size.
+// Tests for heatmap.ts: both heatmaps’ cells drawn from the widget’s data; a time heatmap needs its y bucket size; a
+// click on an ordinal heatmap's cell offering its row.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { clickMark } from '../chart-library/plot-testing';
 import { heatmap } from './heatmap';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -50,5 +52,25 @@ describe('heatmap', () => {
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
+  });
+
+  it('offers the row of a clicked cell of an ordinal heatmap, never its measure; choosing it selects', async () => {
+    testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], status: ['200', '500'], cnt: [3, 5] });
+    const props = { x, y: { kind: 'enum', alias: 'status' }, fill: { kind: 'count', alias: 'cnt' } } as const;
+    const { el } = testbed.render({ type: 'timeHeatmapOrdinal', props, dataUrl: '/p/shop/api/1' });
+    await inView();
+    await clickMark(el.querySelectorAll('g[aria-label="bar"] rect')[1]);
+    expect(testbed.choices()).toEqual(['status = 500']);
+    testbed.choose('status = 500');
+    expect(testbed.widgets.selection).toMatchObject({ kind: 'category', fieldId: 'status', value: '500' });
+  });
+
+  it('has no selection mark on a time heatmap, and a click offers nothing', async () => {
+    testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], duration_ms: [100, 200], cnt: [3, 5] });
+    const { el } = testbed.render({ type: 'timeHeatmap', props: { x, y: { kind: 'expr', alias: 'duration_ms' }, fill: { kind: 'count', alias: 'cnt' }, yBucketSize: 100 }, dataUrl: '/p/shop/api/1' });
+    await inView();
+    expect(el.querySelector('.d-select-on-click')).toBeNull();
+    await clickMark(el.querySelectorAll('g[aria-label="rect"] rect')[1]);
+    expect(testbed.choices()).toEqual([]);
   });
 });

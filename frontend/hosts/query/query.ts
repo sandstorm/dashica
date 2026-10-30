@@ -1,8 +1,8 @@
 import type { Event } from '../../core/event-emitter/event-emitter';
 
 /**
- * The state every query of the shown page depends on: its time range and auto refresh, its SQL filter, the values of
- * its form widgets. It lives in the URL (`?time=1h&sql=…&wp=…&refresh=30`),
+ * The state every query of the shown page depends on: its time range and auto refresh, its filters, the values of its
+ * form widgets. It lives in the URL (`?time=1h&f=host:eq:a&sql=…&wp=…&refresh=30`),
  * so a link opens the page as it was shared; the browser's back button goes to the state before. Widgets query again
  * on `onDidRequestRefresh` and send `requestParams()` along.
  */
@@ -15,7 +15,7 @@ export interface QueryApi {
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
   refresh(): void;
   /**
-   * What a data handler reads from the query string: the keys of the page's URL (`time`, `range`, `sql`, `wp`), with
+   * What a data handler reads from the query string: the keys of the page's URL (`time`, `range`, `sql`, `f`, `wp`), with
    * `time` also when it is the page's default.
    */
   requestParams(): URLSearchParams;
@@ -41,10 +41,29 @@ export interface TimeModel {
 export interface FiltersModel {
   /** The SQL condition every query of the page adds to its WHERE (`status >= 500 AND path LIKE '/api%'`); '' for none. */
   readonly sql: string;
+  /** The structured filters, in the order they were added; in the URL each is one `f` (`?f=host:ne:a`). */
+  readonly fields: readonly FieldFilter[];
   setSql(sql: string): void;
   /** Adds `condition` to the SQL filter with AND (a filter button, "Filter: Equals this value" in a table). */
   add(condition: string): void;
+  /** Adds the structured filter `fieldId` `op` `value` (a clicked column's alias); once, when it is there already. */
+  add(fieldId: string, op: FilterOp, value: string): void;
+  /** Removes the structured filter at `index` of `fields`. */
+  remove(index: number): void;
+  /** Removes every structured filter; the SQL filter stays. */
+  clear(): void;
   readonly onDidChange: Event<void>;
+}
+
+/** `eq`: the field equals `value` (Filter by …); `ne`: it differs (Exclude …). */
+export type FilterOp = 'eq' | 'ne';
+
+/** A structured filter: each chart's query compares what it means by `fieldId` with `value`, bound as a parameter. */
+export interface FieldFilter {
+  /** The alias of the column the viewer clicked (`host`); a chart that does not know it says so (`ignored`). */
+  readonly fieldId: string;
+  readonly op: FilterOp;
+  readonly value: string;
 }
 
 /** The values of the page's form widgets by name, sent to ClickHouse as query parameters (`{path:String}`). */

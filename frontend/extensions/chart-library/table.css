@@ -22,6 +22,11 @@
     font-size: 0.9em;
 }
 
+/* a cell a click selects the value of */
+.d-table .tabulator-cell.d-table__selectable {
+    cursor: pointer;
+}
+
 /* The selected records: fixed at the bottom, beside the left side (its usual width), full height when toggled */
 .d-record-panel {
     position: fixed;

@@ -3,7 +3,7 @@ import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../../core/disposable/disposable';
 import { formatTime } from '../../query/query';
-import type { QueryResult, WidgetContext } from '../widgets';
+import type { Diagnostics, QueryResult, WidgetContext } from '../widgets';
 import './chart-frame.css';
 
 export interface ChartFrameOptions {
@@ -25,7 +25,8 @@ export interface DrawOptions {
 
 /**
  * A chart in `el` inside the frame every chart has: its title while it loads, a spinner while it queries, the error of
- * a failed query, and its menu button (`widget/context`). It queries once the chart scrolls into view, and again on
+ * a failed query, its menu button (`widget/context`), and what the server says the chart did with the page's filters:
+ * "ignores host, path" below it, "skipped: …" in place of it. It queries once the chart scrolls into view, and again on
  * each `onDidRequestRefresh` from then on; an answer to an older query is dropped. A chart's renderer returns it.
  */
 export class ChartFrame {
@@ -34,6 +35,9 @@ export class ChartFrame {
   readonly #spinner: HTMLElement;
   readonly #shimmer: HTMLElement;
   readonly #body: HTMLElement;
+  readonly #ignored: HTMLElement;
+  /** Why the chart did not run, from its last answer; '' while it ran. */
+  #skipped = '';
   readonly #darkScheme: MediaQueryList;
   readonly #intersection: IntersectionObserver;
   readonly #resize: ResizeObserver;
@@ -54,12 +58,14 @@ export class ChartFrame {
     this.#spinner = html`<div class="d-chart-frame__spinner" title="Refreshing…" hidden><span class="d-spinner"></span></div>`;
     this.#shimmer = html`<div class="d-chart-frame__shimmer"></div>`;
     this.#body = html`<div class="d-chart-frame__body" style=${options.height ? { 'min-height': `${options.height}px` } : {}}></div>`;
+    this.#ignored = html`<div class="d-badge d-chart-frame__ignored" data-testid="chart-ignored-filters" title="Filters of the page this chart does not interpret" hidden></div>`;
     const frame: HTMLElement = html`<div class="d-chart-frame">
       ${this.#spinner}
       <div class="d-chart-frame__menu">
         <button type="button" class="d-button d-button--icon" title="More" aria-label="More" aria-haspopup="menu" onclick=${(event: MouseEvent) => ctx.showMenu(event.currentTarget as HTMLElement)}>${menuIcon}</button>
       </div>
       <div class="d-chart-frame__stage">${this.#shimmer}${this.#body}</div>
+      ${this.#ignored}
     </div>`;
     if (options.title) this.#body.append(html`<h2 class="d-chart-frame__title">${options.title}</h2>`);
     el.replaceChildren(frame);
@@ -108,9 +114,12 @@ export class ChartFrame {
     this.#spinner.hidden = false;
     try {
       this.#result = await this.#ctx.query(controller.signal);
+      this.#showDiagnostics(this.#result.dashicaDiagnostics ?? {});
       await this.#draw();
     } catch (error) {
-      if (!controller.signal.aborted) this.#showError(error);
+      if (controller.signal.aborted) return;
+      this.#showDiagnostics({});
+      this.#showError(error);
     } finally {
       if (this.#running === controller) this.#spinner.hidden = true;
     }
@@ -119,6 +128,10 @@ export class ChartFrame {
   async #draw(): Promise<void> {
     if (!this.#result) return;
     const turn = ++this.#drawn;
+    if (this.#skipped) {
+      this.#showMessage('d-chart-frame__skipped', `skipped: ${this.#skipped}`);
+      return;
+    }
     try {
       const chart = await this.#options.draw(this.#result, {
         width: this.#width,
@@ -133,10 +146,20 @@ export class ChartFrame {
     }
   }
 
+  #showDiagnostics({ ignored = [], skipped = '' }: Diagnostics): void {
+    this.#skipped = skipped;
+    this.#ignored.hidden = ignored.length === 0 || skipped !== '';
+    this.#ignored.textContent = `ignores ${ignored.join(', ')}`;
+  }
+
   #showError(error: unknown): void {
+    this.#showMessage('d-widget-error', error instanceof Error ? error.message : String(error));
+  }
+
+  #showMessage(className: string, message: string): void {
     const shown = this.#body.ownerDocument.createElement('div');
-    shown.className = 'd-widget-error';
-    shown.textContent = error instanceof Error ? error.message : String(error);
+    shown.className = className;
+    shown.textContent = message;
     this.#body.replaceChildren(shown);
     this.#shimmer.hidden = true;
   }

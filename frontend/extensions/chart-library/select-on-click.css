@@ -1,0 +1,2 @@
+/* See selectOnClick in select-on-click.ts. */
+svg:has(.d-select-on-click--pointing) { cursor: pointer; }

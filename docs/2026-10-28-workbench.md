@@ -144,7 +144,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `ui` | side / bottom panels, title bar and status bar items, `registerMenuItem`, `showContextMenu`, quick pick, messages, search providers |
+| `ui` | side / bottom panels, title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
 | `widgets` | `registerWidget` (§3.6) |
 | `page` | the shown page (`page.json`), `onDidChangePage` |
 | `query` | the state every query depends on (§3.7) |
@@ -177,6 +177,7 @@ ctx.renderChild(el, child)                 // grid, collapsible
 ctx.showMenu(anchor)                       // the menu `widget/context` (Debug, …)
 ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8); fieldId: the clicked column's alias
 ctx.select({kind, fieldId, value, anchor}) // the page's one selection (§3.8, step 6.7); ctx.clearSelection()
+ctx.choose(at, candidates)                 // a menu "Select" of candidates; the chosen one is selected (step 6.8)
 ```
 
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
@@ -431,7 +432,7 @@ the capture phase, so the click on another bar ends the old one and selects anew
 it), and disposing the widget that holds it. `filters` registers "Filter by" (`filters.filterBySelection`) and
 "Exclude" (`filters.excludeSelection`) for `kind === 'category'`; they call `query.filters.add(fieldId, 'eq' | 'ne',
 value)` and `widgets.clearSelection()`. The entries' titles do not repeat the value: the bar sits next to the clicked
-bar. `chart-library/selectBars` (from 6.8 `selectMarks`) makes the bars of a Plot bar chart selectable. On a click
+bar. `chart-library/selectBars` (from 6.8 the mark `selectOnClick`) makes the bars of a Plot bar chart selectable. On a click
 on a bar (Plot binds each `rect` to its row's index), it selects the value in that row of the first of the given fields
 that is a category (by its alias): a bar chart's category (`x` / `y`), then its `fill`. A NULL selects nothing.
 Without such a field the bars are not selectable and get no pointer cursor. `fx` / `fy` and the color legend are
@@ -441,29 +442,48 @@ a filter in `bar-vertical.test.ts`. The widget testbed now runs a real `UiHost` 
 then hides at the next scroll or resize, but the selection stays until Escape or a click; the selected bar is not
 highlighted.
 
-✅ (step 6.8) **Every chart and table cell selects through the same bar.** `chart-library/selectMarks(chart, data,
-fields, select)` replaces `selectBars`; a chart only says which field each of its parts selects:
-`{marks: {<Plot aria-label>: [fields…]}, legend, fx, fy}`. A field selects when it is a category: not a `count`, not
-a time bucket (`autoBucket`, or a field with `xBucketSizeMs`); its alias is the filter id. A NULL selects nothing, and
-of a mark's fields the first category wins. It reads the value
-from what Plot binds: a mark's `rect` / `path` to its row's index (a line's `path` to its points' indexes, the first
-is taken), a color legend's swatch to its value, a facet label's `text` to its facet group's `{x, y}`. Every part that
-selects gets `d-select-marks__item` (pointer cursor; the chart `d-select-marks`). The mapping per chart:
+✅ (step 6.8, reworked 2026-10-31) **Every chart and table cell selects through the same bar.** A chart selects
+through **a Plot interaction mark** of its own, `chart-library/selectOnClick(mark, data, {...options, fields,
+choose})`, put after its mark as Plot's tip is: `mark` is the chart's mark function (`Plot.barY`), `options` the chart
+mark's options without its tip, so the mark under Plot's pointer transform (`Plot.pointer`, as Plot points a
+`tip: true` or `tip: {channels}`) points at the same row as the tip, a stack included. It draws an empty `g`, with
+`d-select-on-click--pointing` while it points at a row (the SVG then has the pointer cursor, `svg:has(…)`); its render
+function gets the pointed row's index (documented: a render transform, `context.ownerSVGElement`), and reads the row
+as Plot's pointer does (`data.get(i)`, Plot's source). A field is a candidate when it is a category: not a `count`,
+not a time bucket (`autoBucket`, or a field with `xBucketSizeMs`); its alias is the filter id. A NULL is no
+candidate. **A selection takes two steps:** a click on a mark always pops up a menu "Select" (also for one candidate,
+so a click does the same each time) at the click, an entry per category of the pointed row with a value, in the
+order of `fields`, labelled `<alias> = <value>` (`instance = web-1`, `status = 500`, `region = eu`). Choosing one
+selects it (`{kind: 'category', fieldId, value, anchor: the clicked element}`) and the floating bar follows; Escape or
+a press elsewhere closes the menu without selecting. A row without a category value pops up nothing; a chart without a
+category field gets no mark. The menu is `WidgetContext.choose(at, candidates)`: it labels the candidates and shows
+them with `ui.showChoices(entries, {anchor, title})`, an arbitrary menu (`{label, run}` entries, no commands) drawn by
+the context menu's list (keyboard, focus, Escape, one menu at a time); without entries it changes nothing, an open
+menu stays. **Plot pins its tip on a mouse's click** and then ignores the mouse until the next click unpins it, so a
+second click would select nothing (Plot's source only, `pointer.js`: `pointerdown`, `state.sticky`; its typings say
+nothing of pinning): the mark stops a mouse's `pointerdown` at the SVG (capture phase) while it points at a row,
+before Plot's listeners there (Plot stops the same events itself); a touch or pen, on which Plot pins nothing, passes.
+On a faceted chart Plot's pointer renders the mark once per facet and empties the losing facets' elements an
+animation frame later, so a click reads the row of the element that points. The floating bar takes the role of the pinned tip. **Legends no
+longer select** (2026-10-31): Plot's legend is HTML outside the SVG, and its swatches' order was Plot's source only.
+`selectMarks(chart, fields, select)`, which wrapped the drawn chart, read `plot.value` and picked the first category,
+is gone. The candidates per chart:
 
-| Chart | Marks | Legend | Facets |
-|---|---|---|---|
-| `barVertical` | `bar`: `x`, then `fill` | `fill`, else `x` when `fx` colors the bars by it | `fx`, `fy` |
-| `barHorizontal` | `bar`: `y`, then `fill` | `fill` | — (its drawing has no facets) |
-| `timeBar` | `rect`: `fill` | `fill` | `fx`, `fy` |
-| `timeLine` | `line`: `zField`, then `strokeField` | `strokeField` | `fx`, `fy` |
-| `timeHeatmapOrdinal` | `bar` (its cells): `y` | — (the legend is the measure) | — |
+| Chart | Candidates, in order |
+|---|---|
+| `barVertical` | `x`, `fill`, `fx`, `fy` |
+| `barHorizontal` | `y`, `fill` |
+| `timeBar` | `fill`, `fx`, `fy` |
+| `timeLine` | `zField`, `strokeField`, `fx`, `fy` |
+| `timeHeatmapOrdinal` | `y` (its cells) |
 
-`timeHeatmap` selects nothing: its `y` is a numeric bucket and its `fill` a measure. A line selects its own series
-(`zField`) before its color group (`strokeField`), as a bar its category before its fill; the legend shows the
-`strokeField`. **A time chart's drag area (`timeBrush`) lies above its marks**, so a click there lands on the area,
-not on a bar: `selectMarks` then takes the topmost selectable element below the pointer
-(`document.elementsFromPoint`). A click without moving starts no time selection, and `timeBrush` is unchanged; the
-marks below the area show no pointer cursor. The table: `drawTable(result, props, select?)`; with `select`, a click
+**Facet labels no longer select** (2026-10-31): Plot has no API for which facet a label names. A mark's row carries
+its facet's value, so a click on a mark offers its facet as well. `timeHeatmap` has no selection mark: its `y` is a
+numeric bucket and its `fill` a measure. A line offers its own series (`zField`) before its color group (`strokeField`), as a
+bar its category before its fill. **A time chart's drag area (`timeBrush`) lies above its marks**: Plot's pointer and
+the mark listen on the whole SVG, so a click there offers the row Plot points at, as one on the mark (the selection's
+anchor is then the drag area). A click without moving starts no time selection, and `timeBrush` is unchanged. An
+alert's chart (`alertDetail`, `drawTimeBars` without `choose`) selects nothing. The table: `drawTable(result, props, select?)`; with `select`, a click
 on a cell of a category column (Tabulator's `cellClick`) selects `{fieldId: the column's name, value: String(cell),
 anchor: the cell}`, a NULL nothing, and the category columns carry `d-table__selectable`. A table's props carry
 `categories` (step 6.9, its `computeProps`): the aliases of its own fields (`dimensions()`) that are categories, so
@@ -472,10 +492,14 @@ list or struct holds no category on the client either. **Deviation:** a SQL-file
 output columns are only in its text, so its cells select nothing (open question 8). The 6.6 entries "Filter by …" /
 "Exclude …" leave the cell menu: it keeps "Filter: Contains this value", a timestamp column its "Time ±…" entries.
 `dashica-add-filter` carries only SQL conditions again. Debug's table passes no `select`, selects nothing and keeps
-all its SQL entries. Tests: a click per chart type in its extension's test (marks, swatch, facet label; the drag area
-with a stubbed `elementsFromPoint` in `time-bar.test.ts`), the cell click, the category columns and the menus in
-`table.test.ts`, the categories in `table_test.go`. Playwright: `e2e/bar-selection.spec.ts` (selector
-`d-select-marks__item`), `e2e/chart-selection.spec.ts` (a time bar's swatch, a table cell, the cell menu). **Open:** the
+all its SQL entries. Tests: a click per chart type in its extension's test, through Plot's real pointer (`chart-library/plot-testing.ts`
+moves the mouse onto a mark, waits a frame, presses and clicks; it gives jsdom an empty `getBBox` for Plot's tip):
+the candidates in order, also a single one, choosing one and the floating bar, a second click, measures, time
+buckets and NULL never offered (`bar-vertical.test.ts`), a mark's facet, the drag area (`time-bar.test.ts`,
+`time-line.test.ts`); `ctx.choose` in `widgets.test.ts`, `showEntries` in `context-menu.test.ts`; the cell click, the
+category columns and the menus in `table.test.ts`, the categories in `table_test.go`. Playwright:
+`e2e/bar-selection.spec.ts` (a bar, its menu "Select", Escape on it), `e2e/chart-selection.spec.ts` (a time bar through
+its drag area, a table cell, the cell menu). **Open:** the
 ordinal heatmap's y-axis labels and a table's header do not select; a click that ends a text selection in a table cell
 also selects the cell.
 
@@ -553,6 +577,9 @@ interface UiApi {
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
   showContextMenu(menuId: string, o: { anchor: Element | {x: number; y: number}; context?: object; args?: unknown[] }): void;
+  showChoices(entries: { label: string; run(): void }[], o: { anchor: Element | {x: number; y: number}; title: string }): void;
+                                          // a menu of the moment (a chart's candidates), drawn as a context menu;
+                                          // no entries change nothing
   readonly onDidChangeMenu: Event<string>;
   registerFloatingBar<C>(o: { id: string; title: string; order?: number;
                               anchor: (context: C) => DOMRect | null }): FloatingBar<C>;   // entries via registerMenuItem(id, …);
@@ -600,7 +627,11 @@ interface WidgetsApi {
 Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
 expects one. Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug), `widget/selection` (the floating bar
 on a chart selection: zoom, filter, show rows, actions), `table/row` (a row's menu),
-`dashboards/entry` (a menu entry: favorite).
+`dashboards/entry` (a menu entry: favorite). A menu of the moment needs no
+id (reworked 2026-10-31): `ui.showChoices(entries, {anchor, title})` shows `{label, run}` entries in the same list,
+one menu at a time with the registered ones (no entries leave the open menu, a registered menu without entries closes
+it); a chart's candidates for a selection go through it
+(`WidgetContext.choose`, §3.8 step 6.8).
 
 Folders as in Zwiebelfisch: `frontend/core/<name>/` (primitives), `frontend/hosts/<name>/` (contribution points),
 `frontend/extensions/<name>/` (one folder per built-in extension); `frontend/workbench/` puts hosts and extensions
@@ -791,7 +822,7 @@ Open in this design:
    (`JSONExtractString(attrs,'host')`); §3.8 says expressions never leave the server. ✅ Done in step 6.9: the
    generated `marshalProps` write each field slot with `sql.MarshalFieldProps` as `{kind, alias, xBucketSizeMs?}`
    (TS `SqlFieldProps`), never its definition or an AutoBucket's column. `kind` stays because the client reads it:
-   `selectMarks` never selects a count. The widget's JSON (`MarshalJSON`, all fields) is unchanged; Explore's Go code
+   `selectOnClick` never offers a count. The widget's JSON (`MarshalJSON`, all fields) is unchanged; Explore's Go code
    reads that, nothing reads the props. A field without an alias (`sql.Field("lower(host)")`) is aliased by its
    definition, as its result column is named; such an alias still shows the expression, so give it an alias.
 
@@ -872,7 +903,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 6.5 ✅ | client: `FiltersModel` holds `{fieldId, op, value}[]` (URL `f`, `requestParams`), `ctx.addFilter`; the filter bar shows them as chips (id, = / ≠, value, ×); `ChartFrame` shows "ignores `host`" / "skipped: …" from `X-Dashica-Diagnostics` | filters as chips (from links) |
 | 6.6 ✅ | table: a cell adds a structured filter; superseded by 6.8 (a click selects; the menu keeps "Contains" and the timestamp entries (±5 min …) in SQL until step 7) | click-to-filter in tables |
 | 6.7 ✅ | `ui.registerFloatingBar` (menu `widget/selection`); the selection model in the `widgets` host (one selection, Escape clears, `ctx.select`); `filters` contributes "Filter by …" / "Exclude …" for `category`; first users: bar vertical / horizontal (category, fill), selected by the field's alias | click-to-filter on bar charts |
-| 6.8 ✅ | the other charts select categories: time bar / time line series (fill, stroke, z), ordinal heatmap rows, `fx` / `fy` facets; table cells select through the same bar (every column, by its name; §7, 8), replacing the cell menu's entries of 6.6; a category field selects by its alias, never a measure or a time bucket | click-to-filter everywhere |
+| 6.8 ✅ | the other charts select categories: time bar / time line series (fill, stroke, z), ordinal heatmap rows, `fx` / `fy` facets; table cells select through the same bar (every column, by its name; §7, 8), replacing the cell menu's entries of 6.6; a category field selects by its alias, never a measure or a time bucket; reworked 2026-10-31: the mark `selectOnClick` and a menu of candidates (`ctx.choose`, `ui.showChoices`), no legend | click-to-filter everywhere |
 | 6.9 ✅ | props carry aliases (§3.13, 3): client `SqlField` slots go out as `{kind, alias, xBucketSizeMs?}`, never the definition; generator, TS types and fixtures regenerated | dashboards; no expression in `page.json` |
 | 6a ✅ | small, any time after 5b.9: queries stop with their client (§3.7), auto refresh pauses in a hidden tab, chart titles in search everywhere and chart links (§3.11) | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |

@@ -1,20 +1,32 @@
 import { html } from 'htl';
-import { Filter, createElement } from 'lucide';
+import { Filter, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { QueryApi } from '../../hosts/query/query';
+import type { FilterOp, QueryApi } from '../../hosts/query/query';
+import type { Selection } from '../../hosts/widgets/widgets';
 import './filters.css';
 
 /**
  * The filters of a page that has them (`page.json`'s `filterBar`): a funnel button in the title bar, marked while there
  * is a SQL filter, opens the SQL filter every query of the page adds to its WHERE (open by itself while there is one).
- * The filter bar shows while the page has filter buttons, each adding its condition to the SQL filter (`status >= 500`;
- * a `...` in it is asked for), or while the SQL filter is open; else the page has no bar for nothing.
+ * The filter bar shows one chip per structured filter ("host = a", × removes it), the page's filter buttons, each
+ * adding its condition to the SQL filter (`status >= 500`; a `...` in it is asked for), and the open SQL filter; it
+ * shows while it has one of them, else the page has no bar for nothing. On a chart's selected category, the floating
+ * bar `widget/selection` offers "Filter by" and "Exclude", which add it as a structured filter and end the selection.
  */
 export const filters: Extension = {
   id: 'filters',
-  activate({ ui, page, query, subscriptions }) {
+  activate({ ui, page, query, widgets, commands, subscriptions }) {
+    const addSelection = (op: FilterOp) => (selection: Selection) => {
+      query.filters.add(selection.fieldId, op, selection.value);
+      widgets.clearSelection();
+    };
+    subscriptions.push(commands.registerCommand('filters.filterBySelection', addSelection('eq')));
+    subscriptions.push(commands.registerCommand('filters.excludeSelection', addSelection('ne')));
+    const isCategory = (selection: Selection) => selection.kind === 'category';
+    subscriptions.push(ui.registerMenuItem<Selection>('widget/selection', { command: 'filters.filterBySelection', title: 'Filter by', order: 1, when: isCategory }));
+    subscriptions.push(ui.registerMenuItem<Selection>('widget/selection', { command: 'filters.excludeSelection', title: 'Exclude', order: 2, when: isCategory }));
     let button: Disposable | undefined;
     let bar: Disposable | undefined;
     const showBar = () => {
@@ -33,12 +45,14 @@ export const filters: Extension = {
         filterBar.showButtons(page.current.filterButtons);
         button = ui.registerBarItem('title', filterBar.toggle, { alignment: 'right', priority: 40 });
       }
+      filterBar.showFields();
       showBar();
     };
     subscriptions.push(page.onDidChangePage(showForPage));
     subscriptions.push(
       query.filters.onDidChange(() => {
         filterBar.showSql();
+        filterBar.showFields();
         showBar();
       }),
     );
@@ -49,9 +63,11 @@ export const filters: Extension = {
 
 /**
  * The funnel button (`toggle`) and the filter bar's content (`el`); `showButtons` takes the page's buttons, `showSql`
- * the SQL filter of `query`. `onDidChangeWanted` is called when the SQL filter opens or closes.
+ * the SQL filter of `query`, `showFields` its structured filters, each labelled by its id.
+ * `onDidChangeWanted` is called when the SQL filter opens or closes.
  */
 class FilterBar {
+  readonly #chips: HTMLElement = html`<div class="d-filter-bar__chips" hidden></div>`;
   readonly #buttons: HTMLElement = html`<div class="d-filter-bar__buttons"></div>`;
   readonly #active: HTMLElement = html`<span class="d-badge d-badge--dot d-filter-bar__dot" aria-hidden="true"></span>`;
   readonly toggle: HTMLButtonElement = html`<button
@@ -65,7 +81,7 @@ class FilterBar {
     placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
     rows="2"
     hidden></textarea>`;
-  readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#buttons}${this.#sql}</div>`;
+  readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}${this.#sql}</div>`;
   #hasButtons = false;
 
   constructor(
@@ -80,9 +96,9 @@ class FilterBar {
     this.showSql();
   }
 
-  /** Whether the filter bar has something to show: the page's buttons, or the open SQL filter. */
+  /** Whether the filter bar has something to show: a structured filter, the page's buttons, or the open SQL filter. */
   get wanted(): boolean {
-    return this.#hasButtons || !this.#sql.hidden;
+    return this.query.filters.fields.length > 0 || this.#hasButtons || !this.#sql.hidden;
   }
 
   showButtons(buttons: readonly FilterButton[]): void {
@@ -93,6 +109,28 @@ class FilterBar {
         const el: HTMLButtonElement = html`<button type="button" class="d-button">${button.title}</button>`;
         el.addEventListener('click', () => this.#add(button.queryPart));
         return el;
+      }),
+    );
+  }
+
+  showFields(): void {
+    const fields = this.query.filters.fields;
+    this.#chips.hidden = fields.length === 0;
+    this.#chips.replaceChildren(
+      ...fields.map(({ fieldId, op, value }, index) => {
+        const sign = op === 'eq' ? '=' : '≠';
+        const shown = `${fieldId} ${sign} ${value}`;
+        return html`<span class="d-filter-chip" data-testid="filter-chip">
+          <span class="d-filter-chip__label">${fieldId}</span>
+          <span class="d-filter-chip__op">${sign}</span>
+          <span class="d-filter-chip__value">${value}</span>
+          <button
+            type="button"
+            class="d-filter-chip__remove"
+            title=${`Remove ${shown}`}
+            aria-label=${`Remove ${shown}`}
+            onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
+        </span>`;
       }),
     );
   }

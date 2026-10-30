@@ -1,17 +1,19 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeBarProps } from '../../generated/zz_generated.dashica';
-import type { DrawOptions, QueryResult } from '../../hosts/widgets/widgets';
+import type { DrawOptions, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from './schema';
+import { selectOnClick } from './select-on-click';
 import { timeBrush } from './time-brush';
 
 /**
  * A bar per time bucket (`x`) as high as its measure (`y`), stacked by `fill`, over the time range the server queried;
  * an alert's thresholds (`X-Dashica-Alert-If`) as red lines. The widget types `timeBar` and `alertDetail` draw it.
+ * With `choose`, a click on a bar offers its fill and facets to select.
  *
  * The bucket size is the x field's, or the server's for an `AutoBucket` axis: the y axis then shows per second, since
  * a bucket size the server picks says nothing about the bars' height ("logs per 15 minutes or per 5?").
  */
-export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions) {
+export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions, choose?: WidgetContext['choose']) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
   const xBucketSize = data.dashicaBucketSize ?? props.x.xBucketSizeMs;
@@ -23,6 +25,23 @@ export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: Dr
   const buckets = range ? Math.floor((range.to - range.from) / xBucketSize) : undefined;
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
   const alertIf = data.dashicaAlertIf;
+  const bars: Plot.RectYOptions = {
+    x1: x,
+    x2: (d: Record<string, number>) => d[x] + xBucketSize,
+    y: schema.requiredColumn(props.y.alias, 'y'),
+    fx: props.fx?.alias,
+    fy: props.fy?.alias,
+    order: props.stack?.order,
+    offset: props.stack?.offset,
+    reverse: props.stack?.reverse,
+    marginRight: 150,
+    // Observable Plot does not clip marks to the frame by default, so a
+    // bucket wider than the domain paints outside the SVG onto the page.
+    clip: true,
+    fill: props.fill?.alias ?? '#A8C1D1',
+    // a bit of padding between the bars, when they are wide enough - HEURISTIC
+    insetLeft: buckets === undefined || props.fx ? 0 : buckets * 2 < options.width ? 1 : 0,
+  };
 
   return Plot.plot({
     title: props.title,
@@ -49,24 +68,8 @@ export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: Dr
       legend: true,
     },
     marks: [
-      Plot.rectY(data, {
-        x1: x,
-        x2: (d: Record<string, number>) => d[x] + xBucketSize,
-        y: schema.requiredColumn(props.y.alias, 'y'),
-        fx: props.fx?.alias,
-        fy: props.fy?.alias,
-        order: props.stack?.order,
-        offset: props.stack?.offset,
-        reverse: props.stack?.reverse,
-        marginRight: 150,
-        // Observable Plot does not clip marks to the frame by default, so a
-        // bucket wider than the domain paints outside the SVG onto the page.
-        clip: true,
-        tip: tipChannels ? { channels: tipChannels } : true,
-        fill: props.fill?.alias ?? '#A8C1D1',
-        // a bit of padding between the bars, when they are wide enough - HEURISTIC
-        insetLeft: buckets === undefined || props.fx ? 0 : buckets * 2 < options.width ? 1 : 0,
-      }),
+      Plot.rectY(data, { ...bars, tip: tipChannels ? { channels: tipChannels } : true }),
+      choose ? selectOnClick(Plot.rectY, data, { ...bars, fields: [props.fill, props.fx, props.fy], choose }) : null,
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
       // Alert threshold lines from X-Dashica-Alert-If header
