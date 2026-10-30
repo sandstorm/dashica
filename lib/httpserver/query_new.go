@@ -144,49 +144,24 @@ func (f *DashboardFilters) ResolveTimeRangeFromDbAsTime(ctx context.Context, cli
 
 func (f *DashboardFilters) calculateLegacyFilters() {
 	if f.TimeRange == "custom" {
-		// Format from frontend (flatpickr / brush): "YYYY-MM-DD HH:MM to YYYY-MM-DD HH:MM",
-		// interpreted in the local time zone of the server.
+		// "<from> to <to>", each end a time expression (parseTimeExpr): `2026-10-29 10:00 to now`
 		parts := strings.Split(f.CustomTimeRange, " to ")
 		if len(parts) == 2 {
-			from, errFrom := time.ParseInLocation("2006-01-02 15:04", parts[0], time.Local)
-			to, errTo := time.ParseInLocation("2006-01-02 15:04", parts[1], time.Local)
+			now := time.Now()
+			from, errFrom := parseTimeExpr(parts[0], now)
+			to, errTo := parseTimeExpr(parts[1], now)
 			if errFrom == nil && errTo == nil {
 				f.From = float64(from.Unix())
 				f.To = float64(to.Unix())
 			}
 		}
-	} else if f.TimeRange == "5m" {
-		f.From = "now() - INTERVAL 5 MINUTE"
-		f.To = "now()"
-	} else if f.TimeRange == "15m" {
-		f.From = "now() - INTERVAL 15 MINUTE"
-		f.To = "now()"
-	} else if f.TimeRange == "1h" {
-		f.From = "now() - INTERVAL 1 HOUR"
-		f.To = "now()"
-	} else if f.TimeRange == "3h" {
-		f.From = "now() - INTERVAL 3 HOUR"
-		f.To = "now()"
-	} else if f.TimeRange == "6h" {
-		f.From = "now() - INTERVAL 6 HOUR"
-		f.To = "now()"
-	} else if f.TimeRange == "12h" {
-		f.From = "now() - INTERVAL 12 HOUR"
-		f.To = "now()"
-	} else if f.TimeRange == "24h" {
-		f.From = "now() - INTERVAL 1 DAY"
-		f.To = "now()"
-	} else if f.TimeRange == "48h" {
-		f.From = "now() - INTERVAL 2 DAY"
-		f.To = "now()"
-	} else if f.TimeRange == "168h" {
-		f.From = "now() - INTERVAL 7 DAY"
-		f.To = "now()"
-	} else if f.TimeRange == "720h" {
-		f.From = "now() - INTERVAL 30 DAY"
+		return
+	}
+	// a preset: any Go duration (`1h`, `90m`, `168h`), ending now
+	if dur, err := time.ParseDuration(f.TimeRange); err == nil && dur > 0 {
+		f.From = fmt.Sprintf("now() - INTERVAL %d SECOND", int64(dur.Seconds()))
 		f.To = "now()"
 	}
-
 }
 
 func intPtr(i int64) *int64 {
