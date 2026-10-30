@@ -186,8 +186,14 @@ ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8)
 | `cursor` | hovered timestamp | — (ephemeral) | synchronized crosshair across all time charts |
 
 Every data handler reads the same query parameters; the server parses them once in `lib/httpserver` into one
-`QueryState` (time, filters, params) and drops the legacy `From` / `To`. Params stay what they are today: ClickHouse
-parameters (`param_<name>`); the client owns the UI, the server only binds.
+`QueryState` (time, filters, params). Params stay what they are today: ClickHouse parameters (`param_<name>`); the
+client owns the UI, the server only binds.
+
+✅ (2026-10-30, with the time picker) **The time range is resolved once per request, in Go:**
+`DashboardFilters.ResolveTimeRange(time.Now())` gives the window in ms, and every handler passes it to `SqlClause` and
+`X-Dashica-Resolved-Time-Range`. Presets use the server's clock (not ClickHouse's `now()`), so the charts of a page
+query the same numbers. The legacy `From` / `To` and the ClickHouse query for `now()` are gone. `GET /time-range`
+answers the same window for the picker.
 
 **Time range as in Grafana (decided 2026-10-30):** the title bar shows one button with the range ("Last 1h",
 "29.10. 10:00 – 12:00"), and beside it ‹ › (shift by the window's length) and ⊖ (zoom out to twice the window). The
