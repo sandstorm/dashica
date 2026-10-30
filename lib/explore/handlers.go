@@ -29,9 +29,6 @@ func (e *exploreImpl) registerHandlers(ctx *rendering.DashboardContext, collecto
 	if err := api.Handle("preview/debug", apiHandler(e.handlePreviewDebug).asHTTP()); err != nil {
 		return err
 	}
-	if err := api.Handle("preview/render", apiHandler(e.handlePreviewRender).asHTTP()); err != nil {
-		return err
-	}
 	if err := api.Handle("formmodel", apiHandler(e.handleFormModel).asHTTP()); err != nil {
 		return err
 	}
