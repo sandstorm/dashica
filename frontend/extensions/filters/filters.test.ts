@@ -84,6 +84,12 @@ describe('filters', () => {
     expect(query.filters.sql).toBe("method = 'POST'");
   });
 
+  it('opens the SQL filter while there is one (a filter button, a shared link)', () => {
+    expect(sql().hidden).toBe(true);
+    button('Errors').click();
+    expect(sql().hidden).toBe(false);
+  });
+
   it('is gone on a page without filter bar', () => {
     show({ ...shop, title: 'Checkout', filterBar: false });
     expect(bar.children.length).toBe(0);

@@ -7,7 +7,7 @@ import type { QueryApi } from '../../hosts/query/query';
 /**
  * The filter bar of a page that has one (`page.json`'s `filterBar`): the page's filter buttons, each adding its
  * condition to the SQL filter (`status >= 500`; a `...` in it is asked for), and "filters", which opens the SQL
- * filter every query of the page adds to its WHERE; "active" while there is one.
+ * filter every query of the page adds to its WHERE; "active" while there is one, and then it is open.
  */
 export const filters: Extension = {
   id: 'filters',
@@ -31,6 +31,7 @@ export const filters: Extension = {
 class FilterBar {
   readonly #buttons: HTMLElement = html`<div class="flex flex-wrap items-center gap-2"></div>`;
   readonly #active: HTMLElement = html`<span class="badge badge-primary badge-xs">active</span>`;
+  readonly #toggle: HTMLButtonElement = html`<button type="button" class="btn btn-xs" aria-expanded="false">filters</button>`;
   readonly #sql: HTMLTextAreaElement = html`<textarea
     class="textarea textarea-bordered textarea-xs w-full font-mono"
     placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
@@ -38,20 +39,17 @@ class FilterBar {
   readonly el: HTMLElement;
 
   constructor(private readonly query: QueryApi) {
-    const toggle: HTMLButtonElement = html`<button type="button" class="btn btn-xs" aria-expanded="false">filters</button>`;
-    toggle.addEventListener('click', () => {
-      this.#sql.hidden = !this.#sql.hidden;
-      toggle.classList.toggle('btn-active', !this.#sql.hidden);
-      toggle.setAttribute('aria-expanded', String(!this.#sql.hidden));
+    this.#toggle.addEventListener('click', () => {
+      this.#setOpen(this.#sql.hidden);
       if (!this.#sql.hidden) this.#sql.focus();
     });
-    this.#sql.hidden = true;
+    this.#setOpen(false);
     this.#sql.addEventListener('input', () => query.filters.setSql(this.#sql.value));
     this.el = html`<div class="flex-1 min-w-0 flex flex-col gap-1 px-4 py-2">
       <div class="flex items-center gap-2">
         ${this.#buttons}
         <div class="flex-1"></div>
-        ${toggle}
+        ${this.#toggle}
         ${this.#active}
       </div>
       ${this.#sql}
@@ -74,6 +72,13 @@ class FilterBar {
     // while typing, the field has it already; setting it would move the cursor to the end
     if (this.#sql.value !== sql) this.#sql.value = sql;
     this.#active.hidden = sql === '';
+    if (sql !== '') this.#setOpen(true);
+  }
+
+  #setOpen(open: boolean): void {
+    this.#sql.hidden = !open;
+    this.#toggle.classList.toggle('btn-active', open);
+    this.#toggle.setAttribute('aria-expanded', String(open));
   }
 
   /** Adds `condition`; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for. */
