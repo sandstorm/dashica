@@ -1,11 +1,8 @@
 package widget
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
@@ -172,65 +169,6 @@ func (b *BarVertical) AdjustQuery(opts ...sql.SqlBuilderOption) *BarVertical {
 	return &cloned
 }
 
-func (b *BarVertical) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	chartProps := b.buildChartProps()
-	chartPropsJSON, err := json.Marshal(chartProps)
-	if err != nil {
-		return nil, fmt.Errorf("barVertical: failed to marshal chart props: %w", err)
-	}
-
-	return chartComponent(ctx, b, "barVertical", string(chartPropsJSON), b.height), nil
-}
-
-func (b *BarVertical) buildChartProps() map[string]interface{} {
-	props := make(map[string]interface{})
-
-	// Required fields
-	props["height"] = b.height
-	props["x"] = b.x.Alias()
-	props["y"] = b.y.Alias()
-
-	// Optional fields
-	if b.title != "" {
-		props["title"] = b.title
-	}
-	if b.width != nil {
-		props["width"] = *b.width
-	}
-	if b.marginLeft != nil {
-		props["marginLeft"] = *b.marginLeft
-	}
-	if b.marginRight != nil {
-		props["marginRight"] = *b.marginRight
-	}
-	if b.marginBottom != nil {
-		props["marginBottom"] = *b.marginBottom
-	}
-	if b.marginTop != nil {
-		props["marginTop"] = *b.marginTop
-	}
-	if b.fill != nil {
-		props["fill"] = (*b.fill).Alias()
-	}
-	if b.fx != nil {
-		props["fx"] = (*b.fx).Alias()
-	}
-	if b.fy != nil {
-		props["fy"] = (*b.fy).Alias()
-	}
-	if b.color != nil {
-		props["color"] = b.color
-	}
-	if b.sortReverse != nil {
-		props["sort"] = map[string]interface{}{"x": "y", "reverse": *b.sortReverse}
-	}
-	if len(b.tipChannels) > 0 {
-		props["tip"] = map[string]interface{}{"channels": b.tipChannels}
-	}
-
-	return props
-}
-
 func (b *BarVertical) buildQuery() sql.SqlQueryable {
 	// Build the SQL query
 	query := b.sql.With(
@@ -266,5 +204,3 @@ func (b *BarVertical) Handler(deps rendering.Dependencies) http.Handler {
 }
 
 func (b *BarVertical) explicitId() string { return b.id }
-
-var _ WidgetDefinition = (*BarVertical)(nil)

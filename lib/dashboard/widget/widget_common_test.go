@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/a-h/templ"
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -17,10 +16,6 @@ import (
 
 // pathEcho is a widget whose handler answers with the path it sees.
 type pathEcho struct{}
-
-func (pathEcho) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return templ.NopComponent, nil
-}
 
 func (pathEcho) marshalProps(*rendering.DashboardContext) ([]byte, error) { return []byte("{}"), nil }
 

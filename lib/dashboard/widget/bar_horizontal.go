@@ -1,11 +1,8 @@
 package widget
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -131,51 +128,6 @@ func (b *BarHorizontal) AdjustQuery(opts ...sql.SqlBuilderOption) *BarHorizontal
 	return &cloned
 }
 
-func (b *BarHorizontal) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	props := b.buildChartProps()
-	propsJSON, err := json.Marshal(props)
-	if err != nil {
-		return nil, fmt.Errorf("barHorizontal: failed to marshal chart props: %w", err)
-	}
-
-	return chartComponent(ctx, b, "barHorizontal", string(propsJSON), b.height), nil
-}
-
-func (b *BarHorizontal) buildChartProps() map[string]interface{} {
-	props := make(map[string]interface{})
-
-	props["height"] = b.height
-	props["x"] = b.x.Alias()
-	props["y"] = b.y.Alias()
-
-	if b.title != "" {
-		props["title"] = b.title
-	}
-	if b.width != nil {
-		props["width"] = *b.width
-	}
-	if b.marginLeft != nil {
-		props["marginLeft"] = *b.marginLeft
-	}
-	if b.marginRight != nil {
-		props["marginRight"] = *b.marginRight
-	}
-	if b.marginBottom != nil {
-		props["marginBottom"] = *b.marginBottom
-	}
-	if b.marginTop != nil {
-		props["marginTop"] = *b.marginTop
-	}
-	if b.fill != nil {
-		props["fill"] = (*b.fill).Alias()
-	}
-	if b.color != nil {
-		props["color"] = b.color
-	}
-
-	return props
-}
-
 func (b *BarHorizontal) buildQuery() sql.SqlQueryable {
 	query := b.sql.With(
 		sql.PrependSelect(b.y),
@@ -196,5 +148,3 @@ func (b *BarHorizontal) Handler(deps rendering.Dependencies) http.Handler {
 }
 
 func (b *BarHorizontal) explicitId() string { return b.id }
-
-var _ WidgetDefinition = (*BarHorizontal)(nil)

@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/components/layout"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
@@ -25,10 +23,6 @@ type probe struct {
 // unregistered is not in the widget registry, so it stands in for any
 // out-of-scope widget the Explore export must drop.
 type unregistered struct{}
-
-func (unregistered) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return templ.NopComponent, nil
-}
 
 func unregisteredWidget() widget.WidgetDefinition { return unregistered{} }
 

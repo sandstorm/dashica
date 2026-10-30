@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
@@ -34,22 +33,6 @@ func (a *AlertDetail) Title(title string) *AlertDetail {
 	cloned := *a
 	cloned.title = title
 	return &cloned
-}
-
-func (a *AlertDetail) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	props := map[string]interface{}{
-		"title":       a.title,
-		"height":      200,
-		"x":           "time",
-		"xBucketSize": 15 * 60 * 1000,
-		"y":           "value",
-	}
-	chartPropsJSON, err := json.Marshal(props)
-	if err != nil {
-		return nil, fmt.Errorf("alertDetail: failed to marshal chart props: %w", err)
-	}
-
-	return chartComponent(ctx, a, "timeBar", string(chartPropsJSON), 200), nil
 }
 
 func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
@@ -118,5 +101,3 @@ func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
 	})
 	return mux
 }
-
-var _ WidgetDefinition = (*AlertDetail)(nil)

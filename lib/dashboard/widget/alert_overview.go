@@ -2,10 +2,8 @@ package widget
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -21,15 +19,6 @@ func NewAlertOverview(alertGroupPattern string) *AlertOverview {
 	return &AlertOverview{
 		alertGroupPattern: alertGroupPattern,
 	}
-}
-
-func (a *AlertOverview) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	chartPropsJSON, err := json.Marshal(map[string]interface{}{})
-	if err != nil {
-		return nil, fmt.Errorf("alertOverview: failed to marshal chart props: %w", err)
-	}
-
-	return chartComponent(ctx, a, "alertOverview", string(chartPropsJSON), 0), nil
 }
 
 const alertOverviewQuery = `
@@ -103,5 +92,3 @@ func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 	})
 	return mux
 }
-
-var _ WidgetDefinition = (*AlertOverview)(nil)

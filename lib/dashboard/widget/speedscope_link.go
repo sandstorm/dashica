@@ -1,15 +1,11 @@
 package widget
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"html"
-	"io"
 	"io/fs"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -45,29 +41,6 @@ func (s *SpeedscopeLink) Id(id string) *SpeedscopeLink {
 	cloned := *s
 	cloned.id = id
 	return &cloned
-}
-
-func (s *SpeedscopeLink) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	widgetBaseUrl := ctx.DataURL(s)
-
-	title := s.title
-	if title == "" {
-		title = "Open Speedscope"
-	}
-
-	htmlOut := fmt.Sprintf(`
-<div class="my-4" x-data="speedscopeLink" data-widget-base-url="%s">
-  <a target="_blank" :href="href()" class="btn btn-primary btn-sm">%s</a>
-</div>
-`,
-		html.EscapeString(widgetBaseUrl),
-		html.EscapeString(title),
-	)
-
-	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
-		_, err := io.WriteString(w, htmlOut)
-		return err
-	}), nil
 }
 
 func (s *SpeedscopeLink) Handler(deps rendering.Dependencies) http.Handler {
@@ -134,5 +107,3 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 
 // speedscopeViewer is the bundled Speedscope viewer; fs.Sub errs only for an invalid name, which "dist" is not.
 var speedscopeViewer, _ = fs.Sub(speedscope_viewer.FS, "dist")
-
-var _ WidgetDefinition = (*SpeedscopeLink)(nil)

@@ -1,11 +1,8 @@
 package widget
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -101,53 +98,6 @@ func NewTimeHeatmap(sql *sql.SqlQuery) *TimeHeatmap {
 	}
 }
 
-func (h *TimeHeatmap) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	if h.yBucketSize <= 0 {
-		return nil, fmt.Errorf("timeHeatmap: YBucketSize must be set to a positive value (was %d)", h.yBucketSize)
-	}
-
-	chartProps := h.buildChartProps()
-	chartPropsJSON, err := json.Marshal(chartProps)
-	if err != nil {
-		return nil, fmt.Errorf("timeHeatmap: failed to marshal chart props: %w", err)
-	}
-
-	heightVal := 0
-	if h.height != nil {
-		heightVal = *h.height
-	}
-	return chartComponent(ctx, h, "timeHeatmap", string(chartPropsJSON), heightVal), nil
-}
-
-func (h *TimeHeatmap) buildChartProps() map[string]interface{} {
-	props := make(map[string]interface{})
-
-	// Required fields
-	props["x"] = h.x.Alias()
-	props["xBucketSize"] = h.x.XBucketSizeMs()
-	props["y"] = h.y.Alias()
-	props["yBucketSize"] = h.yBucketSize
-
-	// Optional fields
-	if h.title != "" {
-		props["title"] = h.title
-	}
-	if h.height != nil {
-		props["height"] = *h.height
-	}
-	if h.width != nil {
-		props["width"] = *h.width
-	}
-	if h.marginLeft != nil {
-		props["marginLeft"] = *h.marginLeft
-	}
-	if h.fill != nil {
-		props["fill"] = (*h.fill).Alias()
-	}
-
-	return props
-}
-
 func (h *TimeHeatmap) buildQuery() sql.SqlQueryable {
 	// Build the SQL query
 	query := h.sql.With(
@@ -173,5 +123,3 @@ func (h *TimeHeatmap) Handler(deps rendering.Dependencies) http.Handler {
 }
 
 func (h *TimeHeatmap) explicitId() string { return h.id }
-
-var _ WidgetDefinition = (*TimeHeatmap)(nil)

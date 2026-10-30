@@ -1,13 +1,10 @@
 package widget
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/sandstorm/dashica/lib/dashboard/color"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
@@ -115,191 +112,6 @@ func diffStrings(expected, actual string) string {
 		return "(strings are equal)"
 	}
 	return diff.String()
-}
-
-func TestBarVertical_BuildChartProps(t *testing.T) {
-	tests := []struct {
-		name     string
-		setup    func(*BarVertical) *BarVertical
-		expected map[string]interface{}
-	}{
-		{
-			name: "Basic configuration with required fields only",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("category")).
-					Y(sql.Count())
-			},
-			expected: map[string]interface{}{
-				"height": float64(200),
-				"x":      "category",
-				"y":      "cnt",
-			},
-		},
-		{
-			name: "With title",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("category")).
-					Y(sql.Count()).
-					Title("Sales by Category")
-			},
-			expected: map[string]interface{}{
-				"height": float64(200),
-				"x":      "category",
-				"y":      "cnt",
-				"title":  "Sales by Category",
-			},
-		},
-		{
-			name: "With custom dimensions",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("month")).
-					Y(sql.Field("revenue")).
-					Height(300).
-					Width(800)
-			},
-			expected: map[string]interface{}{
-				"height": float64(300),
-				"width":  float64(800),
-				"x":      "month",
-				"y":      "revenue",
-			},
-		},
-		{
-			name: "With all margins",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("product")).
-					Y(sql.Field("sales")).
-					MarginLeft(50).
-					MarginRight(30).
-					MarginTop(20).
-					MarginBottom(40)
-			},
-			expected: map[string]interface{}{
-				"height":       float64(200),
-				"x":            "product",
-				"y":            "sales",
-				"marginLeft":   float64(50),
-				"marginRight":  float64(30),
-				"marginTop":    float64(20),
-				"marginBottom": float64(40),
-			},
-		},
-		{
-			name: "With fill field",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("date")).
-					Y(sql.Count()).
-					Fill(sql.Field("status"))
-			},
-			expected: map[string]interface{}{
-				"height": float64(200),
-				"x":      "date",
-				"y":      "cnt",
-				"fill":   "status",
-			},
-		},
-		{
-			name: "With fx and fy facets",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("hour")).
-					Y(sql.Count()).
-					Fx(sql.Field("region")).
-					Fy(sql.Field("category"))
-			},
-			expected: map[string]interface{}{
-				"height": float64(200),
-				"x":      "hour",
-				"y":      "cnt",
-				"fx":     "region",
-				"fy":     "category",
-			},
-		},
-		{
-			name: "With color configuration",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("product")).
-					Y(sql.Field("amount")).
-					Color(
-						color.ColorLegend(true),
-						color.ColorMapping("A", "#ff0000"),
-						color.ColorUnknown("#cccccc"),
-					)
-			},
-			expected: map[string]interface{}{
-				"height": float64(200),
-				"x":      "product",
-				"y":      "amount",
-				"color": map[string]interface{}{
-					"legend":  true,
-					"domain":  []interface{}{"A"},
-					"range":   []interface{}{"#ff0000"},
-					"unknown": "#cccccc",
-				},
-			},
-		},
-		{
-			name: "Complex configuration with all optional fields",
-			setup: func(b *BarVertical) *BarVertical {
-				return b.X(sql.Field("month")).
-					Y(sql.Field("revenue")).
-					Fill(sql.Field("category")).
-					Fx(sql.Field("region")).
-					Fy(sql.Field("year")).
-					Title("Revenue Analysis").
-					Height(400).
-					Width(1200).
-					MarginLeft(60).
-					MarginRight(40).
-					MarginTop(30).
-					MarginBottom(50).
-					Color(
-						color.ColorLegend(false),
-						color.ColorUnknown("#999999"),
-					)
-			},
-			expected: map[string]interface{}{
-				"height":       float64(400),
-				"width":        float64(1200),
-				"x":            "month",
-				"y":            "revenue",
-				"fill":         "category",
-				"fx":           "region",
-				"fy":           "year",
-				"title":        "Revenue Analysis",
-				"marginLeft":   float64(60),
-				"marginRight":  float64(40),
-				"marginTop":    float64(30),
-				"marginBottom": float64(50),
-				"color": map[string]interface{}{
-					"legend":  false,
-					"unknown": "#999999",
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			baseQuery := sql.New(sql.From("test_table"))
-			widget := NewBarVertical(baseQuery)
-			widget = tt.setup(widget)
-
-			props := widget.buildChartProps()
-
-			// Convert to JSON and back to normalize types
-			propsJSON, err := json.Marshal(props)
-			if err != nil {
-				t.Fatalf("Failed to marshal props: %v", err)
-			}
-
-			var actualProps map[string]interface{}
-			if err := json.Unmarshal(propsJSON, &actualProps); err != nil {
-				t.Fatalf("Failed to unmarshal props: %v", err)
-			}
-
-			assertPropsEqual(t, tt.expected, actualProps)
-		})
-	}
 }
 
 func TestBarVertical_SQLGeneration(t *testing.T) {
@@ -673,27 +485,5 @@ func TestBarVertical_Immutability(t *testing.T) {
 	// WithTitle should have all three
 	if withTitle.x == nil || withTitle.y == nil || withTitle.title != "Test" {
 		t.Error("Fields lost or title not set correctly")
-	}
-}
-
-func TestBarVertical_BuildComponents(t *testing.T) {
-	baseQuery := sql.New(sql.From(testTableName))
-	widget := NewBarVertical(baseQuery).
-		X(sql.Field("category")).
-		Y(sql.Count()).
-		Title("Test Chart").
-		Id("test-widget-123")
-
-	ctx := &rendering.DashboardContext{
-		CurrentHandlerUrl: "/dashboard",
-	}
-
-	component, err := widget.BuildComponents(ctx)
-	if err != nil {
-		t.Fatalf("BuildComponents failed: %v", err)
-	}
-
-	if component == nil {
-		t.Error("Expected non-nil component")
 	}
 }

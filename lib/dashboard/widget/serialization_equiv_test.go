@@ -2,10 +2,10 @@ package widget
 
 import (
 	"bytes"
-	"encoding/json"
 	"testing"
 
 	"github.com/sandstorm/dashica/lib/dashboard/color"
+	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
@@ -54,15 +54,6 @@ func assertStableJSON(t *testing.T, w WidgetDefinition) []byte {
 		t.Errorf("JSON not stable across round trip:\n #1: %s\n #2: %s", b1, b2)
 	}
 	return b1
-}
-
-func mustJSON(t *testing.T, v any) []byte {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("json.Marshal: %v", err)
-	}
-	return b
 }
 
 // TestRoundTrip_stableJSON exercises every registered widget type with a
@@ -143,9 +134,9 @@ func TestRoundTrip_stableJSON(t *testing.T) {
 	}
 }
 
-// TestRoundTrip_chartPropsAndSQL proves semantic equivalence: the rebuilt widget
-// renders and queries identically to the original.
-func TestRoundTrip_chartPropsAndSQL(t *testing.T) {
+// TestRoundTrip_propsAndSQL proves semantic equivalence: the rebuilt widget
+// has the same props in page.json and queries identically to the original.
+func TestRoundTrip_propsAndSQL(t *testing.T) {
 	baseQuery := sql.New(sql.From("full_logs"), sql.Where("level = 'error' OR level = 'fatal'"))
 
 	tb := NewTimeBar(baseQuery).
@@ -161,8 +152,17 @@ func TestRoundTrip_chartPropsAndSQL(t *testing.T) {
 		t.Fatal("round trip did not yield a *TimeBar")
 	}
 
-	if got, want := mustJSON(t, tb2.buildChartProps()), mustJSON(t, tb.buildChartProps()); !bytes.Equal(got, want) {
-		t.Errorf("chartProps differ after round trip:\n want: %s\n got:  %s", want, got)
+	ctx := &rendering.DashboardContext{}
+	got, err := tb2.marshalProps(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := tb.marshalProps(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("props differ after round trip:\n want: %s\n got:  %s", want, got)
 	}
 	if got, want := tb2.buildQuery().Build(), tb.buildQuery().Build(); got != want {
 		t.Errorf("built SQL differs after round trip:\n want: %s\n got:  %s", want, got)

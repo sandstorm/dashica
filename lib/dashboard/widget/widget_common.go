@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -22,12 +21,9 @@ type Widgets []WidgetDefinition
 // WidgetsMap maps an area/slot name to its widget, e.g. Grid's named areas.
 type WidgetsMap map[string]WidgetDefinition
 
-type WidgetDefinition interface {
-	// BuildComponents renders the widget's HTML; its URLs are those Mount recorded (ctx.DataURL).
-	//
-	// Deprecated: (workbench) replaced by the client rendering the Node of Mount (step 5b); see docs/2026-10-28-workbench.md §5.
-	BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error)
-}
+// WidgetDefinition is a widget of a page: what it has beyond its props it implements as withHandler and withChildren,
+// and Mount describes it for page.json by the type it is registered as (Register).
+type WidgetDefinition interface{}
 
 // withProps is a widget's props in page.json, its fields tagged `dashica-gen:"client"` and what its computeProps
 // computes when the page is mounted (a markdown's HTML): dashica-gen generates marshalProps for every registered widget.

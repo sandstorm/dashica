@@ -1,11 +1,8 @@
 package widget
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/color"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
@@ -197,66 +194,6 @@ func (b *TimeLine) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeLine {
 	return &cloned
 }
 
-func (b *TimeLine) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	chartProps := b.buildChartProps()
-	chartPropsJSON, err := json.Marshal(chartProps)
-	if err != nil {
-		return nil, fmt.Errorf("timeLine: failed to marshal chart props: %w", err)
-	}
-
-	return chartComponent(ctx, b, "timeLine", string(chartPropsJSON), b.height), nil
-}
-
-func (b *TimeLine) buildChartProps() map[string]interface{} {
-	props := make(map[string]interface{})
-
-	props["height"] = b.height
-	props["x"] = b.x.Alias()
-	props["xBucketSize"] = b.x.XBucketSizeMs()
-	props["y"] = b.y.Alias()
-
-	if b.title != "" {
-		props["title"] = b.title
-	}
-	if b.width != nil {
-		props["width"] = *b.width
-	}
-	if b.marginLeft != nil {
-		props["marginLeft"] = *b.marginLeft
-	}
-	if b.marginRight != nil {
-		props["marginRight"] = *b.marginRight
-	}
-	if b.marginBottom != nil {
-		props["marginBottom"] = *b.marginBottom
-	}
-	if b.marginTop != nil {
-		props["marginTop"] = *b.marginTop
-	}
-	if b.strokeField != nil {
-		props["stroke"] = (*b.strokeField).Alias()
-	} else if b.stroke != "" {
-		props["stroke"] = b.stroke
-	}
-	if b.zField != nil {
-		props["z"] = (*b.zField).Alias()
-	}
-	if b.fx != nil {
-		props["fx"] = (*b.fx).Alias()
-	}
-	if b.fy != nil {
-		props["fy"] = (*b.fy).Alias()
-	}
-	if b.color != nil {
-		props["color"] = b.color
-	}
-	if len(b.tipChannels) > 0 {
-		props["tip"] = map[string]interface{}{"channels": b.tipChannels}
-	}
-
-	return props
-}
-
 func (b *TimeLine) buildQuery() sql.SqlQueryable {
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
@@ -310,5 +247,3 @@ func (b *TimeLine) Handler(deps rendering.Dependencies) http.Handler {
 }
 
 func (b *TimeLine) explicitId() string { return b.id }
-
-var _ WidgetDefinition = (*TimeLine)(nil)

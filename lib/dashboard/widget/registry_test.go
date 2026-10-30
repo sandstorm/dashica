@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
-
-	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
 // fakeWidget is a leaf widget with real JSON methods, used to exercise the
@@ -17,24 +14,12 @@ type fakeWidget struct {
 	Count int    `json:"count"`
 }
 
-func (f *fakeWidget) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return nil, nil
-}
-
-var _ WidgetDefinition = (*fakeWidget)(nil)
-
 // fakeContainer is a container widget holding both a slice and a map of
 // children, to exercise recursive envelope nesting via Widgets / WidgetsMap.
 type fakeContainer struct {
 	Items Widgets    `json:"items"`
 	Areas WidgetsMap `json:"areas"`
 }
-
-func (f *fakeContainer) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return nil, nil
-}
-
-var _ WidgetDefinition = (*fakeContainer)(nil)
 
 func init() {
 	Register("_fakeWidget", CategoryChart, func() WidgetDefinition { return &fakeWidget{} })

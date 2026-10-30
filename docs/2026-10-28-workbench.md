@@ -397,9 +397,7 @@ Favorites stay inside `dashboards` (separating them would need a contribution po
 
 ```go
 // lib/dashboard/widget — a widget implements only what it has (§3.13); the rest is the framework's Mount
-type WidgetDefinition interface {
-	BuildComponents(…) // Deprecated until step 5b
-}
+type WidgetDefinition interface{} // what it has: the optional interfaces below; its type name: Register
 
 // withProps is a widget's props: its fields tagged dashica-gen:"client", generated for every registered widget; not
 // part of WidgetDefinition, since the package must compile without zz_generated.dashica.go for dashica-gen to load it

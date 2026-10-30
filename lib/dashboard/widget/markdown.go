@@ -10,8 +10,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/a-h/templ"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
@@ -71,15 +69,6 @@ func (m *Markdown) Assets(fsys fs.FS) *Markdown {
 	cloned := *m
 	cloned.assets = fsys
 	return &cloned
-}
-
-// BuildComponents implements the WidgetDefinition interface.
-func (m *Markdown) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	htmlOut, err := m.renderHTML(ctx.Deps.FileSystem, ctx.UntrustedContent)
-	if err != nil {
-		return nil, err
-	}
-	return widget_component.Markdown(m.title, htmlOut), nil
 }
 
 // markdownComputed is what the server computes for a markdown when the page is mounted.
@@ -218,5 +207,3 @@ func mimeForExtension(ext string) string {
 	}
 	return ""
 }
-
-var _ WidgetDefinition = (*Markdown)(nil)

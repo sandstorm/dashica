@@ -3,14 +3,11 @@ package widget
 import (
 	"context"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"regexp"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/lib/components/widget_component"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 )
 
@@ -40,19 +37,6 @@ var schemaTableNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 type showTableStructureResult struct {
 	Statement string `json:"statement"`
-}
-
-func (s *SchemaTable) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	statement, err := s.showCreateTable(context.Background(), ctx.Deps)
-	if err != nil {
-		return s.errorComponent(err.Error()), nil
-	}
-
-	htmlOut := fmt.Sprintf(
-		`<pre class="text-xs overflow-x-auto p-3 bg-base-200 rounded">%s</pre>`,
-		html.EscapeString(statement),
-	)
-	return widget_component.Markdown(s.title, htmlOut), nil
 }
 
 // Handler serves the table's CREATE TABLE statement as text at "/schema".
@@ -92,16 +76,3 @@ func (s *SchemaTable) showCreateTable(ctx context.Context, deps rendering.Depend
 	}
 	return result.Statement, nil
 }
-
-func (s *SchemaTable) errorComponent(msg string) templ.Component {
-	htmlOut := fmt.Sprintf(
-		`<pre class="text-xs text-error p-3 bg-base-200 rounded">%s</pre>`,
-		html.EscapeString(msg),
-	)
-	return templ.ComponentFunc(func(_ context.Context, w io.Writer) error {
-		_, err := io.WriteString(w, htmlOut)
-		return err
-	})
-}
-
-var _ WidgetDefinition = (*SchemaTable)(nil)

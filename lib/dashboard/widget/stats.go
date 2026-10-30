@@ -1,11 +1,8 @@
 package widget
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -55,30 +52,6 @@ func NewStats(sql sql.SqlQueryable) *Stats {
 	}
 }
 
-func (s *Stats) BuildComponents(ctx *rendering.DashboardContext) (templ.Component, error) {
-	chartProps := s.buildChartProps()
-	chartPropsJSON, err := json.Marshal(chartProps)
-	if err != nil {
-		return nil, fmt.Errorf("stats: failed to marshal chart props: %w", err)
-	}
-
-	return chartComponent(ctx, s, "stats", string(chartPropsJSON), 0), nil
-}
-
-func (s *Stats) buildChartProps() map[string]interface{} {
-	props := make(map[string]interface{})
-
-	// Optional fields
-	if s.titleField != nil {
-		props["title"] = (*s.titleField).Alias()
-	}
-	if s.fillField != nil {
-		props["fill"] = (*s.fillField).Alias()
-	}
-
-	return props
-}
-
 func (s *Stats) Handler(deps rendering.Dependencies) http.Handler {
 	// Build the SQL query - select all stat fields
 	query := s.sql
@@ -94,5 +67,3 @@ func (s *Stats) Handler(deps rendering.Dependencies) http.Handler {
 }
 
 func (s *Stats) explicitId() string { return s.id }
-
-var _ WidgetDefinition = (*Stats)(nil)

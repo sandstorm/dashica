@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/a-h/templ"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
@@ -19,10 +18,6 @@ import (
 // that dispatchPreview reaches the widget's own /query handler with the
 // original request intact — without a ClickHouse connection.
 type echoWidget struct{}
-
-func (e *echoWidget) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return templ.NopComponent, nil
-}
 
 func (e *echoWidget) Handler(rendering.Dependencies) http.Handler {
 	mux := http.NewServeMux()
@@ -37,10 +32,6 @@ func (e *echoWidget) Handler(rendering.Dependencies) http.Handler {
 
 // nonInteractiveWidget is a fake widget with no query handler.
 type nonInteractiveWidget struct{}
-
-func (n *nonInteractiveWidget) BuildComponents(*rendering.DashboardContext) (templ.Component, error) {
-	return templ.NopComponent, nil
-}
 
 func init() {
 	widget.Register("exploreTestEcho", widget.CategoryChart, func() widget.WidgetDefinition { return &echoWidget{} })
