@@ -1,13 +1,12 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { FiltersModel, ParamsModel, QueryApi, TimeModel, ViewOptionsModel } from './query';
+import type { FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
 
 /** The workbench's `QueryApi`, kept in the URL of `browserWindow`. `load` takes the state from the URL. */
 export class QueryHost implements QueryApi {
   readonly time: TimeState;
   readonly filters: FiltersState;
   readonly params: ParamsState;
-  readonly viewOptions: ViewOptionsState;
   readonly #onDidRequestRefresh = new EventEmitter<void>();
   readonly onDidRequestRefresh = this.#onDidRequestRefresh.event;
   #defaultTime = DEFAULT_TIME;
@@ -25,7 +24,6 @@ export class QueryHost implements QueryApi {
     });
     this.filters = new FiltersState(() => changed(true));
     this.params = new ParamsState(() => changed(true));
-    this.viewOptions = new ViewOptionsState(() => changed(false));
   }
 
   /**
@@ -41,12 +39,10 @@ export class QueryHost implements QueryApi {
     this.time.load(url.get('time') || this.#defaultTime, url.get('range') ?? '', refresh > 0 ? refresh : undefined);
     this.filters.load(url.get('sql') ?? '');
     this.params.load(parseParams(url.get('wp')));
-    this.viewOptions.load(url.get('log') === '1');
     this.#restartAutoRefresh();
     this.time.fire();
     this.filters.fire();
     this.params.fire();
-    this.viewOptions.fire();
     this.refresh();
   }
 
@@ -68,7 +64,6 @@ export class QueryHost implements QueryApi {
     this.time.dispose();
     this.filters.dispose();
     this.params.dispose();
-    this.viewOptions.dispose();
   }
 
   #restartAutoRefresh(): void {
@@ -89,8 +84,6 @@ export class QueryHost implements QueryApi {
       else url.delete('range');
       if (this.time.autoRefresh) url.set('refresh', String(this.time.autoRefresh));
       else url.delete('refresh');
-      if (this.viewOptions.logScale) url.set('log', '1');
-      else url.delete('log');
       if (this.filters.sql) url.set('sql', this.filters.sql);
       else url.delete('sql');
       if (Object.keys(this.params.values).length > 0) url.set('wp', JSON.stringify(this.params.values));
@@ -191,25 +184,6 @@ class ParamsState extends Model implements ParamsModel {
   set(name: string, value: string): void {
     if (this.values[name] === value) return;
     this.values = { ...this.values, [name]: value };
-    this.fire();
-    this.changed();
-  }
-}
-
-class ViewOptionsState extends Model implements ViewOptionsModel {
-  logScale = false;
-
-  constructor(private readonly changed: () => void) {
-    super();
-  }
-
-  load(logScale: boolean): void {
-    this.logScale = logScale;
-  }
-
-  setLogScale(logScale: boolean): void {
-    if (logScale === this.logScale) return;
-    this.logScale = logScale;
     this.fire();
     this.changed();
   }

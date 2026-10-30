@@ -23,13 +23,12 @@ const urlParams = () => Object.fromEntries(new URLSearchParams(location.search))
 
 describe('QueryHost', () => {
   it('takes the state from the URL, the page default for a missing time range', () => {
-    history.replaceState(null, '', '/p/shop?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D&log=1&refresh=30');
+    history.replaceState(null, '', '/p/shop?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D&refresh=30');
     query.load({ defaultTime: '168h' });
     expect(query.time.range).toBe('168h');
     expect(query.time.autoRefresh).toBe(30);
     expect(query.filters.sql).toBe('status >= 500');
     expect(query.params.values).toEqual({ path: '^/api' });
-    expect(query.viewOptions.logScale).toBe(true);
     expect(refreshes).toBe(1);
   });
 
@@ -54,14 +53,13 @@ describe('QueryHost', () => {
     expect(query.requestParams().has('params')).toBe(false);
   });
 
-  it('asks the widgets to query again when the time, the filter or a param changes, but not for the log scale', () => {
+  it('asks the widgets to query again when the time, the filter or a param changes, but not for auto refresh', () => {
     query.load();
     refreshes = 0;
     query.time.setRange('1h');
     query.filters.add('status >= 500');
     query.params.set('path', '^/api');
     expect(refreshes).toBe(3);
-    query.viewOptions.setLogScale(true);
     query.time.setAutoRefresh(30);
     expect(refreshes).toBe(3);
   });
@@ -76,13 +74,13 @@ describe('QueryHost', () => {
   it('writes the URL after a pause, leaving out what is the default', () => {
     query.load({ defaultTime: '1h' });
     query.time.setRange('3h');
-    query.viewOptions.setLogScale(true);
+    query.time.setAutoRefresh(30);
     expect(location.search).toBe('');
     vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ time: '3h', log: '1' });
+    expect(urlParams()).toEqual({ time: '3h', refresh: '30' });
     query.time.setRange('1h');
     vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ log: '1' });
+    expect(urlParams()).toEqual({ refresh: '30' });
   });
 
   it('writes a custom range with the viewer’s local time', () => {

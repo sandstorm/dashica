@@ -2,7 +2,7 @@ import type { Event } from '../../core/event-emitter/event-emitter';
 
 /**
  * The state every query of the shown page depends on: its time range and auto refresh, its SQL filter, the values of
- * its form widgets and the view options (log scale). It lives in the URL (`?time=1h&sql=…&wp=…&log=1&refresh=30`),
+ * its form widgets. It lives in the URL (`?time=1h&sql=…&wp=…&refresh=30`),
  * so a link opens the page as it was shared; the browser's back button goes to the state before. Widgets query again
  * on `onDidRequestRefresh` and send `requestParams()` along.
  */
@@ -10,7 +10,6 @@ export interface QueryApi {
   readonly time: TimeModel;
   readonly filters: FiltersModel;
   readonly params: ParamsModel;
-  readonly viewOptions: ViewOptionsModel;
   /** Fires when the widgets should query again: the time, the filter or a param changed, or `refresh` was called. */
   readonly onDidRequestRefresh: Event<void>;
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
@@ -50,12 +49,6 @@ export interface ParamsModel {
   readonly values: Readonly<Record<string, string>>;
   get(name: string): string | undefined;
   set(name: string, value: string): void;
-  readonly onDidChange: Event<void>;
-}
-
-export interface ViewOptionsModel {
-  readonly logScale: boolean;
-  setLogScale(logScale: boolean): void;
   readonly onDidChange: Event<void>;
 }
 

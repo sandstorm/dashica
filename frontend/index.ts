@@ -15,7 +15,6 @@ import { debug } from './extensions/debug/debug';
 import { filters } from './extensions/filters/filters';
 import { grid } from './extensions/grid/grid';
 import { heatmap } from './extensions/heatmap/heatmap';
-import { logScale } from './extensions/log-scale/log-scale';
 import { markdown } from './extensions/markdown/markdown';
 import { schemaTable } from './extensions/schema-table/schema-table';
 import { searchEverywhere } from './extensions/search-everywhere/search-everywhere';
@@ -26,7 +25,6 @@ import { textInput } from './extensions/text-input/text-input';
 import { timeBar } from './extensions/time-bar/time-bar';
 import { timeLine } from './extensions/time-line/time-line';
 import { timeRange } from './extensions/time-range/time-range';
-import { titleBarMenu } from './extensions/title-bar-menu/title-bar-menu';
 
 /** The workbench's extensions: the chrome first (its title bar items in this order), then the page and widget types. */
 const EXTENSIONS: readonly Extension[] = [
@@ -34,8 +32,6 @@ const EXTENSIONS: readonly Extension[] = [
   searchEverywhere,
   timeRange,
   autoRefresh,
-  logScale,
-  titleBarMenu,
   filters,
   debug,
   dashboardPage,
