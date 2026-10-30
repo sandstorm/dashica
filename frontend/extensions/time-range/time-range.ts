@@ -51,7 +51,7 @@ const PRESETS = [
 class TimeRangePicker {
   readonly #button: HTMLButtonElement = html`<button
     type="button"
-    class="btn btn-sm btn-outline"
+    class="btn btn-sm join-item gap-1.5 border-base-300 bg-base-100 font-medium shadow-none"
     aria-haspopup="dialog"
     aria-expanded="false"></button>`;
   readonly #from: HTMLInputElement = html`<input class="input input-sm w-full font-mono" aria-label="From" spellcheck="false">`;
@@ -96,10 +96,23 @@ class TimeRangePicker {
       </div>
     </div>`;
     this.#panel.hidden = true;
-    const back = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Shift back" aria-label="Shift back">${createElement(ChevronLeft)}</button>`;
-    const forward = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Shift forward" aria-label="Shift forward">${createElement(ChevronRight)}</button>`;
-    const zoomOut = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Zoom out" aria-label="Zoom out">${createElement(ZoomOut)}</button>`;
-    const refresh = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Refresh" aria-label="Refresh">${createElement(RefreshCw)}</button>`;
+    // one segmented group: the range and what moves it; white, as a plain button has the title bar's background
+    const back = html`<button
+      type="button"
+      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      title="Shift back"
+      aria-label="Shift back">${createElement(ChevronLeft, { class: 'w-4 h-4' })}</button>`;
+    const forward = html`<button
+      type="button"
+      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      title="Shift forward"
+      aria-label="Shift forward">${createElement(ChevronRight, { class: 'w-4 h-4' })}</button>`;
+    const zoomOut = html`<button
+      type="button"
+      class="btn btn-sm join-item border-base-300 bg-base-100 px-2 shadow-none"
+      title="Zoom out"
+      aria-label="Zoom out">${createElement(ZoomOut, { class: 'w-4 h-4' })}</button>`;
+    const refresh = html`<button type="button" class="btn btn-sm btn-circle btn-ghost" title="Refresh" aria-label="Refresh">${createElement(RefreshCw, { class: 'w-4 h-4' })}</button>`;
 
     this.#button.addEventListener('click', () => (this.#panel.hidden ? this.open() : this.close()));
     form.addEventListener('submit', (event) => {
@@ -116,18 +129,20 @@ class TimeRangePicker {
     forward.addEventListener('click', () => void this.#shift(1));
     zoomOut.addEventListener('click', () => void this.#zoomOut());
     refresh.addEventListener('click', () => query.refresh());
-    this.el = html`<div class="relative flex items-center gap-1">
-      ${this.#button}
+    this.el = html`<div class="relative flex items-center gap-2">
+      <div class="join">
+        ${this.#button}
+        ${back}
+        ${forward}
+        ${zoomOut}
+      </div>
       ${this.#panel}
-      ${back}
-      ${forward}
-      ${zoomOut}
       ${refresh}
     </div>`;
   }
 
   show(): void {
-    this.#button.replaceChildren(createElement(Clock), this.#label(), createElement(ChevronDown));
+    this.#button.replaceChildren(createElement(Clock, { class: 'w-4 h-4' }), this.#label(), createElement(ChevronDown, { class: 'w-3.5 h-3.5 opacity-60' }));
     this.#showQuickRanges();
   }
 
