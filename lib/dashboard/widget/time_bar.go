@@ -29,6 +29,8 @@ type TimeBar struct {
 	id string
 	// height is the chart height in pixels.
 	height int `dashica-gen:"client"`
+	// logScale starts the chart on a log scale; the viewer turns it on and off in the chart's menu. Zero value: linear.
+	logScale bool `dashica-gen:"client"`
 	// width is the chart width in pixels. Zero value: fills the container width.
 	width *int `dashica-gen:"client"`
 	// marginLeft is the left margin in pixels. Zero value: Observable Plot's default.
@@ -149,6 +151,12 @@ func (b *TimeBar) Id(id string) *TimeBar {
 func (b *TimeBar) Height(height int) *TimeBar {
 	cloned := *b
 	cloned.height = height
+	return &cloned
+}
+
+func (b *TimeBar) LogScale() *TimeBar {
+	cloned := *b
+	cloned.logScale = true
 	return &cloned
 }
 

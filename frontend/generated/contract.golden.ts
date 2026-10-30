@@ -99,6 +99,7 @@ export const page = {
           "type": "barVertical",
           "props": {
             "height": 200,
+            "logScale": true,
             "x": {
               "kind": "expr",
               "definition": "status",
