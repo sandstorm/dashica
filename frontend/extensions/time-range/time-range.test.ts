@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 // Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range), closing the panel, refresh.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
+import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { timeRange } from './time-range';
 
 let query: QueryHost;
 let bar: HTMLElement;
 let commands: Map<string, () => void>;
+let stored: Map<string, unknown>;
 
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
@@ -15,8 +16,14 @@ beforeEach(() => {
   query.load();
   bar = document.body.appendChild(document.createElement('div'));
   commands = new Map();
+  stored = new Map();
+  const globalState: Memento = {
+    get: (key: string, defaultValue?: unknown) => (stored.has(key) ? stored.get(key) : defaultValue),
+    update: async (key: string, value: unknown) => void stored.set(key, value),
+  } as Memento;
   const context = {
     query,
+    globalState,
     subscriptions: [],
     ui: { registerBarItem: (_bar: string, el: HTMLElement) => bar.appendChild(el) },
     commands: { registerCommand: (id: string, run: () => void) => commands.set(id, run) },
@@ -34,7 +41,7 @@ afterEach(() => {
 const rangeButton = () => bar.querySelector<HTMLButtonElement>('button[aria-haspopup]')!;
 const panel = () => bar.querySelector<HTMLElement>('[role=dialog]')!;
 const input = (label: string) => bar.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
-const quickRanges = () => [...panel().querySelectorAll('li button')].map((item) => item.textContent);
+const quickRanges = () => [...panel().querySelectorAll(':scope > div li button')].map((item) => item.textContent);
 const apply = () => bar.querySelector<HTMLButtonElement>('button[type=submit]')!;
 
 function type(label: string, value: string): void {
@@ -68,7 +75,7 @@ describe('timeRange', () => {
     expect(rangeButton().textContent).toBe('Last 24 hours');
     rangeButton().click();
     expect(panel().hidden).toBe(false);
-    [...panel().querySelectorAll<HTMLButtonElement>('li button')].find((item) => item.textContent === 'Last 1 hour')!.click();
+    [...panel().querySelectorAll<HTMLButtonElement>(':scope > div li button')].find((item) => item.textContent === 'Last 1 hour')!.click();
     expect(query.time.range).toBe('1h');
     expect(rangeButton().textContent).toBe('Last 1 hour');
     expect(panel().hidden).toBe(true);
@@ -126,6 +133,22 @@ describe('timeRange', () => {
     expect(panel().querySelector('[role=alert]')!.textContent).toBe('time "yesterday": neither `now-…` nor `2006-01-02 15:04`');
     expect(panel().hidden).toBe(false);
     expect(query.time.range).toBe('24h');
+  });
+
+  it('offers the last three custom ranges applied, newest first, and applies one picked', async () => {
+    serverAnswers(200, '{"from":1761703200000,"to":1761721200000}');
+    for (const from of ['now-1h', 'now-2h', 'now-3h', 'now-2h', 'now-4h']) {
+      rangeButton().click();
+      type('From', from);
+      type('To', 'now');
+      await submit();
+    }
+    expect(stored.get('recent')).toEqual(['now-4h to now', 'now-2h to now', 'now-3h to now']);
+    rangeButton().click();
+    const recent = [...panel().querySelectorAll<HTMLButtonElement>('form li button')];
+    expect(recent.map((item) => item.textContent)).toEqual(['now-4h to now', 'now-2h to now', 'now-3h to now']);
+    recent[2].click();
+    await vi.waitFor(() => expect(query.time.custom).toBe('now-3h to now'));
   });
 
   it('closes on Escape and on a click outside', () => {

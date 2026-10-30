@@ -1,6 +1,6 @@
 import { html } from 'htl';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, RefreshCw, ZoomOut, createElement } from 'lucide';
-import type { Extension } from '../../hosts/extension-host/extension-host';
+import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
 import { formatTime, type QueryApi } from '../../hosts/query/query';
 
 /**
@@ -8,7 +8,7 @@ import { formatTime, type QueryApi } from '../../hosts/query/query';
  * "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the window by its length, ⊖ zooming out to twice the
  * window, and the refresh button (also the command `timeRange.refresh`).
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
- * filtered by typing. Only the server reads the times: Apply asks it (`/time-range`) and shows its reason when it
+ * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply asks it (`/time-range`) and shows its reason when it
  * cannot. A range ending at a fixed time does not move, so applying one turns auto refresh off. A selection on a time
  * chart shows here as a custom range.
  */
@@ -17,8 +17,8 @@ export const timeRange: Extension = {
   contributes: {
     commands: [{ command: 'timeRange.refresh', title: 'Refresh', category: 'Time range' }],
   },
-  activate({ ui, query, commands, subscriptions }) {
-    const picker = new TimeRangePicker(query);
+  activate({ ui, query, commands, globalState, subscriptions }) {
+    const picker = new TimeRangePicker(query, globalState);
     picker.show();
     subscriptions.push(query.time.onDidChange(() => picker.show()));
     subscriptions.push(ui.registerBarItem('title', picker.el, { alignment: 'right', priority: 30 }));
@@ -61,10 +61,18 @@ class TimeRangePicker {
     placeholder="Search quick ranges"
     aria-label="Search quick ranges">`;
   readonly #quickRanges: HTMLElement = html`<ul class="menu menu-sm w-full p-0"></ul>`;
+  readonly #recent: HTMLElement = html`<ul class="menu menu-sm w-full p-0"></ul>`;
+  readonly #recentSection: HTMLElement = html`<div class="flex flex-col gap-1">
+    <div class="font-semibold">Recently used</div>
+    ${this.#recent}
+  </div>`;
   readonly #panel: HTMLElement;
   readonly el: HTMLElement;
 
-  constructor(private readonly query: QueryApi) {
+  constructor(
+    private readonly query: QueryApi,
+    private readonly globalState: Memento,
+  ) {
     const form: HTMLFormElement = html`<form class="flex flex-col gap-2">
       <div class="font-semibold">Custom range</div>
       <label class="flex flex-col gap-1 text-xs">From ${this.#from}</label>
@@ -72,6 +80,7 @@ class TimeRangePicker {
       <div class="text-xs opacity-60">e.g. <code>2026-10-29 10:00</code> or <code>now-6h</code></div>
       ${this.#error}
       ${this.#apply}
+      ${this.#recentSection}
     </form>`;
     this.#panel = html`<div
       class="absolute right-0 top-full z-50 mt-1 grid w-[34rem] max-w-[calc(100vw-1rem)] gap-4 rounded-box border border-base-300 bg-base-100 p-4 shadow-lg sm:grid-cols-2"
@@ -127,6 +136,7 @@ class TimeRangePicker {
     this.#search.value = '';
     this.#error.textContent = '';
     this.#showQuickRanges();
+    this.#showRecent();
     this.#panel.hidden = false;
     this.#button.setAttribute('aria-expanded', 'true');
     this.el.ownerDocument.addEventListener('pointerdown', this.#onPointerDown);
@@ -185,7 +195,33 @@ class TimeRangePicker {
     }
     if (!to.startsWith('now')) this.query.time.setAutoRefresh(undefined);
     this.query.time.setCustom(from, to);
+    const custom = `${from} to ${to}`;
+    void this.globalState.update('recent', [custom, ...this.#recentRanges().filter((range) => range !== custom)].slice(0, 3));
     this.close();
+  }
+
+  /** The custom ranges applied last, newest first (`now-6h to now-1h`), as stored by an earlier visit. */
+  #recentRanges(): string[] {
+    const stored = this.globalState.get<unknown>('recent', []);
+    return Array.isArray(stored) ? stored.filter((range): range is string => typeof range === 'string') : [];
+  }
+
+  /** Lists the recent ranges; picking one applies it as typed into From / To. */
+  #showRecent(): void {
+    const ranges = this.#recentRanges();
+    this.#recentSection.hidden = ranges.length === 0;
+    this.#recent.replaceChildren(
+      ...ranges.map((range) => {
+        const item: HTMLButtonElement = html`<button type="button">${range}</button>`;
+        item.addEventListener('click', () => {
+          const [from = '', to = ''] = range.split(' to ');
+          this.#from.value = from;
+          this.#to.value = to;
+          void this.#applyCustom();
+        });
+        return html`<li>${item}</li>`;
+      }),
+    );
   }
 
   /** Moves the window by its length, back (`-1`) or forward (`1`); a moved window is fixed, so auto refresh goes off. */
