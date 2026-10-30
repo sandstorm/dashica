@@ -1,7 +1,6 @@
 package widget
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -71,19 +70,11 @@ func TestMarkdown_Content(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			widget := NewMarkdown().Content(tt.content)
 
-			component, err := widget.BuildComponents(ctx)
+			computed, err := widget.computeProps(ctx)
 			if err != nil {
-				t.Fatalf("BuildComponents failed: %v", err)
+				t.Fatalf("computeProps failed: %v", err)
 			}
-
-			// Render the component to a string
-			var buf strings.Builder
-			err = component.Render(context.Background(), &buf)
-			if err != nil {
-				t.Fatalf("Render failed: %v", err)
-			}
-
-			output := buf.String()
+			output := computed.html
 
 			// Check that all expected strings are present
 			for _, exp := range tt.expected {
@@ -103,15 +94,11 @@ func TestMarkdown_UntrustedContentEscapesRawHTML(t *testing.T) {
 	const src = "hello\n\n<script>alert(1)</script>\n"
 
 	render := func(ctx *rendering.DashboardContext) string {
-		component, err := NewMarkdown().Content(src).BuildComponents(ctx)
+		computed, err := NewMarkdown().Content(src).computeProps(ctx)
 		if err != nil {
-			t.Fatalf("BuildComponents failed: %v", err)
+			t.Fatalf("computeProps failed: %v", err)
 		}
-		var buf strings.Builder
-		if err := component.Render(context.Background(), &buf); err != nil {
-			t.Fatalf("Render failed: %v", err)
-		}
-		return buf.String()
+		return computed.html
 	}
 
 	// Trusted (compiled) markdown: raw HTML passes through verbatim.
@@ -137,27 +124,20 @@ func TestMarkdown_Title(t *testing.T) {
 		Title("Documentation")
 
 	ctx := createTestContext()
-	component, err := widget.BuildComponents(ctx)
+	props, err := widget.marshalProps(ctx)
 	if err != nil {
-		t.Fatalf("BuildComponents failed: %v", err)
+		t.Fatalf("marshalProps failed: %v", err)
 	}
+	output := string(props)
 
-	var buf strings.Builder
-	err = component.Render(context.Background(), &buf)
-	if err != nil {
-		t.Fatalf("Render failed: %v", err)
-	}
-
-	output := buf.String()
-
-	if !strings.Contains(output, "Documentation") {
+	if !strings.Contains(output, `"title":"Documentation"`) {
 		t.Errorf("Expected title 'Documentation' in output, got: %s", output)
 	}
 }
 
 func TestMarkdown_File(t *testing.T) {
 	// File() resolves against the project filesystem (Deps.FileSystem), never the
-	// host filesystem — see markdown.go BuildComponents.
+	// host filesystem — see renderHTML in markdown.go.
 	testContent := "# Test File\n\nThis is from a file."
 	ctx := createTestContext()
 	ctx.Deps.FileSystem = fstest.MapFS{
@@ -166,18 +146,11 @@ func TestMarkdown_File(t *testing.T) {
 
 	widget := NewMarkdown().File("docs/test.md")
 
-	component, err := widget.BuildComponents(ctx)
+	computed, err := widget.computeProps(ctx)
 	if err != nil {
-		t.Fatalf("BuildComponents failed: %v", err)
+		t.Fatalf("computeProps failed: %v", err)
 	}
-
-	var buf strings.Builder
-	err = component.Render(context.Background(), &buf)
-	if err != nil {
-		t.Fatalf("Render failed: %v", err)
-	}
-
-	output := buf.String()
+	output := computed.html
 
 	expectedStrings := []string{
 		"<h1",
@@ -197,7 +170,7 @@ func TestMarkdown_FileNotFound(t *testing.T) {
 	ctx.Deps.FileSystem = fstest.MapFS{}
 	widget := NewMarkdown().File("nonexistent.md")
 
-	_, err := widget.BuildComponents(ctx)
+	_, err := widget.computeProps(ctx)
 	if err == nil {
 		t.Error("Expected error for nonexistent file, got nil")
 	}
@@ -220,7 +193,7 @@ func TestMarkdown_FileRejectedForUntrustedContent(t *testing.T) {
 
 	widget := NewMarkdown().File("secret.md")
 
-	_, err := widget.BuildComponents(ctx)
+	_, err := widget.computeProps(ctx)
 	if err == nil {
 		t.Fatal("Expected File() to be rejected for untrusted content, got nil")
 	}
@@ -238,7 +211,7 @@ func TestMarkdown_FileRejectsHostAbsolutePath(t *testing.T) {
 
 	widget := NewMarkdown().File("/etc/passwd")
 
-	_, err := widget.BuildComponents(ctx)
+	_, err := widget.computeProps(ctx)
 	if err == nil {
 		t.Fatal("Expected absolute path to be rejected, got nil")
 	}
@@ -251,7 +224,7 @@ func TestMarkdown_NoContentOrFile(t *testing.T) {
 	widget := NewMarkdown()
 
 	ctx := createTestContext()
-	_, err := widget.BuildComponents(ctx)
+	_, err := widget.computeProps(ctx)
 	if err == nil {
 		t.Error("Expected error when neither Content nor File is set, got nil")
 	}
@@ -294,18 +267,11 @@ func TestMarkdown_HTMLUnsafe(t *testing.T) {
 	widget := NewMarkdown().Content("This is <strong>bold</strong> text.")
 
 	ctx := createTestContext()
-	component, err := widget.BuildComponents(ctx)
+	computed, err := widget.computeProps(ctx)
 	if err != nil {
-		t.Fatalf("BuildComponents failed: %v", err)
+		t.Fatalf("computeProps failed: %v", err)
 	}
-
-	var buf strings.Builder
-	err = component.Render(context.Background(), &buf)
-	if err != nil {
-		t.Fatalf("Render failed: %v", err)
-	}
-
-	output := buf.String()
+	output := computed.html
 
 	if !strings.Contains(output, "<strong>bold</strong>") {
 		t.Error("Expected raw HTML to be rendered, but it was escaped or removed")
@@ -346,18 +312,11 @@ func TestMarkdown_SyntaxHighlighting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			widget := NewMarkdown().Content(tt.content)
 
-			component, err := widget.BuildComponents(ctx)
+			computed, err := widget.computeProps(ctx)
 			if err != nil {
-				t.Fatalf("BuildComponents failed: %v", err)
+				t.Fatalf("computeProps failed: %v", err)
 			}
-
-			var buf strings.Builder
-			err = component.Render(context.Background(), &buf)
-			if err != nil {
-				t.Fatalf("Render failed: %v", err)
-			}
-
-			output := buf.String()
+			output := computed.html
 
 			// Verify that syntax highlighting is applied by checking for style attributes
 			if !strings.Contains(output, "style=") {
