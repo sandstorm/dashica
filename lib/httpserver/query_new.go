@@ -23,9 +23,8 @@ type QueryHandler struct {
 }
 
 // HandleQuery answers `queryObj` as Arrow, filtered by `state` (ParseQueryState of `r`): its window and its SQL
-// filter; `queryObj` has the structured filters its chart interprets already, and `diagnostics` says what it did
-// (X-Dashica-Diagnostics). Every filter's value is bound (filter.Param). A skipped chart answers 204 without asking
-// ClickHouse. An unreadable custom range is ResolveTimeRange's error.
+// filter; `queryObj` has the pills on its table already, and `diagnostics` says what it did (X-Dashica-Diagnostics).
+// A skipped chart answers 204 without asking ClickHouse. An unreadable custom range is ResolveTimeRange's error.
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
 	return qh.answerArrow(queryObj, state, diagnostics, nil, w, r)
 }
@@ -64,7 +63,7 @@ type prepared struct {
 }
 
 // prepare is `queryObj` filtered by `state` as HandleQuery, HandleRows and HandleDebug send it: its window and SQL
-// filter unless it skips filters, the form values and every filter's value bound.
+// filter unless it skips filters, the form values bound.
 func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (prepared, error) {
 	client, err := qh.client(queryObj)
 	if err != nil {
@@ -74,7 +73,6 @@ func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (pre
 	p.opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates (which is used in date picker by browser)
 
 	maps.Copy(p.opts.Parameters, state.Params)
-	bindFilters(p.opts.Parameters, state)
 
 	q := queryObj
 	if !queryObj.ShouldSkipFilters() {
@@ -213,12 +211,4 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, state QueryState, 
 	// Return as JSON
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(debugInfo)
-}
-
-// bindFilters adds the value of each of the request's filters to `params` (`__f0`, …), also of those its chart
-// ignores, so a chart's conditions name only filter.Param.
-func bindFilters(params map[string]string, state QueryState) {
-	for i, f := range state.Filters {
-		params[filter.Param(i)] = f.Value
-	}
 }

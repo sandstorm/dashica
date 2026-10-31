@@ -35,11 +35,9 @@ func TestParseQueryState(t *testing.T) {
 			query: url.Values{"time": {"custom"}, "range": {"now-6h to now-1h"}},
 			want:  QueryState{Time: "custom", Range: "now-6h to now-1h"},
 		},
-		"filters, the value everything after the second colon": {
-			query: url.Values{"time": {"1h"}, "f": {"status:eq:500", "path:ne:/a:b", "host:eq:"}},
-			want: QueryState{Time: "1h", Filters: []filter.Filter{
-				{ID: "status", Op: "eq", Value: "500"}, {ID: "path", Op: "ne", Value: "/a:b"}, {ID: "host", Op: "eq", Value: ""},
-			}},
+		"pills as their keys, unchecked, empty ones left out": {
+			query: url.Values{"time": {"1h"}, "f": {"eyJ.abc", "", "status:eq:500"}},
+			want:  QueryState{Time: "1h", Pills: []string{"eyJ.abc", "status:eq:500"}},
 		},
 		"SQL filter and params": {
 			query: url.Values{"time": {"24h"}, "sql": {"status >= 500"}, "wp": {`{"path":"^/api"}`}},
@@ -54,7 +52,7 @@ func TestParseQueryState(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			got := parseQueryState(t, tt.query.Encode())
 			if got.Time != tt.want.Time || got.Range != tt.want.Range || !reflect.DeepEqual(got.Sql, tt.want.Sql) ||
-				!reflect.DeepEqual(got.Filters, tt.want.Filters) || !reflect.DeepEqual(got.Params, tt.want.Params) {
+				!reflect.DeepEqual(got.Pills, tt.want.Pills) || !reflect.DeepEqual(got.Params, tt.want.Params) {
 				t.Errorf("ParseQueryState = %+v, want %+v", got, tt.want)
 			}
 		})
@@ -66,15 +64,12 @@ func TestParseQueryState_SaysWhatIsWrong(t *testing.T) {
 		query url.Values
 		want  string
 	}{
-		"missing time":      {query: url.Values{"sql": {"status >= 500"}}, want: "time range missing"},
-		"bad duration":      {query: url.Values{"time": {"2d"}}, want: `"2d"`},
-		"negative":          {query: url.Values{"time": {"-1h"}}, want: `"-1h"`},
-		"wp not JSON":       {query: url.Values{"time": {"1h"}, "wp": {"path=^/api"}}, want: "wp"},
-		"wp not strings":    {query: url.Values{"time": {"1h"}, "wp": {`{"limit":10}`}}, want: "wp"},
-		"wp not an object":  {query: url.Values{"time": {"1h"}, "wp": {`["^/api"]`}}, want: "wp"},
-		"filter op unknown": {query: url.Values{"time": {"1h"}, "f": {"status:gt:500"}}, want: `"status:gt:500"`},
-		"filter without op": {query: url.Values{"time": {"1h"}, "f": {"status"}}, want: `"status"`},
-		"filter without id": {query: url.Values{"time": {"1h"}, "f": {":eq:500"}}, want: `":eq:500"`},
+		"missing time":     {query: url.Values{"sql": {"status >= 500"}}, want: "time range missing"},
+		"bad duration":     {query: url.Values{"time": {"2d"}}, want: `"2d"`},
+		"negative":         {query: url.Values{"time": {"-1h"}}, want: `"-1h"`},
+		"wp not JSON":      {query: url.Values{"time": {"1h"}, "wp": {"path=^/api"}}, want: "wp"},
+		"wp not strings":   {query: url.Values{"time": {"1h"}, "wp": {`{"limit":10}`}}, want: "wp"},
+		"wp not an object": {query: url.Values{"time": {"1h"}, "wp": {`["^/api"]`}}, want: "wp"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

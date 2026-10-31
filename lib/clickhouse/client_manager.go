@@ -57,3 +57,9 @@ func (cm *Manager) GetClient(serverId string) (*Client, error) {
 	cm.clients[serverId] = client
 	return client, nil
 }
+
+// Database is the database dashica_config names for the connection `connection` ("" for one it does not know): where
+// a table named without its database is.
+func (cm *Manager) Database(connection string) string {
+	return cm.config.ClickHouse[connection].Database
+}

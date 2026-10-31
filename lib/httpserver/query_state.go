@@ -11,16 +11,17 @@ import (
 )
 
 // QueryState is the page's query state as every data handler reads it, from the keys the page keeps in its own URL
-// (`?time=1h&f=host:eq:a&sql=status >= 500&wp={"path":"^/api"}`; see docs/2026-10-28-workbench.md §3.7). ParseQueryState
+// (`?time=1h&f=<key>&sql=status >= 500&wp={"path":"^/api"}`; see docs/2026-10-28-workbench.md §3.7). ParseQueryState
 // reads it once per request; the handler resolves its window with ResolveTimeRange and adds SqlClause to the query's
-// WHERE, the chart the filters it interprets (filter.Apply).
+// WHERE, the chart the pills on its table (filter.Open, filter.Apply).
 type QueryState struct {
 	// Time is the time range: a preset as a Go duration (`1h`, `168h`), or `custom` for Range.
 	Time string
 	// Range is the custom range, `<from> to <to>`, each end a time expression (`2026-10-29 10:00`, `now-6h`).
 	Range string
-	// Filters are the structured filters, in the order of the URL; each chart interprets them itself.
-	Filters []filter.Filter
+	// Pills are the keys of the pills (`f`, filter.Sign), in the order of the URL, not yet checked: filter.Open checks
+	// each.
+	Pills []string
 	// Sql are the SQL chips, in the order of the URL (one `sql` each); every query adds each to its WHERE.
 	Sql []string
 	// Params are the values of the page's form widgets by name, bound as ClickHouse parameters (`param_<name>`).
@@ -38,10 +39,10 @@ func (e *QueryStateError) Error() string {
 	return e.Reason
 }
 
-// ParseQueryState reads the query state of `r`: `time`, `range`, each `f` (`<id>:<op>:<value>`, the value everything
-// after the second colon), each `sql` (an empty one left out) and `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a
-// missing `time`, a `time` that is neither a Go duration nor `custom`, an `f` without op or with an op other than
-// `eq` / `ne`, a `wp` that is not such an object. An unreadable `range` is ResolveTimeRange's error.
+// ParseQueryState reads the query state of `r`: `time`, `range`, each `f` and each `sql` (an empty one left out) and
+// `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a missing `time`, a `time` that is
+// neither a Go duration nor `custom`, a `wp` that is not such an object. An unreadable `range` is ResolveTimeRange's
+// error.
 func ParseQueryState(r *http.Request) (QueryState, error) {
 	query := r.URL.Query()
 	s := QueryState{Time: query.Get("time"), Range: query.Get("range")}
@@ -60,12 +61,10 @@ func ParseQueryState(r *http.Request) (QueryState, error) {
 		}
 		s.preset = dur
 	}
-	for _, f := range query["f"] {
-		parts := strings.SplitN(f, ":", 3)
-		if len(parts) != 3 || parts[0] == "" || (parts[1] != "eq" && parts[1] != "ne") {
-			return QueryState{}, &QueryStateError{fmt.Sprintf("filter %q: want `<id>:eq:<value>` or `<id>:ne:<value>`", f)}
+	for _, key := range query["f"] {
+		if key != "" {
+			s.Pills = append(s.Pills, key)
 		}
-		s.Filters = append(s.Filters, filter.Filter{ID: parts[0], Op: parts[1], Value: parts[2]})
 	}
 	if wp := query.Get("wp"); wp != "" {
 		if err := json.Unmarshal([]byte(wp), &s.Params); err != nil {
@@ -76,7 +75,7 @@ func ParseQueryState(r *http.Request) (QueryState, error) {
 }
 
 // WriteDiagnostics tells the client what the chart did with the request (X-Dashica-Diagnostics:
-// {"ignored":["host"]}); no header when it has nothing to say.
+// {"ignored":["customer = acme"]}); no header when it has nothing to say.
 func WriteDiagnostics(w http.ResponseWriter, d filter.Diagnostics) {
 	if len(d.Ignored) == 0 && d.Skipped == "" {
 		return

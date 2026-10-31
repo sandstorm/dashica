@@ -39,6 +39,10 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		println("Failed to load config: ", err.Error())
 		os.Exit(1)
 	}
+	if err := cfg.Filters.CheckFilterSecret(); err != nil {
+		println("Failed to load config: ", err.Error())
+		os.Exit(1)
+	}
 
 	// --- Logger initialization ---
 
@@ -130,6 +134,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertEvaluator:          alertEvaluator,
 		AlertManager:            alertManager,
 		ExploreEnabled:          cfg.Explore.Enabled,
+		FilterSecret:            []byte(cfg.Filters.Secret),
 	}
 
 	return newDashicaImpl(cfg, logger, mux, deps)

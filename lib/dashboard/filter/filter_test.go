@@ -1,8 +1,9 @@
-// Tests for Apply and Condition.
+// Tests for TableOf, New, Sign, Open and Apply.
 package filter
 
 import (
-	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
@@ -11,156 +12,167 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// fixedColumns is a column source with `http_logs` on server "default" ("") and `caddy_logs` on "logs"; it counts
-// what it is asked.
-func fixedColumns(asked *int) Columns {
-	return func(_ context.Context, server, table string) ([]string, error) {
-		*asked++
-		switch server + "/" + table {
-		case "/http_logs":
-			return []string{"timestamp", "status", "path", "my-host", "bytes"}, nil
-		case "logs/caddy_logs":
-			return []string{"timestamp", "upstream"}, nil
-		}
-		return nil, nil
-	}
+var secret = []byte("a test secret of at least thirty-two bytes")
+
+// databases is dashica_config's database per connection: "default" on default, "monitoring" on logs.
+func databases(connection string) string {
+	return map[string]string{"default": "default", "logs": "monitoring"}[connection]
 }
 
-func filters(fs ...string) []Filter {
-	var out []Filter
-	for _, f := range fs {
-		parts := strings.SplitN(f, ":", 3)
-		out = append(out, Filter{ID: parts[0], Op: parts[1], Value: parts[2]})
-	}
-	return out
-}
+var httpLogs = Table{Connection: "default", Name: "default.http_logs"}
 
-func apply(t *testing.T, q sql.SqlQueryable, fields []sql.SqlField, fs []Filter) (string, Diagnostics, int) {
+func pill(t *testing.T, table Table, field sql.SqlField, op, value string) Pill {
 	t.Helper()
-	asked := 0
-	got, d, err := Apply(context.Background(), q, fields, fs, fixedColumns(&asked))
+	p, err := New(table, field, op, value)
 	if err != nil {
-		t.Fatalf("Apply: %v", err)
+		t.Fatalf("New: %v", err)
 	}
-	return got.Build(), d, asked
+	return p
 }
 
-func TestApply_AnOwnFieldComparesItsDefinition(t *testing.T) {
+func TestTableOf_NamesTheTableWithItsDatabaseOnItsConnection(t *testing.T) {
+	tests := map[string]struct {
+		q    sql.SqlQueryable
+		want Table
+		ok   bool
+	}{
+		"From in the connection's database": {sql.New(sql.From("http_logs")), httpLogs, true},
+		"From with its database":            {sql.New(sql.From("default.http_logs")), httpLogs, true},
+		"another connection":                {sql.New(sql.From("full_logs"), sql.OnDatabase("logs")), Table{"logs", "monitoring.full_logs"}, true},
+		"a SQL file's Table":                {sql.FromFile("x.sql", sql.Table("http_logs")), httpLogs, true},
+		"a SQL file without Table":          {sql.FromFile("x.sql"), Table{}, false},
+		"a subquery":                        {sql.New(sql.From("(SELECT 1)")), Table{}, false},
+		"a query that skips filters":        {sql.New(sql.From("http_logs"), sql.SkipFilters()), Table{}, false},
+	}
+	for name, tt := range tests {
+		got, ok := TableOf(tt.q, databases)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("%s: %+v %v, want %+v %v", name, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestNew_WritesTheFieldsConditionAndLabel(t *testing.T) {
+	host := pill(t, httpLogs, sql.JsonExtractString("attrs", "host"), "ne", "it's")
+	want := Pill{Table: httpLogs, Field: "host", Op: "ne", Condition: `(JSONExtractString(attrs, 'host')) != 'it\'s'`, Label: "host ≠ it's"}
+	if host != want {
+		t.Errorf("got %+v", host)
+	}
+	if _, err := New(httpLogs, sql.Count(), "eq", "1"); !errors.Is(err, ErrCannotFilter) {
+		t.Errorf("count: %v", err)
+	}
+	if _, err := New(httpLogs, sql.Field("status"), "like", "5"); err == nil {
+		t.Errorf("op like accepted")
+	}
+}
+
+func TestSignAndOpen_GiveThePillBack(t *testing.T) {
+	p := pill(t, httpLogs, sql.Field("status"), "eq", "500")
+	key, err := Sign(secret, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(key, "+/=&? ") {
+		t.Errorf("key %q is not URL-safe", key)
+	}
+	got, err := Open(secret, key)
+	if err != nil || got != p {
+		t.Errorf("Open: %+v, %v", got, err)
+	}
+}
+
+func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
+	key, _ := Sign(secret, pill(t, httpLogs, sql.Field("status"), "eq", "500"))
+	payload, signature, _ := strings.Cut(key, ".")
+
+	// the condition changed on its way, the mac kept
+	var p Pill
+	b, _ := base64.RawURLEncoding.DecodeString(payload)
+	_ = json.Unmarshal(b, &p)
+	p.Condition = "1 = 1) OR (1 = 1"
+	b, _ = json.Marshal(p)
+	tampered := base64.RawURLEncoding.EncodeToString(b) + "." + signature
+
+	otherSecret, _ := Sign([]byte("another secret of at least thirty-two bytes"), p)
+	for name, k := range map[string]string{
+		"tampered":         tampered,
+		"unsigned":         payload,
+		"another secret":   otherSecret,
+		"bad mac":          payload + ".x",
+		"empty":            "",
+		"the old filter f": "status:eq:500",
+	} {
+		if _, err := Open(secret, k); err == nil {
+			t.Errorf("%s: opened", name)
+		}
+	}
+	if _, err := Open(nil, key); err == nil {
+		t.Errorf("opened without a secret")
+	}
+	if _, err := Sign(nil, p); err == nil {
+		t.Errorf("signed without a secret")
+	}
+}
+
+func TestApply_AddsThePillsOnItsTableAndNamesTheOthers(t *testing.T) {
 	q := sql.New(sql.From("http_logs"))
-	fields := []sql.SqlField{sql.JsonExtractString("attrs", "host"), sql.Count()}
+	table, ok := TableOf(q, databases)
+	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
+	other := pill(t, Table{"logs", "monitoring.full_logs"}, sql.Field("status"), "eq", "500")
+	other.Label = "full_logs status = 500"
 
-	built, d, asked := apply(t, q, fields, filters("host:ne:a:b", "host:eq:shop"))
+	got, d := Apply(q, table, ok, []Pill{status, other, other})
 
-	if want := "((JSONExtractString(attrs, 'host')) != {__f0:String} AND (JSONExtractString(attrs, 'host')) = {__f1:String})"; !strings.Contains(built, want) {
-		t.Errorf("query lacks %s:\n%s", want, built)
+	if !strings.Contains(got.Build(), "((status) = '500')") {
+		t.Errorf("query:\n%s", got.Build())
 	}
-	if d.Ignored != nil || asked != 0 {
-		t.Errorf("diagnostics %+v, asked DESCRIBE %d times", d, asked)
-	}
-}
-
-func TestApply_ABaseTableColumnComparesTheColumn(t *testing.T) {
-	built, d, _ := apply(t, sql.New(sql.From("http_logs")), nil, filters("status:eq:500", "my-host:eq:a"))
-
-	if want := "((status) = {__f0:String} AND (`my-host`) = {__f1:String})"; !strings.Contains(built, want) {
-		t.Errorf("query lacks %s:\n%s", want, built)
-	}
-	if d.Ignored != nil {
+	if !reflect.DeepEqual(d.Ignored, []string{"full_logs status = 500"}) {
 		t.Errorf("ignored %v", d.Ignored)
 	}
 }
 
-func TestApply_AColumnASelectAliasesWithAnotherExpressionIsIgnored(t *testing.T) {
-	// ClickHouse would compare the select: sum(bytes) in WHERE fails, the hour bucket matches other rows
-	q := sql.New(sql.From("http_logs"),
-		sql.Select(sql.Field("sum(bytes)").WithAlias("bytes")),
-		sql.Select(sql.Field("toStartOfHour(timestamp)").WithAlias("timestamp")),
-		sql.Select(sql.Field("status")),
-	)
-
-	built, d, _ := apply(t, q, nil, filters("bytes:eq:100", "timestamp:eq:1761730000", "status:eq:500"))
-
-	if want := "((status) = {__f2:String})"; !strings.Contains(built, want) {
-		t.Errorf("query lacks %s:\n%s", want, built)
-	}
-	if want := []string{"bytes", "timestamp"}; !reflect.DeepEqual(d.Ignored, want) {
-		t.Errorf("ignored %v, want %v", d.Ignored, want)
-	}
-}
-
-func TestApply_TheOthersAreIgnoredOnceInURLOrderAndKeepTheirIndex(t *testing.T) {
-	q := sql.New(sql.From("caddy_logs"), sql.OnDatabase("logs"))
-
-	built, d, asked := apply(t, q, nil, filters("nope:eq:1", "status:eq:500", "upstream:eq:a", "nope:ne:2"))
-
-	if want := "((upstream) = {__f2:String})"; !strings.Contains(built, want) {
-		t.Errorf("query lacks %s:\n%s", want, built)
-	}
-	if want := []string{"nope", "status"}; !reflect.DeepEqual(d.Ignored, want) {
-		t.Errorf("ignored %v, want %v", d.Ignored, want)
-	}
-	if asked != 1 {
-		t.Errorf("asked DESCRIBE %d times, want once", asked)
-	}
-}
-
-func TestApply_MeasuresAndTimeBucketsAreNoFilters(t *testing.T) {
-	// on a table without such columns, so only the fields could interpret them
-	q := sql.New(sql.From("other"))
-	fields := []sql.SqlField{sql.Count(), sql.Timestamp15Min(), sql.AutoBucketAs("ts", "bucket")}
-
-	_, d, _ := apply(t, q, fields, filters("cnt:eq:1", "time:eq:1", "bucket:eq:1"))
-
-	if want := []string{"cnt", "time", "bucket"}; !reflect.DeepEqual(d.Ignored, want) {
-		t.Errorf("ignored %v, want %v", d.Ignored, want)
-	}
-}
-
-func TestApply_ASqlFileInterpretsItsOwnOutputColumnsOnly(t *testing.T) {
-	q := sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")
-	fields := []sql.SqlField{sql.NewFieldAlias("host"), sql.Count()}
-
-	built, d, asked := apply(t, q, fields, filters("host:eq:shop", "status:eq:500"))
-
-	if want := "WHERE ((host) = {__f0:String}) GROUP BY"; !strings.Contains(built, want) {
-		t.Errorf("query lacks %s:\n%s", want, built)
-	}
-	if !reflect.DeepEqual(d.Ignored, []string{"status"}) || asked != 0 {
-		t.Errorf("ignored %v, asked DESCRIBE %d times", d.Ignored, asked)
-	}
-}
-
-func TestApply_AQueryThatSkipsFiltersInterpretsNone(t *testing.T) {
-	q := sql.New(sql.From("http_logs"), sql.SkipFilters())
-
-	built, d, asked := apply(t, q, []sql.SqlField{sql.Field("status")}, filters("status:eq:500", "path:eq:/"))
-
-	if strings.Contains(built, "__f") || !reflect.DeepEqual(d.Ignored, []string{"status", "path"}) || asked != 0 {
-		t.Errorf("want all ignored: %+v, asked %d\n%s", d, asked, built)
-	}
-}
-
-func TestApply_WithoutFiltersAsksNothing(t *testing.T) {
+func TestApply_PillsOnOneFieldCombine(t *testing.T) {
 	q := sql.New(sql.From("http_logs"))
-	built, d, asked := apply(t, q, nil, nil)
-	if built != q.Build() || d.Ignored != nil || asked != 0 {
-		t.Errorf("want q unchanged, got %+v, asked %d", d, asked)
+	customer := sql.Field("customer")
+	pills := []Pill{
+		pill(t, httpLogs, customer, "eq", "acme"),
+		pill(t, httpLogs, sql.Field("status"), "ne", "500"),
+		pill(t, httpLogs, customer, "eq", "globex"),
+		pill(t, httpLogs, sql.Field("status"), "ne", "404"),
+		pill(t, httpLogs, customer, "ne", "initech"),
+	}
+
+	got, d := Apply(q, httpLogs, true, pills)
+
+	want := "WHERE\n" +
+		"    (((customer) = 'acme') OR ((customer) = 'globex'))\n" +
+		"    AND (((status) != '500') AND ((status) != '404'))\n" +
+		"    AND (((customer) != 'initech'))"
+	if !strings.Contains(got.Build(), want) || len(d.Ignored) > 0 {
+		t.Errorf("ignored %v, query:\n%s", d.Ignored, got.Build())
 	}
 }
 
-func TestApply_AFailingColumnSourceFails(t *testing.T) {
-	failing := func(context.Context, string, string) ([]string, error) { return nil, errors.New("connection refused") }
-	_, _, err := Apply(context.Background(), sql.New(sql.From("http_logs")), nil, filters("status:eq:500"), failing)
-	if err == nil || !strings.Contains(err.Error(), "connection refused") {
-		t.Errorf("err = %v", err)
+func TestApply_TwoBasesOnOneTableShareThePills(t *testing.T) {
+	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
+	for _, q := range []sql.SqlQueryable{
+		sql.New(sql.From("http_logs"), sql.Where("path LIKE '/api%'")),
+		sql.New(sql.From("default.http_logs")),
+		sql.FromString("SELECT count() FROM http_logs WHERE {{DASHICA_FILTERS}}").With(sql.Table("http_logs")),
+	} {
+		table, ok := TableOf(q, databases)
+		if got, _ := Apply(q, table, ok, []Pill{status}); !strings.Contains(got.Build(), "(status) = '500'") {
+			t.Errorf("%T lacks the pill:\n%s", q, got.Build())
+		}
 	}
 }
 
-func TestApply_LeavesTheChartsQueryAsItIs(t *testing.T) {
-	q := sql.New(sql.From("http_logs"), sql.Where("a"), sql.Where("b"))
-	before := q.Build()
-	_, _, _ = apply(t, q, nil, filters("status:eq:500"))
-	if q.Build() != before {
-		t.Errorf("the chart's query changed:\n%s", q.Build())
+func TestApply_WithoutATableNone(t *testing.T) {
+	q := sql.FromString("SELECT 1 WHERE {{DASHICA_FILTERS}}")
+	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
+	table, ok := TableOf(q, databases)
+	got, d := Apply(q, table, ok, []Pill{status})
+	if strings.Contains(got.Build(), "500") || !reflect.DeepEqual(d.Ignored, []string{"status = 500"}) {
+		t.Errorf("ignored %v, query %s", d.Ignored, got.Build())
 	}
 }

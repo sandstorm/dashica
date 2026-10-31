@@ -84,7 +84,10 @@ export const page = {
             }
           },
           "dataUrl": "/p/shop/api/1",
-          "rowsUrl": "/p/shop/api/1/rows"
+          "rowsUrl": "/p/shop/api/1/rows",
+          "filterable": [
+            "status"
+          ]
         },
         "b": {
           "type": "timeLine",
@@ -127,7 +130,10 @@ export const page = {
             }
           },
           "dataUrl": "/p/shop/api/3",
-          "rowsUrl": "/p/shop/api/3/rows"
+          "rowsUrl": "/p/shop/api/3/rows",
+          "filterable": [
+            "status"
+          ]
         },
         "1": {
           "type": "barHorizontal",
@@ -143,7 +149,10 @@ export const page = {
             }
           },
           "dataUrl": "/p/shop/api/4",
-          "rowsUrl": "/p/shop/api/4/rows"
+          "rowsUrl": "/p/shop/api/4/rows",
+          "filterable": [
+            "path"
+          ]
         },
         "2": {
           "type": "timeHeatmap",
@@ -160,7 +169,10 @@ export const page = {
             "yBucketSize": 100
           },
           "dataUrl": "/p/shop/api/5",
-          "rowsUrl": "/p/shop/api/5/rows"
+          "rowsUrl": "/p/shop/api/5/rows",
+          "filterable": [
+            "duration_ms"
+          ]
         },
         "3": {
           "type": "timeHeatmapOrdinal",
@@ -176,7 +188,10 @@ export const page = {
             }
           },
           "dataUrl": "/p/shop/api/6",
-          "rowsUrl": "/p/shop/api/6/rows"
+          "rowsUrl": "/p/shop/api/6/rows",
+          "filterable": [
+            "status"
+          ]
         },
         "4": {
           "type": "stats",

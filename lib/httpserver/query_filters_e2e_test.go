@@ -1,12 +1,11 @@
-// Tests for structured filters against a real ClickHouse (QueryHandler.HandleQuery with filter.Apply's conditions).
+// Tests for pills against a real ClickHouse (QueryHandler.HandleQuery with filter.Apply's conditions): a quoted value
+// compared with a column of another type.
 package httpserver
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -17,58 +16,55 @@ import (
 )
 
 // statusRows has two rows with a UInt16 `status`, 500 and 200, inside the last hour; each row's `hit` names its status.
-const statusRows = `SELECT status, concat('hit-', toString(status)) AS hit
+// It names `status_rows` as its table, so that it takes the pills on that table.
+var statusRows = sql.FromString(`SELECT status, concat('hit-', toString(status)) AS hit
 FROM values('status UInt16, timestamp DateTime', (500, now() - 60), (200, now() - 60))
-WHERE {{DASHICA_FILTERS}}`
+WHERE {{DASHICA_FILTERS}}`).With(sql.Table("default.status_rows"))
 
-// queryStatusRows answers statusRows with the query string `query`, the chart's own output column `status` its field.
-func queryStatusRows(t *testing.T, query string) (*httptest.ResponseRecorder, error) {
+// queryStatusRows answers statusRows with the pill on `status` `op` `value`.
+func queryStatusRows(t *testing.T, op, value string) (*httptest.ResponseRecorder, error) {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
-	r := httptest.NewRequest(http.MethodGet, "/query?"+query, nil)
+	r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
 	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
-	q, diagnostics, err := filter.Apply(context.Background(), sql.FromString(statusRows), []sql.SqlField{sql.NewFieldAlias("status")}, state.Filters, nil)
+	table, ok := filter.TableOf(statusRows, func(string) string { return "default" })
+	pill, err := filter.New(table, sql.Field("status"), op, value)
 	if err != nil {
-		t.Fatalf("Apply: %v", err)
+		t.Fatalf("New: %v", err)
 	}
+	q, diagnostics := filter.Apply(statusRows, table, ok, []filter.Pill{pill})
 	rec := httptest.NewRecorder()
 	return rec, qh.HandleQuery(q, state, diagnostics, rec, r)
 }
 
-func TestHandleQuery_AStringValueMatchesAUInt16Column(t *testing.T) {
-	for query, want := range map[string]string{"time=1h&f=status:eq:500": "hit-500", "time=1h&f=status:ne:500": "hit-200"} {
-		rec, err := queryStatusRows(t, query)
+func TestHandleQuery_AQuotedValueMatchesAUInt16Column(t *testing.T) {
+	for op, want := range map[string]string{"eq": "hit-500", "ne": "hit-200"} {
+		rec, err := queryStatusRows(t, op, "500")
 		if err != nil {
-			t.Fatalf("%s: %v", query, err)
+			t.Fatalf("%s: %v", op, err)
 		}
 		other := map[string]string{"hit-500": "hit-200", "hit-200": "hit-500"}[want]
 		// the Arrow body is uncompressed, so the strings of its rows are in it as they are
 		if body := rec.Body.Bytes(); !bytes.Contains(body, []byte(want)) || bytes.Contains(body, []byte(other)) {
-			t.Errorf("%s: want only the row %s", query, want)
+			t.Errorf("%s: want only the row %s", op, want)
 		}
 	}
 }
 
-func TestHandleQuery_AValueOfAnIgnoredFilterIsBoundUnnamed(t *testing.T) {
-	rec, err := queryStatusRows(t, "time=1h&f=host:eq:a&f=status:eq:500")
-	if err != nil {
-		t.Fatalf("ClickHouse refuses the unnamed __f0: %v", err)
-	}
-	if got := rec.Header().Get("X-Dashica-Diagnostics"); got != `{"ignored":["host"]}` {
-		t.Errorf("diagnostics %q", got)
-	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte("hit-500")) {
-		t.Errorf("want the row hit-500")
+func TestHandleQuery_AQuotedValueThatDoesNotConvertFailsTheQuery(t *testing.T) {
+	_, err := queryStatusRows(t, "eq", "abc")
+	if err == nil {
+		t.Errorf("want ClickHouse's error for 'abc' against a UInt16")
 	}
 }
 
-func TestHandleQuery_AValueThatDoesNotConvertFailsWithTypeMismatch(t *testing.T) {
-	_, err := queryStatusRows(t, "time=1h&f=status:eq:abc")
-	if err == nil || !strings.Contains(err.Error(), "TYPE_MISMATCH") {
-		t.Errorf("want ClickHouse's TYPE_MISMATCH, got %v", err)
+func TestHandleQuery_AValueWithQuotesStaysOneLiteral(t *testing.T) {
+	_, err := queryStatusRows(t, "eq", `500' OR '1'='1`)
+	if err == nil {
+		t.Errorf("want the whole text compared as one value (and failing to convert), got %v", err)
 	}
 }

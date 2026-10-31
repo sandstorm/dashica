@@ -32,6 +32,26 @@ type Config struct {
 	Auth     AuthConfig     `koanf:"auth"`
 	Alerting AlertingConfig `koanf:"alerting"`
 	Explore  ExploreConfig  `koanf:"explore"`
+	Filters  FiltersConfig  `koanf:"filters"`
+}
+
+// FiltersConfig is how the server signs the page's pills (docs/2026-10-28-workbench.md §3.8).
+type FiltersConfig struct {
+	// Secret is the key of the HMAC each pill carries, so that the conditions of a page's URL are the server's own;
+	// required (CheckFilterSecret). Never in a checked-in file: set it as FILTERS__SECRET.
+	Secret string `koanf:"secret"`
+}
+
+// MinFilterSecretLength is the shortest filters.secret the server starts with (`openssl rand -hex 32` gives 64).
+const MinFilterSecretLength = 32
+
+// CheckFilterSecret is why the server cannot start with `c`'s filters.secret: missing or shorter than
+// MinFilterSecretLength; nil when it can.
+func (c FiltersConfig) CheckFilterSecret() error {
+	if len(c.Secret) < MinFilterSecretLength {
+		return fmt.Errorf("filters.secret must be set, at least %d characters (signs the page's filters; e.g. FILTERS__SECRET=$(openssl rand -hex 32))", MinFilterSecretLength)
+	}
+	return nil
 }
 
 // ExploreConfig is what the Explore view may show beyond what the charts show.
@@ -235,6 +255,7 @@ func PrintConfig(config *Config) {
 	}
 
 	fmt.Printf("explore.enabled: %v\n", config.Explore.Enabled)
+	fmt.Printf("filters.secret: %s\n", maskSecret(config.Filters.Secret))
 
 	fmt.Println("Alerting Configuration:")
 	fmt.Printf("  helvetikit_alerting_url: %s\n", config.Alerting.HelvetikitAlertingUrl)

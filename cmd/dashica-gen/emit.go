@@ -305,7 +305,7 @@ func (r *{{.Type}}) marshalProps(ctx *rendering.DashboardContext) ([]byte, error
 // widgetTitle is its title, as the page's outline names it.
 func (r *{{.Type}}) widgetTitle() string { return r.title }
 {{end}}{{if .Dimensions}}
-// dimensions are its slots tagged ` + "`" + `role=dimension` + "`" + ` that are set: its own fields, by whose alias filter.Apply interprets a filter.
+// dimensions are its slots tagged ` + "`" + `role=dimension` + "`" + ` that are set: its own fields, those holding categories the ones it makes pills of (/pill).
 func (r *{{.Type}}) dimensions() []sql.SqlField {
 	var out []sql.SqlField
 	{{range .Dimensions}}{{.}}

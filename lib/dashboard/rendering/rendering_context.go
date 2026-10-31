@@ -74,6 +74,8 @@ type Dependencies struct {
 	AlertManager            *alerting2.AlertManager
 	// ExploreEnabled: a chart's handler serves its SQL and runs the SQL the viewer edited (config.ExploreConfig).
 	ExploreEnabled bool
+	// FilterSecret signs and checks the page's pills (config.FiltersConfig, filter.Sign).
+	FilterSecret []byte
 }
 
 // MenuGroup is a group of the dashboards menu ("Shop"), as RegisterDashboardGroup starts it.

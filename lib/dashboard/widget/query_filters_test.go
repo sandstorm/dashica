@@ -1,11 +1,12 @@
-// Tests for the filters a chart's query handler applies (queryHandler, applyFilters).
+// Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields).
 package widget
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,153 +18,177 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// debugged is what a chart's /debug answers about its filters: the query, the bound parameters, the Diagnostics.
+var testSecret = []byte("a test secret of at least thirty-two bytes")
+
+// testDeps are the dependencies of a chart's handler on a ClickHouse that is unreachable (the EXPLAINs of /debug fail
+// and stay unchecked), its connection "default" on the database "default", the pills signed with testSecret.
+func testDeps() rendering.Dependencies {
+	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
+	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), FilterSecret: testSecret}
+}
+
+// askPath is the answer of `chart`'s handler to `path` (with its query string).
+func askPath(chart withQuery, path string) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	queryHandler(testDeps(), chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	return rec
+}
+
+// pillOf is the key `chart`'s /pill gives for `field` `op` `value`; it fails the test on another answer.
+func pillOf(t *testing.T, chart withQuery, field, op, value string) string {
+	t.Helper()
+	rec := askPath(chart, "/pill?"+url.Values{"field": {field}, "op": {op}, "value": {value}}.Encode())
+	var body struct{ Key, Label string }
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil || body.Key == "" {
+		t.Fatalf("/pill %s %s %s: %d %s", field, op, value, rec.Code, rec.Body)
+	}
+	return body.Key
+}
+
+// debugged is what a chart's /debug answers about its pills: the query and the Diagnostics.
 type debugged struct {
 	status      int
 	diagnostics string
 	query       string
-	params      map[string]string
 }
 
-// httpLogsColumns is a column source with the table http_logs on every server.
-func httpLogsColumns(_ context.Context, _, table string) ([]string, error) {
-	if table == "http_logs" {
-		return []string{"timestamp", "status", "path"}, nil
-	}
-	return nil, nil
-}
-
-// debug asks /debug of `chart` with the query string `query`, its base table's columns from httpLogsColumns, on a
-// ClickHouse that is unreachable (the EXPLAINs of /debug fail and stay unchecked).
-func debug(t *testing.T, chart withQuery, query string) debugged {
+// debug asks /debug of `chart` with `time=1h` and the pills `keys`.
+func debug(t *testing.T, chart withQuery, keys ...string) debugged {
 	t.Helper()
-	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop())}
-	rec := httptest.NewRecorder()
-	queryHandler(deps, chart, httpLogsColumns).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/debug?"+query, nil))
+	rec := askPath(chart, "/debug?"+url.Values{"time": {"1h"}, "f": keys}.Encode())
 	got := debugged{status: rec.Code, diagnostics: rec.Header().Get("X-Dashica-Diagnostics")}
 	if rec.Code != http.StatusOK {
 		return got
 	}
-	var body struct {
-		Query string
-		Stats struct {
-			Parameters map[string]string `json:"parameters"`
-		}
-	}
+	var body struct{ Query string }
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("debug body %s: %v", rec.Body, err)
 	}
-	got.query, got.params = body.Query, body.Stats.Parameters
+	got.query = body.Query
 	return got
 }
 
-func TestQueryHandler_AChartInterpretsItsOwnFieldsAndItsTablesColumns(t *testing.T) {
+func TestPill_IsTheFieldsConditionSignedAndLabelled(t *testing.T) {
 	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.JsonExtractString("attrs", "host")).Y(sql.Count())
 
-	got := debug(t, bar, "time=1h&f=host:ne:a:b&f=status:eq:500&f=level:eq:error")
+	rec := askPath(bar, "/pill?field=host&op=ne&value=it's")
+	var body struct{ Key, Label string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	pill, err := filter.Open(testSecret, body.Key)
+	if rec.Code != http.StatusOK || err != nil || body.Label != "host ≠ it's" {
+		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
+	}
+	want := filter.Pill{Table: filter.Table{Connection: "default", Name: "default.http_logs"}, Field: "host", Op: "ne", Condition: `(JSONExtractString(attrs, 'host')) != 'it\'s'`, Label: "host ≠ it's"}
+	if pill != want {
+		t.Errorf("pill %+v", pill)
+	}
+}
 
-	if got.diagnostics != `{"ignored":["level"]}` {
+func TestPill_AFieldThatCannotFilterIs422(t *testing.T) {
+	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
+	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
+	for name, tt := range map[string]struct {
+		chart withQuery
+		field string
+	}{
+		"a count":                    {bar, "cnt"},
+		"a time bucket":              {bar, "time"},
+		"no field of it":             {bar, "path"},
+		"a SQL file without a table": {noTable, "host"},
+	} {
+		if rec := askPath(tt.chart, "/pill?op=eq&value=1&field="+tt.field); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	for _, query := range []string{"field=status&op=like&value=1", "field=status&op=eq"} {
+		if rec := askPath(bar, "/pill?"+query); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", query, rec.Code)
+		}
+	}
+}
+
+func TestQueryHandler_AppliesThePillsOnItsTableAndNamesTheOthers(t *testing.T) {
+	logs := sql.New(sql.From("http_logs"))
+	bar := NewBarVertical(logs).X(sql.JsonExtractString("attrs", "host")).Y(sql.Count())
+	other := NewBarVertical(sql.New(sql.From("caddy_logs"))).X(sql.Field("upstream")).Y(sql.Count())
+	host := pillOf(t, bar, "host", "eq", "shop")
+	upstream := pillOf(t, other, "upstream", "eq", "a")
+
+	got := debug(t, bar, host, upstream)
+
+	if got.diagnostics != `{"ignored":["upstream = a"]}` {
 		t.Errorf("diagnostics %q", got.diagnostics)
 	}
-	if want := "(JSONExtractString(attrs, 'host')) != {__f0:String} AND (status) = {__f1:String}"; !strings.Contains(got.query, want) {
+	if want := "((JSONExtractString(attrs, 'host')) = 'shop')"; !strings.Contains(got.query, want) {
 		t.Errorf("query lacks %s:\n%s", want, got.query)
 	}
-	// the ignored filter's value is bound as well
-	if got.params["__f0"] != "a:b" || got.params["__f1"] != "500" || got.params["__f2"] != "error" || got.params["__from"] == "" {
-		t.Errorf("params: %v", got.params)
-	}
 }
 
-func TestQueryHandler_TheSameIdMeansWhatEachChartSaysIt(t *testing.T) {
-	// two charts alias different expressions as level; each compares its own
-	logs := sql.New(sql.From("http_logs"))
-	byLevel := NewBarVertical(logs).X(sql.Enum("level")).Y(sql.Count())
-	byLevelOverTime := NewTimeHeatmapOrdinal(logs).X(sql.Timestamp15Min()).Y(sql.Field("lower(severity)").WithAlias("level"))
+func TestQueryHandler_AnotherChartOnTheTableTakesThePillAsItWasMade(t *testing.T) {
+	// the pill holds the condition of the chart it was made on; a chart with another field of that alias applies it
+	byHost := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.JsonExtractString("attrs", "host")).Y(sql.Count())
+	byPath := NewTimeBar(sql.New(sql.From("default.http_logs"), sql.Where("path != '/'"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("path"))
 
-	if got := debug(t, byLevel, "time=1h&f=level:eq:error"); !strings.Contains(got.query, "(level::String) = {__f0:String}") {
-		t.Errorf("bar:\n%s", got.query)
-	}
-	if got := debug(t, byLevelOverTime, "time=1h&f=level:eq:error"); !strings.Contains(got.query, "(lower(severity)) = {__f0:String}") {
-		t.Errorf("heatmap:\n%s", got.query)
-	}
-}
+	got := debug(t, byPath, pillOf(t, byHost, "host", "eq", "shop"))
 
-func TestQueryHandler_ASqlFileChartInterpretsItsOwnOutputColumns(t *testing.T) {
-	byHost := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).
-		X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
-
-	got := debug(t, byHost, "time=1h&f=status:eq:500&f=host:eq:shop")
-
-	if got.diagnostics != `{"ignored":["status"]}` {
-		t.Errorf("diagnostics %q", got.diagnostics)
-	}
-	if !strings.Contains(got.query, "((host) = {__f1:String})") {
-		t.Errorf("query:\n%s", got.query)
-	}
-}
-
-func TestQueryHandler_ATableInterpretsItsGroupByFieldsAsItSelectsThem(t *testing.T) {
-	table := NewTable(sql.New(sql.From("http_logs"),
-		sql.Select(sql.JsonExtractString("attrs", "host")),
-		sql.Select(sql.Field("sum(bytes)").WithAlias("bytes")),
-		sql.GroupBy(sql.Field("host")),
-	))
-
-	got := debug(t, table, "time=1h&f=host:eq:shop&f=bytes:eq:1")
-
-	if !strings.Contains(got.query, "(JSONExtractString(attrs, 'host')) = {__f0:String}") || got.diagnostics != `{"ignored":["bytes"]}` {
+	if !strings.Contains(got.query, "(JSONExtractString(attrs, 'host')) = 'shop'") || got.diagnostics != "" {
 		t.Errorf("diagnostics %q, query:\n%s", got.diagnostics, got.query)
 	}
 }
 
-// ownFilters is a chart that interprets the filters itself: it skips without a host filter.
-type ownFilters struct{ *BarVertical }
+func TestQueryHandler_ASqlFileWithTableTakesThePillsAtItsPlaceholder(t *testing.T) {
+	file := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host").With(sql.Table("http_logs"))).
+		X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
 
-func (c ownFilters) ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics) {
-	for i, f := range filters {
-		if f.ID == "host" {
-			return q.With(sql.Where(filter.Condition(i, f, "hostname"))), filter.Diagnostics{}
-		}
-	}
-	return q, filter.Diagnostics{Skipped: "pick a host"}
-}
+	got := debug(t, file, pillOf(t, file, "host", "ne", "shop"))
 
-func TestQueryHandler_AChartWithApplyFiltersDecidesItself(t *testing.T) {
-	chart := ownFilters{NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())}
-
-	if got := debug(t, chart, "time=1h&f=status:eq:500&f=host:eq:a"); !strings.Contains(got.query, "(hostname) = {__f1:String}") || strings.Contains(got.query, "__f0:") {
+	if !strings.Contains(got.query, "WHERE (((host) != 'shop')) AND (timestamp >= ") {
 		t.Errorf("query:\n%s", got.query)
 	}
+}
 
-	unreachable := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, zerolog.Nop())}
-	rec := httptest.NewRecorder()
-	queryHandler(unreachable, chart, httpLogsColumns).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/query?time=1h", nil))
-	if rec.Code != http.StatusNoContent || rec.Header().Get("X-Dashica-Diagnostics") != `{"skipped":"pick a host"}` {
-		t.Errorf("skipped: status %d, headers %v, body %s", rec.Code, rec.Header(), rec.Body)
+func TestQueryHandler_ATamperedPillIsABadRequest(t *testing.T) {
+	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
+	key := pillOf(t, bar, "status", "eq", "500")
+	payload, _, _ := strings.Cut(key, ".")
+	for name, k := range map[string]string{"unsigned": payload, "the old filter": "status:eq:500", "bad mac": payload + ".AAAA"} {
+		if got := debug(t, bar, k); got.status != http.StatusBadRequest {
+			t.Errorf("%s: %d", name, got.status)
+		}
 	}
 }
 
 func TestQueryHandler_AQueryThatSkipsFiltersIgnoresAll(t *testing.T) {
-	got := debug(t, NewBarVertical(sql.New(sql.From("http_logs"), sql.SkipFilters())).X(sql.Field("status")).Y(sql.Count()), "time=1h&f=status:eq:500")
-	if got.diagnostics != `{"ignored":["status"]}` || strings.Contains(got.query, "__f0:") {
+	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
+	skips := NewBarVertical(sql.New(sql.From("http_logs"), sql.SkipFilters())).X(sql.Field("status")).Y(sql.Count())
+	got := debug(t, skips, pillOf(t, bar, "status", "eq", "500"))
+	if got.diagnostics != `{"ignored":["status = 500"]}` || strings.Contains(got.query, "'500'") {
 		t.Errorf("want everything ignored: %+v", got)
 	}
 }
 
-func TestQueryHandler_AFailingDescribeFailsTheChart(t *testing.T) {
-	failing := func(context.Context, string, string) ([]string, error) { return nil, context.DeadlineExceeded }
-	chart := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
-	rec := httptest.NewRecorder()
-	queryHandler(rendering.Dependencies{}, chart, failing).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/query?time=1h&f=path:eq:/", nil))
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status %d", rec.Code)
+func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
+	logs := sql.New(sql.From("http_logs"))
+	aliases := func(chart withQuery) []string {
+		var out []string
+		for _, f := range filterableFields(chart) {
+			out = append(out, f.Alias())
+		}
+		return out
 	}
-}
-
-func TestQueryHandler_AnUnknownOpIsABadRequest(t *testing.T) {
-	got := debug(t, NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("host")).Y(sql.Count()), "time=1h&f=host:like:shop")
-	if got.status != http.StatusBadRequest {
-		t.Errorf("status %d", got.status)
+	tests := map[string]struct {
+		chart withQuery
+		want  []string
+	}{
+		"time bar":            {NewTimeBar(logs).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status")), []string{"status"}},
+		"bar":                 {NewBarVertical(logs).X(sql.Field("path")).Y(sql.Count()).Fill(sql.Field("status")), []string{"path", "status"}},
+		"skips filters":       {NewBarVertical(sql.New(sql.From("http_logs"), sql.SkipFilters())).X(sql.Field("path")).Y(sql.Count()), nil},
+		"SQL file":            {NewBarVertical(sql.FromFile("x.sql")).X(sql.NewFieldAlias("path")).Y(sql.NewFieldAlias("cnt")), nil},
+		"SQL file with Table": {NewBarVertical(sql.FromFile("x.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("path")).Y(sql.NewFieldAlias("cnt")), []string{"path"}},
+	}
+	for name, tt := range tests {
+		if got := aliases(tt.chart); !slices.Equal(got, tt.want) {
+			t.Errorf("%s: %v, want %v", name, got, tt.want)
+		}
 	}
 }

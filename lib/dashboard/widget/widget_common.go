@@ -2,7 +2,6 @@ package widget
 
 import (
 	"cmp"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,16 +43,11 @@ type withQuery interface {
 	Query() sql.SqlQueryable
 }
 
-// withDimensions is a chart's own fields, which filter.Apply interprets a filter id as (by alias): the slots tagged
-// `dashica-gen:"role=dimension"` that are set (generated), a table's GROUP BY or select fields.
+// withDimensions is a chart's own fields, those of them that hold categories the fields it makes pills of (by
+// alias, "/pill"): the slots tagged `dashica-gen:"role=dimension"` that are set (generated), a table's GROUP BY or
+// select fields.
 type withDimensions interface {
 	dimensions() []sql.SqlField
-}
-
-// withFilters is a chart that interprets the request's filters itself: `q` (its Query) with those it interprets
-// added, and what it did. Every other chart gets filter.Apply.
-type withFilters interface {
-	ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
 }
 
 // withHandler is a widget with data beyond a query (alerts, Speedscope, the schema table): its handler answers the
@@ -89,6 +83,10 @@ type Node struct {
 	// RowsURL is where the Explore view's rows of it answer ("/p/shop/api/3/rows": its result, `?xsql=` an edited
 	// query); empty for a widget without a query.
 	RowsURL string `json:"rowsUrl,omitempty"`
+	// Filterable are the aliases of its fields a click may filter by, each a pill on its table (`<dataUrl>/pill`): its
+	// fields that hold categories (sql.IsCategory), when its query has a table (sql.From, sql.Table) and does not skip
+	// filters; empty for every other widget.
+	Filterable []string `json:"filterable,omitempty"`
 	// Children by name: a grid's areas; a collapsible group's widgets as "0", "1", ….
 	Children map[string]Node `json:"children,omitempty"`
 	// Title is its title for the page's outline (Outline); in page.json it is in its props.
@@ -126,8 +124,11 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 			return Node{}, fmt.Errorf("%s: %w", typ, err)
 		}
 		node.DataURL = own.Path()
-		if _, ok := w.(withQuery); ok {
+		if chart, ok := w.(withQuery); ok {
 			node.RowsURL = own.Path() + "/rows"
+			for _, field := range filterableFields(chart) {
+				node.Filterable = append(node.Filterable, field.Alias())
+			}
 		}
 	}
 	if container, ok := w.(withChildren); ok {
@@ -215,11 +216,11 @@ func (w WidgetsMap) all() iter.Seq2[string, WidgetDefinition] {
 	}
 }
 
-// DataHandler answers the requests below a widget's URL: a withQuery's query (queryHandler, its base table's columns
-// from ClickHouse), a withHandler's Handler; nil for a widget without data.
+// DataHandler answers the requests below a widget's URL: a withQuery's query (queryHandler), a withHandler's Handler;
+// nil for a widget without data.
 func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 	if chart, ok := w.(withQuery); ok {
-		return queryHandler(deps, chart, deps.ClickhouseClientManager.Columns)
+		return queryHandler(deps, chart)
 	}
 	if data, ok := w.(withHandler); ok {
 		return data.Handler(deps)
@@ -230,10 +231,10 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 // queryHandler serves the query of `chart`: /query (the data, Arrow), /debug (the query, EXPLAIN), /rows (the
 // Explore view's rows in plain Arrow types, HandleRows: the chart's result; with `?xsql=<text>` the query the viewer
 // edited, HandleEditedRows, at most exploreRowLimit rows) and /sql (the chart's query with its parameters written in,
-// HandleSql), each with the request's filters as the chart interprets them (applyFilters, base-table columns from
-// `columns`); a request whose query state cannot be read is a 400. /sql and `xsql` are behind the Explore gate
-// (editable on deps.ExploreEnabled).
-func queryHandler(deps rendering.Dependencies, chart withQuery, columns filter.Columns) http.Handler {
+// HandleSql), each with the pills of the request on its table (filter.Apply; a pill not signed with
+// deps.FilterSecret is a 400, as is a query state that cannot be read); and /pill, the pill of one of its fields
+// (pillHandler). /sql and `xsql` are behind the Explore gate (editable on deps.ExploreEnabled).
+func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: deps.ClickhouseClientManager,
 		Logger:                  deps.Logger,
@@ -247,11 +248,13 @@ func queryHandler(deps rendering.Dependencies, chart withQuery, columns filter.C
 				httpError(w, err)
 				return
 			}
-			filtered, diagnostics, err := applyFilters(r.Context(), chart, query, state.Filters, columns)
+			pills, err := openPills(deps.FilterSecret, state.Pills)
 			if err != nil {
 				httpError(w, err)
 				return
 			}
+			table, ok := tableOf(deps, query)
+			filtered, diagnostics := filter.Apply(query, table, ok, pills)
 			httpError(w, handle(filtered, state, diagnostics, w, r))
 		}
 	}
@@ -267,7 +270,79 @@ func queryHandler(deps rendering.Dependencies, chart withQuery, columns filter.C
 		rows(w, r)
 	})))
 	mux.Handle("/sql", editable(deps.ExploreEnabled, always, serve(qh.HandleSql)))
+	mux.Handle("/pill", pillHandler(deps, chart))
 	return mux
+}
+
+// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne` with the pill (filter.New) of the
+// chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with deps.FilterSecret
+// (filter.Sign), its label the chip's text. 422 for a field that cannot filter (none of filterableFields: a count, a
+// time bucket, any field of a chart without a table), 400 for a request without `value` or with another op.
+func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		args := r.URL.Query()
+		alias, op := args.Get("field"), args.Get("op")
+		if !args.Has("value") || (op != "eq" && op != "ne") {
+			http.Error(w, "want ?field=<alias>&value=<value>&op=eq|ne", http.StatusBadRequest)
+			return
+		}
+		i := slices.IndexFunc(filterableFields(chart), func(f sql.SqlField) bool { return f.Alias() == alias })
+		table, ok := tableOf(deps, chart.Query())
+		if i < 0 || !ok {
+			http.Error(w, fmt.Sprintf("%q cannot filter this chart's table", alias), http.StatusUnprocessableEntity)
+			return
+		}
+		pill, err := filter.New(table, filterableFields(chart)[i], op, args.Get("value"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		key, err := filter.Sign(deps.FilterSecret, pill)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Key   string `json:"key"`
+			Label string `json:"label"`
+		}{key, pill.Label})
+	}
+}
+
+// filterableFields are the fields of `chart` a pill filters by: its dimensions that hold categories, each alias once;
+// none when its query has no table or skips filters.
+func filterableFields(chart withQuery) []sql.SqlField {
+	d, ok := chart.(withDimensions)
+	if _, hasTable := sql.TableOf(chart.Query()); !ok || !hasTable || chart.Query().ShouldSkipFilters() {
+		return nil
+	}
+	var fields []sql.SqlField
+	for _, field := range d.dimensions() {
+		if field != nil && sql.IsCategory(field) && !slices.ContainsFunc(fields, func(f sql.SqlField) bool { return f.Alias() == field.Alias() }) {
+			fields = append(fields, field)
+		}
+	}
+	return fields
+}
+
+// tableOf is the table whose pills `query` takes (filter.TableOf), a name without database in its connection's
+// database from dashica_config.
+func tableOf(deps rendering.Dependencies, query sql.SqlQueryable) (filter.Table, bool) {
+	return filter.TableOf(query, deps.ClickhouseClientManager.Database)
+}
+
+// openPills are the pills of `keys` (filter.Open); a QueryStateError (400) for the first one not signed with `secret`.
+func openPills(secret []byte, keys []string) ([]filter.Pill, error) {
+	pills := make([]filter.Pill, 0, len(keys))
+	for _, key := range keys {
+		pill, err := filter.Open(secret, key)
+		if err != nil {
+			return nil, &httpserver.QueryStateError{Reason: err.Error()}
+		}
+		pills = append(pills, pill)
+	}
+	return pills, nil
 }
 
 // exploreRowLimit is the number of rows an edited query (/rows?xsql=) answers at most.
@@ -293,20 +368,6 @@ func editable(explore bool, needs func(*http.Request) bool, handler http.Handler
 		}
 		handler.ServeHTTP(w, r)
 	}
-}
-
-// applyFilters is `query` of `chart` with the filters it interprets, and what it did: its own ApplyFilters, else
-// filter.Apply on its dimensions.
-func applyFilters(ctx context.Context, chart withQuery, query sql.SqlQueryable, filters []filter.Filter, columns filter.Columns) (sql.SqlQueryable, filter.Diagnostics, error) {
-	if own, ok := chart.(withFilters); ok {
-		filtered, diagnostics := own.ApplyFilters(query, filters)
-		return filtered, diagnostics, nil
-	}
-	var fields []sql.SqlField
-	if d, ok := chart.(withDimensions); ok {
-		fields = d.dimensions()
-	}
-	return filter.Apply(ctx, query, fields, filters, columns)
 }
 
 // httpError answers `err`: 400 for a query state that cannot be read, else 500; nothing for nil.

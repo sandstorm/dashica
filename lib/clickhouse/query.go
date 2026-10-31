@@ -25,9 +25,6 @@ type Client struct {
 
 	introspectedSchemaMutex  sync.Mutex
 	introspectedSchemaCached *IntrospectedSchema
-
-	// columns are the filterable columns by table, as Columns asked them
-	columns tableColumns
 }
 
 // NewClient creates a new Clickhouse HTTP client for a specific server

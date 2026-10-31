@@ -21,10 +21,10 @@ import (
 // by_status.sql, on a ClickHouse that is unreachable (a query that gets past the handler's own checks fails with a 500).
 func ask(chart withQuery, explore bool, target string) *httptest.ResponseRecorder {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), ExploreEnabled: explore,
+	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), ExploreEnabled: explore, FilterSecret: testSecret,
 		FileSystem: fstest.MapFS{"by_status.sql": {Data: []byte("SELECT status, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY status")}}}
 	rec := httptest.NewRecorder()
-	queryHandler(deps, chart, httpLogsColumns).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	queryHandler(deps, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec
 }
 
@@ -85,13 +85,13 @@ func TestSql_IsTheChartsQueryWithItsFiltersWrittenIn(t *testing.T) {
 			want:  []string{"http_logs", "(status) = 'it''s'", "AND (path LIKE '/api%')", "GROUP BY"},
 		},
 		"a SQL file chart": {
-			chart: NewBarVertical(sql.FromFile("by_status.sql")).X(sql.Field("status")).Y(sql.Count()),
+			chart: NewBarVertical(sql.FromFile("by_status.sql", sql.Table("http_logs"))).X(sql.Field("status")).Y(sql.Count()),
 			want:  []string{"FROM http_logs WHERE", "(status) = 'it''s'", "AND (path LIKE '/api%')", "GROUP BY status"},
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			rec := ask(tt.chart, true, "/sql?time=1h&f="+url.QueryEscape("status:eq:it's")+"&sql="+sqlChip)
+			rec := ask(tt.chart, true, "/sql?time=1h&f="+url.QueryEscape(pillOf(t, byStatusChart(), "status", "eq", "it's"))+"&sql="+sqlChip)
 
 			text := rec.Body.String()
 			if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/plain") {
