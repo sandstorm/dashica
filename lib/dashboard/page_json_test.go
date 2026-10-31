@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
@@ -18,7 +20,11 @@ import (
 func serve(t *testing.T, d Dashboard) *http.ServeMux {
 	t.Helper()
 	mux := http.NewServeMux()
-	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop"}
+	// the connection's database names a filterable chart's table in page.json; no server is asked
+	connections := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
+	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
+		ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: connections}, zerolog.Nop()),
+	}}
 	if _, err := d.CollectHandlers(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)
 	}
