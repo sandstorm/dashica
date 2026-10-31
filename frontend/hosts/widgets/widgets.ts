@@ -9,9 +9,10 @@ import type { MenuAnchor } from '../ui/ui';
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
  * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu and the workbench's
- * one selection (`select`, or `choose` among candidates). Charts put themselves into one `ChartFrame` (title, spinner, error, menu
- * button). Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button,
- * a mark, a table cell), outlined; `active` is the active tab's, as Debug and the status bar show it.
+ * one selection (`select`, or `choose` among candidates), its selected records (`selectRecords`: a table's ticked rows).
+ * Charts put themselves into one `ChartFrame` (title, spinner, error, menu button). Each tab has an active widget: the
+ * widget with data the viewer last pressed or focused in (its menu button, a mark, a table cell) or ticked records on,
+ * outlined; `active` is the active tab's, as Debug, Details and the status bar show it.
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -36,14 +37,22 @@ export interface WidgetsApi {
    * focused in a widget with data of that tab, or after it was removed.
    */
   readonly active: ActiveWidget | undefined;
-  /** Fires when `active` changes: another widget or tab, the widget removed, its query started, answered or failed. */
+  /**
+   * Fires when `active` changes: another widget or tab, the widget removed, its query started, answered or failed, its
+   * selected records changed.
+   */
   readonly onDidChangeActive: Event<void>;
 }
 
-/** The active widget as it is now (`WidgetsApi.active`): what its menu is shown for, and its query's status. */
+/** The active widget as it is now (`WidgetsApi.active`): what its menu is shown for, its query's status, its records. */
 export interface ActiveWidget extends WidgetMenuContext {
   readonly status: WidgetStatus;
+  /** The records the viewer selected on it (a table's ticked rows, in the order ticked); empty while none. */
+  readonly records: readonly WidgetRecord[];
 }
+
+/** One record of a widget's result, by column name (`{ path: '/api', status: 500 }`). */
+export type WidgetRecord = Readonly<Record<string, unknown>>;
 
 /** How a widget's last query went: not asked yet, running, answered (rows, the time until the answer), failed. */
 export type WidgetStatus =
@@ -103,6 +112,11 @@ export interface WidgetContext {
   choose(at: MenuAnchor, candidates: readonly Omit<Selection, 'widgetId'>[]): void;
   /** Ends the selection, whichever widget it is on. */
   clearSelection(): void;
+  /**
+   * Makes `records` the widget's selected records (`ActiveWidget.records`), in place of those before; with records,
+   * the widget becomes its tab's active widget.
+   */
+  selectRecords(records: readonly WidgetRecord[]): void;
 }
 
 /** What the menu `widget/context` is shown for, also its commands' argument: the widget and what it queried last. */
@@ -136,5 +150,5 @@ export interface Diagnostics {
   readonly skipped?: string;
 }
 
-export { WidgetsHost, showWidgetError } from './widgets-impl';
+export { WidgetsHost, showWidgetError, widgetTitle } from './widgets-impl';
 export { ChartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';

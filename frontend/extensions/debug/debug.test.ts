@@ -82,6 +82,7 @@ function chart(widgetStatus: WidgetStatus, title = 'Requests'): ActiveWidget {
     url: (path) => `/p/shop/api/1${path}?time=24h`,
     lastResult: undefined,
     status: widgetStatus,
+    records: [],
   };
 }
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for table.ts: the rows drawn into a table, a click on a cell of a category column selecting its value
-// for the floating bar's filters, a cell's menu (`table/cell`) adding a condition to the page's SQL filter, a column
+// Tests for table.ts: the rows drawn into a table, ticked rows as the widget's selected records, a click on a cell of
+// a category column selecting its value for the floating bar's filters, a cell's menu (`table/cell`) adding a condition to the page's SQL filter, a column
 // header's (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -52,6 +52,25 @@ describe('table', () => {
     expect(error(el)).toBeUndefined();
     expect(el.querySelector('.d-table h2')!.textContent).toBe('Latest');
     expect(el.querySelectorAll('.tabulator-cell[tabulator-field="path"]')).toHaveLength(2);
+  });
+
+  it('makes the ticked rows its selected records, which makes it active; a new answer starts with none', async () => {
+    testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    await inView();
+    expect(testbed.widgets.active).toBeUndefined();
+
+    const tick = (row: number) => el.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row].click();
+    tick(1);
+    expect(testbed.widgets.active?.widget.type).toBe('table');
+    expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }]);
+    tick(0);
+    expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }, { path: '/api', status: 200 }]);
+    expect(el.querySelector('.d-record-panel')).toBeNull();
+
+    testbed.query.refresh();
+    await settle();
+    expect(testbed.widgets.active?.records).toEqual([]);
   });
 
   it('selects the value of a clicked cell by its column’s name; the floating bar filters by it', async () => {

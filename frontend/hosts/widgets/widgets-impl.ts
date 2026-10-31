@@ -5,7 +5,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { ActiveQuerySource, FilterOp, QueryApi } from '../query/query';
 import type { FloatingBar, MenuAnchor, UiApi } from '../ui/ui';
-import type { ActiveWidget, QueryResult, Selection, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type { ActiveWidget, QueryResult, Selection, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
@@ -41,16 +41,15 @@ export class WidgetsHost implements WidgetsApi {
   get active(): ActiveWidget | undefined {
     const widget = this.#active.get(this.tabs.activeQuery);
     if (!widget) return undefined;
-    return { widget: widget.widget, url: (path) => widget.url(path), lastResult: widget.lastResult, status: widget.status };
+    return { widget: widget.widget, url: (path) => widget.url(path), lastResult: widget.lastResult, status: widget.status, records: widget.records };
   }
 
-  /** Makes `widget` its tab's active widget, outlining its element `el` in place of the one before. */
-  activate(widget: RenderedWidget, el: HTMLElement): void {
+  /** Makes `widget` its tab's active widget, outlining its element in place of the one before. */
+  activate(widget: RenderedWidget): void {
     const before = this.#active.get(widget.state);
     if (before === widget) return;
-    before?.el?.classList.remove(ACTIVE);
-    widget.el = el;
-    el.classList.add(ACTIVE);
+    before?.el.classList.remove(ACTIVE);
+    widget.el.classList.add(ACTIVE);
     this.#active.set(widget.state, widget);
     this.#tell();
   }
@@ -58,7 +57,7 @@ export class WidgetsHost implements WidgetsApi {
   /** `widget` is removed: its tab has no active widget if it was that one. */
   deactivate(widget: RenderedWidget): void {
     if (this.#active.get(widget.state) !== widget) return;
-    widget.el?.classList.remove(ACTIVE);
+    widget.el.classList.remove(ACTIVE);
     this.#active.delete(widget.state);
     this.#tell();
   }
@@ -66,6 +65,12 @@ export class WidgetsHost implements WidgetsApi {
   /** `widget`'s status changed: told when it is the active one. */
   statusChanged(widget: RenderedWidget): void {
     if (widget === this.#told) this.#onDidChangeActive.fire();
+  }
+
+  /** `widget`'s selected records changed: with records it becomes active; told when it is the active one. */
+  recordsChanged(widget: RenderedWidget): void {
+    if (widget.records.length > 0 && this.#active.get(widget.state) !== widget) this.activate(widget);
+    else this.statusChanged(widget);
   }
 
   /** Fires `onDidChangeActive` when the active tab's active widget is another one than told last. */
@@ -131,7 +136,7 @@ export class WidgetsHost implements WidgetsApi {
       return new Disposable(() => el.replaceChildren());
     }
     try {
-      const ctx = new RenderedWidget(widget, this, state, this.ui);
+      const ctx = new RenderedWidget(widget, el, this, state, this.ui);
       const rendered = renderer(el, widget, ctx);
       const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
@@ -150,7 +155,7 @@ export class WidgetsHost implements WidgetsApi {
   /** A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. */
   #activateOn(el: HTMLElement, ctx: RenderedWidget): Disposable {
     const onEvent = (event: Event) => {
-      if (event.target instanceof Element && event.target.closest('[data-data-url]') === el) this.activate(ctx, el);
+      if (event.target instanceof Element && event.target.closest('[data-data-url]') === el) this.activate(ctx);
     };
     el.addEventListener('pointerdown', onEvent);
     el.addEventListener('focusin', onEvent);
@@ -168,11 +173,12 @@ const ACTIVE = 'd-widget--active';
 class RenderedWidget implements WidgetContext, WidgetMenuContext {
   lastResult: QueryResult | undefined;
   status: WidgetStatus = { kind: 'idle' };
-  /** Its element, once it was active. */
-  el: HTMLElement | undefined;
+  records: readonly WidgetRecord[] = [];
 
   constructor(
     readonly widget: WidgetNode,
+    /** The element it is rendered into, outlined while it is active. */
+    readonly el: HTMLElement,
     private readonly host: WidgetsHost,
     readonly state: QueryApi,
     private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices'>,
@@ -230,6 +236,17 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   clearSelection(): void {
     this.host.clearSelection();
   }
+
+  selectRecords(records: readonly WidgetRecord[]): void {
+    if (records.length === 0 && this.records.length === 0) return;
+    this.records = records;
+    this.host.recordsChanged(this);
+  }
+}
+
+/** A widget's title (`props.title`), else its type (`timeBar`). */
+export function widgetTitle(widget: WidgetNode): string {
+  return 'title' in widget.props && widget.props.title ? widget.props.title : widget.type;
 }
 
 /** Shows `error` in `el` in place of the widget: its message and the widget's type. */

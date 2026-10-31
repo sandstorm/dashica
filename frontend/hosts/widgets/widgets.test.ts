@@ -299,6 +299,28 @@ describe('WidgetsHost', () => {
       expect(changes).toBe(5);
     });
 
+    it('holds the records selected on it; selecting records makes a widget active, none leave it so', () => {
+      const first = testbed.render(requests);
+      testbed.render(errors);
+      press(first.el);
+      expect(testbed.widgets.active?.records).toEqual([]);
+      expect(changes).toBe(1);
+      contexts[1].selectRecords([{ status: 500 }, { status: 502 }]);
+      expect(testbed.widgets.active?.widget).toBe(errors);
+      expect(testbed.widgets.active?.records).toEqual([{ status: 500 }, { status: 502 }]);
+      expect(changes).toBe(2);
+      contexts[1].selectRecords([{ status: 502 }]);
+      expect(testbed.widgets.active?.records).toEqual([{ status: 502 }]);
+      expect(changes).toBe(3);
+      // the first one's records: none yet, and none tell nothing
+      contexts[0].selectRecords([]);
+      expect(changes).toBe(3);
+      contexts[1].selectRecords([]);
+      expect(testbed.widgets.active?.widget).toBe(errors);
+      expect(testbed.widgets.active?.records).toEqual([]);
+      expect(changes).toBe(4);
+    });
+
     it('is kept per tab: switching tabs shows that tab’s active widget', () => {
       const tabs = new EventEmitter<void>();
       const source = { activeQuery: new QueryHost(window), onDidChangeTabs: tabs.event };

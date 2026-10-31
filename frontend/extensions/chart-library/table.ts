@@ -2,10 +2,10 @@ import { html } from 'htl';
 import { DataType } from 'apache-arrow';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import type { CellComponent, ColumnComponent, ColumnDefinition, RowComponent } from 'tabulator-tables';
-import { Braces, Copy, Maximize2, Pin, X, createElement } from 'lucide';
+import { Braces, Copy, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
 import type { MenuAnchor } from '../../hosts/ui/ui';
-import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext, WidgetRecord } from '../../hosts/widgets/widgets';
 import './table.css';
 
 const canvas = document.createElement('canvas');
@@ -43,50 +43,8 @@ function calculateSizeOfColumn(rows: RowComponent[], fieldName: string) {
   return Math.ceil(maxWidth) + 10;
 }
 
-// Render record details as HTML string
-function renderRecordDetails(records: Record<string, any>[]): string {
-  if (!records.length) return '';
-
-  return records.map(record => {
-    const fields = Object.entries(record).map(([key, value]) => {
-      const valueStr = String(value);
-
-      // Handle JSON objects/arrays
-      const formatted = tryPrettyJson(valueStr);
-      if (formatted !== null) {
-        return `
-          <p class="d-record-panel__field">
-            <span class="d-record-panel__key">${key}</span>:
-            <span class="d-record-panel__value"><pre>${formatted}</pre></span>
-          </p>
-        `;
-      }
-
-      // Handle multiline values
-      if (valueStr.trim().includes('\n')) {
-        return `
-          <p class="d-record-panel__field">
-            <span class="d-record-panel__key">${key}</span>:
-            <span class="d-record-panel__value"><pre>${valueStr}</pre></span>
-          </p>
-        `;
-      }
-
-      // Regular values
-      return `
-        <p class="d-record-panel__field">
-          <span class="d-record-panel__key">${key}</span>:
-          <span class="d-record-panel__value">${valueStr}</span>
-        </p>
-      `;
-    }).join('');
-
-    return `<div class="d-record-panel__record">${fields}</div>`;
-  }).join('');
-}
-
-// Try to detect + pretty-print JSON. Returns null if the string is not JSON.
-function tryPrettyJson(raw: string): string | null {
+/** `raw` pretty-printed, when it is a JSON object or array; else `null`. */
+export function tryPrettyJson(raw: string): string | null {
   const trimmed = raw.trim();
   if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
     return null;
@@ -125,7 +83,7 @@ interface TooltipEl {
 }
 
 function createTooltipEl(): TooltipEl {
-  // Build the static skeleton with htl (same pattern as `panelHeader` below);
+  // Build the static skeleton with htl (the house style in this file for one-shot DOM);
   // grab element refs afterwards. Behaviour (drag/position/pin) is wired
   // imperatively — see the note in `drawTable()`.
   const root = html`<div class="d-sticky-tooltip">
@@ -497,25 +455,24 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
 
 /**
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
- * tooltips that can be pinned, and a details panel for the selected rows. With `select`, a click on a cell of a
- * column in `props.categories` selects its value, its column's name the field id; a NULL selects nothing, and a Map,
- * Array or Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows
- * the menu `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
+ * tooltips that can be pinned. With `selectRecords`, a checkbox in front of each row (and one for all) ticks it, each
+ * change calling `selectRecords` with the ticked rows. With `select`, a click on a cell of a column in
+ * `props.categories` selects its value, its column's name the field id; a NULL selects nothing, and a Map, Array or
+ * Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows the menu
+ * `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
  * `TableHeaderMenuContext`); extensions add their entries there (the `table` extension: SQL filters, auto-size).
  */
 export function drawTable(
   queryResult: QueryResult,
   props: TableProps,
-  { select, showMenu }: { select?: WidgetContext['select']; showMenu?: ShowTableMenu } = {},
+  { select, selectRecords, showMenu }: { select?: WidgetContext['select']; selectRecords?: WidgetContext['selectRecords']; showMenu?: ShowTableMenu } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
   const data = queryResult.toArray().map((row: any) => row.toJSON());
 
-  // The search and the selection: each change calls what shows it (applySearch, showSelection)
+  // The search: each change calls applySearch
   let searchTerm = '';
-  let selectedRecords: Record<string, any>[] = [];
-  let panelFullscreen = false;
 
   // With `select`, a click on a cell of a category column selects (see the cellClick handler below)
   const selecting = select !== undefined;
@@ -617,13 +574,13 @@ export function drawTable(
   tableRoot.classList.add("d-table__grid");
 
   // Highlight the search term everywhere it appears in the widget: visible
-  // table cells, the sticky tooltips, and the record-details panel. Uses the
+  // table cells and the sticky tooltips. Uses the
   // CSS Custom Highlight API — we paint style ranges rather than wrapping
   // matches in <mark>: no DOM mutation means it can't corrupt cells with
   // custom markup (timestamp innerHTML, pin badges) and it survives Tabulator
   // recycling row DOM on scroll/sort/filter. A single named highlight spans
-  // all roots. Re-run on table render, on tooltip show/pin, and on record
-  // panel render (see call sites). Gracefully no-ops where unsupported —
+  // all roots. Re-run on table render and on tooltip show/pin (see call
+  // sites). Gracefully no-ops where unsupported —
   // filtering still works.
   function applySearchHighlight(term: string) {
     const highlights = (CSS as any).highlights;
@@ -633,7 +590,6 @@ export function drawTable(
     if (!needle) return;
     const roots = [
       tableRoot.querySelector('.tabulator-tableholder'),
-      detailsPanel,
       // All live tooltips (transient + every pin) — they append to <body>,
       // so query them fresh each run rather than plumbing refs.
       ...document.querySelectorAll('.d-sticky-tooltip'),
@@ -664,7 +620,8 @@ export function drawTable(
     layout: "fitData",
     columns: columns,
     movableColumns: true,
-    rowHeader: {
+    // the checkbox column, ticking rows
+    rowHeader: selectRecords ? {
       formatter: "rowSelection",
       titleFormatter: "rowSelection",
       headerSort: false,
@@ -674,7 +631,7 @@ export function drawTable(
       hozAlign: "center",
       // @ts-expect-error the types list only some column options for rowHeader, but Tabulator applies columnDefaults to it
       headerFilter: false // No filter in the checkbox column
-    },
+    } : undefined,
     columnDefaults: {
       headerFilter: "input", // Add filter input to all column headers
       headerFilterPlaceholder: "Filter...",
@@ -684,11 +641,8 @@ export function drawTable(
     }
   });
 
-  // Listen to row selection changes
-  tabulatorTable.on("rowSelectionChanged", (data, rows) => {
-    selectedRecords = data;
-    showSelection();
-  });
+  // the ticked rows, in the order ticked
+  if (selectRecords) tabulatorTable.on("rowSelectionChanged", (records: WidgetRecord[]) => selectRecords(records));
 
   // a right click on a cell: the menu `table/cell`
   tabulatorTable.on("cellContext", (e: UIEvent, cell: CellComponent) => {
@@ -715,9 +669,8 @@ export function drawTable(
   // [1]/[2]/… + highlights the row), or drag it around.
   //
   // Markup vs. behaviour — what fits here:
-  //   - Static skeleton is built with htl `html` (see createTooltipEl), the
-  //     same approach as `panelHeader` below. That's the house style in this
-  //     file for one-shot DOM.
+  //   - Static skeleton is built with htl `html` (see createTooltipEl).
+  //     That's the house style in this file for one-shot DOM.
   //   - Behaviour (drag, viewport-clamped positioning, N independent pins,
   //     live re-decoration on Tabulator renders) is imperative.
   const tooltipManager = createTooltipManager(tabulatorTable, () => applySearchHighlight(searchTerm));
@@ -731,88 +684,9 @@ export function drawTable(
     tooltipManager.onCellLeave();
   });
 
-  // Create record details panel with header
-  const detailsPanel = document.createElement('div');
-  detailsPanel.classList.add('d-record-panel');
-
-  // Panel header with controls
-  const fullscreenIcon = createElement(Maximize2, { width: 16, height: 16 });
-
-  const closeIcon = createElement(X, { width: 16, height: 16 });
-
-  const panelHeader = html`<div class="d-record-panel__header">
-    <span class="d-record-panel__summary">
-      <span class="d-record-panel__count">0</span> record(s) selected
-    </span>
-    <div class="d-record-panel__actions">
-      <button class="d-button d-button--ghost d-button--icon d-record-panel__fullscreen" title="Toggle fullscreen">
-        ${fullscreenIcon}
-      </button>
-      <button class="d-button d-button--ghost d-button--icon d-record-panel__close" title="Close">
-        ${closeIcon}
-      </button>
-    </div>
-  </div>`;
-
-  const detailsContainer = document.createElement('div');
-  detailsContainer.classList.add('d-record-panel__records');
-
-  detailsPanel.appendChild(panelHeader);
-  detailsPanel.appendChild(detailsContainer);
-
-  // Setup button handlers
-  const fullscreenBtn = panelHeader.querySelector('.d-record-panel__fullscreen') as HTMLButtonElement;
-  const closeBtn = panelHeader.querySelector('.d-record-panel__close') as HTMLButtonElement;
-  const selectedCountSpan = panelHeader.querySelector('.d-record-panel__count') as HTMLSpanElement;
-
-  fullscreenBtn.addEventListener('click', () => {
-    panelFullscreen = !panelFullscreen;
-    showSelection();
-  });
-
-  closeBtn.addEventListener('click', () => {
-    // Deselect all rows
-    tabulatorTable.deselectRow();
-  });
-
-  // Shows the panel with the selected records, or hides it; full screen when toggled
-  function showSelection() {
-    const hasSelection = selectedRecords.length > 0;
-
-    // Update selected count
-    selectedCountSpan.textContent = selectedRecords.length.toString();
-
-    // Toggle panel visibility with animation
-    if (hasSelection) {
-      detailsPanel.hidden = false;
-      // Force reflow to enable CSS transition
-      void detailsPanel.offsetHeight;
-      detailsPanel.classList.add('d-record-panel--open');
-      detailsContainer.innerHTML = renderRecordDetails(selectedRecords);
-      applySearchHighlight(searchTerm); // highlight term in record panel
-    } else {
-      detailsPanel.classList.remove('d-record-panel--open');
-      // Wait for animation before hiding
-      setTimeout(() => {
-        if (selectedRecords.length === 0) {
-          detailsPanel.hidden = true;
-        }
-      }, 300);
-    }
-
-    // Toggle fullscreen class
-    if (panelFullscreen) {
-      detailsPanel.classList.add('d-record-panel--fullscreen');
-    } else {
-      detailsPanel.classList.remove('d-record-panel--fullscreen');
-    }
-  }
-  showSelection();
-
   // Assemble container
   container.appendChild(searchInput);
   container.appendChild(tableRoot);
-  container.appendChild(detailsPanel);
 
   return container;
 }

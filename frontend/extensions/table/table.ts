@@ -4,7 +4,8 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
 
 /**
  * The widget type `table`: the result rows (Tabulator) with a search box, filters per column, sticky tooltips that can
- * be pinned, and a details panel for the selected rows. A click on a cell selects its value (by its column's name).
+ * be pinned. The ticked rows are the widget's selected records (Details shows them); each draw starts with none. A
+ * click on a cell selects its value (by its column's name).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter, a column header's (`table/header`) size the columns.
  */
@@ -29,11 +30,15 @@ function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetCont
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result) =>
-      drawTable(result, widget.props, {
+    draw: (result) => {
+      // the table drawn anew has no row ticked
+      ctx.selectRecords([]);
+      return drawTable(result, widget.props, {
         select: (selection) => ctx.select(selection),
+        selectRecords: (records) => ctx.selectRecords(records),
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
-      }),
+      });
+    },
   });
 }
 

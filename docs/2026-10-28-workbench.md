@@ -113,7 +113,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 │▐menu▌ [Shop ×] [Explore: 500 per instance ×]       │▐inspector▌│   tab bar
 │▐Debug▌ filters: [Status = 500 ×] [Only errors] ✎ SQL│▐         ▌│   filter bar (above the content)
 │▐    ▌ content (scrolls)                          │▐         ▌│   left · content · right
-└─ Requests · 1,234 rows · 87 ms · ignores host ──────────────────┘   status bar: the active widget
+└─ Requests · 1,234 rows · 87 ms · ignores host · 2 records selected ┘   status bar: the active widget, its records
 ```
 
 | Region | Holds |
@@ -121,13 +121,13 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
 | Tab bar | above the filter bar: a tab per open page, the active one selected, × to close (§3.4.1) |
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the title bar adds a SQL chip (step 7b, §3.8) |
-| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); later Explore's widget tree |
+| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
-| Status bar | the active widget's title, rows, query time, error, ignored filters (§3.4.4) |
+| Status bar | the active widget's title, rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
   resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
-  moved to the left side, it had no other user); row details will need a place of their own.
+  moved to the left side, it had no other user); a table's selected rows show in the left side panel "Details" (§3.4.5).
 - **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar above the filter bar; each tab shows one
   page with its own URL and query state, the address bar the active tab's (§3.4.1).
 - A **page** is what a tab shows: `page.kind` = `dashboard` | `explore` | `home` (the start page, §3.4.3) | `docs`.
@@ -355,6 +355,30 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   shows *(proposed)*; the page-wide query counts of the sketch (`query-status`) are not built.
 - **The bottom panel is removed** (`BottomPanel`, `registerBottomPanel`, its CSS and stored layout key): Debug was its
   only user.
+
+#### 3.4.5 Selected records and the Details panel (step 7f, decided 2026-10-31)
+
+A table's ticked rows (Tabulator's row selection checkboxes, and the one for all in the header) are the widget's
+**selected records**, part of the context model: the active widget carries them, and whoever shows them follows it. The
+in-table "N record(s) selected" panel (fixed at the bottom, full screen, close) is gone. A click on a cell still selects
+a category for the floating bar (§3.8), unchanged; the two never mix.
+
+- **API (`widgets` host):** `ctx.selectRecords(records)` puts the widget's records (`WidgetRecord`: a row by column
+  name) in place of those before; with records the widget becomes its tab's active widget (the press on the checkbox
+  made it so already; ticking by keyboard does too). `ActiveWidget.records` (in the order ticked *(proposed)*, empty
+  while none); `onDidChangeActive` also fires when the active widget's records change. No `widgets.records` and no
+  event of its own *(proposed)*: one value, one event, as for the status.
+- **The table:** `drawTable(…, { selectRecords })` draws the checkbox column only with it (so Debug's result table has
+  none *(proposed)*), its `rowSelectionChanged` calls it. Each draw starts with no row ticked, so the table's renderer
+  clears the records before each draw: a new answer, and also another width or color scheme, drops them *(proposed)*.
+- **Details is a left side panel** (rail button "Details", a list-checks icon, after "Debug"): the active widget's
+  title, then a view (§3.4.2) per record ("Record 1", …), its fields one below the other as `renderRecordDetails` had
+  them (a JSON value pretty-printed, a value of several lines as it is, others as text; built with `htl`, so escaped);
+  the views' collapsed state in the extension's `workspaceState` under the record's place *(proposed)*. Drawn only while
+  shown, anew when the active widget or its records change (not on its status). Without records: "Tick rows of a table
+  to see them here." The table's search term is no longer highlighted in the details *(proposed)*.
+- **Status bar:** a second item, of the `details` extension: "2 records selected", hidden while none; a click opens
+  Details *(proposed)*.
 
 ### 3.5 Extensions and UI code
 
@@ -1249,7 +1273,8 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7c ✅ | **views in a panel** (§3.4.2): `createView` (`hosts/ui/views/view.ts`: header button, ArrowLeft / ArrowRight, collapsed state in the owner's memento); the Dashboards panel as views ("Favorites", one per menu group; headings, rules and the guide line gone); favorites moved by a grip (pointer events) and Alt+ArrowUp / Alt+ArrowDown, the order stored in `favorites`; `e2e/dashboards-views.spec.ts`. ✅ 2026-10-31 (vitest green; Playwright written, not run), deviations: a pure helper instead of `panel.registerView` (no `setTitle` / `dispose`: the owner draws the view anew); a view's description shows only while it is closed; headers stick to the panel's top | collapsible groups, favorites in the viewer's order |
 | 7d ✅ | **the start page "/"** (§3.4.3): Go `dashboard.CollectHome` (`/` and `/page.json`, kind `home`), the redirect to `/home` removed; the renderer `home` in `dashboards` (`home-page.ts`: favorites as tiles with their group, a hint while there are none, the groups with their dashboards), redrawn when the favorites change; outer repo: `/home`, its group "Dashica" and `src/root_page.go` removed; `e2e/start-page.spec.ts`. ✅ 2026-10-31 (vitest, Go tests green; Playwright written, not run), deviations: the start page is drawn by the client from `/workbench.json`, its `page.json` carries no menu *(proposed)*; tiles and links only, no star or menu on the start page *(proposed)* | "/" shows the favorites and all dashboards |
 | 7e ✅ | **the active widget** (§3.4.4): `widgets.active` / `onDidChangeActive` (`WidgetStatus` from `ctx.query()`), per tab, outlined; Debug as a left side panel of views following it, asking `/debug` only while shown; the status bar's item (title, rows, time, error, ignored filters), a click opens Debug; the bottom panel removed; `e2e/active-widget.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the innermost widget with data becomes active; no `setActive` (the menu button's press activates); the query time is measured in the browser; the status bar always shows ("No active chart"); Debug's Stats view also holds the ClickHouse summary (the old "Clickhouse Summary (Legacy)" section) *(all proposed)* | the active chart in Debug and the status bar |
-| 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, row details | |
+| 7f ✅ | **selected records** (§3.4.5): `ctx.selectRecords`, `ActiveWidget.records` (`WidgetRecord`), told by `onDidChangeActive`; the table's ticked rows, its checkbox column only with `selectRecords`, cleared on each draw; the in-table details panel (full screen, close) and its CSS removed; the `details` extension: the left side panel "Details" (a view per record, `renderRecordDetails`' formatting as `drawRecord`), the status bar's "N records selected"; `widgetTitle` moved from Debug into the `widgets` host; `e2e/record-details.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: records in the order ticked; a redraw (also another width) drops them; Debug's result table has no checkboxes; collapsed state per record place in `workspaceState`; the search highlight leaves the details *(all proposed)* | a table's ticked rows in Details and the status bar |
+| 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |
 |---|---|

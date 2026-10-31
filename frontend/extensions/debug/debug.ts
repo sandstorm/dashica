@@ -3,7 +3,7 @@ import { instance as viz } from '@viz-js/viz';
 import { Bug, createElement } from 'lucide';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import type { ActiveWidget } from '../../hosts/widgets/widgets';
+import { widgetTitle, type ActiveWidget } from '../../hosts/widgets/widgets';
 import { createView, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
 import './debug.css';
@@ -153,11 +153,6 @@ export function statusParts(active: ActiveWidget | undefined): readonly StatusPa
       return parts;
     }
   }
-}
-
-/** A widget's title, else its type. */
-function widgetTitle(widget: WidgetNode): string {
-  return 'title' in widget.props && widget.props.title ? widget.props.title : widget.type;
 }
 
 /** The first line of `message`, at most 80 characters. */

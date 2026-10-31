@@ -1,5 +1,4 @@
-/* See table.ts: the search above the grid (Tabulator, its own CSS), the panel of the selected records sliding up from the
-   bottom, the sticky tooltips of the cells. */
+/* See table.ts: the search above the grid (Tabulator, its own CSS), the sticky tooltips of the cells. */
 
 /* the search term, wherever it shows (CSS Custom Highlight API, see applySearchHighlight) */
 ::highlight(tableSearch) {
@@ -40,83 +39,6 @@
 /* a cell a click selects the value of */
 .d-table .tabulator-cell.d-table__selectable {
     cursor: pointer;
-}
-
-/* The selected records: fixed at the bottom, beside the left side (its usual width), full height when toggled */
-.d-record-panel {
-    position: fixed;
-    bottom: 0;
-    left: 250px;
-    right: 0;
-    z-index: var(--z-panel);
-    max-height: 40vh;
-    overflow-y: auto;
-    border-top: var(--border-width) solid var(--color-border);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-popover);
-    transform: translateY(100%);
-    transition: transform var(--duration-slow) ease-in-out, max-height var(--duration-slow) ease-in-out;
-}
-
-.d-record-panel--open {
-    transform: translateY(0);
-}
-
-.d-record-panel--fullscreen {
-    top: 60px;
-    max-height: calc(100vh - 60px);
-}
-
-.d-record-panel__header {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-2);
-    border-bottom: var(--border-width) solid var(--color-border);
-    background: var(--color-surface-subtle);
-}
-
-.d-record-panel__summary {
-    font-size: var(--text-sm);
-    font-weight: var(--weight-bold);
-}
-
-.d-record-panel__actions {
-    display: flex;
-    gap: var(--space-1);
-}
-
-.d-record-panel__records {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
-    padding: var(--space-4);
-}
-
-.d-record-panel__record {
-    flex: 0 0 30%;
-    max-width: 30%;
-    padding: var(--space-2);
-    overflow: auto;
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface-raised);
-}
-
-.d-record-panel__field {
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-}
-
-.d-record-panel__key {
-    font-weight: var(--weight-bold);
-}
-
-.d-record-panel__value {
-    word-break: break-all;
 }
 
 /* Sticky, copyable, draggable cell tooltip; resizable by its bottom right corner while pinned */
