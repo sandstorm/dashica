@@ -22,7 +22,7 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
   const ui = new UiHost(host, session, commands);
   const page = new PageHost(doc.defaultView!, options.workbench, ui.content, session);
   const query = activeQuery(page);
-  const widgets = new WidgetsHost(ui);
+  const widgets = new WidgetsHost(ui, page);
   const extensions = new ExtensionHost({ commands, ui, page, query, widgets, ownerDocument: doc });
   extensions.activate(options.extensions);
   const tabs = showTabs(page, widgets, ui.tabBar, commands);
@@ -31,6 +31,7 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
     page.dispose();
     extensions.dispose();
     tabs.dispose();
+    widgets.dispose();
     query.dispose();
     ui.dispose();
     commands.dispose();

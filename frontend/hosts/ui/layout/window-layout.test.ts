@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for window-layout.ts (WindowLayout), its two sides (side-bar.ts) and its bottom panel (bottom-panel.ts).
+// Tests for window-layout.ts (WindowLayout) and its two sides (side-bar.ts).
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandsHost } from '../../commands/commands';
@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('WindowLayout', () => {
-  it('puts the title bar, the left side, the tab bar, filter bar, content and bottom panel between the sides, the right side and the status bar into the host', () => {
+  it('puts the title bar, the left side, the tab bar, filter bar and content between the sides, the right side and the status bar into the host', () => {
     const { host, layout } = setup();
     expect([...host.children].map((c) => c.className)).toEqual([
       'd-workbench__title-bar',
@@ -64,7 +64,7 @@ describe('WindowLayout', () => {
       'd-workbench__side d-workbench__side--right',
       'd-workbench__status-bar',
     ]);
-    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__tab-bar', 'd-workbench__filter-bar', 'd-workbench__content', 'd-workbench__bottom']);
+    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__tab-bar', 'd-workbench__filter-bar', 'd-workbench__content']);
     expect(layout.content.className).toBe('d-workbench__content');
   });
 

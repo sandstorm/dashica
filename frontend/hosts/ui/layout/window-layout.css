@@ -1,5 +1,5 @@
 /* The workbench's regions (see WindowLayout in window-layout.ts): the title and filter bars, the two sides (rail,
-   resizable panel; the left one an overlay when narrow), between them the tab bar, the filter bar, the content and the bottom panel,
+   resizable panel; the left one an overlay when narrow), between them the tab bar, the filter bar and the content,
    the status bar. All values are tokens (core/style/tokens.css), so light and dark apply. */
 .d-workbench {
   position: relative;
@@ -160,7 +160,7 @@
 .d-workbench__tab-title:focus-visible,
 .d-workbench__tab-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
-/* The centre column: the tab bar, the filter bar, the content, the bottom panel. */
+/* The centre column: the tab bar, the filter bar, the content. */
 .d-workbench__center {
   grid-column: 2;
   grid-row: 2;
@@ -175,57 +175,6 @@
 .d-workbench__tab-page[hidden] { display: none; }
 /* the page a renderer fills: at least as tall as the tab, taller when its content is (the tab then scrolls) */
 .d-workbench__page { flex: 1 0 auto; display: flex; flex-direction: column; }
-.d-workbench__bottom {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  max-height: 80%;
-  border-top: var(--border-width) solid var(--color-border);
-  background: var(--color-surface);
-}
-.d-workbench__bottom[hidden],
-.d-workbench__bottom-body[hidden],
-.d-workbench__bottom-tab[hidden] { display: none; }
-.d-workbench__bottom-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border-bottom: var(--border-width) solid var(--color-border);
-  background: var(--color-surface-subtle);
-}
-.d-workbench__bottom-tabs { display: flex; gap: var(--space-1); flex: 1; }
-.d-workbench__bottom-tab,
-.d-workbench__bottom-close {
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: var(--space-1) var(--space-2);
-  background: none;
-  color: var(--color-text);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-.d-workbench__bottom-tab[aria-selected='true'] { background: var(--color-surface); border-color: var(--color-border); }
-.d-workbench__bottom-tab:hover,
-.d-workbench__bottom-close:hover { background: var(--color-hover); }
-.d-workbench__bottom-body { flex: 1; min-height: 0; overflow: auto; }
-/* the separator on the top edge */
-.d-workbench__bottom-resizer {
-  position: absolute;
-  top: -3px;
-  left: 0;
-  right: 0;
-  height: 6px;
-  z-index: 5;
-  cursor: row-resize;
-}
-.d-workbench__bottom-resizer:hover,
-.d-workbench__bottom-resizer:focus-visible,
-.d-workbench--resizing-rows .d-workbench__bottom-resizer { background: var(--color-accent); outline: none; }
-.d-workbench--resizing-rows { cursor: row-resize; user-select: none; }
-
 /* Below everything: the status bar. */
 .d-workbench__status-bar {
   grid-column: 1 / -1;

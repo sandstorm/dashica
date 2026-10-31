@@ -111,10 +111,9 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 ```
 ┌─ Dashica › Shop ────── [⌘K search] ── [Last 1h ▾][⟳ 30s][log] ┐   title bar
 │▐menu▌ [Shop ×] [Explore: 500 per instance ×]       │▐inspector▌│   tab bar
-│▐    ▌ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐         ▌│   filter bar (above the content)
+│▐Debug▌ filters: [Status = 500 ×] [Only errors] ✎ SQL│▐         ▌│   filter bar (above the content)
 │▐    ▌ content (scrolls)                          │▐         ▌│   left · content · right
-│▐    ▌ bottom panel: Debug │ Details              │▐         ▌│   bottom panel (below the content)
-└─ status: 12 queries · 2 loading · 1 failed · 340 ms ──────────┘   status bar
+└─ Requests · 1,234 rows · 87 ms · ignores host ──────────────────┘   status bar: the active widget
 ```
 
 | Region | Holds |
@@ -122,13 +121,13 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
 | Tab bar | above the filter bar: a tab per open page, the active one selected, × to close (§3.4.1) |
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the title bar adds a SQL chip (step 7b, §3.8) |
-| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); later Explore's widget tree |
+| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
-| Bottom panel | Debug (query, EXPLAIN); later row details |
-| Status bar | query count, loading, failures, timings |
+| Status bar | the active widget's title, rows, query time, error, ignored filters (§3.4.4) |
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
-  resizable, state remembered, left panel overlays on narrow screens) plus a bottom panel.
+  resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
+  moved to the left side, it had no other user); row details will need a place of their own.
 - **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar above the filter bar; each tab shows one
   page with its own URL and query state, the address bar the active tab's (§3.4.1).
 - A **page** is what a tab shows: `page.kind` = `dashboard` | `explore` | `home` (the start page, §3.4.3) | `docs`.
@@ -162,7 +161,8 @@ functions on it (`frontend/hosts/page/tabs.ts`), tested without DOM *(proposed)*
 | query state (`QueryHost`) | | ✓, from the tab's URL |
 | `page.json`, the rendered page | | ✓ |
 | the selection (`widgets.selection`) | ✓; switching tabs clears it *(proposed)* | |
-| side and bottom panels (Dashboards, Debug) | ✓; they keep what they were asked to show *(proposed)* | |
+| side panels (Dashboards, Debug) | ✓; Debug follows the active tab's active widget (§3.4.4) | |
+| the active widget (`widgets.active`) | | ✓, the widget pressed or focused in last (§3.4.4) |
 
 - **`QueryHost` per tab, without `location`.** It takes its state from a given query string
   (`load({ search, defaultTime })`) and reports each change instead of writing the address bar:
@@ -289,7 +289,7 @@ A panel's body can hold several **views** one below the other, each a header (ch
 description such as its count, then optional action buttons) above a body the header closes and opens. Views scroll
 with the panel; a header stays at the top while its body scrolls past (`position: sticky`); no sashes between views
 *(proposed)*. First users: the Dashboards panel ("Favorites", then a view per menu group, replacing the group headings,
-the rule between groups and the guide line); later Debug's sections.
+the rule between groups and the guide line); Debug's sections (step 7e, §3.4.4).
 
 - **API: a pure helper, no registry** *(proposed)*: `createView({ id, title, description?, actions?, collapsed?,
   state, body })` (exported from `hosts/ui/ui.ts`, in `hosts/ui/views/view.ts`) returns the view's element; its owner
@@ -325,6 +325,37 @@ no favorites a hint to star one. The brand "Dashica" links to it; its tab is tit
   opened by the page host like any other (Cmd / Ctrl+click: the browser's new tab); no star, menu or drag on the start
   page itself *(proposed)*.
 
+#### 3.4.4 The active widget, Debug and the status bar (step 7e, decided 2026-10-31)
+
+As the active editor: the **active widget** is the widget with data the viewer pressed (`pointerdown`) or focused in
+(`focusin`) last, anywhere in its element: its title, a mark (whose click still selects, §3.8), its menu button, a table
+cell. A quiet accent outline marks it (`d-widget--active`). Each tab has its own; switching tabs shows that tab's.
+Escape keeps it; removing the widget (its page rendered anew, its tab closed) ends it.
+
+- **API (`widgets` host):** `widgets.active: ActiveWidget | undefined` (`{widget, url(path), lastResult, status}`, a
+  value taken anew on each read) and `widgets.onDidChangeActive` (another widget or tab, the widget removed, its query
+  started, answered or failed). `WidgetStatus` = `idle` | `loading` | `done {rows, ms, diagnostics}` | `error {message,
+  ms}`, set by `ctx.query()` itself, so every widget with data has one; `ms` is the time until the answer in the
+  browser *(proposed)*; an aborted query puts the status back to what it was *(proposed)*. The host keeps each tab's
+  active widget under the tab's query state (the `QueryApi` its widgets render with) and is told the active tab by the
+  `page` host (`ActiveQuerySource`, as `activeQuery`); no other registry.
+- **Innermost widget with data** *(proposed)*: a press inside a chart inside a grid makes the chart active (the closest
+  element with `data-data-url`); containers, markdown and form inputs never become active.
+- **Debug is a left side panel** (rail button "Debug", a bug icon, after "Dashboards"; one left panel shows at a
+  time): the active widget's title, then views (§3.4.2): Query (the SQL as sent), Stats (ClickHouse's stats and the
+  summary of the chart's answer, closed), EXPLAIN plan, Pipeline (graph and steps, closed), Syntax (closed), Result (the
+  last result as a table); their collapsed state in the extension's `globalState` *(proposed)*. It asks
+  `<dataUrl>/debug` only while it is shown: when shown, when another widget becomes active, and when the active
+  widget's query answered or failed (a query state change queries the chart again); while that query runs it keeps
+  what it shows. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
+  panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
+- **Status bar:** one item of the `debug` extension, always there: the active widget's title, then "1,234 rows · 87
+  ms", "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red; the whole
+  message in the tooltip); "No active chart" without one. A click opens Debug *(proposed)*. The status bar so always
+  shows *(proposed)*; the page-wide query counts of the sketch (`query-status`) are not built.
+- **The bottom panel is removed** (`BottomPanel`, `registerBottomPanel`, its CSS and stored layout key): Debug was its
+  only user.
+
 ### 3.5 Extensions and UI code
 
 As in Zwiebelfisch: an extension is `{ id, contributes, activate(context) }`; it registers into the hosts' contribution
@@ -340,8 +371,8 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `ui` | side / bottom panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
-| `widgets` | `registerWidget` (§3.6) |
+| `ui` | side panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
+| `widgets` | `registerWidget` (§3.6), the selection (§3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -807,8 +838,8 @@ Pure UI behaviour (palette, keys, panels) stays TS.
 
 ### 3.10 Errors and tests
 
-- **Errors where they happen:** a query error shows in its chart (short message; "details" opens Debug) and is
-  counted in the status bar; an action or navigation error is a notification; an unknown page shows "not found" in
+- **Errors where they happen:** a query error shows in its chart (short message) and, while the chart is active, in
+  the status bar, whose click opens Debug; an action or navigation error is a notification; an unknown page shows "not found" in
   the content area. Nothing modal.
 - **Tests:** vitest (jsdom) for core, hosts and extensions through their public interface; Go golden JSON for the
   contract (§3.3); Go tests for `QueryState` parsing and the default filter helper (a fixed column list, no ClickHouse); Playwright specs for flows (written
@@ -908,8 +939,8 @@ interface QueryApi {
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
   registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
-  readonly statuses: ReadonlyMap<string, WidgetStatus>;   // for the status bar
-  readonly onDidChangeStatus: Event<void>;
+  readonly active: ActiveWidget | undefined;              // the active tab's active widget: Debug, the status bar (§3.4.4)
+  readonly onDidChangeActive: Event<void>;
 }
 ```
 
@@ -943,10 +974,9 @@ Built-in extensions:
 | (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |
-| `query-status` | status bar: queries, loading, failed, timings |
-| `debug` | bottom panel "Debug" (query, EXPLAIN); `widget/context` "Debug" |
+| `debug` | left panel "Debug" (the active widget's query, stats, EXPLAIN, result, as views); the status bar's item (the active widget's status); `widget/context` "Debug" (§3.4.4) |
 | `chart-link` | `widget/context` "Copy link to chart" (`/p/shop#w=3`) |
-| `row-details` | `table/row` "Details" and `widget/selection` "Show rows" → bottom panel |
+| `row-details` | `table/row` "Details" and `widget/selection` "Show rows" → a panel (its place open since the bottom panel is gone) |
 | `page-actions` | Go actions from `page.json` → commands + menu items |
 | one per widget type: `time-bar`, `time-line`, `bar-vertical`, `bar-horizontal`, `heatmap`, `stats`, `table`, `markdown`, `checkbox-group`, `text-input`, `grid`, `collapsible`, `alerts`, … | `registerWidget` for its type, its CSS, its own menu items |
 
@@ -1218,7 +1248,8 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7b ✅ | **SQL filter as a chip** (decided 2026-10-31, §3.8 "The SQL filter is a chip"): one list of chips (`FilterChip`, `FiltersModel.chips` / `replace`, `sql` / `setSql` / `fields` gone); one `?sql=` per SQL chip, chip order kept across `f` and `sql`, a single old `?sql=` one chip; the funnel adds a SQL chip, every chip edited and removed alike; a filter button a toggle, its chip labelled by its title (`buttonOf`); Go `QueryState.Sql []string`, `SqlClause` ANDs each in parentheses. Files: `lib/httpserver/query_state.go`, `time_range.go` (+ tests), `frontend/hosts/query/{query,query-impl,active-query}.ts` (+ tests), `frontend/extensions/filters/*`, `e2e/filter-chips.spec.ts`; no generated file changes. ✅ 2026-10-31 (vitest and Go tests without ClickHouse green; Playwright written, not run), deviations: `FilterChip = FieldFilter \| SqlFilter` (`FieldFilter` has `kind: 'field'`, `SqlFilter` `{kind: 'sql', sql}`); a SQL chip of only spaces is no chip in the URL, in `add` / `replace` and in Go (`TrimSpace`), not only an empty one; the `=` / `≠` of a structured chip flips its op at once (`replace`), in edit mode it flips the edit's op; the funnel is titled "Add a SQL filter" (its label "Filters" kept); filter buttons show only on a page with `filterBar`, as before; a chip of a `...` button is labelled `Title: value` (several `...` joined with `, `), one of a plain button its title alone; pressing a pressed button removes its chips one by one (one refresh each); tests also in `table`, `widgets`, `dashboard-page`, `bar-vertical`. **Open:** a chip can match two buttons (`/p_wetell/app`: "Host = app.wetell.de" and "Host" with `'...'`): both show pressed, the chip is labelled by the first in page order, either releases it | one filter bar of chips; old links open as before |
 | 7c ✅ | **views in a panel** (§3.4.2): `createView` (`hosts/ui/views/view.ts`: header button, ArrowLeft / ArrowRight, collapsed state in the owner's memento); the Dashboards panel as views ("Favorites", one per menu group; headings, rules and the guide line gone); favorites moved by a grip (pointer events) and Alt+ArrowUp / Alt+ArrowDown, the order stored in `favorites`; `e2e/dashboards-views.spec.ts`. ✅ 2026-10-31 (vitest green; Playwright written, not run), deviations: a pure helper instead of `panel.registerView` (no `setTitle` / `dispose`: the owner draws the view anew); a view's description shows only while it is closed; headers stick to the panel's top | collapsible groups, favorites in the viewer's order |
 | 7d ✅ | **the start page "/"** (§3.4.3): Go `dashboard.CollectHome` (`/` and `/page.json`, kind `home`), the redirect to `/home` removed; the renderer `home` in `dashboards` (`home-page.ts`: favorites as tiles with their group, a hint while there are none, the groups with their dashboards), redrawn when the favorites change; outer repo: `/home`, its group "Dashica" and `src/root_page.go` removed; `e2e/start-page.spec.ts`. ✅ 2026-10-31 (vitest, Go tests green; Playwright written, not run), deviations: the start page is drawn by the client from `/workbench.json`, its `page.json` carries no menu *(proposed)*; tiles and links only, no star or menu on the start page *(proposed)* | "/" shows the favorites and all dashboards |
-| 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
+| 7e ✅ | **the active widget** (§3.4.4): `widgets.active` / `onDidChangeActive` (`WidgetStatus` from `ctx.query()`), per tab, outlined; Debug as a left side panel of views following it, asking `/debug` only while shown; the status bar's item (title, rows, time, error, ignored filters), a click opens Debug; the bottom panel removed; `e2e/active-widget.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the innermost widget with data becomes active; no `setActive` (the menu button's press activates); the query time is measured in the browser; the status bar always shows ("No active chart"); Debug's Stats view also holds the ClickHouse summary (the old "Clickhouse Summary (Legacy)" section) *(all proposed)* | the active chart in Debug and the status bar |
+| 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, row details | |
 
 | Risk | Mitigation |
 |---|---|

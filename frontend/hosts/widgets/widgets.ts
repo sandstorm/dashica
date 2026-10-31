@@ -1,5 +1,6 @@
 import type { Table } from 'apache-arrow';
 import type { Disposable } from '../../core/disposable/disposable';
+import type { Event } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { FilterOp, QueryApi } from '../query/query';
 import type { MenuAnchor } from '../ui/ui';
@@ -9,7 +10,8 @@ import type { MenuAnchor } from '../ui/ui';
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
  * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu and the workbench's
  * one selection (`select`, or `choose` among candidates). Charts put themselves into one `ChartFrame` (title, spinner, error, menu
- * button).
+ * button). Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button,
+ * a mark, a table cell), outlined; `active` is the active tab's, as Debug and the status bar show it.
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -29,7 +31,26 @@ export interface WidgetsApi {
   select(selection: Selection): void;
   /** Ends the selection; its floating bar goes away. */
   clearSelection(): void;
+  /**
+   * The active tab's active widget and how its last query went; `undefined` while the viewer has not pressed or
+   * focused in a widget with data of that tab, or after it was removed.
+   */
+  readonly active: ActiveWidget | undefined;
+  /** Fires when `active` changes: another widget or tab, the widget removed, its query started, answered or failed. */
+  readonly onDidChangeActive: Event<void>;
 }
+
+/** The active widget as it is now (`WidgetsApi.active`): what its menu is shown for, and its query's status. */
+export interface ActiveWidget extends WidgetMenuContext {
+  readonly status: WidgetStatus;
+}
+
+/** How a widget's last query went: not asked yet, running, answered (rows, the time until the answer), failed. */
+export type WidgetStatus =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'done'; readonly rows: number; readonly ms: number; readonly diagnostics: Diagnostics }
+  | { readonly kind: 'error'; readonly message: string; readonly ms: number };
 
 /**
  * What the viewer selected on a chart (`WidgetContext.select`). The floating bar `widget/selection` shows next to it,

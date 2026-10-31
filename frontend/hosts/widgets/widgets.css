@@ -7,3 +7,10 @@
     color: var(--color-danger);
     white-space: pre-wrap;
 }
+
+/* each tab's active widget (pressed or focused in last): a quiet accent outline around it */
+.d-widget--active {
+    border-radius: var(--radius-md);
+    outline: var(--border-width) solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+    outline-offset: var(--space-1);
+}

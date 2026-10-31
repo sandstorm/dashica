@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu, filters), the
-// selection, the chart frame.
+// selection, the active widget, the chart frame.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../query/query';
-import { ChartFrame, type Selection, type WidgetContext, type WidgetMenuContext } from './widgets';
+import { ChartFrame, WidgetsHost, type Selection, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -227,6 +228,104 @@ describe('WidgetsHost', () => {
       target.addEventListener('click', () => contexts[0].select({ kind: 'category', fieldId: 'status', value: '500', anchor: target }));
       target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       expect(testbed.widgets.selection?.value).toBe('500');
+    });
+  });
+
+  describe('the active widget', () => {
+    const errors: WidgetNode = { ...requests, props: { ...requests.props, title: 'Errors' }, dataUrl: '/p/shop/api/2' } as WidgetNode;
+    let contexts: WidgetContext[];
+    let changes: number;
+
+    beforeEach(() => {
+      contexts = [];
+      changes = 0;
+      testbed.widgets.registerWidget('timeBar', (el, _widget, ctx) => {
+        contexts.push(ctx);
+        el.append(document.createElement('button'));
+        return new Disposable(() => {});
+      });
+      testbed.widgets.onDidChangeActive(() => changes++);
+    });
+
+    const press = (el: Element) => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+
+    it('is the widget with data pressed or focused in last, outlined; Escape keeps it, removing it ends it', () => {
+      const first = testbed.render(requests);
+      const second = testbed.render(errors);
+      expect(testbed.widgets.active).toBeUndefined();
+      press(first.el.querySelector('button')!);
+      expect(testbed.widgets.active?.widget).toBe(requests);
+      expect(first.el.classList.contains('d-widget--active')).toBe(true);
+      second.el.querySelector('button')!.focus();
+      expect(testbed.widgets.active?.widget).toBe(errors);
+      expect(first.el.classList.contains('d-widget--active')).toBe(false);
+      expect(second.el.classList.contains('d-widget--active')).toBe(true);
+      expect(changes).toBe(2);
+      press(second.el);
+      expect(changes).toBe(2);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(testbed.widgets.active?.widget).toBe(errors);
+      second.rendered.dispose();
+      expect(testbed.widgets.active).toBeUndefined();
+      expect(changes).toBe(3);
+    });
+
+    it('is the innermost widget with data: a press on a chart in a grid makes the chart active', () => {
+      testbed.widgets.registerWidget('grid', (el, widget, ctx) =>
+        Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child))),
+      );
+      const { el } = testbed.render({ type: 'grid', props: {}, children: { a: requests } });
+      press(el.querySelector('button')!);
+      expect(testbed.widgets.active?.widget).toBe(requests);
+      press(el);
+      expect(testbed.widgets.active?.widget).toBe(requests);
+    });
+
+    it('tells how its query goes: rows and time, an error, its diagnostics', async () => {
+      testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host"]}' });
+      const { el } = testbed.render(requests);
+      press(el);
+      expect(testbed.widgets.active?.status).toEqual({ kind: 'idle' });
+      const answered = contexts[0].query();
+      expect(testbed.widgets.active?.status).toEqual({ kind: 'loading' });
+      await answered;
+      const status = testbed.widgets.active?.status;
+      expect(status).toMatchObject({ kind: 'done', rows: 3, diagnostics: { ignored: ['host'] } });
+      expect(testbed.widgets.active?.lastResult?.numRows).toBe(3);
+      expect(testbed.widgets.active?.url('/debug')).toBe('/p/shop/api/1/debug?time=24h');
+      testbed.serveText('/p/shop/api/1/query', 'Code: 60. Table default.http_logs does not exist', 500);
+      await expect(contexts[0].query()).rejects.toThrow();
+      expect(testbed.widgets.active?.status).toMatchObject({ kind: 'error', message: 'Code: 60. Table default.http_logs does not exist' });
+      expect(changes).toBe(5);
+    });
+
+    it('is kept per tab: switching tabs shows that tab’s active widget', () => {
+      const tabs = new EventEmitter<void>();
+      const source = { activeQuery: new QueryHost(window), onDidChangeTabs: tabs.event };
+      const other = new QueryHost(window);
+      const ui = { showContextMenu() {}, showChoices() {}, registerFloatingBar: () => ({ show() {}, hide() {}, dispose() {} }) };
+      const widgets = new WidgetsHost(ui, source);
+      widgets.registerWidget('timeBar', () => new Disposable(() => {}));
+      let told = 0;
+      widgets.onDidChangeActive(() => told++);
+      const inFirst = document.body.appendChild(document.createElement('div'));
+      const inOther = document.body.appendChild(document.createElement('div'));
+      const first = source.activeQuery;
+      widgets.render(inFirst, requests, first);
+      widgets.render(inOther, errors, other);
+      press(inFirst);
+      press(inOther);
+      expect(widgets.active?.widget).toBe(requests);
+      expect(told).toBe(1);
+      source.activeQuery = other;
+      tabs.fire();
+      expect(widgets.active?.widget).toBe(errors);
+      expect(told).toBe(2);
+      tabs.fire();
+      expect(told).toBe(2);
+      widgets.dispose();
+      first.dispose();
+      other.dispose();
     });
   });
 });

@@ -8,7 +8,7 @@ import { ContextMenu } from './menus/context-menu';
 import { FloatingBars } from './menus/floating-bar';
 import { Menus } from './menus/menus';
 import { QuickInput } from './quick-input/quick-input';
-import type { BarPlacement, BottomPanelOptions, Choice, ContextMenuOptions, FloatingBar, FloatingBarOptions, Panel, QuickPick, QuickPickItem, SearchProvider, SidePanelOptions, UiApi } from './ui';
+import type { BarPlacement, Choice, ContextMenuOptions, FloatingBar, FloatingBarOptions, Panel, QuickPick, QuickPickItem, SearchProvider, SidePanelOptions, UiApi } from './ui';
 import './layout/window-layout.css';
 import './menus/context-menu.css';
 import './menus/floating-bar.css';
@@ -45,10 +45,6 @@ export class UiHost implements UiApi {
 
   registerSidePanel(id: string, options: SidePanelOptions): Panel {
     return this.#layout.addSidePanel(id, options);
-  }
-
-  registerBottomPanel(id: string, options: BottomPanelOptions): Panel {
-    return this.#layout.addBottomPanel(id, options);
   }
 
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable {

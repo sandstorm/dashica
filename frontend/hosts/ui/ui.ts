@@ -4,16 +4,14 @@ import type { Event } from '../../core/event-emitter/event-emitter';
 import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
- * The workbench's regions as extensions fill them (side panels left and right, panels below the content, items in
- * the title bar, the filter bar and the status bar), its menus, and what search everywhere finds. Each panel has a command `workbench.view.<id>`: it shows and
+ * The workbench's regions as extensions fill them (side panels left and right, items in the title bar, the filter
+ * bar and the status bar), its menus, and what search everywhere finds. Each panel has a command `workbench.view.<id>`: it shows and
  * focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are remembered for
  * the browser session.
  */
 export interface UiApi {
   /** Adds a side panel with its rail button on `options.side`; one panel per side shows at a time. Ids are unique across all panels. */
   registerSidePanel(id: string, options: SidePanelOptions): Panel;
-  /** Adds a panel below the content with its tab; one shows at a time. */
-  registerBottomPanel(id: string, options: BottomPanelOptions): Panel;
   /** Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item. */
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
   /**
@@ -203,13 +201,6 @@ export interface SidePanelOptions {
   /** The rail's group: `'top'` (the default) or `'bottom'`, at the rail's far end. */
   alignment?: 'top' | 'bottom';
   /** The place among the buttons of its side and group (lower first; equal: registration order); default 0. */
-  order?: number;
-}
-
-export interface BottomPanelOptions {
-  /** The tab's text. */
-  label: string;
-  /** The place among the tabs (lower first; equal: registration order); default 0. */
   order?: number;
 }
 

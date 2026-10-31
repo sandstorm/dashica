@@ -1,6 +1,7 @@
 // See WidgetsApi in widgets.ts.
 import { Table, tableFromArrays, tableToIPC } from 'apache-arrow';
 import { vi } from 'vitest';
+import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica';
 import { CommandsHost } from '../commands/commands';
@@ -29,7 +30,7 @@ export function widgetTestbed() {
     showContextMenu: (menuId, options) => menus.push({ menuId, options }),
     showChoices: (entries, options) => ui.showChoices(entries, options),
     registerFloatingBar: (options) => ui.registerFloatingBar(options),
-  });
+  }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -115,6 +116,7 @@ export function widgetTestbed() {
       for (const callback of resizes) callback([{ contentRect: { width } }]);
     },
     dispose() {
+      widgets.dispose();
       query.dispose();
       ui.dispose();
       commands.dispose();

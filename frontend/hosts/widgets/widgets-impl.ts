@@ -1,28 +1,85 @@
 // See WidgetsApi in widgets.ts.
 import * as Arrow from 'apache-arrow';
 import { Disposable } from '../../core/disposable/disposable';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
-import type { FilterOp, QueryApi } from '../query/query';
+import type { ActiveQuerySource, FilterOp, QueryApi } from '../query/query';
 import type { FloatingBar, MenuAnchor, UiApi } from '../ui/ui';
-import type { QueryResult, Selection, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi } from './widgets';
+import type { ActiveWidget, QueryResult, Selection, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
  * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). It shows the floating bar
- * `widget/selection` for the selection, and listens for Escape and clicks while there is one.
+ * `widget/selection` for the selection, and listens for Escape and clicks while there is one. The active widget of
+ * each tab is kept under the tab's query state; `tabs` tells which tab is active.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
   readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
   readonly #selectionBar: FloatingBar<Selection>;
   #selection: { selection: Selection; owner: RenderedWidget | undefined; listening: Disposable } | undefined;
+  /** Each tab's active widget, by the tab's query state. */
+  readonly #active = new Map<QueryApi, RenderedWidget>();
+  /** The active widget as told last through `onDidChangeActive`. */
+  #told: RenderedWidget | undefined;
+  readonly #onDidChangeActive = new EventEmitter<void>();
+  readonly onDidChangeActive = this.#onDidChangeActive.event;
+  readonly #onDidChangeTabs: Disposable;
 
-  constructor(private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices' | 'registerFloatingBar'>) {
+  constructor(
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices' | 'registerFloatingBar'>,
+    private readonly tabs: ActiveQuerySource,
+  ) {
     this.#selectionBar = ui.registerFloatingBar<Selection>({
       id: 'widget/selection',
       title: 'Selection',
       anchor: ({ anchor }) => (anchor.isConnected ? anchor.getBoundingClientRect() : null),
     });
+    this.#onDidChangeTabs = tabs.onDidChangeTabs(() => this.#tell());
+  }
+
+  get active(): ActiveWidget | undefined {
+    const widget = this.#active.get(this.tabs.activeQuery);
+    if (!widget) return undefined;
+    return { widget: widget.widget, url: (path) => widget.url(path), lastResult: widget.lastResult, status: widget.status };
+  }
+
+  /** Makes `widget` its tab's active widget, outlining its element `el` in place of the one before. */
+  activate(widget: RenderedWidget, el: HTMLElement): void {
+    const before = this.#active.get(widget.state);
+    if (before === widget) return;
+    before?.el?.classList.remove(ACTIVE);
+    widget.el = el;
+    el.classList.add(ACTIVE);
+    this.#active.set(widget.state, widget);
+    this.#tell();
+  }
+
+  /** `widget` is removed: its tab has no active widget if it was that one. */
+  deactivate(widget: RenderedWidget): void {
+    if (this.#active.get(widget.state) !== widget) return;
+    widget.el?.classList.remove(ACTIVE);
+    this.#active.delete(widget.state);
+    this.#tell();
+  }
+
+  /** `widget`'s status changed: told when it is the active one. */
+  statusChanged(widget: RenderedWidget): void {
+    if (widget === this.#told) this.#onDidChangeActive.fire();
+  }
+
+  /** Fires `onDidChangeActive` when the active tab's active widget is another one than told last. */
+  #tell(): void {
+    const now = this.#active.get(this.tabs.activeQuery);
+    if (now === this.#told) return;
+    this.#told = now;
+    this.#onDidChangeActive.fire();
+  }
+
+  dispose(): void {
+    this.#onDidChangeTabs.dispose();
+    this.#onDidChangeActive.dispose();
+    this.#active.clear();
   }
 
   get selection(): Selection | undefined {
@@ -76,8 +133,11 @@ export class WidgetsHost implements WidgetsApi {
     try {
       const ctx = new RenderedWidget(widget, this, state, this.ui);
       const rendered = renderer(el, widget, ctx);
+      const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
         if (this.#selection?.owner === ctx) this.clearSelection();
+        listening.dispose();
+        this.deactivate(ctx);
         rendered.dispose();
         el.replaceChildren();
       });
@@ -86,11 +146,30 @@ export class WidgetsHost implements WidgetsApi {
       return new Disposable(() => el.replaceChildren());
     }
   }
+
+  /** A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. */
+  #activateOn(el: HTMLElement, ctx: RenderedWidget): Disposable {
+    const onEvent = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest('[data-data-url]') === el) this.activate(ctx, el);
+    };
+    el.addEventListener('pointerdown', onEvent);
+    el.addEventListener('focusin', onEvent);
+    return new Disposable(() => {
+      el.removeEventListener('pointerdown', onEvent);
+      el.removeEventListener('focusin', onEvent);
+    });
+  }
 }
+
+/** The class of the active widget's element in each tab: its outline. */
+const ACTIVE = 'd-widget--active';
 
 /** The context of one rendered widget; also what its menu `widget/context` is shown for. */
 class RenderedWidget implements WidgetContext, WidgetMenuContext {
   lastResult: QueryResult | undefined;
+  status: WidgetStatus = { kind: 'idle' };
+  /** Its element, once it was active. */
+  el: HTMLElement | undefined;
 
   constructor(
     readonly widget: WidgetNode,
@@ -105,8 +184,24 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   }
 
   async query(signal?: AbortSignal): Promise<QueryResult> {
-    this.lastResult = await fetchQueryResult(this.url('/query'), signal);
+    const before = this.status;
+    const started = performance.now();
+    this.#setStatus({ kind: 'loading' });
+    try {
+      this.lastResult = await fetchQueryResult(this.url('/query'), signal);
+    } catch (error) {
+      const ms = Math.round(performance.now() - started);
+      this.#setStatus(signal?.aborted ? before : { kind: 'error', message: error instanceof Error ? error.message : String(error), ms });
+      throw error;
+    }
+    const ms = Math.round(performance.now() - started);
+    this.#setStatus({ kind: 'done', rows: this.lastResult.numRows, ms, diagnostics: this.lastResult.dashicaDiagnostics ?? {} });
     return this.lastResult;
+  }
+
+  #setStatus(status: WidgetStatus): void {
+    this.status = status;
+    this.host.statusChanged(this);
   }
 
   renderChild(el: HTMLElement, child: WidgetNode): Disposable {
