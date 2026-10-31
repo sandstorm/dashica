@@ -828,11 +828,11 @@ with `when(context)` like any menu, so each extension adds its own:
 | Zoom | time | `time-range` (sets the time range) |
 | Filter to window | time | `filters` (a `tw` chip: all charts filtered, time charts keep their axis at the page's range) |
 | Filter by … / Exclude … | category | `filters` |
-| Show rows | either, base table known | `row-details` (drill to detail, §6) |
+| ~~Show rows~~ | **DROPPED 2026-10-31**, superseded by Explore | ~~`row-details` (drill to detail, §6)~~ |
 | a Go action | as declared (§3.9) | `page-actions` |
 | Open in Explore | either | `explore` (later) |
 
-So "both zoom and filter" is no either-or: they are two entries, and later ones (drill-down, actions) need no new UI.
+So "both zoom and filter" is no either-or: they are two entries, and later ones (actions) need no new UI.
 
 ✅ (step 6.7) **The floating bar, the selection, and bar charts select.** `ui.registerFloatingBar({id, title, order?,
 anchor})` gives a `FloatingBar<C>` its owner drives, `show(context)` / `hide()` / `dispose()` (the sketch had a
@@ -1195,7 +1195,7 @@ Built-in extensions:
 | `details` | left panel "Details" (the records `details.showRecords` gave it: a table's ticked rows, a view per record); the status bar's "N records selected" (§3.4.5) |
 | `schema` | left panel "Schema", only with Explore (connection › database › table from `/schema.json`, the page's connections first); `panel/schema` "Refresh" (Perspective §4.8, 8h) |
 | `chart-link` | `widget/context` "Copy link to chart" (`/p/shop#w=3`) |
-| `row-details` | `table/row` "Details" → a panel (its place open since the bottom panel is gone; "Show rows" for a click needs a place now that the floating bar is gone, 8c) |
+| ~~`row-details`~~ | **DROPPED 2026-10-31**, superseded by Explore: no "Show rows" and no panel of its own; a table's rows go to Details (`details`), the raw rows behind a chart to Explore |
 | `page-actions` | Go actions from `page.json` → commands + menu items |
 | one per widget type: `time-bar`, `time-line`, `bar-vertical`, `bar-horizontal`, `heatmap`, `stats`, `table`, `markdown`, `checkbox-group`, `text-input`, `grid`, `collapsible`, `alerts`, … | `registerWidget` for its type, its CSS, its own menu items |
 
@@ -1826,9 +1826,10 @@ its own.
   reads that widget from the source's `page.json` (no server state, no URL length issue). Persistence: localStorage +
   share link as today.
 - **Drill-down: start at a chart, go ad hoc from there.** Two kinds, as Superset names them:
-  - *Drill to detail:* a click on a bar / cell opens the bottom panel with the raw rows behind it: the chart's base
-    table and WHERE, the page's filters and time, plus the clicked value (`SELECT * … LIMIT n`). Needs the base table,
-    which builder queries know; SQL files declare none (§7, question 2), so they have no "Show rows".
+  - ~~*Drill to detail:* a click on a bar / cell opens the bottom panel with the raw rows behind it: the chart's base
+    table and WHERE, the page's filters and time, plus the clicked value (`SELECT * … LIMIT n`).~~ **DROPPED
+    2026-10-31**, superseded by Explore (its rows without grouping, its SQL from the chart, Perspective §4): the
+    maintainer does not need it any more.
   - *Drill by / ad hoc:* "Open in Explore" from a chart or dashboard carries the chart *and* the current `QueryState`
     (time, filters, params), so you narrow further, regroup by another field or add charts from there. Builds on the
     Explore rebuild below.
@@ -1859,8 +1860,9 @@ its own.
    names its table (`sql.Table("default.http_logs")`); a field writes its own condition by `.FilterAs`.
 3. **Alerts and filters:** should dashboard filters ever apply to alert widgets (e.g. only alerts of host `a`)? For
    now no.
-4. **Drill-down:** is "drill to detail" (raw rows in the bottom panel) wanted early, before the Explore rebuild?
-   What does ad hoc narrowing need beyond filters + Explore (e.g. regrouping a chart in place)?
+4. **Drill-down:** ~~is "drill to detail" (raw rows in the bottom panel) wanted early, before the Explore rebuild?~~
+   Answered 2026-10-31: drill to detail is DROPPED, superseded by Explore. What does ad hoc narrowing need beyond
+   filters + Explore (e.g. regrouping a chart in place)?
 5. **Permission model:** roles per dashboard subtree; who may use free SQL; how roles map to ClickHouse users.
 6. **Anonymization:** declared per column in Go, or in ClickHouse; reversible (pseudonyms) or not.
 7. ✅ **Who interprets a filter** (decided 2026-10-30): the chart, when it runs, in Go; it returns its Diagnostics.
