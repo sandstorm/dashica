@@ -1,25 +1,27 @@
 import { html } from 'htl';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement } from 'lucide';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
+import { hasQueries } from '../../hosts/page/page';
 import { formatTime, type QueryApi } from '../../hosts/query/query';
+import { registerBarItemWhile } from '../../hosts/ui/ui';
 import './time-range.css';
 
 /**
  * The time range of the page's queries, in the title bar: a button showing the range ("Last 1 hour",
  * "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the window by its length, ⊖ zooming out to twice the
- * window.
+ * window. Not on the start page, which queries nothing.
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
- * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply asks it (`/time-range`) and shows its reason when it
- * cannot. A range ending at a fixed time does not move, so applying one turns auto refresh off. A selection on a time
- * chart shows here as a custom range.
+ * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply
+ * asks it (`/time-range`) and shows its reason when it cannot. A range ending at a fixed time does not move, so
+ * applying one turns auto refresh off. A selection on a time chart shows here as a custom range.
  */
 export const timeRange: Extension = {
   id: 'timeRange',
-  activate({ ui, query, globalState, subscriptions }) {
+  activate({ ui, page, query, globalState, subscriptions }) {
     const picker = new TimeRangePicker(query, globalState);
     picker.show();
     subscriptions.push(query.time.onDidChange(() => picker.show()));
-    subscriptions.push(ui.registerBarItem('title', picker.el, { alignment: 'right', priority: 30 }));
+    subscriptions.push(registerBarItemWhile(ui, 'title', picker.el, { alignment: 'right', priority: 30 }, page.onDidChangePage, () => hasQueries(page.current)));
     subscriptions.push({ dispose: () => picker.close() });
   },
 };

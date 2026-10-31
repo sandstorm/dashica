@@ -2,12 +2,16 @@
 // Tests for debug.ts: the panel following the active widget, asking /debug only while shown, its views, the status bar.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
+import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import type { ActiveWidget, WidgetStatus } from '../../hosts/widgets/widgets';
 import { debug, statusParts } from './debug';
 
 let body: HTMLElement;
 let status: HTMLElement;
+/** Whether the status bar holds Debug's item. */
+let inStatusBar: boolean;
+let page: { current: PageJson | undefined; changed: EventEmitter<PageJson | undefined> };
 let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
@@ -26,6 +30,7 @@ beforeEach(() => {
   active = undefined;
   menuItems = [];
   requested = [];
+  page = { current: undefined, changed: new EventEmitter<PageJson | undefined>() };
   vi.stubGlobal('fetch', async (url: string) => {
     requested.push(url);
     return new Response(
@@ -52,7 +57,11 @@ beforeEach(() => {
         show: () => panel.shown++,
         dispose() {},
       }),
-      registerBarItem: (_bar: string, element: HTMLElement) => (status = element),
+      registerBarItem: (_bar: string, element: HTMLElement) => {
+        status = element;
+        inStatusBar = true;
+        return { dispose: () => (inStatusBar = false) };
+      },
       registerMenuItem: (menuId: string, item: { title?: string }) => menuItems.push({ menuId, title: item.title }),
     },
     widgets: {
@@ -60,6 +69,12 @@ beforeEach(() => {
         return active;
       },
       onDidChangeActive: activeChanged.event,
+    },
+    page: {
+      get current() {
+        return page.current;
+      },
+      onDidChangePage: page.changed.event,
     },
     commands: { registerCommand: (_id: string, run: () => void) => (runCommand = run) },
   };
@@ -172,6 +187,16 @@ describe('debug', () => {
     expect([...status.children].map((part) => part.textContent)).toEqual(['Requests', '1,234 rows', '87 ms', 'ignores host']);
     status.click();
     expect(panel.shown).toBe(1);
+  });
+
+  it('leaves the status bar on the start page, which queries nothing', () => {
+    expect(inStatusBar).toBe(true);
+    page.current = { kind: 'home', title: 'Home', filterBar: false, filterButtons: [], widgets: [] };
+    page.changed.fire(page.current);
+    expect(inStatusBar).toBe(false);
+    page.current = { kind: 'dashboard', title: 'Shop', filterBar: false, filterButtons: [], widgets: [] };
+    page.changed.fire(page.current);
+    expect(inStatusBar).toBe(true);
   });
 });
 

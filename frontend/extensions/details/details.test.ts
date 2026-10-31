@@ -8,6 +8,8 @@ import { details, drawRecord, recordsSelected } from './details';
 
 let body: HTMLElement;
 let status: HTMLElement;
+/** Whether the status bar holds Details' item. */
+let inStatusBar: boolean;
 let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
@@ -15,6 +17,7 @@ let active: ActiveWidget | undefined;
 
 beforeEach(() => {
   body = document.body.appendChild(document.createElement('div'));
+  inStatusBar = false;
   panel = { visible: false, shown: 0 };
   visibility = new EventEmitter<void>();
   activeChanged = new EventEmitter<void>();
@@ -31,7 +34,11 @@ beforeEach(() => {
         show: () => panel.shown++,
         dispose() {},
       }),
-      registerBarItem: (_bar: string, element: HTMLElement) => (status = element),
+      registerBarItem: (_bar: string, element: HTMLElement) => {
+        status = element;
+        inStatusBar = true;
+        return { dispose: () => (inStatusBar = false) };
+      },
     },
     widgets: {
       get active() {
@@ -63,16 +70,16 @@ const titles = () => [...body.querySelectorAll('.d-view__title')].map((title) =>
 
 describe('details', () => {
   it('says in the status bar how many records are selected, only while there are some; a click opens the panel', () => {
-    expect(status.hidden).toBe(true);
+    expect(inStatusBar).toBe(false);
     active = table([{ path: '/api' }, { path: '/login' }]);
     activeChanged.fire();
-    expect(status.hidden).toBe(false);
+    expect(inStatusBar).toBe(true);
     expect(status.textContent).toBe('2 records selected');
     status.click();
     expect(panel.shown).toBe(1);
     active = table([]);
     activeChanged.fire();
-    expect(status.hidden).toBe(true);
+    expect(inStatusBar).toBe(false);
     expect(recordsSelected(1)).toBe('1 record selected');
     expect(recordsSelected(1200)).toBe('1,200 records selected');
   });

@@ -1,17 +1,20 @@
 import { html } from 'htl';
 import { RefreshCw, createElement } from 'lucide';
 import type { Extension } from '../../hosts/extension-host/extension-host';
+import { hasQueries } from '../../hosts/page/page';
+import { registerBarItemWhile } from '../../hosts/ui/ui';
 
 /**
  * Refresh in the title bar, as one split button: ⟳ queries the page again now (also the command `refresh.now`), the
- * interval beside it queries again every so often (`?refresh=30`; "Off" by default).
+ * interval beside it queries again every so often (`?refresh=30`; "Off" by default). Not on the start page, which
+ * queries nothing.
  */
 export const refresh: Extension = {
   id: 'refresh',
   contributes: {
     commands: [{ command: 'refresh.now', title: 'Refresh', category: 'Page' }],
   },
-  activate({ ui, query, commands, subscriptions }) {
+  activate({ ui, page, query, commands, subscriptions }) {
     const button: HTMLButtonElement = html`<button
       type="button"
       class="d-button d-button--icon d-segmented__item"
@@ -33,7 +36,8 @@ export const refresh: Extension = {
     show();
     subscriptions.push(query.time.onDidChange(show));
     subscriptions.push(commands.registerCommand('refresh.now', () => query.refresh()));
-    subscriptions.push(ui.registerBarItem('title', html`<div class="d-segmented">${button}${interval}</div>`, { alignment: 'right', priority: 20 }));
+    const item = html`<div class="d-segmented">${button}${interval}</div>`;
+    subscriptions.push(registerBarItemWhile(ui, 'title', item, { alignment: 'right', priority: 20 }, page.onDidChangePage, () => hasQueries(page.current)));
   },
 };
 

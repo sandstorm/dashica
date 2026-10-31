@@ -9,7 +9,7 @@ import (
 
 // PageJson is what "<page>/page.json" says about a page: everything the client needs to show it.
 type PageJson struct {
-	// Kind is the kind of page: "dashboard".
+	// Kind is the kind of page: "dashboard", or "home" for the start page (HomePage).
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
 	// DefaultTime is the time range the page opens with, as a Go duration ("168h"); empty: 24h.

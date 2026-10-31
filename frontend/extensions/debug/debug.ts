@@ -4,7 +4,8 @@ import { Bug, createElement } from 'lucide';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
 import { widgetTitle, type ActiveWidget, type WidgetStatus } from '../../hosts/widgets/widgets';
-import { createView, type MenuAnchor } from '../../hosts/ui/ui';
+import { hasQueries } from '../../hosts/page/page';
+import { createView, registerBarItemWhile, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
 import './debug.css';
 
@@ -14,17 +15,18 @@ import './debug.css';
  * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
  * a table. It asks `/debug` only while it is shown: on showing, on another active widget, and when that widget's query
  * answered or failed, not when its records change. The status bar says the widget's title, rows, query time, its
- * error or the filters it ignores; a click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
+ * error or the filters it ignores, on every page but the start page; a click on it opens the panel, as the chart
+ * menu's "Debug" (`widget/context`) does.
  */
 export const debug: Extension = {
   id: 'debug',
-  activate({ ui, widgets, commands, globalState, subscriptions }) {
+  activate({ ui, page, widgets, commands, globalState, subscriptions }) {
     const panel = ui.registerSidePanel('debug', { label: 'Debug', icon: createElement(Bug).outerHTML, order: 10 });
     subscriptions.push(panel);
     // its result table's menus (`table/cell`, `table/header`)
     const showMenu = (menuId: string, anchor: MenuAnchor, context: object) => ui.showContextMenu(menuId, { anchor, title: 'Debug', context, args: [context] });
     const status: HTMLButtonElement = html`<button type="button" class="d-debug-status" data-testid="debug-status" onclick=${() => panel.show()}></button>`;
-    subscriptions.push(ui.registerBarItem('status', status, { alignment: 'left' }));
+    subscriptions.push(registerBarItemWhile(ui, 'status', status, { alignment: 'left' }, page.onDidChangePage, () => hasQueries(page.current)));
 
     let loading: AbortController | undefined;
     /** The widget the panel shows, once it asked for its debug info, and its status then. */

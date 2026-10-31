@@ -326,6 +326,13 @@ no favorites a hint to star one. The brand "Dashica" links to it; its tab is tit
   toggles or moves a favorite in the panel (an `EventEmitter` inside the extension) *(proposed)*. The tiles are links,
   opened by the page host like any other (Cmd / Ctrl+click: the browser's new tab); no star, menu or drag on the start
   page itself *(proposed)*.
+- **No query controls on "/"** *(proposed)*: the start page queries nothing, so the time range, refresh and Debug's
+  status bar item ("No active chart") are not shown there: `hasQueries(page)` (`hosts/page/page.ts`, every kind but
+  `home`; also a page still loading, so the title bar does not flicker) decides, and `registerBarItemWhile(ui, bar,
+  element, placement, page.onDidChangePage, …)` (`hosts/ui/bar/bar.ts`) registers the item while it holds and removes
+  it otherwise, so a bar of such items alone hides: Details' "N records selected" is registered only while there are
+  records, so "/" has no status bar. A page kind, not a `page.json` flag: kinds are the client's
+  renderers already. The start page's `page.json` is in the contract golden file (`export const home`).
 
 #### 3.4.4 The active widget, Debug and the status bar (step 7e, decided 2026-10-31)
 
@@ -353,10 +360,11 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   widget's query answered or failed (a query state change queries the chart again); while that query runs it keeps
   what it shows, and a change of its records alone (the same status value as when it asked) asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
   panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
-- **Status bar:** one item of the `debug` extension, always there: the active widget's title, then "1,234 rows · 87
-  ms", "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red; the whole
-  message in the tooltip); "No active chart" without one. A click opens Debug *(proposed)*. The status bar so always
-  shows *(proposed)*; the page-wide query counts of the sketch (`query-status`) are not built.
+- **Status bar:** one item of the `debug` extension, there on every page but "/": the active widget's title, then "1,234
+  rows · 87 ms", "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red;
+  the whole message in the tooltip); "No active chart" without one. A click opens Debug *(proposed)*. The status bar so
+  always shows *(proposed)*, but on the start page (§3.4.3); the page-wide query counts of the sketch (`query-status`)
+  are not built.
 - **The bottom panel is removed** (`BottomPanel`, `registerBottomPanel`, its CSS and stored layout key): Debug was its
   only user.
 
@@ -382,8 +390,8 @@ a category for the floating bar (§3.8), unchanged; the two never mix.
   table closed "Record 1" of every other table and of the next selection *(proposed)*. Drawn only while
   shown, anew when the active widget or its records change (not on its status). Without records: "Tick rows of a table
   to see them here." The table's search term is no longer highlighted in the details *(proposed)*.
-- **Status bar:** a second item, of the `details` extension: "2 records selected", hidden while none; a click opens
-  Details *(proposed)*.
+- **Status bar:** a second item, of the `details` extension: "2 records selected", not in the bar while none; a click
+  opens Details *(proposed)*.
 
 ### 3.5 Extensions and UI code
 
@@ -920,6 +928,8 @@ interface UiApi {
                                      when?: (p: Page) => boolean }): Panel;     // command workbench.view.<id>
   registerBarItem(bar: 'title' | 'filter' | 'status', el: HTMLElement,
                   o: { alignment: 'left' | 'right'; priority?: number }): Disposable;
+                                          // registerBarItemWhile(ui, bar, el, o, changed, wanted): only while
+                                          // wanted() holds (the time range: hasQueries(page.current), §3.4.3)
 
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
@@ -1300,6 +1310,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7c ✅ | **views in a panel** (§3.4.2): `createView` (`hosts/ui/views/view.ts`: header button, ArrowLeft / ArrowRight, collapsed state in the owner's memento); the Dashboards panel as views ("Favorites", one per menu group; headings, rules and the guide line gone); favorites moved by a grip (pointer events) and Alt+ArrowUp / Alt+ArrowDown, the order stored in `favorites`; `e2e/dashboards-views.spec.ts`. ✅ 2026-10-31 (vitest green; Playwright written, not run), deviations: a pure helper instead of `panel.registerView` (no `setTitle` / `dispose`: the owner draws the view anew); a view's description shows only while it is closed; headers stick to the panel's top | collapsible groups, favorites in the viewer's order |
 | 7c.1 ✅ | **review fix: view ids** (§3.4.2): a view body's id comes from a module counter (`d-view-<n>`) instead of `Math.random()`: deterministic and never colliding. ✅ 2026-10-31 (vitest) | — |
 | 7d ✅ | **the start page "/"** (§3.4.3): Go `dashboard.CollectHome` (`/` and `/page.json`, kind `home`), the redirect to `/home` removed; the renderer `home` in `dashboards` (`home-page.ts`: favorites as tiles with their group, a hint while there are none, the groups with their dashboards), redrawn when the favorites change; outer repo: `/home`, its group "Dashica" and `src/root_page.go` removed; `e2e/start-page.spec.ts`. ✅ 2026-10-31 (vitest, Go tests green; Playwright written, not run), deviations: the start page is drawn by the client from `/workbench.json`, its `page.json` carries no menu *(proposed)*; tiles and links only, no star or menu on the start page *(proposed)* | "/" shows the favorites and all dashboards |
+| 7d.1 ✅ | **review fix: no query controls on "/"** (§3.4.3): `hasQueries(page)` and `registerBarItemWhile`; the time range, refresh and Debug's status item leave their bars on kind `home`; the start page's `page.json` added to `contract.golden.ts` (`go test . -run TestContract_Golden -update`); `e2e/start-page.spec.ts` checks it. ✅ 2026-10-31 (vitest, typecheck, Go tests without ClickHouse green; Playwright written, not run) | "/" without time picker and "No active chart" |
 | 7e ✅ | **the active widget** (§3.4.4): `widgets.active` / `onDidChangeActive` (`WidgetStatus` from `ctx.query()`), per tab, outlined; Debug as a left side panel of views following it, asking `/debug` only while shown; the status bar's item (title, rows, time, error, ignored filters), a click opens Debug; the bottom panel removed; `e2e/active-widget.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the innermost widget with data becomes active; no `setActive` (the menu button's press activates); the query time is measured in the browser; the status bar always shows ("No active chart"); Debug's Stats view also holds the ClickHouse summary (the old "Clickhouse Summary (Legacy)" section) *(all proposed)* | the active chart in Debug and the status bar |
 | 7e.1 ✅ | **review fix: overlapping queries** (§3.4.4): a per-widget count of `query()` calls; only the latest sets the status and `lastResult`, an aborted latest one puts back the last answer's status (not the one seen at its start, which may be an earlier call's `loading`). Before, an aborted query's late rejection put an old "done" over the newer query's `loading`, and Debug asked `/debug` twice. ✅ 2026-10-31 (vitest: two overlapping queries, the first aborted) | a refresh during a load shows "querying…" |
 | 7e.2 ✅ | **review fix: Debug and records** (§3.4.4): Debug remembers the status it asked `/debug` for and asks again only for another widget or another status, so ticking rows (which fires `onDidChangeActive`, step 7f) no longer refetches and redraws it (scroll, the Result table, the pipeline graph kept). ✅ 2026-10-31 (vitest) | ticking rows keeps Debug as it is |
