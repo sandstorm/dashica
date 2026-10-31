@@ -87,6 +87,9 @@ type Node struct {
 	// fields that hold categories (sql.IsCategory), when its query has a table (sql.From, sql.Table) and does not skip
 	// filters; empty for every other widget.
 	Filterable []string `json:"filterable,omitempty"`
+	// Connection is the ClickHouse connection its query runs on (sql.ConnectionOf: "default", "logs"); empty for a
+	// widget without a query. The Schema view shows a page's connections first.
+	Connection string `json:"connection,omitempty"`
 	// Children by name: a grid's areas; a collapsible group's widgets as "0", "1", ….
 	Children map[string]Node `json:"children,omitempty"`
 	// Title is its title for the page's outline (Outline); in page.json it is in its props.
@@ -126,6 +129,7 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 		node.DataURL = own.Path()
 		if chart, ok := w.(withQuery); ok {
 			node.RowsURL = own.Path() + "/rows"
+			node.Connection = sql.ConnectionOf(chart.Query())
 			for _, field := range filterableFields(chart) {
 				node.Filterable = append(node.Filterable, field.Alias())
 			}

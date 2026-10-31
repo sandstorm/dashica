@@ -95,11 +95,7 @@ func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (pre
 
 // client is the ClickHouse client of `queryObj`'s connection (its Database, else "default").
 func (qh QueryHandler) client(queryObj sql.SqlQueryable) (*clickhouse.Client, error) {
-	serverId := queryObj.Database()
-	if serverId == "" {
-		serverId = "default"
-	}
-	client, err := qh.ClickhouseClientManager.GetClient(serverId)
+	client, err := qh.ClickhouseClientManager.GetClient(sql.ConnectionOf(queryObj))
 	if err != nil {
 		return nil, fmt.Errorf("get clickhouse client: %w", err)
 	}

@@ -140,8 +140,8 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	return newDashicaImpl(cfg, logger, mux, deps)
 }
 
-// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range and the start page "/", and no
-// dashboards yet.
+// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range, /schema.json (the Schema view's,
+// httpserver.SchemaHandler) and the start page "/", and no dashboards yet.
 func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
 	d := &DashicaImpl{
 		cfg:              cfg,
@@ -156,6 +156,10 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 	if err := d.handlerCollector.Handle("/time-range", http.HandlerFunc(httpserver.TimeRangeHandler)); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /time-range")
 	}
+	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, ExploreEnabled: deps.ExploreEnabled}
+	if err := d.handlerCollector.Handle("/schema.json", schema); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /schema.json")
+	}
 	if err := dashboard.CollectHome(d.handlerCollector); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register the start page")
 	}
@@ -168,6 +172,8 @@ type WorkbenchJson struct {
 	Menu []rendering.MenuGroup `json:"menu"`
 	// Explore: the Explore view is on (explore.enabled); else the client leaves it out, and its endpoints answer 404.
 	Explore bool `json:"explore"`
+	// Connections are the names of the ClickHouse connections of dashica_config, sorted: the Schema view's tree.
+	Connections []string `json:"connections"`
 }
 
 // serveWorkbenchJson serves the WorkbenchJson of the groups as they are when asked (dashboards register after New).
@@ -176,8 +182,12 @@ func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request)
 	if menu == nil {
 		menu = []rendering.MenuGroup{}
 	}
+	connections := d.deps.ClickhouseClientManager.Connections()
+	if connections == nil {
+		connections = []string{}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.ExploreEnabled}); err != nil {
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.ExploreEnabled, Connections: connections}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

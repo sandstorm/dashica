@@ -36,7 +36,8 @@ export const workbench = {
       ]
     }
   ],
-  "explore": false
+  "explore": false,
+  "connections": []
 } satisfies WorkbenchJson;
 
 export const page = {
@@ -88,7 +89,8 @@ export const page = {
           "rowsUrl": "/p/shop/api/1/rows",
           "filterable": [
             "status"
-          ]
+          ],
+          "connection": "default"
         },
         "b": {
           "type": "timeLine",
@@ -106,7 +108,8 @@ export const page = {
             }
           },
           "dataUrl": "/p/shop/api/2",
-          "rowsUrl": "/p/shop/api/2/rows"
+          "rowsUrl": "/p/shop/api/2/rows",
+          "connection": "default"
         }
       }
     },
@@ -134,7 +137,8 @@ export const page = {
           "rowsUrl": "/p/shop/api/3/rows",
           "filterable": [
             "status"
-          ]
+          ],
+          "connection": "default"
         },
         "1": {
           "type": "barHorizontal",
@@ -153,7 +157,8 @@ export const page = {
           "rowsUrl": "/p/shop/api/4/rows",
           "filterable": [
             "path"
-          ]
+          ],
+          "connection": "default"
         },
         "2": {
           "type": "timeHeatmap",
@@ -173,7 +178,8 @@ export const page = {
           "rowsUrl": "/p/shop/api/5/rows",
           "filterable": [
             "duration_ms"
-          ]
+          ],
+          "connection": "default"
         },
         "3": {
           "type": "timeHeatmapOrdinal",
@@ -192,13 +198,15 @@ export const page = {
           "rowsUrl": "/p/shop/api/6/rows",
           "filterable": [
             "status"
-          ]
+          ],
+          "connection": "default"
         },
         "4": {
           "type": "stats",
           "props": {},
           "dataUrl": "/p/shop/api/shop_stats",
-          "rowsUrl": "/p/shop/api/shop_stats/rows"
+          "rowsUrl": "/p/shop/api/shop_stats/rows",
+          "connection": "default"
         },
         "5": {
           "type": "table",
@@ -208,7 +216,8 @@ export const page = {
             "title": "Latest"
           },
           "dataUrl": "/p/shop/api/7",
-          "rowsUrl": "/p/shop/api/7/rows"
+          "rowsUrl": "/p/shop/api/7/rows",
+          "connection": "default"
         }
       }
     },

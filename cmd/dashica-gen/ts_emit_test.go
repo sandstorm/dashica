@@ -30,7 +30,7 @@ func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
 		"export interface ColorScale {\n  legend: boolean;",
 		// widget.Node per widget type: a data URL for a widget with a handler, a rows URL for a chart, children for a
 		// container
-		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string; rowsUrl?: string; filterable?: string[] }",
+		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string; rowsUrl?: string; filterable?: string[]; connection?: string }",
 		"  | { type: 'speedscopeLink'; props: SpeedscopeLinkProps; dataUrl: string }",
 		"  | { type: 'grid'; props: GridProps; children?: Record<string, WidgetNode> }",
 		"  | { type: 'markdown'; props: MarkdownProps }",

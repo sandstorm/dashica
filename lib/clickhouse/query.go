@@ -25,6 +25,10 @@ type Client struct {
 
 	introspectedSchemaMutex  sync.Mutex
 	introspectedSchemaCached *IntrospectedSchema
+
+	// schemaCached is its Schema once asked (Client.Schema), guarded by schemaMutex
+	schemaMutex  sync.Mutex
+	schemaCached *Schema
 }
 
 // NewClient creates a new Clickhouse HTTP client for a specific server

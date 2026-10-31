@@ -7,6 +7,7 @@ import { chartSearch } from './chart-search';
 
 const workbench: WorkbenchJson = {
   explore: false,
+  connections: [],
   menu: [
     {
       title: 'Shop',

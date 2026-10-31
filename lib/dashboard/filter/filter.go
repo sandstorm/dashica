@@ -39,10 +39,7 @@ func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table
 	if !ok || q.ShouldSkipFilters() {
 		return Table{}, false
 	}
-	connection := q.Database()
-	if connection == "" {
-		connection = "default"
-	}
+	connection := sql.ConnectionOf(q)
 	if db := database(connection); !strings.Contains(name, ".") && db != "" {
 		name = db + "." + name
 	}

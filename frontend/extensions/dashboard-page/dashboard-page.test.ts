@@ -58,7 +58,7 @@ beforeEach(() => {
 /** The page host at `url`, the dashboard page's renderer registered, started. */
 async function start(url: string): Promise<PageHost> {
   history.replaceState(null, '', url);
-  page = new PageHost(window, { menu: [], explore: false }, content, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
+  page = new PageHost(window, { menu: [], explore: false, connections: [] }, content, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
   dashboardPage.activate({ page, widgets: testbed.widgets, subscriptions: [] } as never);
   await page.start();
   return page;

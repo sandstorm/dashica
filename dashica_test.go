@@ -20,7 +20,7 @@ import (
 )
 
 func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
-	d := &DashicaImpl{}
+	d := &DashicaImpl{deps: rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, zerolog.Nop())}}
 	get := func() string {
 		rec := httptest.NewRecorder()
 		d.serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
@@ -30,21 +30,35 @@ func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
 		return rec.Body.String()
 	}
 
-	if got := get(); got != `{"menu":[],"explore":false}`+"\n" {
+	if got := get(); got != `{"menu":[],"explore":false,"connections":[]}`+"\n" {
 		t.Errorf("before any group: %s", got)
 	}
 	d.RegisterDashboardGroup("Shop")
-	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}],"explore":false}`+"\n" {
+	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}],"explore":false,"connections":[]}`+"\n" {
 		t.Errorf("after registering: %s", got)
 	}
 }
 
-func TestWorkbenchJson_SaysWhetherExploreIsEnabled(t *testing.T) {
+func TestWorkbenchJson_SaysWhetherExploreIsEnabledAndTheConnections(t *testing.T) {
+	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}}}
 	rec := httptest.NewRecorder()
-	(&DashicaImpl{deps: rendering.Dependencies{ExploreEnabled: true}}).serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
+	deps := rendering.Dependencies{ExploreEnabled: true, ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop())}
+	(&DashicaImpl{deps: deps}).serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
 
-	if got := rec.Body.String(); got != `{"menu":[],"explore":true}`+"\n" {
+	if got := rec.Body.String(); got != `{"menu":[],"explore":true,"connections":["alert_storage","default"]}`+"\n" {
 		t.Errorf("got %s", got)
+	}
+}
+
+func TestSchemaJson_IsServedAndAnswersNotFoundWhileExploreIsOff(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	mux := http.NewServeMux()
+	newDashicaImpl(&config.Config{}, logger, mux, rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger), Logger: logger})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/schema.json?connection=default", nil))
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "explore.enabled") {
+		t.Errorf("status %d: %s", rec.Code, rec.Body)
 	}
 }
 

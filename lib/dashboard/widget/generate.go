@@ -7,12 +7,12 @@ package widget
 // It is gitignored and regenerated on every build (same convention as templ's
 // *_templ.go); `go generate ./...` runs before `go build` in .mise/tasks/build.
 //
-// -ts also writes the TypeScript types of the widgets, page.json, workbench.json and
-// a chart's /sql (frontend/generated/zz_generated.dashica.ts, gitignored as well).
+// -ts also writes the TypeScript types of the widgets, page.json, workbench.json,
+// a chart's /sql and /schema.json (frontend/generated/zz_generated.dashica.ts, gitignored as well).
 //
 // No package argument is needed: `go generate` runs the command with the working
 // directory set to this file's directory, and dashica-gen defaults to loading "."
 // — so it targets whichever package holds this directive.
 //
 //go:generate go run github.com/sandstorm/dashica/cmd/dashica-gen -enums
-//go:generate go run github.com/sandstorm/dashica/cmd/dashica-gen -ts ../../../frontend/generated/zz_generated.dashica.ts -ts-types github.com/sandstorm/dashica.WorkbenchJson,github.com/sandstorm/dashica/lib/dashboard.PageJson,github.com/sandstorm/dashica/lib/httpserver.ChartSql
+//go:generate go run github.com/sandstorm/dashica/cmd/dashica-gen -ts ../../../frontend/generated/zz_generated.dashica.ts -ts-types github.com/sandstorm/dashica.WorkbenchJson,github.com/sandstorm/dashica/lib/dashboard.PageJson,github.com/sandstorm/dashica/lib/httpserver.ChartSql,github.com/sandstorm/dashica/lib/clickhouse.Schema

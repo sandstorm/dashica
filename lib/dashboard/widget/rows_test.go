@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -133,5 +134,13 @@ func TestMount_AChartHasARowsURLAWidgetWithItsOwnHandlerNone(t *testing.T) {
 	}
 	if page[1].DataURL == "" || page[1].RowsURL != "" {
 		t.Errorf("handler: data %q, rows %q", page[1].DataURL, page[1].RowsURL)
+	}
+}
+
+func TestMount_AChartNamesItsConnectionAWidgetWithItsOwnHandlerNone(t *testing.T) {
+	_, _, _, page := mountPage(t, NewTable(sql.New(sql.From("caddy_logs"))), NewTable(sql.New(sql.From("audit"), sql.OnDatabase("logs"))), pathEcho{})
+
+	if got := []string{page[0].Connection, page[1].Connection, page[2].Connection}; !slices.Equal(got, []string{"default", "logs", ""}) {
+		t.Errorf("connections %q", got)
 	}
 }

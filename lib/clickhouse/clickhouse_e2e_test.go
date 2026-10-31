@@ -34,6 +34,10 @@ func TestClickhouseE2E(t *testing.T) {
 		testIntrospectSchema(t, ctx, clickhouseManager)
 	})
 
+	t.Run("schema", func(t *testing.T) {
+		testSchema(t, ctx, clickhouseManager)
+	})
+
 	t.Run("arrowJSONColumn", func(t *testing.T) {
 		testArrowJSONColumn(t, ctx, clickhouseManager)
 	})
@@ -182,4 +186,39 @@ func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *
 		}
 	}
 	assertions.AssertEquals(t, "full_logs.timestamp type", "DateTime64(6)", timestampType)
+}
+
+// testSchema asks the Schema of the testing ClickHouse: full_logs with its ORDER BY, columns and a default, and the
+// system tables; asked again with refresh.
+func testSchema(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+	dbClient, err := clickhouseManager.GetClient("default")
+	require.NoError(t, err)
+
+	schema, err := dbClient.Schema(ctx, false)
+	require.NoError(t, err)
+	var fullLogs *SchemaTable
+	databases := []string{}
+	for _, db := range schema.Databases {
+		databases = append(databases, db.Name)
+		for i, table := range db.Tables {
+			if db.Name == "default" && table.Name == "full_logs" {
+				fullLogs = &db.Tables[i]
+			}
+		}
+	}
+	require.Contains(t, databases, "system")
+	require.NotNil(t, fullLogs, "default.full_logs in %v", databases)
+	require.Equal(t, "MergeTree", fullLogs.Engine)
+	require.Contains(t, fullLogs.SortingKey, "timestamp")
+	require.Equal(t, "customer_tenant", fullLogs.Columns[0].Name, "columns in their order")
+	for _, column := range fullLogs.Columns {
+		if column.Name == "level" {
+			require.Equal(t, "DEFAULT", column.DefaultKind)
+			require.Equal(t, "'NoLevel'", column.DefaultExpression)
+		}
+	}
+
+	again, err := dbClient.Schema(ctx, true)
+	require.NoError(t, err)
+	require.Equal(t, len(schema.Databases), len(again.Databases))
 }

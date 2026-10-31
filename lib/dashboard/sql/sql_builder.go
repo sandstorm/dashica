@@ -286,6 +286,14 @@ func TableOf(q SqlQueryable) (string, bool) {
 	return table, plainTable.MatchString(table)
 }
 
+// ConnectionOf is the ClickHouse connection `q` runs on: its Database (OnDatabase), "default" when it names none.
+func ConnectionOf(q SqlQueryable) string {
+	if connection := q.Database(); connection != "" {
+		return connection
+	}
+	return "default"
+}
+
 // plainTable is a table by name, its database before it or not.
 var plainTable = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
 

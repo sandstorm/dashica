@@ -23,6 +23,7 @@ beforeEach(async () => {
     extensions: [dashboards, dashboardPage, searchEverywhere],
     workbench: {
       explore: false,
+      connections: [],
       menu: [
         {
           title: 'Shop',
