@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 // Tests for workbench.ts: the top bar's controls showing the active tab's query state after a switch of tabs, "+" for
-// a new tab, the global menu's "…" at the left rail's start.
+// a new tab, the global menu's "…" at the left rail's start, a popped-out view's tab without the top bar's items and
+// the filter bar.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Disposable } from '../core/disposable/disposable';
+import { Disposable } from '../core/disposable/disposable';
 import { dashboardPage } from '../extensions/dashboard-page/dashboard-page';
 import { refresh } from '../extensions/refresh/refresh';
 import { timeRange } from '../extensions/time-range/time-range';
+import type { PageApi } from '../hosts/page/page';
 import type { UiApi } from '../hosts/ui/ui';
 import { settle } from '../hosts/widgets/widgets-testing';
 import { createWorkbench } from './workbench';
@@ -14,6 +16,8 @@ let workbench: Disposable;
 let host: HTMLElement;
 /** The workbench's `ui`, as an extension sees it. */
 let ui: UiApi;
+/** The workbench's `page`, as an extension sees it. */
+let page: PageApi;
 
 beforeEach(async () => {
   // two tabs from before a reload, the shop one active
@@ -33,7 +37,7 @@ beforeEach(async () => {
     new Response(JSON.stringify({ kind: 'dashboard', title: titles[url], filterBar: false, filterButtons: [], widgets: [] })),
   );
   host = document.body.appendChild(document.createElement('div'));
-  const grab = { id: 'test', activate: (context: { ui: UiApi }) => void (ui = context.ui) };
+  const grab = { id: 'test', activate: (context: { ui: UiApi; page: PageApi }) => void ((ui = context.ui), (page = context.page)) };
   workbench = createWorkbench(host, { extensions: [dashboardPage, timeRange, refresh, grab], workbench: { menu: [], explore: false, sqlEnabled: false, connections: [] } });
   await settle();
 });
@@ -88,5 +92,25 @@ describe('createWorkbench', () => {
     expect(options.map((option) => option.textContent)).toEqual(['Something global']);
     entry.dispose();
     expect(button.hidden).toBe(true);
+  });
+
+  it('shows a popped-out view’s tab with the tabs only in the top bar and no filter bar; the page’s tab with them again', async () => {
+    const filterBar = host.querySelector<HTMLElement>('[data-testid=wb-filter-bar]')!;
+    ui.registerBarItem('filter', document.createElement('span'), { alignment: 'left' });
+    const shown = (el: Element) => !el.closest('[hidden]');
+    expect(shown(rangeButton())).toBe(true);
+    expect(shown(filterBar)).toBe(true);
+
+    await page.popOut({ title: 'Debug: Requests', render: (el) => ((el.textContent = 'debug'), Disposable.from()) });
+    expect(shown(tab('Debug: Requests'))).toBe(true);
+    expect(shown(host.querySelector('[data-testid=wb-tab-add]')!)).toBe(true);
+    expect(shown(rangeButton())).toBe(false);
+    expect(shown(interval())).toBe(false);
+    expect(shown(filterBar)).toBe(false);
+
+    tab('Shop').click();
+    expect(shown(rangeButton())).toBe(true);
+    expect(shown(interval())).toBe(true);
+    expect(shown(filterBar)).toBe(true);
   });
 });

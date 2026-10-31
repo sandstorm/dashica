@@ -479,6 +479,7 @@ describe('PageHost', () => {
         },
       });
       const popped = host.activeTab;
+      expect(host.showsPoppedView).toBe(true);
       expect(host.tabs.map((tab) => tab.title)).toEqual(['Shop', 'Debug: Requests']);
       expect(popped.url).toBe(`/p/shop?time=1h#view=${popped.id}`);
       expect(address()).toBe(popped.url);
@@ -491,6 +492,7 @@ describe('PageHost', () => {
       host.closeTab(popped.id);
       expect(views).toEqual(['rendered', 'disposed']);
       expect(shownText()).toBe('Shop');
+      expect(host.showsPoppedView).toBe(false);
     });
 
     it('keeps a popped-out view in memory only: not stored for a reload, its link shows the page', async () => {
@@ -511,6 +513,7 @@ describe('PageHost', () => {
       // `#view=<id>` names no view in memory: the page shows
       expect(popped.url).toBe(`/p/checkout#view=${popped.id}`);
       expect(shownText()).toBe('Checkout');
+      expect(host.showsPoppedView).toBe(false);
     });
 
     it('leaves a URL without `page.json` to the browser', async () => {

@@ -14,7 +14,8 @@ import { WidgetsHost } from '../hosts/widgets/widgets';
 /**
  * The workbench in `host`: its hosts (commands, ui, page, query, widgets, extensions) and the extensions activated on
  * them, the tab bar with the commands `workbench.tabs.close` / `next` / `previous`, the global menu's "…" at the start
- * of the left rail, then the page of the URL in the active tab. `workbench` is what `/workbench.json` says. Bound keys work
+ * of the left rail, then the page of the URL in the active tab. While the active tab shows a popped-out view, the top
+ * bar has only the tabs and there is no filter bar (`showPageBars`). `workbench` is what `/workbench.json` says. Bound keys work
  * anywhere on the page. Lives as long as the page; `dispose` takes it all down (tests).
  */
 export function createWorkbench(host: HTMLElement, options: { extensions: readonly Extension[]; workbench: WorkbenchJson }): Disposable {
@@ -29,12 +30,14 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
   extensions.activate(options.extensions);
   const tabs = showTabs(page, ui.tabBar, commands);
   const globalMenu = showGlobalMenu(ui);
+  const pageBars = page.onDidChangeTabs(() => ui.showPageBars(!page.showsPoppedView));
   void page.start();
   return new Disposable(() => {
     page.dispose();
     extensions.dispose();
     tabs.dispose();
     globalMenu.dispose();
+    pageBars.dispose();
     widgets.dispose();
     query.dispose();
     ui.dispose();

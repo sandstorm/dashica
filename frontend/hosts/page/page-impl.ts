@@ -67,6 +67,11 @@ export class PageHost implements PageApi {
     return this.#active().page;
   }
 
+  /** The active tab shows a view popped out (`popOut`), not a page: its time range and filters change nothing it shows. */
+  get showsPoppedView(): boolean {
+    return this.#popped.has(this.#list.active);
+  }
+
   /** The active tab's query state (`activeQuery`). */
   get activeQuery(): QueryHost {
     return this.#active().query;

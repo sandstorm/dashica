@@ -62,6 +62,15 @@ export class UiHost implements UiApi {
     return this.#layout.railStart;
   }
 
+  /**
+   * Shows the items of the top bar (time range, auto refresh) and the filter bar, or hides them while the active tab
+   * shows a popped-out view: what it shows follows neither the tab's time range nor its filters.
+   */
+  showPageBars(shown: boolean): void {
+    this.#bars.top.withhold(!shown);
+    this.#bars.filter.withhold(!shown);
+  }
+
   registerSidePanel(id: string, options: SidePanelOptions): Panel {
     return this.#layout.addSidePanel(id, options);
   }
