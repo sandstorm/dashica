@@ -83,15 +83,35 @@ describe('dashboards', () => {
     expect(tabs()).toHaveLength(1);
   });
 
-  it('keeps a starred dashboard among the favorites, for the next visit too; a second click removes it', () => {
+  it('keeps a starred dashboard among the favorites, with its group, for the next visit too; its star there removes it', () => {
     const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')][1];
     star().click();
     expect(titles('.d-list__heading')).toEqual(['Favorites', 'Shop']);
-    expect(titles('a')).toEqual(['Checkout', 'Orders', 'Checkout']);
+    expect(titles('a')).toEqual(['CheckoutShop', 'Orders', 'Checkout']);
+    expect(titles('.d-dashboards-menu__group-name')).toEqual(['Shop']);
     expect(JSON.parse(localStorage.getItem('dashica:global:dashboards:favorites')!)).toEqual([{ url: '/p/checkout', title: 'Checkout' }]);
 
-    star().click();
+    // the favorite's own star, under "Favorites"
+    menu().querySelector<HTMLButtonElement>('.d-dashboards-menu__star')!.click();
     expect(titles('.d-list__heading')).toEqual(['Shop']);
+  });
+
+  it('keeps a star toggled where it was on screen and focused, though the favorites above it grow or shrink', () => {
+    const panel = menu().parentElement!;
+    const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')].at(-1)!;
+    // jsdom lays out nothing: a favorite pushes the entries below it down by one row
+    const rowHeight = 24;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const rows = [...menu().querySelectorAll('.d-dashboards-menu__entry')];
+      const top = rows.findIndex((row) => row.contains(this)) * rowHeight - panel.scrollTop;
+      return { top, bottom: top + rowHeight, left: 0, right: 0, width: 0, height: rowHeight, x: 0, y: top, toJSON: () => ({}) };
+    });
+    star().focus();
+    star().click();
+    expect(panel.scrollTop).toBe(rowHeight);
+    expect(document.activeElement).toBe(star());
+    star().click();
+    expect(panel.scrollTop).toBe(0);
   });
 
   it('finds the dashboards in search everywhere, with their group', async () => {

@@ -48,7 +48,11 @@ export const dashboards: Extension = {
   },
 };
 
-/** The list in the panel "Dashboards"; `render` draws it again (the page shown changed, a favorite was toggled). */
+/**
+ * The list in the panel "Dashboards"; `render` draws it again (the page shown changed, a favorite was toggled). A
+ * favorite names its group; a star toggled keeps its place on screen, though a favorite added or removed above moves
+ * everything below it.
+ */
 class DashboardsMenu {
   constructor(
     private readonly el: HTMLElement,
@@ -56,19 +60,29 @@ class DashboardsMenu {
   ) {}
 
   render(): void {
+    const { menu } = this.context.page.workbench;
     const favorites = this.#favorites();
-    const groups = this.context.page.workbench.menu.map((group) => html`<li>
-      <h2 class="d-list__heading">${group.title}</h2>
-      <ul class="d-list">${group.entries.map((entry) => this.#entry(entry, favorites))}</ul>
-    </li>`);
-    const favoriteGroup = favorites.length === 0 ? '' : html`<li>
-      <h2 class="d-list__heading">Favorites</h2>
-      <ul class="d-list">${favorites.map((favorite) => html`<li class="d-dashboards-menu__entry">${this.#link(favorite)}</li>`)}</ul>
-    </li>`;
+    const groupOf = (url: string) => menu.find((group) => group.entries.some((entry) => entry.url === url));
+    const groups = menu.map((group) => this.#group(group.title, group.entries.map((entry) => this.#entry(group.title, entry, favorites))));
+    const favoriteGroup =
+      favorites.length === 0
+        ? ''
+        : this.#group(
+            'Favorites',
+            favorites.map((favorite) => this.#entry('Favorites', favorite, favorites, groupOf(favorite.url)?.title)),
+          );
     this.el.replaceChildren(html`<ul class="d-dashboards-menu">${favoriteGroup}${groups}</ul>`);
   }
 
-  #entry(entry: MenuGroupEntry, favorites: readonly MenuGroupEntry[]): HTMLElement {
+  #group(title: string, entries: readonly HTMLElement[]): HTMLElement {
+    return html`<li class="d-dashboards-menu__group">
+      <h2 class="d-list__heading d-dashboards-menu__heading">${title}</h2>
+      <ul class="d-list d-dashboards-menu__entries">${entries}</ul>
+    </li>`;
+  }
+
+  /** An entry of the list `section` (a group's title, "Favorites"); `group` is a favorite's group, shown after its title. */
+  #entry(section: string, entry: MenuGroupEntry, favorites: readonly MenuGroupEntry[], group?: string): HTMLElement {
     const isFavorite = favorites.some((favorite) => favorite.url === entry.url);
     const showMenu = (event: MouseEvent) =>
       this.context.ui.showContextMenu('dashboards/entry', {
@@ -78,19 +92,22 @@ class DashboardsMenu {
         args: [entry.url],
       });
     return html`<li class="d-dashboards-menu__entry">
-      ${this.#link(entry)}
+      ${this.#link(entry, group)}
       <button type="button" class="d-dashboards-menu__more" aria-label=${`More for ${entry.title}`} title="More" aria-haspopup="menu" onclick=${showMenu}>…</button>
       <button
         type="button"
         class=${isFavorite ? 'd-dashboards-menu__star d-dashboards-menu__star--active' : 'd-dashboards-menu__star'}
+        data-key=${`${section} ${entry.url}`}
         aria-label=${isFavorite ? `Remove ${entry.title} from the favorites` : `Add ${entry.title} to the favorites`}
-        onclick=${() => this.#toggleFavorite(entry)}>${isFavorite ? '★' : '☆'}</button>
+        onclick=${(event: MouseEvent) => this.#toggleFavorite(entry, event.currentTarget as HTMLElement)}>${isFavorite ? '★' : '☆'}</button>
     </li>`;
   }
 
-  #link(entry: MenuGroupEntry): HTMLElement {
+  #link(entry: MenuGroupEntry, group?: string): HTMLElement {
     const shown = entry.url === new URL(this.context.page.activeTab.url, location.origin).pathname;
-    return html`<a href=${entry.url} class=${shown ? 'd-list__item d-list__item--active' : 'd-list__item'} title=${entry.title}>${entry.title}</a>`;
+    return html`<a href=${entry.url} class=${shown ? 'd-list__item d-list__item--active' : 'd-list__item'} title=${group ? `${entry.title} (${group})` : entry.title}
+      >${entry.title}${group ? html`<span class="d-dashboards-menu__group-name">${group}</span>` : ''}</a
+    >`;
   }
 
   /** The viewer's favorites, in the order they were added. */
@@ -100,11 +117,18 @@ class DashboardsMenu {
     return stored.filter((f): f is MenuGroupEntry => typeof f?.url === 'string' && typeof f?.title === 'string');
   }
 
-  #toggleFavorite(entry: MenuGroupEntry): void {
+  /** Toggles `entry` with its `star`, which then stays where it was on screen and keeps the focus. */
+  #toggleFavorite(entry: MenuGroupEntry, star: HTMLElement): void {
     const favorites = this.#favorites();
     const kept = favorites.filter((favorite) => favorite.url !== entry.url);
     void this.context.globalState.update('favorites', kept.length < favorites.length ? kept : [...favorites, { url: entry.url, title: entry.title }]);
+    const top = star.getBoundingClientRect().top;
+    const hadFocus = document.activeElement === star;
     this.render();
+    const again = [...this.el.querySelectorAll<HTMLElement>('.d-dashboards-menu__star')].find((el) => el.dataset.key === star.dataset.key);
+    if (!again) return;
+    this.el.scrollTop += again.getBoundingClientRect().top - top;
+    if (hadFocus) again.focus();
   }
 }
 
