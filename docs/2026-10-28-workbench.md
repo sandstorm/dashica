@@ -53,6 +53,7 @@ dashboard; access control can later be a middleware on a page's subtree. **Entry
 they are**; inner API URLs may change.
 
 ```
+GET  /                            the start page (§3.4.3): shell HTML; its page.json at /page.json, {kind: "home"}
 GET  /workbench.json               menu groups, each page with its outline (below; the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
 GET  /p/shop                       shell HTML (the same for every page)
 GET  /p/shop/page.json             {kind, title, defaultTime, filterBar, filterButtons, widgets}; actions with step 7+
@@ -130,7 +131,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
   resizable, state remembered, left panel overlays on narrow screens) plus a bottom panel.
 - **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar above the filter bar; each tab shows one
   page with its own URL and query state, the address bar the active tab's (§3.4.1).
-- A **page** is what a tab shows: `page.kind` = `dashboard` | `explore` | `docs`.
+- A **page** is what a tab shows: `page.kind` = `dashboard` | `explore` | `home` (the start page, §3.4.3) | `docs`.
 
 #### 3.4.1 Tabs (decided 2026-10-31, reversing one page at a time)
 
@@ -307,6 +308,22 @@ the rule between groups and the guide line); later Debug's sections.
   *(proposed)*.
 - Kept: a favorite names its group, muted after its title; a star toggled keeps its place on screen; the page shown
   tinted. The entries' text lines up with the view's title.
+
+#### 3.4.3 The start page "/" (step 7d, decided 2026-10-31)
+
+"/" is a page of its own, not a dashboard and no redirect (the redirect to `/home` is gone): the viewer's favorites as
+tiles (title, its group muted below; in the viewer's order), then every menu group with its dashboards as links; with
+no favorites a hint to star one. The brand "Dashica" links to it; its tab is titled "Home".
+
+- **Go:** `dashboard.CollectHome` mounts the shell at exactly `/` (the pattern `/{$}`, so other paths still 404) and
+  `/page.json` (`dashboard.HomePage`: `{kind: "home", title: "Home"}`, no widgets, no filter bar), from `newDashicaImpl`
+  beside `/workbench.json`. `ListenAndServe` serves the Dashica as it is. The outer repo's `/home` page
+  (`src/root_page.go`) and its group "Dashica" are gone.
+- **Client:** the renderer of kind `home` is in the `dashboards` extension, which owns the favorites: `homePage(menu,
+  favorites)` (`extensions/dashboards/home-page.ts`) is a pure function to an element, drawn anew when the viewer
+  toggles or moves a favorite in the panel (an `EventEmitter` inside the extension) *(proposed)*. The tiles are links,
+  opened by the page host like any other (Cmd / Ctrl+click: the browser's new tab); no star, menu or drag on the start
+  page itself *(proposed)*.
 
 ### 3.5 Extensions and UI code
 
@@ -1200,6 +1217,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | (spike) | `spike/perspective`, rebased onto 7a, in its own commit (`frontend/extensions/explore-view/**`, `e2e/explore-view.spec.ts`, the Perspective doc): the renderer of kind `explore`; "Open in Explore view" is `navigate(<tab's URL>#explore=<id>, { newTab: true })`; "Close" is `context.close()`; its `showOverContent` in `hosts/ui` and its hash-keeping in `query-impl.ts` are dropped (the tab's URL keeps the hash) | the Explore view as a tab |
 | 7b ✅ | **SQL filter as a chip** (decided 2026-10-31, §3.8 "The SQL filter is a chip"): one list of chips (`FilterChip`, `FiltersModel.chips` / `replace`, `sql` / `setSql` / `fields` gone); one `?sql=` per SQL chip, chip order kept across `f` and `sql`, a single old `?sql=` one chip; the funnel adds a SQL chip, every chip edited and removed alike; a filter button a toggle, its chip labelled by its title (`buttonOf`); Go `QueryState.Sql []string`, `SqlClause` ANDs each in parentheses. Files: `lib/httpserver/query_state.go`, `time_range.go` (+ tests), `frontend/hosts/query/{query,query-impl,active-query}.ts` (+ tests), `frontend/extensions/filters/*`, `e2e/filter-chips.spec.ts`; no generated file changes. ✅ 2026-10-31 (vitest and Go tests without ClickHouse green; Playwright written, not run), deviations: `FilterChip = FieldFilter \| SqlFilter` (`FieldFilter` has `kind: 'field'`, `SqlFilter` `{kind: 'sql', sql}`); a SQL chip of only spaces is no chip in the URL, in `add` / `replace` and in Go (`TrimSpace`), not only an empty one; the `=` / `≠` of a structured chip flips its op at once (`replace`), in edit mode it flips the edit's op; the funnel is titled "Add a SQL filter" (its label "Filters" kept); filter buttons show only on a page with `filterBar`, as before; a chip of a `...` button is labelled `Title: value` (several `...` joined with `, `), one of a plain button its title alone; pressing a pressed button removes its chips one by one (one refresh each); tests also in `table`, `widgets`, `dashboard-page`, `bar-vertical`. **Open:** a chip can match two buttons (`/p_wetell/app`: "Host = app.wetell.de" and "Host" with `'...'`): both show pressed, the chip is labelled by the first in page order, either releases it | one filter bar of chips; old links open as before |
 | 7c ✅ | **views in a panel** (§3.4.2): `createView` (`hosts/ui/views/view.ts`: header button, ArrowLeft / ArrowRight, collapsed state in the owner's memento); the Dashboards panel as views ("Favorites", one per menu group; headings, rules and the guide line gone); favorites moved by a grip (pointer events) and Alt+ArrowUp / Alt+ArrowDown, the order stored in `favorites`; `e2e/dashboards-views.spec.ts`. ✅ 2026-10-31 (vitest green; Playwright written, not run), deviations: a pure helper instead of `panel.registerView` (no `setTitle` / `dispose`: the owner draws the view anew); a view's description shows only while it is closed; headers stick to the panel's top | collapsible groups, favorites in the viewer's order |
+| 7d ✅ | **the start page "/"** (§3.4.3): Go `dashboard.CollectHome` (`/` and `/page.json`, kind `home`), the redirect to `/home` removed; the renderer `home` in `dashboards` (`home-page.ts`: favorites as tiles with their group, a hint while there are none, the groups with their dashboards), redrawn when the favorites change; outer repo: `/home`, its group "Dashica" and `src/root_page.go` removed; `e2e/start-page.spec.ts`. ✅ 2026-10-31 (vitest, Go tests green; Playwright written, not run), deviations: the start page is drawn by the client from `/workbench.json`, its `page.json` carries no menu *(proposed)*; tiles and links only, no star or menu on the start page *(proposed)* | "/" shows the favorites and all dashboards |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
 | Risk | Mitigation |

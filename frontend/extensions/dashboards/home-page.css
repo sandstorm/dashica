@@ -1,0 +1,75 @@
+/*
+ * See home-page.ts. The start page on the content's surface: a heading per section; the favorites as tiles in a
+ * grid that fills the width (title, its group muted below), hovered tinted; each group's dashboards as links in
+ * columns.
+ */
+.d-home-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-height: 100%;
+  padding: var(--space-6);
+  background: var(--color-surface);
+}
+
+.d-home-page__heading {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.d-home-page__hint {
+  color: var(--color-text-muted);
+}
+
+.d-home-page__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-3);
+}
+
+.d-home-page__tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  height: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+}
+
+.d-home-page__tile:hover,
+.d-home-page__tile:focus-visible {
+  border-color: var(--color-accent);
+  background: var(--color-hover);
+}
+
+.d-home-page__tile-title {
+  font-weight: var(--weight-medium);
+}
+
+.d-home-page__tile-group {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.d-home-page__dashboards {
+  columns: 16rem;
+  column-gap: var(--space-6);
+}
+
+.d-home-page__dashboard {
+  display: block;
+  padding: var(--space-1) 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.d-home-page__dashboard:hover,
+.d-home-page__dashboard:focus-visible {
+  color: var(--color-accent);
+  text-decoration: underline;
+}

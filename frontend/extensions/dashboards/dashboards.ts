@@ -1,15 +1,18 @@
 import { html } from 'htl';
 import { GripVertical, createElement } from 'lucide';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { MenuGroupEntry } from '../../generated/zz_generated.dashica';
-import type { Extension, ExtensionContext } from '../../hosts/extension-host/extension-host';
+import type { Extension, ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import { createView } from '../../hosts/ui/ui';
 import './dashboards.css';
+import { homePage } from './home-page';
 
 /**
  * The dashboards of `workbench.json`: the left panel "Dashboards" (the viewer's favorites, in the viewer's order, then
  * the menu groups, each a view the viewer closes and opens; the page shown is marked; a star makes an entry a favorite, "…" opens the menu `dashboards/entry`: context `{ url, title }`,
  * argument the URL; "Open in new tab" opens it in a tab of its own), their group in search everywhere (Cmd / Ctrl+Enter:
- * in a new tab), and "Dashica" in the title bar. Picking one opens it in the active tab.
+ * in a new tab), the start page "/" (page kind `home`: the favorites as tiles, then the groups), and "Dashica" in the
+ * title bar, a link to it. Picking one opens it in the active tab.
  */
 export const dashboards: Extension = {
   id: 'dashboards',
@@ -21,8 +24,17 @@ export const dashboards: Extension = {
     const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
     panel.setDefault(true);
     subscriptions.push(panel);
-    const menu = new DashboardsMenu(panel.body, context);
+    const favoritesChanged = new EventEmitter<void>();
+    subscriptions.push(favoritesChanged);
+    const menu = new DashboardsMenu(panel.body, context, () => favoritesChanged.fire());
     menu.render();
+    subscriptions.push(
+      page.registerPageRenderer('home', (el) => {
+        const draw = () => el.replaceChildren(homePage(page.workbench.menu, favoritesOf(context.globalState)));
+        draw();
+        return favoritesChanged.event(draw);
+      }),
+    );
     subscriptions.push(page.onDidChangePage(() => menu.render()));
     // on a narrow workbench, the panel lies over the dashboard just picked
     subscriptions.push(page.onDidChangePage(() => panel.dismiss()));
@@ -60,6 +72,8 @@ class DashboardsMenu {
   constructor(
     private readonly el: HTMLElement,
     private readonly context: ExtensionContext,
+    /** Called when the viewer changed the favorites (toggled or moved one). */
+    private readonly onDidChangeFavorites: () => void,
   ) {}
 
   render(): void {
@@ -135,25 +149,27 @@ class DashboardsMenu {
     >`;
   }
 
-  /** The viewer's favorites, in the viewer's order (a new one last). */
   #favorites(): MenuGroupEntry[] {
-    const stored = this.context.globalState.get<unknown>('favorites', []);
-    if (!Array.isArray(stored)) return [];
-    return stored.filter((f): f is MenuGroupEntry => typeof f?.url === 'string' && typeof f?.title === 'string');
+    return favoritesOf(this.context.globalState);
+  }
+
+  #store(favorites: readonly Pick<MenuGroupEntry, 'url' | 'title'>[]): void {
+    void this.context.globalState.update('favorites', favorites.map(({ url, title }) => ({ url, title })));
+    this.onDidChangeFavorites();
   }
 
   /** Stores the favorites in the order of `urls`. */
   #order(urls: readonly string[]): void {
     const favorites = this.#favorites();
     const ordered = urls.flatMap((url) => favorites.filter((favorite) => favorite.url === url));
-    void this.context.globalState.update('favorites', ordered.map(({ url, title }) => ({ url, title })));
+    this.#store(ordered);
   }
 
   /** Toggles `entry` with its `star`, which then stays where it was on screen and keeps the focus. */
   #toggleFavorite(entry: MenuGroupEntry, star: HTMLElement): void {
     const favorites = this.#favorites();
     const kept = favorites.filter((favorite) => favorite.url !== entry.url);
-    void this.context.globalState.update('favorites', kept.length < favorites.length ? kept : [...favorites, { url: entry.url, title: entry.title }]);
+    this.#store(kept.length < favorites.length ? kept : [...favorites, entry]);
     const top = star.getBoundingClientRect().top;
     const hadFocus = document.activeElement === star;
     this.render();
@@ -221,6 +237,13 @@ class DashboardsMenu {
     doc.addEventListener('pointercancel', cancel);
     doc.addEventListener('keydown', onkeydown, true);
   }
+}
+
+/** The viewer's favorites in `globalState`, in the viewer's order (a new one last). */
+function favoritesOf(globalState: Memento): MenuGroupEntry[] {
+  const stored = globalState.get<unknown>('favorites', []);
+  if (!Array.isArray(stored)) return [];
+  return stored.filter((f): f is MenuGroupEntry => typeof f?.url === 'string' && typeof f?.title === 'string');
 }
 
 /** `list` with its item at `from` moved to `to`. */

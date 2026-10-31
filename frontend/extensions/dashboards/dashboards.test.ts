@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for dashboards.ts in the workbench: the menu (a view per group), the active tab's page marked, favorites
 // (toggled, moved by dragging and by Alt+arrows), "Open in new tab" with the workbench's tab bar, search everywhere (with the charts of searchEverywhere after the dashboards, Cmd / Ctrl+Enter
-// in a new tab).
+// in a new tab), the start page "/".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { settle } from '../../hosts/widgets/widgets-testing';
@@ -16,7 +16,7 @@ let host: HTMLElement;
 beforeEach(async () => {
   history.replaceState(null, '', '/p/shop');
   vi.stubGlobal('fetch', async (url: string) =>
-    new Response(JSON.stringify({ kind: 'dashboard', title: url, filterBar: false, filterButtons: [], widgets: [] })),
+    new Response(JSON.stringify({ kind: url === '/page.json' ? 'home' : 'dashboard', title: url, filterBar: false, filterButtons: [], widgets: [] })),
   );
   host = document.body.appendChild(document.createElement('div'));
   workbench = createWorkbench(host, {
@@ -189,6 +189,37 @@ describe('dashboards', () => {
       press('ArrowDown');
       expect(stored()).toEqual(['Orders', 'Checkout']);
       expect(document.activeElement).toBe(linkOf('Checkout'));
+    });
+  });
+
+  describe('the start page', () => {
+    const home = () => host.querySelector<HTMLElement>('.d-home-page')!;
+    const homeTitles = (selector: string) => [...home().querySelectorAll(selector)].map((el) => el.textContent);
+
+    it('is what the brand links to: a hint while there are no favorites, then the groups with their dashboards', async () => {
+      host.querySelector<HTMLAnchorElement>('.d-brand')!.click();
+      await settle();
+      expect(location.pathname).toBe('/');
+      expect(homeTitles('h2')).toEqual(['Favorites', 'Shop']);
+      expect(homeTitles('.d-home-page__hint')).toHaveLength(1);
+      expect(homeTitles('.d-home-page__dashboard')).toEqual(['Orders', 'Checkout']);
+    });
+
+    it('shows the favorites as tiles with their group, in their order, as they change', async () => {
+      const star = (n: number) => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')].at(n)!;
+      star(-1).click();
+      host.querySelector<HTMLAnchorElement>('.d-brand')!.click();
+      await settle();
+      expect(homeTitles('.d-home-page__tile')).toEqual(['CheckoutShop']);
+      star(-2).click();
+      expect(homeTitles('.d-home-page__tile')).toEqual(['CheckoutShop', 'OrdersShop']);
+      expect(homeTitles('.d-home-page__hint')).toHaveLength(0);
+      // Checkout's own star, under "Favorites"
+      star(0).click();
+      expect(homeTitles('.d-home-page__tile')).toEqual(['OrdersShop']);
+      home().querySelector<HTMLAnchorElement>('.d-home-page__tile')!.click();
+      await settle();
+      expect(location.pathname).toBe('/p/shop');
     });
   });
 

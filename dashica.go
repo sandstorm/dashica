@@ -135,7 +135,8 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	return newDashicaImpl(cfg, logger, mux, deps)
 }
 
-// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json and /time-range and no dashboards yet.
+// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range and the start page "/", and no
+// dashboards yet.
 func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
 	d := &DashicaImpl{
 		cfg:              cfg,
@@ -149,6 +150,9 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 	}
 	if err := d.handlerCollector.Handle("/time-range", http.HandlerFunc(httpserver.TimeRangeHandler)); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /time-range")
+	}
+	if err := dashboard.CollectHome(d.handlerCollector); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register the start page")
 	}
 	return d
 }
@@ -215,13 +219,7 @@ func (d *DashicaImpl) ListenAndServe() error {
 		Int("port", d.cfg.Server.Port).
 		Msg("Starting Dashica HTTP server")
 
-	return http.ListenAndServe(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, "/home", http.StatusFound)
-			return
-		}
-		d.ServeHTTP(w, r)
-	}))
+	return http.ListenAndServe(addr, d)
 }
 
 func (d *DashicaImpl) RegisterDashboardGroup(title string) Dashica {

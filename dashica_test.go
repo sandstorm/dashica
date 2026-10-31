@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -80,5 +81,26 @@ func TestWorkbenchJson_ListsEveryPagesOutline(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Menu[0].Entries, want) {
 		t.Errorf("entries\n got %+v\nwant %+v", got.Menu[0].Entries, want)
+	}
+}
+
+func TestStartPage_ServesTheShellAtTheRootOnly(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	mux := http.NewServeMux()
+	newDashicaImpl(&config.Config{}, logger, mux, rendering.Dependencies{Logger: logger})
+	answer := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+
+	if rec := answer("/"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "window.Dashica.boot()") {
+		t.Errorf("GET /: %d %s", rec.Code, rec.Body)
+	}
+	if got := answer("/page.json").Body.String(); got != `{"kind":"home","title":"Home","filterBar":false,"filterButtons":[],"widgets":[]}` {
+		t.Errorf("GET /page.json: %s", got)
+	}
+	if rec := answer("/p/unknown"); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /p/unknown: %d", rec.Code)
 	}
 }
