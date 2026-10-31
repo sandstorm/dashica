@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Tests for chart-frame.ts: the title above the chart, querying once in view and on a refresh, drawing again for
-// another width, the error, the ignored and skipped Diagnostics, the dragged time range, the menu button.
+// another width, the error, the ignored (the chart muted) and skipped Diagnostics, the dragged time range, the menu
+// button.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
@@ -43,6 +44,7 @@ describe('ChartFrame', () => {
   });
 
   const body = (el: HTMLElement) => el.querySelector('.d-chart-frame__body')!;
+  const muted = (el: HTMLElement) => el.querySelector('.d-chart-frame')!.classList.contains('d-chart-frame--muted');
 
   it('shows the title above the chart, and queries only once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3, 4] });
@@ -110,6 +112,30 @@ describe('ChartFrame', () => {
     expect(ignored.hidden).toBe(true);
   });
 
+  it('draws a chart muted while it ignores some of the page’s filters, and at full strength again once it ignores none', async () => {
+    const { el } = testbed.render(requests);
+    expect(muted(el)).toBe(false);
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host"]}' });
+    testbed.scrollIntoView();
+    await settle();
+    expect(muted(el)).toBe(true);
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    testbed.query.refresh();
+    await settle();
+    expect(muted(el)).toBe(false);
+  });
+
+  it('draws a chart unmuted after a failed query', async () => {
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host"]}' });
+    const { el } = testbed.render(requests);
+    testbed.scrollIntoView();
+    await settle();
+    testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
+    testbed.query.refresh();
+    await settle();
+    expect(muted(el)).toBe(false);
+  });
+
   it('shows why a chart did not run in place of it, and draws it again once it runs', async () => {
     testbed.serveNothing('/p/shop/api/1/query', { 'X-Dashica-Diagnostics': '{"skipped":"pick a host","ignored":["path"]}' });
     const { el } = testbed.render(requests);
@@ -117,6 +143,7 @@ describe('ChartFrame', () => {
     await settle();
     expect(body(el).textContent).toBe('skipped: pick a host');
     expect(el.querySelector<HTMLElement>('.d-chart-frame__ignored')!.hidden).toBe(true);
+    expect(muted(el)).toBe(false);
     testbed.serve('/p/shop/api/1/query', { time: [1], cnt: [3] });
     testbed.query.refresh();
     await settle();

@@ -1,5 +1,6 @@
-// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b and 9c): a link's `f`
-// and `sql` show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the
+// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b, 9c and 9r): a link's `f`
+// and `sql` show as chips in their order, a chart whose query ignores a pill says so and is drawn muted until the
+// pointer is on it, an unsigned pill fails the
 // charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26), a chip's × removes it from the URL, a pill's operator and value are edited in
 // place on a page whose charts filter its table, a filter button toggles in place as a signed pill, without a chip; a
 // button with `...` asks its value, shows it beside it and takes a new one in its place.
@@ -54,11 +55,19 @@ test('a link’s pill shows as a chip, the charts on another table name it as ig
     const ignored = page.getByTestId('chart-ignored-filters').first();
     await expect(ignored).toBeVisible();
     await expect(ignored).toHaveText(`ignores ${pill.label}`);
+    await expect(ignored).toHaveCSS('opacity', '1');
+
+    const muted = page.locator('.d-chart-frame--muted').first();
+    const stage = muted.locator('.d-chart-frame__stage');
+    await expect(stage).not.toHaveCSS('opacity', '1');
+    await muted.hover();
+    await expect(stage).toHaveCSS('opacity', '1');
 
     await chips.first().getByRole('button', {name: `Remove ${pill.label}`}).click();
     await expect(chips).toHaveCount(0);
     await expect(page).not.toHaveURL(/[?&]f=/);
     await expect(ignored).toBeHidden();
+    await expect(page.locator('.d-chart-frame--muted')).toHaveCount(0);
 });
 
 test('an exclude shows ≠; back brings a removed chip back', async ({page}) => {

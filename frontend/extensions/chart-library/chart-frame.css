@@ -7,6 +7,23 @@
 /* the chart, with the shimmer over it until it is drawn */
 .d-chart-frame__stage {
     position: relative;
+    transition: opacity var(--duration-fast), filter var(--duration-fast);
+}
+
+/*
+ * a chart that ignores some of the page's filters: its drawing faded and greyer, the title row and its "ignores …"
+ * as they are; at full strength while the pointer is on it, the focus is in it or it is its tab's active widget
+ */
+.d-chart-frame--muted .d-chart-frame__stage {
+    opacity: var(--opacity-muted);
+    filter: saturate(var(--saturation-muted));
+}
+
+.d-chart-frame--muted:hover .d-chart-frame__stage,
+.d-chart-frame--muted:focus-within .d-chart-frame__stage,
+.d-widget--active > .d-chart-frame--muted .d-chart-frame__stage {
+    opacity: 1;
+    filter: none;
 }
 
 /* while it queries: a spinner in the top right corner */

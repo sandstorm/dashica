@@ -1,6 +1,6 @@
 /*
  * The design tokens (docs/2026-10-30-styling.md §3.1): the only place with raw values. Components take colors, spaces,
- * type sizes, radii and depths from here; dark mode redefines the colors only.
+ * type sizes, radii, depths and the muted look from here; dark mode redefines the colors only.
  */
 :root {
   color-scheme: light dark;
@@ -55,6 +55,10 @@
   --z-panel: 10;
   --z-popover: 50;
   --z-tooltip: 9999;
+
+  /* a drawing that shows only part of what the page asks (a chart that ignores filters); readable on both schemes */
+  --opacity-muted: 0.5;
+  --saturation-muted: 0.3;
 
   --duration-fast: 150ms;
   --duration-slow: 300ms;
