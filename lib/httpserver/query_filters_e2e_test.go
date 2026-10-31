@@ -1,5 +1,5 @@
 // Tests for pills against a real ClickHouse (QueryHandler.HandleQuery with filter.Apply's conditions): a quoted value
-// compared with a column of another type.
+// compared with a column of another type; the values of a field (HandleValues).
 package httpserver
 
 import (
@@ -66,5 +66,24 @@ func TestHandleQuery_AValueWithQuotesStaysOneLiteral(t *testing.T) {
 	_, err := queryStatusRows(t, "eq", `500' OR '1'='1`)
 	if err == nil {
 		t.Errorf("want the whole text compared as one value (and failing to convert), got %v", err)
+	}
+}
+
+func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
+	cfg, _ := testServer.LoadTestingConfig(t)
+	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+	for search, want := range map[string]string{"": `["200","500"]`, "50": `["500"]`, "x": `[]`} {
+		r := httptest.NewRequest(http.MethodGet, "/values?time=1h", nil)
+		state, err := ParseQueryState(r)
+		if err != nil {
+			t.Fatalf("ParseQueryState: %v", err)
+		}
+		rec := httptest.NewRecorder()
+		if err := qh.HandleValues(sql.Values(statusRows, sql.NewFieldAlias("status"), ValuesLimit), state, search, rec, r); err != nil {
+			t.Fatalf("%q: %v", search, err)
+		}
+		if got := string(bytes.TrimSpace(rec.Body.Bytes())); got != want {
+			t.Errorf("%q: %s, want %s", search, got, want)
+		}
 	}
 }

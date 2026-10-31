@@ -90,6 +90,7 @@ export const page = {
           "filterable": [
             "status"
           ],
+          "table": "http_logs",
           "connection": "default"
         },
         "b": {
@@ -138,6 +139,7 @@ export const page = {
           "filterable": [
             "status"
           ],
+          "table": "http_logs",
           "connection": "default"
         },
         "1": {
@@ -158,6 +160,7 @@ export const page = {
           "filterable": [
             "path"
           ],
+          "table": "http_logs",
           "connection": "default"
         },
         "2": {
@@ -179,6 +182,7 @@ export const page = {
           "filterable": [
             "duration_ms"
           ],
+          "table": "http_logs",
           "connection": "default"
         },
         "3": {
@@ -199,6 +203,7 @@ export const page = {
           "filterable": [
             "status"
           ],
+          "table": "http_logs",
           "connection": "default"
         },
         "4": {

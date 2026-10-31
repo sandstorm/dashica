@@ -87,6 +87,9 @@ type Node struct {
 	// fields that hold categories (sql.IsCategory), when its query has a table (sql.From, sql.Table) and does not skip
 	// filters; empty for every other widget.
 	Filterable []string `json:"filterable,omitempty"`
+	// Table is the table its pills are on, with its database ("default.http_logs", filter.Table), when it has
+	// Filterable fields: the filter bar's "add filter" offers the page's fields by table (`<dataUrl>/values`).
+	Table string `json:"table,omitempty"`
 	// Connection is the ClickHouse connection its query runs on (sql.ConnectionOf: "default", "logs"); empty for a
 	// widget without a query. The Schema view shows a page's connections first.
 	Connection string `json:"connection,omitempty"`
@@ -132,6 +135,10 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 			node.Connection = sql.ConnectionOf(chart.Query())
 			for _, field := range filterableFields(chart) {
 				node.Filterable = append(node.Filterable, field.Alias())
+			}
+			if len(node.Filterable) > 0 {
+				table, _ := tableOf(ctx.Deps, chart.Query()) // filterable fields only with a table
+				node.Table = table.Name
 			}
 		}
 	}
@@ -237,7 +244,7 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 // viewer edited, its `param_<name>` values bound, HandleEditedRows, at most httpserver.ExploreRowLimit rows) and /sql (the
 // chart's query with its parameters, HandleSql), each with the pills of the request on its table (filter.Apply; a
 // pill not signed with deps.FilterSecret is a 400, as is a query state that cannot be read); and /pill, the pill of
-// one of its fields (pillHandler). /sql and `exploreSql` answer 404 unless deps.ExploreEnabled (their handlers check
+// one of its fields (pillHandler); /values, the values of one of them (valuesHandler). /sql and `exploreSql` answer 404 unless deps.ExploreEnabled (their handlers check
 // it).
 func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	qh := httpserver.QueryHandler{
@@ -277,7 +284,39 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	})
 	mux.Handle("/sql", serve(qh.HandleSql))
 	mux.Handle("/pill", pillHandler(deps, chart))
+	mux.Handle("/values", valuesHandler(deps, qh, chart))
 	return mux
+}
+
+// valuesHandler answers `GET /values?field=<alias>&search=<text>` with the values of the chart's filterable field
+// `field` that contain `search` (ignoring case), at most httpserver.ValuesLimit, sorted, as a JSON array of strings
+// (HandleValues): sql.Values of its query in the request's time range, SQL chips and pills, the pills on that field
+// left out, so that a value besides one filtered by is still offered. 422 for a field that cannot filter (as /pill),
+// 400 for a pill not signed with deps.FilterSecret or a query state that cannot be read.
+func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		alias := r.URL.Query().Get("field")
+		i := slices.IndexFunc(filterableFields(chart), func(f sql.SqlField) bool { return f.Alias() == alias })
+		table, ok := tableOf(deps, chart.Query())
+		if i < 0 || !ok {
+			http.Error(w, fmt.Sprintf("%q cannot filter this chart's table", alias), http.StatusUnprocessableEntity)
+			return
+		}
+		state, err := httpserver.ParseQueryState(r)
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		pills, err := openPills(deps.FilterSecret, state.Pills)
+		if err != nil {
+			httpError(w, err)
+			return
+		}
+		pills = slices.DeleteFunc(pills, func(p filter.Pill) bool { return p.Table == table && p.Field == alias })
+		filtered, _ := filter.Apply(chart.Query(), table, ok, pills)
+		values := sql.Values(filtered, filterableFields(chart)[i], httpserver.ValuesLimit)
+		httpError(w, qh.HandleValues(values, state, r.URL.Query().Get("search"), w, r))
+	}
 }
 
 // pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne` with the pill (filter.New) of the

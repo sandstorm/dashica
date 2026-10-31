@@ -141,6 +141,8 @@ func BuildWithFS(query SqlQueryable, fileSystem fs.ReadFileFS) (string, error) {
 		return q.BuildWithFS(fileSystem)
 	case *SqlString:
 		return q.BuildWithFS(fileSystem)
+	case *valuesOf:
+		return q.buildWithFS(fileSystem)
 	default:
 		return query.Build(), nil
 	}

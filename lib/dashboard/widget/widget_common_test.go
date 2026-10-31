@@ -32,7 +32,7 @@ func init() {
 
 func mountPage(t *testing.T, widgets ...WidgetDefinition) (*rendering.DashboardContext, *http.ServeMux, handler_collector.HandlerCollector, []Node) {
 	t.Helper()
-	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop"}
+	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop", Deps: testDeps()}
 	mux := http.NewServeMux()
 	handlers := handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop/api")
 	nodes, err := Widgets(widgets).Mount(ctx, handlers)

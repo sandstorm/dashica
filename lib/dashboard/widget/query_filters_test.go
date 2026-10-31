@@ -1,4 +1,5 @@
-// Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields).
+// Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields), the
+// values it offers for them (valuesHandler) and the table its node names.
 package widget
 
 import (
@@ -190,5 +191,46 @@ func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
 		if got := aliases(tt.chart); !slices.Equal(got, tt.want) {
 			t.Errorf("%s: %v, want %v", name, got, tt.want)
 		}
+	}
+}
+
+func TestValues_AFieldThatCannotFilterIs422AnUnsignedPill400(t *testing.T) {
+	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
+	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
+	for name, tt := range map[string]struct {
+		chart withQuery
+		field string
+	}{
+		"a count":                    {bar, "cnt"},
+		"a time bucket":              {bar, "time"},
+		"no field of it":             {bar, "path"},
+		"a SQL file without a table": {noTable, "host"},
+	} {
+		if rec := askPath(tt.chart, "/values?time=1h&field="+tt.field); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	if rec := askPath(bar, "/values?time=1h&field=status&f=status:eq:500"); rec.Code != http.StatusBadRequest {
+		t.Errorf("unsigned pill: %d %s", rec.Code, rec.Body)
+	}
+	if rec := askPath(bar, "/values?field=status"); rec.Code != http.StatusBadRequest {
+		t.Errorf("no time range: %d %s", rec.Code, rec.Body)
+	}
+	// the ClickHouse of testDeps is unreachable: a request that passed every check fails there
+	if rec := askPath(bar, "/values?time=1h&field=status&search=50"); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "clickhouse") {
+		t.Errorf("a field that filters: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestMount_AChartWithFilterableFieldsNamesItsTable(t *testing.T) {
+	_, _, _, page := mountPage(t,
+		NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count()),
+		NewBarVertical(sql.New(sql.From("audit"), sql.OnDatabase("logs"))).X(sql.Field("action")).Y(sql.Count()),
+		NewStats(sql.New(sql.From("payments"))),
+		pathEcho{},
+	)
+
+	if got := []string{page[0].Table, page[1].Table, page[2].Table, page[3].Table}; !slices.Equal(got, []string{"default.http_logs", "audit", "", ""}) {
+		t.Errorf("tables %q", got)
 	}
 }
