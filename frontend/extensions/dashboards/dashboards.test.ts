@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for dashboards.ts in the workbench: the menu (a view per group), the active tab's page marked, favorites
-// (toggled, moved by dragging and by Alt+arrows), "Open in new tab" with the workbench's tab bar, search everywhere (with the charts of searchEverywhere after the dashboards, Cmd / Ctrl+Enter
-// in a new tab), the start page "/".
+// (toggled, moved by dragging and by Alt+arrows), "Open in new tab" with the workbench's tab bar, search everywhere
+// (with the charts of searchEverywhere after the dashboards, Cmd / Ctrl+Enter in a new tab), the start page "/".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { settle } from '../../hosts/widgets/widgets-testing';

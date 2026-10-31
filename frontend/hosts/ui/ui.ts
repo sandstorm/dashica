@@ -4,10 +4,10 @@ import type { Event } from '../../core/event-emitter/event-emitter';
 import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
- * The workbench's regions as extensions fill them (side panels left and right, items in the title bar, the filter
- * bar and the status bar), its menus, and what search everywhere finds. Each panel has a command `workbench.view.<id>`: it shows and
- * focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are remembered for
- * the browser session.
+ * The workbench's regions as extensions fill them (side panels left and right, items in the title bar, the filter bar
+ * and the status bar), its menus, and what search everywhere finds. Each panel has a command `workbench.view.<id>`: it
+ * shows and focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are
+ * remembered for the browser session.
  */
 export interface UiApi {
   /** Adds a side panel with its rail button on `options.side`; one panel per side shows at a time. Ids are unique across all panels. */
@@ -31,8 +31,8 @@ export interface UiApi {
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
   /**
    * Pops up `entries` at `options.anchor` as `showContextMenu` pops up a menu's, for entries of the moment (a chart's
-   * categories to select); without entries it changes nothing, the open menu stays. Choosing one calls its `run`, after the menu closed and gave the
-   * focus back.
+   * categories to select); without entries it changes nothing, the open menu stays. Choosing one calls its `run`, after
+   * the menu closed and gave the focus back.
    */
   showChoices(entries: readonly Choice[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void;
   /**
@@ -160,9 +160,9 @@ export interface QuickPickSeparator {
 }
 
 /**
- * A quick pick its owner drives: it shows `items` as they are (the owner filters and marks them as `value` changes)
- * and tells what the viewer does. Picking an item (Enter, a click, either with Cmd / Ctrl) fires `onDidAccept` with it in `selectedItems`; the
- * box stays until `hide`. Escape, a press outside or another box hide it.
+ * A quick pick its owner drives: it shows `items` as they are (the owner filters and marks them as `value` changes) and
+ * tells what the viewer does. Picking an item (Enter, a click, either with Cmd / Ctrl) fires `onDidAccept` with it in
+ * `selectedItems`; the box stays until `hide`. Escape, a press outside or another box hide it.
  */
 export interface QuickPick<T extends QuickPickItem> {
   /** The box's accessible name. */

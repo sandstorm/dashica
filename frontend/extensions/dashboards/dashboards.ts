@@ -9,10 +9,11 @@ import { homePage } from './home-page';
 
 /**
  * The dashboards of `workbench.json`: the left panel "Dashboards" (the viewer's favorites, in the viewer's order, then
- * the menu groups, each a view the viewer closes and opens; the page shown is marked; a star makes an entry a favorite, "…" opens the menu `dashboards/entry`: context `{ url, title }`,
- * argument the URL; "Open in new tab" opens it in a tab of its own), their group in search everywhere (Cmd / Ctrl+Enter:
- * in a new tab), the start page "/" (page kind `home`: the favorites as tiles, then the groups), and "Dashica" in the
- * title bar, a link to it. Picking one opens it in the active tab.
+ * the menu groups, each a view the viewer closes and opens; the page shown is marked; a star makes an entry a
+ * favorite, "…" opens the menu `dashboards/entry`: context `{ url, title }`, argument the URL; "Open in new tab"
+ * opens it in a tab of its own), their group in search everywhere (Cmd / Ctrl+Enter: in a new tab), the start page
+ * "/" (page kind `home`: the favorites as tiles, then the groups), and "Dashica" in the title bar, a link to it.
+ * Picking one opens it in the active tab.
  */
 export const dashboards: Extension = {
   id: 'dashboards',
@@ -193,8 +194,8 @@ class DashboardsMenu {
   }
 
   /**
-   * Drags the favorite `row` from its grip (`event`, the main button): it moves in the list as the pointer passes the middle of another
-   * favorite; releasing stores the order, Escape or a cancelled pointer puts it back.
+   * Drags the favorite `row` from its grip (`event`, the main button): it moves in the list as the pointer passes the
+   * middle of another favorite; releasing stores the order, Escape or a cancelled pointer puts it back.
    */
   #drag(event: PointerEvent, row: HTMLElement): void {
     if (event.button !== 0) return;

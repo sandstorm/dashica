@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// Tests for table.ts: the rows drawn into a table, ticked rows as the widget's selected records, a click on a cell of
-// a category column selecting its value for the floating bar's filters, a cell's menu (`table/cell`) adding a condition to the page's SQL filter, a column
-// header's (`table/header`) sizing the columns.
+// Tests for table.ts: the rows drawn into a table, ticked rows as the widget's selected records, a click on a cell of a
+// category column selecting its value for the floating bar's filters, a cell's menu (`table/cell`) adding a condition
+// to the page's SQL filter, a column header's (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';

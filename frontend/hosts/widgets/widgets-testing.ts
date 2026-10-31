@@ -12,10 +12,11 @@ import { WidgetsHost } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
- * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`, `query`, `ui`, `commands` and `page`);
- * `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
- * chart visible, `resize` sets every chart's width; `menus` are the context menus shown, `choices()` / `choose` the
- * choices `ctx.choose` shows, `floatingBar()` the floating bar shown. `dispose` in `afterEach`.
+ * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
+ * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
+ * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
+ * shown, `choices()` / `choose` the choices `ctx.choose` shows, `floatingBar()` the floating bar shown. `dispose` in
+ * `afterEach`.
  */
 export function widgetTestbed() {
   history.replaceState(null, '', '/p/shop');

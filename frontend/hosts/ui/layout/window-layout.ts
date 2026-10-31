@@ -7,9 +7,10 @@ import { restoreSideBarState, SideBar, type PanelCommands, type Side } from './s
 
 /**
  * The workbench's regions in one grid: the title bar above everything; the left side (a rail with a button per side
- * panel and the shown panel); in the middle the tab bar, the filter bar and the content; the right side (the shown panel and its rail, on the outer edge); the status bar below everything. Each side shows one panel at
- * a time; clicking the shown one's rail button hides the side and the content takes the room. Sizes and the panels
- * picked are remembered for the session.
+ * panel and the shown panel); in the middle the tab bar, the filter bar and the content; the right side (the shown
+ * panel and its rail, on the outer edge); the status bar below everything. Each side shows one panel at a time;
+ * clicking the shown one's rail button hides the side and the content takes the room. Sizes and the panels picked are
+ * remembered for the session.
  *
  * While the workbench is narrower than 720px the left side's panel lies over the content and closes on Escape, a click
  * outside, or `dismiss()` (e.g. after a dashboard was chosen in it).
