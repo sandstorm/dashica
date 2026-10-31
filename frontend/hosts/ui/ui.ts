@@ -24,15 +24,15 @@ export interface UiApi {
   /** Fires with a menu's id when its entries change. */
   readonly onDidChangeMenu: Event<string>;
   /**
-   * Pops up the menu `menuId` at `options.anchor`; nothing while no entry applies. Choosing an entry runs its command
-   * with `options.args`, after the menu closed and gave the focus back. One at a time: a new menu closes the open one;
-   * so do Escape and a press elsewhere.
+   * Pops up the menu `menuId` at `options.anchor`, its entries in the quick pick (typing narrows them); nothing while no
+   * entry applies (an open box hides). Choosing an entry runs its command with `options.args`, after the box closed
+   * and gave the focus back. One box at a time: a new one closes the open one; so do Escape and a press elsewhere.
    */
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
   /**
-   * Pops up `entries` at `options.anchor` as `showContextMenu` pops up a menu's, for entries of the moment (a chart's
-   * categories to select); without entries it changes nothing, the open menu stays. Choosing one calls its `run`, after
-   * the menu closed and gave the focus back.
+   * Pops up `entries` at `options.anchor` in the quick pick as `showContextMenu` pops up a menu's, for entries of the
+   * moment (a chart's categories to select); without entries it changes nothing, the open box stays. Choosing one calls
+   * its `run`, after the box closed and gave the focus back.
    */
   showChoices(entries: readonly Choice[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void;
   /**

@@ -74,10 +74,10 @@ export function widgetTestbed() {
     commands,
     menus,
     /** The labels of the choices `ctx.choose` shows, `[]` while it shows none. */
-    choices: () => [...workbench.querySelectorAll('[role=menu][aria-label="Select"] [role=menuitem]')].map((item) => item.textContent),
+    choices: () => [...workbench.querySelectorAll('.d-workbench__quick-pick[aria-label="Select"] [role=option]')].map((item) => item.textContent),
     /** Chooses the choice `label` that `ctx.choose` shows, as a click does. */
     choose(label: string) {
-      const items = [...workbench.querySelectorAll<HTMLElement>('[role=menu][aria-label="Select"] [role=menuitem]')];
+      const items = [...workbench.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Select"] [role=option]')];
       const item = items.find((candidate) => candidate.textContent === label);
       if (!item) throw new Error(`no choice ${label} among ${items.map((candidate) => candidate.textContent).join(', ')}`);
       item.click();

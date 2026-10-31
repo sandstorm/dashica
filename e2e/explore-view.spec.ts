@@ -18,7 +18,7 @@ async function openExplore(page: Page) {
     const frame = page.locator('.d-chart-frame', {has: page.getByText(CHART, {exact: true})}).first();
     await frame.scrollIntoViewIfNeeded();
     await frame.getByRole('button', {name: 'More'}).click();
-    await page.getByRole('menuitem', {name: 'Open in Explore view'}).click();
+    await page.getByRole('option', {name: 'Open in Explore view'}).click();
     const view = page.getByTestId('explore-view');
     await expect(view).toBeVisible();
     return view;

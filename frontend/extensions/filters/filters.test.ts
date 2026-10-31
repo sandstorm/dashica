@@ -18,6 +18,9 @@ let pageChanged: EventEmitter<PageJson | undefined>;
 let menuItems: { menuId: string; item: MenuItem<Selection> }[];
 let commands: CommandsHost;
 let selectionCleared: number;
+/** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
+let answer: string | undefined;
+let asked: { title?: string; prompt?: string; anchor?: unknown }[];
 
 const shop: PageJson = {
   kind: 'dashboard',
@@ -49,12 +52,14 @@ beforeEach(() => {
       (name === 'title' ? titleBar : bar).appendChild(el);
       return { dispose: () => el.remove() };
     },
+    showInputBox: async (options: { title?: string; prompt?: string; anchor?: unknown }) => (asked.push(options), answer),
     registerMenuItem: (menuId: string, item: MenuItem<Selection>) => {
       menuItems.push({ menuId, item });
       return { dispose() {} };
     },
   };
   menuItems = [];
+  asked = [];
   commands = new CommandsHost(document.body);
   selectionCleared = 0;
   const widgets = { clearSelection: () => selectionCleared++ };
@@ -126,15 +131,18 @@ describe('filters', () => {
     expect(changes).toBe(1);
   });
 
-  it('asks for the value of a `...` in a condition; nothing when the viewer cancels', () => {
-    vi.stubGlobal('prompt', () => '/api/');
-    button('Path').click();
-    expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '/api/%'" }]);
+  it('asks for the value of a `...` in a condition in an input box below the button; nothing when the viewer cancels', async () => {
+    answer = '/api/';
+    const pressed = button('Path');
+    pressed.click();
+    await vi.waitFor(() => expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '/api/%'" }]));
+    expect(asked).toEqual([{ title: 'Parameter value', prompt: "Path: path LIKE '...%'", anchor: pressed }]);
     expect(chips().map(chipText)).toEqual(['Path: /api/']);
     query.filters.clear();
-    vi.stubGlobal('prompt', () => null);
+    answer = undefined;
     button('Path').click();
-    expect(query.filters.chips).toEqual([]);
+    await Promise.resolve();
+    expect([query.filters.chips, asked.length]).toEqual([[], 2]);
   });
 
   it('shows a SQL chip that matches no button as `SQL:` and its text on one line', () => {

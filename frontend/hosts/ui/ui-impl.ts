@@ -25,7 +25,6 @@ import type {
   UiApi,
 } from './ui';
 import './layout/window-layout.css';
-import './menus/context-menu.css';
 import './menus/floating-bar.css';
 import './quick-input/quick-input.css';
 
@@ -44,10 +43,10 @@ export class UiHost implements UiApi {
     this.#layout = new WindowLayout(host, layoutState, commands);
     this.#bars = { title: new Bar(this.#layout.titleBar), filter: new Bar(this.#layout.filterBar), status: new Bar(this.#layout.statusBar) };
     this.#menus = new Menus(() => commands.getCommands());
-    this.#contextMenu = new ContextMenu(host, this.#menus, commands);
+    this.#quickInput = new QuickInput(host);
+    this.#contextMenu = new ContextMenu(this.#quickInput, this.#menus, commands);
     this.#floatingBars = new FloatingBars(host, this.#menus, commands);
     this.onDidChangeMenu = this.#menus.onDidChange;
-    this.#quickInput = new QuickInput(host);
   }
 
   get content(): HTMLElement {
@@ -79,7 +78,8 @@ export class UiHost implements UiApi {
   }
 
   showChoices(entries: readonly Choice[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void {
-    this.#contextMenu.showEntries(entries, options);
+    if (entries.length === 0) return;
+    this.#quickInput.pickOne(entries, options, (picked) => picked?.run());
   }
 
   registerFloatingBar<C extends object>(options: FloatingBarOptions<C>): FloatingBar<C> {
@@ -111,7 +111,6 @@ export class UiHost implements UiApi {
   dispose(): void {
     this.#searchProviders.clear();
     this.#quickInput.dispose();
-    this.#contextMenu.dispose();
     this.#floatingBars.dispose();
     this.#menus.dispose();
     this.#layout.dispose();

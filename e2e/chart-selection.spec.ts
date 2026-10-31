@@ -49,8 +49,8 @@ test('a click on a table cell selects its value; "Exclude" adds it as ≠; its m
 
     // a right click shows the menu table/cell
     await cell.click({button: 'right'});
-    const menu = page.getByRole('menu');
-    await expect(menu.getByRole('menuitem')).toHaveText(['Filter: Contains this value']);
+    const menu = page.getByRole('dialog', {name: 'table'});
+    await expect(menu.getByRole('option')).toHaveText(['Filter: Contains this value']);
     // a click outside the menu closes it
     await frame.getByText(TABLE, {exact: true}).click();
     await expect(menu).toHaveCount(0);

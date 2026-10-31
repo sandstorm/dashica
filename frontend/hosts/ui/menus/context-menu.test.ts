@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// Tests for context-menu.ts, over menus of its own and commands faked, and for entries of the moment.
+// Tests for context-menu.ts, over menus of its own, a real quick input and commands faked.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandsHost, MenuContext, MenuItem } from '../../commands/commands';
+import { QuickInput } from '../quick-input/quick-input';
 import { ContextMenu } from './context-menu';
 import { Menus } from './menus';
 
@@ -26,68 +27,58 @@ function commandsWith(more: { executeCommand?(command: string, ...args: unknown[
   return { executeCommand: async () => undefined, keybindingLabel: () => undefined, ...more } as Pick<CommandsHost, 'executeCommand' | 'keybindingLabel'>;
 }
 
-function setup() {
+function setup(menus = menusWith('dashboards/entry', ENTRIES), more: Parameters<typeof commandsWith>[0] = {}) {
   const host = document.body.appendChild(document.createElement('div'));
   const trigger = host.appendChild(document.createElement('button'));
   trigger.focus();
   const ran: unknown[][] = [];
-  const menus = new ContextMenu(
-    host,
-    menusWith('dashboards/entry', ENTRIES),
-    commandsWith({ executeCommand: async (command, ...args) => void ran.push([command, document.activeElement === trigger, ...args]), keybindingLabel: (command) => (command === 'dashboards.copyLink' ? '⌘C' : undefined) }),
+  const quickInput = new QuickInput(host);
+  const menu = new ContextMenu(
+    quickInput,
+    menus,
+    commandsWith({
+      executeCommand: async (command, ...args) => void ran.push([command, document.activeElement === trigger, ...args]),
+      keybindingLabel: (command) => (command === 'dashboards.copyLink' ? '⌘C' : undefined),
+      ...more,
+    }),
   );
-  const show = (favorite = true) => menus.show('dashboards/entry', { anchor: { x: 10, y: 20 }, title: 'Shop', context: { favorite }, args: ['/p/shop'] });
-  const items = () => [...host.querySelectorAll<HTMLElement>('.d-workbench__context-menu-item')];
-  const key = (key: string) => (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-  const isOpen = () => host.querySelector('[role=menu]') !== null;
-  return { host, trigger, menus, show, ran, items, key, isOpen };
+  const show = (favorite = true) => menu.show('dashboards/entry', { anchor: { x: 10, y: 20 }, title: 'Shop', context: { favorite }, args: ['/p/shop'] });
+  const items = () => [...host.querySelectorAll<HTMLElement>('[role=option]')];
+  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+  const isOpen = () => host.querySelector('.d-workbench__quick-pick') !== null;
+  return { host, trigger, menu, quickInput, show, ran, items, field, isOpen };
 }
 
 describe('ContextMenu', () => {
-  it("lists the menu's entries for the context, a separator between groups, and focuses the first", () => {
-    const { host, show, items } = setup();
+  it("lists the menu's entries for the context in the quick pick at the anchor, a line between groups, the field focused", () => {
+    const { host, show, items, field } = setup();
     show();
-    const menu = host.querySelector('[role=menu]')!;
-    expect(menu.getAttribute('aria-label')).toBe('Shop');
-    expect([...menu.children].map((child) => child.getAttribute('role'))).toEqual(['menuitem', 'menuitem', 'separator', 'menuitem']);
+    const box = host.querySelector<HTMLElement>('.d-workbench__quick-pick')!;
+    expect([box.getAttribute('aria-label'), box.style.left, box.style.top, document.activeElement]).toEqual(['Shop', '10px', '20px', field()]);
+    expect([...host.querySelectorAll('[role=group]')].map((group) => group.querySelectorAll('[role=option]').length)).toEqual([1]);
     expect(items().map((item) => item.textContent)).toEqual(['Open in new tab', 'Copy link ⌘C', 'favorites.remove']);
-    expect(document.activeElement).toBe(items()[0]);
+    expect(items()[2].parentElement!.getAttribute('role')).toBe('group');
   });
 
-  it('shows an entry with `toggled` as a checkbox, checked as it says in the context, the others aligned with it', () => {
-    const host = document.body.appendChild(document.createElement('div'));
+  it('shows an entry with `toggled` with a check mark as it says in the context', () => {
     const shown: MenuContext[] = [];
     const items: MenuItem[] = [
       { command: 'dashboards.toggleFavorite', title: 'Favorite', toggled: (context) => (shown.push(context), context.favorite === true) },
       { command: 'dashboards.togglePinned', title: 'Pinned', toggled: () => false },
       { command: 'dashboards.copyLink', title: 'Copy link', group: 'z' },
     ];
-    const menus = new ContextMenu(host, menusWith('page/title', items), commandsWith());
-    menus.show('page/title', { anchor: host, title: 'Shop', context: { favorite: true } });
-    const entries = [...host.querySelectorAll<HTMLElement>('.d-workbench__context-menu-item')];
-    expect(entries.map((entry) => [entry.getAttribute('role'), entry.getAttribute('aria-checked'), entry.textContent])).toEqual([
-      ['menuitemcheckbox', 'true', '✓Favorite'],
-      ['menuitemcheckbox', 'false', 'Pinned'],
-      ['menuitem', null, 'Copy link'],
+    const { host, menu, items: options } = setup(menusWith('page/title', items));
+    menu.show('page/title', { anchor: host, title: 'Shop', context: { favorite: true } });
+    expect(options().map((entry) => [entry.getAttribute('aria-checked'), entry.textContent])).toEqual([
+      ['true', '✓Favorite'],
+      ['false', 'Pinned'],
+      [null, 'Copy link ⌘C'],
     ]);
     expect(shown).toEqual([{ favorite: true }]);
-    expect(host.querySelector('[role=menu]')!.classList.contains('d-workbench__context-menu--checks')).toBe(true);
+    expect(host.querySelector('[role=listbox]')!.classList.contains('d-workbench__quick-pick-list--checks')).toBe(true);
   });
 
-  it('moves with the arrow keys, Home and End', () => {
-    const { show, items, key } = setup();
-    show();
-    key('ArrowDown');
-    expect(document.activeElement).toBe(items()[1]);
-    key('End');
-    expect(document.activeElement).toBe(items()[2]);
-    key('ArrowDown');
-    expect(document.activeElement).toBe(items()[0]);
-    key('ArrowUp');
-    expect(document.activeElement).toBe(items()[2]);
-  });
-
-  it("runs a chosen entry's command with the menu's arguments after closing, the focus back on the trigger", () => {
+  it("runs a chosen entry's command with the menu's arguments right after closing, the focus back on the trigger", () => {
     const { show, items, ran, isOpen } = setup();
     show(false);
     items()[1].click();
@@ -95,58 +86,43 @@ describe('ContextMenu', () => {
     expect(isOpen()).toBe(false);
   });
 
+  it('narrows the entries as the viewer types; Enter runs the first left', () => {
+    const { show, items, field, ran } = setup();
+    show();
+    field().value = 'copy';
+    field().dispatchEvent(new Event('input', { bubbles: true }));
+    expect(items().map((item) => item.textContent)).toEqual(['Copy link ⌘C']);
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(ran).toEqual([['dashboards.copyLink', true, '/p/shop']]);
+  });
+
   it('logs a failing command', async () => {
-    const host = document.body.appendChild(document.createElement('div'));
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const menus = new ContextMenu(host, menusWith('m', [{ command: 'dashboards.copyLink' }]), commandsWith({ executeCommand: async () => Promise.reject(new Error('no')) }));
-    menus.show('m', { anchor: host, title: 'm' });
-    host.querySelector<HTMLElement>('[role=menuitem]')!.click();
+    const { host, menu } = setup(menusWith('m', [{ command: 'dashboards.copyLink' }]), { executeCommand: async () => Promise.reject(new Error('no')) });
+    menu.show('m', { anchor: host, title: 'm' });
+    host.querySelector<HTMLElement>('[role=option]')!.click();
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Command dashboards.copyLink failed:', expect.any(Error)));
     error.mockRestore();
   });
 
-  it('shows nothing for a menu without entries that apply, and closes the open one', () => {
-    const { menus, show, isOpen } = setup();
+  it('shows nothing for a menu without entries that apply, and hides the open box', () => {
+    const { menu, show, isOpen } = setup();
     show();
-    menus.show('widget/context', { anchor: { x: 0, y: 0 }, title: 'Chart' });
+    menu.show('widget/context', { anchor: { x: 0, y: 0 }, title: 'Chart' });
     expect(isOpen()).toBe(false);
   });
 
-  it('closes on Escape, on a press elsewhere, on a new menu and on dispose', () => {
-    const { host, show, menus, trigger, ran, isOpen, key } = setup();
+  it('closes on Escape (the focus back), on a press elsewhere and on a new menu, running nothing', () => {
+    const { host, show, field, trigger, ran, isOpen } = setup();
     show();
-    key('Escape');
-    expect(isOpen()).toBe(false);
-    expect(document.activeElement).toBe(trigger);
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect([isOpen(), document.activeElement]).toEqual([false, trigger]);
     show();
     document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     expect(isOpen()).toBe(false);
     show();
     show(false);
-    expect(host.querySelectorAll('[role=menu]')).toHaveLength(1);
-    menus.dispose();
-    expect(isOpen()).toBe(false);
+    expect(host.querySelectorAll('.d-workbench__quick-pick')).toHaveLength(1);
     expect(ran).toEqual([]);
-  });
-
-  it('shows entries of the moment as a menu of its own, runs a chosen one after closing, replaces the open menu; none leave it open', () => {
-    const { host, menus, show, trigger, items, isOpen } = setup();
-    const ran: [string, boolean][] = [];
-    const entry = (label: string) => ({ label, run: () => ran.push([label, document.activeElement === trigger]) });
-    show();
-    menus.showEntries([entry('instance = web-1'), entry('status = 500')], { anchor: { x: 10, y: 20 }, title: 'Select' });
-    expect(host.querySelectorAll('[role=menu]')).toHaveLength(1);
-    expect(host.querySelector('[role=menu]')!.getAttribute('aria-label')).toBe('Select');
-    expect(items().map((item) => [item.getAttribute('role'), item.textContent])).toEqual([
-      ['menuitem', 'instance = web-1'],
-      ['menuitem', 'status = 500'],
-    ]);
-    expect(document.activeElement).toBe(items()[0]);
-    items()[1].click();
-    expect(ran).toEqual([['status = 500', true]]);
-    expect(isOpen()).toBe(false);
-    show();
-    menus.showEntries([], { anchor: { x: 0, y: 0 }, title: 'Select' });
-    expect(isOpen()).toBe(true);
   });
 });

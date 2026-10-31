@@ -48,7 +48,7 @@ test('Debug follows the active chart; the chart menu’s "Debug" makes it active
     const second = await chart(page, SECOND);
     await second.hover();
     await second.getByRole('button', {name: 'More'}).click();
-    await page.getByRole('menuitem', {name: 'Debug'}).click();
+    await page.getByRole('option', {name: 'Debug'}).click();
     await expect(page.locator('.d-widget--active .d-chart-frame')).toContainText(SECOND);
     const query = debug.locator('pre').first();
     await expect(query).toContainText('SELECT');
@@ -67,7 +67,7 @@ test('each tab keeps its active widget', async ({page}) => {
     // the page in a second tab, from its entry's menu in the dashboards panel
     const entry = page.locator('.d-dashboards-menu__entry', {has: page.locator(`a[href="${PAGE}"]`)}).first();
     await entry.locator('.d-dashboards-menu__more').click();
-    await page.getByRole('menuitem', {name: 'Open in new tab'}).click();
+    await page.getByRole('option', {name: 'Open in new tab'}).click();
     const tabs = page.getByTestId('wb-tab-bar').getByRole('tab');
     await expect(tabs).toHaveCount(2);
     const first = await chart(page, FIRST);

@@ -66,7 +66,7 @@ export class ChartFrame {
     const frame: HTMLElement = html`<div class="d-chart-frame">
       ${this.#spinner}
       <div class="d-chart-frame__menu">
-        <button type="button" class="d-button d-button--icon" title="More" aria-label="More" aria-haspopup="menu" onclick=${(event: MouseEvent) => ctx.showMenu('widget/context', event.currentTarget as HTMLElement)}>${menuIcon}</button>
+        <button type="button" class="d-button d-button--icon" title="More" aria-label="More" aria-haspopup="dialog" onclick=${(event: MouseEvent) => ctx.showMenu('widget/context', event.currentTarget as HTMLElement)}>${menuIcon}</button>
       </div>
       ${(this.#title = html`<h2 class="d-chart-frame__title" hidden=${!options.title}>${options.title ?? ''}${this.#ignored}</h2>`)}
       <div class="d-chart-frame__stage">${this.#shimmer}${this.#body}</div>

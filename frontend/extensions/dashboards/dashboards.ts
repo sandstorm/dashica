@@ -117,7 +117,7 @@ class DashboardsMenu {
       });
     return html`<li class="d-dashboards-menu__entry" data-url=${entry.url}>
       ${this.#link(entry, group)}
-      <button type="button" class="d-dashboards-menu__more" aria-label=${`More for ${entry.title}`} title="More" aria-haspopup="menu" onclick=${showMenu}>…</button>
+      <button type="button" class="d-dashboards-menu__more" aria-label=${`More for ${entry.title}`} title="More" aria-haspopup="dialog" onclick=${showMenu}>…</button>
       <button
         type="button"
         class=${isFavorite ? 'd-dashboards-menu__star d-dashboards-menu__star--active' : 'd-dashboards-menu__star'}

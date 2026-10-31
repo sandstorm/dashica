@@ -445,7 +445,7 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
     autoSize: () => size(column),
     autoSizeAll: () => column.getTable().getColumns().forEach(size),
   };
-  const button: HTMLButtonElement = html`<button type="button" class="d-table__header-menu" title="Column menu" aria-label=${`Menu of ${title}`} aria-haspopup="menu"
+  const button: HTMLButtonElement = html`<button type="button" class="d-table__header-menu" title="Column menu" aria-label=${`Menu of ${title}`} aria-haspopup="dialog"
     onclick=${(event: MouseEvent) => {
       event.stopPropagation();
       showMenu('table/header', button, context);

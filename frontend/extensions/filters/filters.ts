@@ -4,6 +4,7 @@ import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { FilterChip, FilterOp, QueryApi } from '../../hosts/query/query';
+import type { UiApi } from '../../hosts/ui/ui';
 import type { Selection } from '../../hosts/widgets/widgets';
 import './filters.css';
 
@@ -39,7 +40,7 @@ export const filters: Extension = {
       }
       filterBar.focusEditor();
     };
-    const filterBar = new FilterBar(query, showBar);
+    const filterBar = new FilterBar(query, ui, showBar);
     const showForPage = () => {
       button?.dispose();
       button = undefined;
@@ -102,6 +103,8 @@ class FilterBar {
 
   constructor(
     private readonly query: QueryApi,
+    /** Asks for the value of a button's `...`. */
+    private readonly ui: Pick<UiApi, 'showInputBox'>,
     private readonly onDidChangeWanted: () => void,
   ) {
     this.toggle.addEventListener('click', () => this.#edit('new'));
@@ -142,7 +145,7 @@ class FilterBar {
       ...this.#pageButtons.map((button) => {
         const pressed = chips.some((chip) => chip.kind === 'sql' && buttonOf(chip.sql, [button]) !== undefined);
         const el: HTMLButtonElement = html`<button type="button" class="d-button" aria-pressed=${String(pressed)}>${button.title}</button>`;
-        el.addEventListener('click', () => (pressed ? this.#release(button) : this.#press(button)));
+        el.addEventListener('click', () => (pressed ? this.#release(button) : void this.#press(button, el)));
         return el;
       }),
     );
@@ -241,13 +244,16 @@ class FilterBar {
     this.onDidChangeWanted();
   }
 
-  /** Adds `button`'s condition; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for. */
-  #press(button: FilterButton): void {
+  /**
+   * Adds `button`'s condition; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for, in an input box
+   * below the button (`el`).
+   */
+  async #press(button: FilterButton, el: HTMLElement): Promise<void> {
     if (!button.queryPart.includes('...')) {
       this.query.filters.add(button.queryPart);
       return;
     }
-    const value = prompt('Parameter value');
+    const value = await this.ui.showInputBox({ title: 'Parameter value', prompt: `${button.title}: ${button.queryPart}`, anchor: el });
     if (value) this.query.filters.add(button.queryPart.replaceAll('...', value));
   }
 

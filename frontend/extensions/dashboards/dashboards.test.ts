@@ -67,7 +67,7 @@ describe('dashboards', () => {
   it('opens a dashboard in a new tab from its menu; the tab bar shows both, the mark follows the tab shown', async () => {
     const more = [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__more')][1];
     more.click();
-    [...host.querySelectorAll<HTMLElement>('[role=menuitem]')].find((item) => item.textContent?.includes('Open in new tab'))!.click();
+    [...host.querySelectorAll<HTMLElement>('[role=option]')].find((item) => item.textContent?.includes('Open in new tab'))!.click();
     await settle();
     const tabs = () => [...host.querySelectorAll<HTMLElement>('[role=tab]')];
     expect(tabs().map((tab) => [tab.textContent, tab.getAttribute('aria-selected')])).toEqual([

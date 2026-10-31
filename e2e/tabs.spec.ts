@@ -23,7 +23,7 @@ async function openOther(page: Page) {
     await expect(tabs(page)).toHaveCount(1);
     const entry = page.locator('.d-dashboards-menu__entry', {has: page.locator(`a[href="${OTHER}"]`)}).first();
     await entry.locator('.d-dashboards-menu__more').click();
-    await page.getByRole('menuitem', {name: 'Open in new tab'}).click();
+    await page.getByRole('option', {name: 'Open in new tab'}).click();
     await expect(tabs(page)).toHaveCount(2);
 }
 
