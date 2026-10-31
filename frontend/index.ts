@@ -18,6 +18,7 @@ import { filters } from './extensions/filters/filters';
 import { grid } from './extensions/grid/grid';
 import { heatmap } from './extensions/heatmap/heatmap';
 import { markdown } from './extensions/markdown/markdown';
+import { schema } from './extensions/schema/schema';
 import { schemaTable } from './extensions/schema-table/schema-table';
 import { refresh } from './extensions/refresh/refresh';
 import { searchEverywhere } from './extensions/search-everywhere/search-everywhere';
@@ -38,6 +39,7 @@ const EXTENSIONS: readonly Extension[] = [
   filters,
   debug,
   details,
+  schema,
   exploreView,
   chartLink,
   dashboardPage,
