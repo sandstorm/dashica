@@ -262,7 +262,9 @@ class FiltersState extends Model implements FiltersModel {
 
   replace(index: number, chip: FilterChip): void {
     if (index < 0 || index >= this.chips.length || sameChip(this.chips[index], chip)) return;
-    this.#setChips(isEmpty(chip) ? this.chips.filter((_, i) => i !== index) : this.chips.map((old, i) => (i === index ? chip : old)));
+    // an edit that makes a chip another one already is (`host = a` switched to the `host ≠ a` beside it) removes it
+    const removed = isEmpty(chip) || this.chips.some((old) => sameChip(old, chip));
+    this.#setChips(removed ? this.chips.filter((_, i) => i !== index) : this.chips.map((old, i) => (i === index ? chip : old)));
   }
 
   remove(which: number | ((chip: FilterChip) => boolean)): void {

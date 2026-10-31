@@ -45,7 +45,10 @@ export interface FiltersModel {
   add(condition: string): void;
   /** Adds the pill `pill` (as a widget's `/pill` answered it, or a filter button's); once, when its key is there already. */
   add(pill: Pill): void;
-  /** Puts `chip` in place of the chip at `index` (an edit); a SQL chip of only spaces removes it. */
+  /**
+   * Puts `chip` in place of the chip at `index` (an edit); a SQL chip of only spaces removes it, and so does a chip
+   * that is there already (once in the URL, as `add` keeps it).
+   */
   replace(index: number, chip: FilterChip): void;
   /** Removes the chip at index `which` of `chips`, or every chip `which` holds for (a released filter button's), in one change. */
   remove(which: number | ((chip: FilterChip) => boolean)): void;

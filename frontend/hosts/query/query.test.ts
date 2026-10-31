@@ -164,6 +164,15 @@ describe('QueryHost', () => {
     expect(refreshes).toBe(3);
   });
 
+  it('removes the chip it replaces when the new one is there already', () => {
+    query.load({ search: `?f=${keyOf('host = a')}&sql=b&f=${keyOf('host ≠ a')}` });
+    query.filters.replace(0, { kind: 'pill', ...pill('host ≠ a') });
+    expect(query.filters.chips).toEqual([
+      { kind: 'sql', sql: 'b' },
+      { kind: 'pill', ...pill('host ≠ a') },
+    ]);
+  });
+
   it('sends the pills as one f each, their keys', () => {
     query.load();
     query.filters.add(pill('status = 500'));
