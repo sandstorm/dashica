@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
 // edited, removed), the buttons as toggles in place (buttonOf), without a chip of their own, a button's value asked
-// for in an input box and shown on it.
+// for in an input box and shown on it, "Add filter" while a chart filters a table.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
@@ -17,6 +17,8 @@ let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
 let asked: { title?: string; prompt?: string; anchor?: unknown }[];
+/** The quick picks shown (all cancelled): their labels and anchor. */
+let picks: { labels: string[]; anchor: unknown }[];
 
 const shop: PageJson = {
   kind: 'dashboard',
@@ -59,8 +61,10 @@ beforeEach(() => {
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: { title?: string; prompt?: string; anchor?: unknown }) => (asked.push(options), answer),
+    showQuickPick: async (items: { label: string }[], options: { anchor?: unknown }) => (picks.push({ labels: items.map((i) => i.label), anchor: options.anchor }), undefined),
   };
   asked = [];
+  picks = [];
   filters.activate({ query, page, ui, subscriptions: [] } as unknown as ExtensionContext);
   show(shop);
 });
@@ -254,6 +258,20 @@ describe('filters', () => {
     expect(bar.children.length).toBe(1);
     query.filters.clear();
     expect(bar.children.length).toBe(0);
+  });
+
+  it('shows "Add filter" after the chips while a chart filters a table, which asks for a field of it below the button', async () => {
+    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+    const add = () => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__chips button')].find((b) => b.textContent === 'Add filter');
+    expect(add()).toBeUndefined();
+
+    show({ ...shop, title: 'Checkout', filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
+    query.filters.add('a');
+
+    expect(bar.children.length).toBe(1);
+    expect(bar.querySelector('.d-filter-bar__chips')!.lastElementChild).toBe(add());
+    add()!.click();
+    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['host'], anchor: add() }]));
   });
 
   it('is gone on a page without filters', () => {

@@ -248,8 +248,11 @@ function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
   });
 }
 
-/** The pill `<dataUrl>/pill` makes of `fieldId` `op` `value`; rejects with the server's message (a field that cannot filter: 422). */
-async function fetchPill(dataUrl: string, { fieldId, op, value }: FilterCandidate & { readonly op: FilterOp }): Promise<Pill> {
+/**
+ * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, the filter bar's "add filter"); rejects
+ * with the server's message (a field that cannot filter: 422).
+ */
+export async function fetchPill(dataUrl: string, { fieldId, op, value }: FilterCandidate & { readonly op: FilterOp }): Promise<Pill> {
   const response = await fetch(`${dataUrl}/pill?${new URLSearchParams({ field: fieldId, op, value })}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   const { key, label } = (await response.json()) as Pill;

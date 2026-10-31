@@ -1,10 +1,11 @@
 import { html } from 'htl';
-import { Filter, X, createElement } from 'lucide';
+import { Filter, ListFilterPlus, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { FilterChip, QueryApi, SqlFilter } from '../../hosts/query/query';
 import type { UiApi } from '../../hosts/ui/ui';
+import { addFilter, filterableTables, type FilterableTable } from './add-filter';
 import './filters.css';
 
 /**
@@ -13,8 +14,9 @@ import './filters.css';
  * SQL chip's text edits it, a pill is not edited (its condition is the server's). The funnel
  * button in the top bar adds a SQL chip. The page's filter buttons are toggles in their place: pressed while a SQL
  * filter has their condition (`status >= 500`; a `...` in it is asked for, its value shown on the button), which then
- * has no chip of its own. The bar shows while it has a chip or a button, else the page has no bar for nothing. A
- * click on a chart adds its pills (`WidgetsApi.offerFilters`).
+ * has no chip of its own. "Add filter" after the chips adds a pill on one of the tables the page's charts filter
+ * (`addFilter`), while there is one. The bar shows while it has a chip, a button or "Add filter", else the page has no
+ * bar for nothing. A click on a chart adds its pills (`WidgetsApi.offerFilters`).
  */
 export const filters: Extension = {
   id: 'filters',
@@ -34,7 +36,7 @@ export const filters: Extension = {
     const showForPage = () => {
       button?.dispose();
       button = undefined;
-      filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : []);
+      filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : [], page.current?.filterBar ? filterableTables(page.current.widgets) : []);
       if (page.current?.filterBar) button = ui.registerBarItem('top', filterBar.toggle, { alignment: 'right', priority: 40 });
       showBar();
     };
@@ -73,8 +75,8 @@ function escapeRegExp(text: string): string {
 type Editing = number | 'new' | undefined;
 
 /**
- * The funnel button (`toggle`) and the filter bar's content (`el`): the chips of `query` and the page's buttons
- * (`setButtons`); `show` draws them again. `onDidChangeWanted` is called when an edit starts (the funnel's new SQL chip
+ * The funnel button (`toggle`) and the filter bar's content (`el`): the chips of `query`, "Add filter" for the page's
+ * filterable tables and the page's buttons (`setButtons`); `show` draws them again. `onDidChangeWanted` is called when an edit starts (the funnel's new SQL chip
  * among them) or ends without a change of the chips.
  */
 class FilterBar {
@@ -85,28 +87,36 @@ class FilterBar {
     class="d-button d-button--ghost d-button--icon"
     title="Add a SQL filter"
     aria-label="Filters">${createElement(Filter, { width: 16, height: 16 })}</button>`;
+  readonly #add: HTMLButtonElement = html`<button
+    type="button"
+    class="d-button d-button--ghost"
+    title="Add a filter on a field of the page's charts">${createElement(ListFilterPlus, { width: 16, height: 16 })}Add filter</button>`;
   readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}</div>`;
   #pageButtons: readonly FilterButton[] = [];
+  #tables: readonly FilterableTable[] = [];
   #editing: Editing;
   /** The field of the chip being edited, focused once it is in the document. */
   #editor: HTMLElement | undefined;
 
   constructor(
     private readonly query: QueryApi,
-    /** Asks for the value of a button's `...`. */
-    private readonly ui: Pick<UiApi, 'showInputBox'>,
+    /** Asks for the value of a button's `...`, and "Add filter"'s table, field, operator and value. */
+    private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
     private readonly onDidChangeWanted: () => void,
   ) {
     this.toggle.addEventListener('click', () => this.#edit('new'));
+    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add));
   }
 
-  /** Whether the filter bar has something to show: a chip, the page's buttons, or the SQL chip being added. */
+  /** Whether the filter bar has something to show: a chip, the page's buttons, "Add filter", or the SQL chip being added. */
   get wanted(): boolean {
-    return this.query.filters.chips.length > 0 || this.#pageButtons.length > 0 || this.#editing === 'new';
+    return this.query.filters.chips.length > 0 || this.#pageButtons.length > 0 || this.#tables.length > 0 || this.#editing === 'new';
   }
 
-  setButtons(buttons: readonly FilterButton[]): void {
+  /** The page's filter buttons, and the tables its charts filter ("Add filter"). */
+  setButtons(buttons: readonly FilterButton[], tables: readonly FilterableTable[]): void {
     this.#pageButtons = buttons;
+    this.#tables = tables;
     this.#editing = undefined;
     this.show();
   }
@@ -132,6 +142,7 @@ class FilterBar {
       ofButton[index] ? [] : [this.#editing === index && chip.kind === 'sql' ? this.#editorOf(chip, index) : this.#chipOf(chip, index)],
     );
     if (this.#editing === 'new') shown.push(this.#editorOf({ kind: 'sql', sql: '' }, 'new'));
+    if (this.#tables.length > 0) shown.push(this.#add);
     this.#chips.hidden = shown.length === 0;
     this.#chips.replaceChildren(...shown);
     this.#buttons.hidden = this.#pageButtons.length === 0;
