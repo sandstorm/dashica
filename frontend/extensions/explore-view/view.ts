@@ -1,14 +1,14 @@
 // See exploreView in explore-view.ts.
 import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
-import type { WidgetNode } from '../../generated/zz_generated.dashica';
+import type { ChartSql, WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { FilterCandidate } from '../../hosts/widgets/widgets';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';
-import { describeRows, fetchRows, fetchSql, rowsRequest, sqlRequest, type RowsAnswer } from './rows';
+import { describeRows, editedQueryKeys, editedQueryOf, fetchRows, fetchSql, rowsRequest, sqlRequest, type EditedQuery, type RowsAnswer } from './rows';
 
 /** Perspective as the view uses it, from the lazily loaded module (perspective.ts). */
 export interface Perspective {
@@ -52,11 +52,11 @@ export interface ExploreViewOptions {
   /** Keeps the viewer's config per chart and mode for this viewer (`stateKey`). */
   readonly state: Memento;
   readonly perspective: () => Promise<Perspective>;
-  /** The tab's hash (`#explore=3`, `#explore=3&xsql=…` while the SQL is edited), as it is now. */
+  /** The tab's hash (`#explore=3`, `#explore=3&exploreSql=…&param_…` while the SQL is edited), as it is now. */
   hash(): string;
   /** Fires when the tab's hash changed (Run, Reset, back and forward). */
   readonly onDidChangeHash: PageContext['onDidChangeHash'];
-  /** Goes to `hash` in the tab, a new entry of its history (`#explore=3&xsql=…`). */
+  /** Goes to `hash` in the tab, a new entry of its history (`#explore=3&exploreSql=…`). */
   navigate(hash: string): void;
   /** The view's "Close". */
   close(): void;
@@ -66,13 +66,14 @@ export interface ExploreViewOptions {
 
 /**
  * Fills `el` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's result",
- * the chart's Diagnostics, "SQL" closing and opening the editor when the answer allows editing, else a note that it
- * is off, "Reset", "Close"), the SQL editor (open from the start), the notes of the config mapping, and
- * `<perspective-viewer>`. Following the chart (no `xsql` in the tab's hash) it shows the chart's result
- * with the page's query state and the editor the chart's SQL with that state written in, both fetched again on each
- * `onDidRequestRefresh`. Run puts the editor's text into the hash (`xsql`): the view then shows that SQL's rows, which
- * the page's time range and filters do not change, until "Reset to the chart's query". It keeps the config the viewer
- * changed per chart and mode; "Reset" goes back to the chart's.
+ * the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor (open from the
+ * start) with the values of its parameters beside it, the notes of the config mapping, and `<perspective-viewer>`.
+ * Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result with the page's query state and
+ * the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`) kept and their values listed,
+ * both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the listed values into the hash
+ * (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's time range and filters do
+ * not change, until "Reset to the chart's query". It keeps the config the viewer changed per chart and mode; "Reset"
+ * goes back to the chart's.
  */
 export function renderExploreView(el: HTMLElement, options: ExploreViewOptions): Disposable {
   const view = new ExploreView(el, options);
@@ -89,17 +90,22 @@ export function stateKey(widget: { readonly dataUrl: string }, edited = false): 
   return edited ? `view:${widget.dataUrl}:edited` : `view:${widget.dataUrl}`;
 }
 
-/** The SQL the tab's hash `hash` holds (`#explore=3&xsql=…`); `undefined` while the view follows the chart. */
-export function editedSql(hash: string): string | undefined {
-  return new URLSearchParams(hash.replace(/^#/, '')).get('xsql') ?? undefined;
+/** The query the tab's hash `hash` holds (`#explore=3&exploreSql=…&param_…`); `undefined` while the view follows the chart. */
+export function editedQuery(hash: string): EditedQuery | undefined {
+  return editedQueryOf(new URLSearchParams(hash.replace(/^#/, '')));
 }
 
-/** `hash` with the edited SQL `sql` (`xsql`), or without one for `undefined`; its other keys kept. */
-export function withEditedSql(hash: string, sql: string | undefined): string {
+/** `hash` with the edited query `edited` (`editedQueryKeys`), or without one for `undefined`; its other keys kept. */
+export function withEditedQuery(hash: string, edited: EditedQuery | undefined): string {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
-  if (sql === undefined) params.delete('xsql');
-  else params.set('xsql', sql);
+  for (const key of [...params.keys()]) if (key === 'exploreSql' || key.startsWith('param_')) params.delete(key);
+  for (const [key, value] of edited ? editedQueryKeys(edited) : []) params.append(key, value);
   return `#${params}`;
+}
+
+/** `a` and `b` are the same edited query (or both none): the same SQL and parameters. */
+function sameQuery(a: EditedQuery | undefined, b: EditedQuery | undefined): boolean {
+  return withEditedQuery('', a) === withEditedQuery('', b);
 }
 
 /** What the viewer's config keeps across visits: without the table's name (new per visit), its theme and title. */
@@ -111,8 +117,7 @@ export function persistable(config: ViewerConfig): ViewerConfig {
 class ExploreView {
   readonly #status: HTMLElement = html`<span class="d-explore-view__status"></span>`;
   readonly #ignored: HTMLElement = html`<span class="d-badge" hidden></span>`;
-  readonly #sqlButton: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="true" hidden data-testid="explore-view-sql">SQL</button>`;
-  readonly #sqlOff: HTMLElement = html`<span class="d-explore-view__status" hidden data-testid="explore-view-sql-off">SQL editing is off (explore.enabled)</span>`;
+  readonly #sqlButton: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="true" data-testid="explore-view-sql">SQL</button>`;
   readonly #sqlText: HTMLTextAreaElement = html`<textarea
     class="d-field d-field--full d-field--mono d-explore-view__sql-text"
     rows="8"
@@ -120,8 +125,9 @@ class ExploreView {
     aria-label="SQL"
     data-testid="explore-view-sql-text"></textarea>`;
   readonly #sqlNote: HTMLElement = html`<span class="d-explore-view__status" data-testid="explore-view-sql-note"></span>`;
+  readonly #parameters: HTMLElement = html`<dl class="d-explore-view__parameters" aria-label="Parameters" data-testid="explore-view-parameters"></dl>`;
   readonly #sqlError: HTMLElement = html`<div class="d-notice d-notice--error" hidden></div>`;
-  readonly #sqlPanel: HTMLElement = html`<div class="d-explore-view__sql" hidden data-testid="explore-view-sql-panel"></div>`;
+  readonly #sqlPanel: HTMLElement = html`<div class="d-explore-view__sql" data-testid="explore-view-sql-panel"></div>`;
   readonly #editedNote: HTMLElement = html`<div class="d-notice d-explore-view__edited" hidden data-testid="explore-view-edited"></div>`;
   readonly #notes: HTMLElement = html`<ul class="d-explore-view__notes" hidden></ul>`;
   readonly #body: HTMLElement = html`<div class="d-explore-view__body"></div>`;
@@ -134,14 +140,13 @@ class ExploreView {
   #showing: Promise<void> = Promise.resolve();
   /** The viewer was used (a press or a key in it): its config changes are the viewer's own, kept. */
   #touched = false;
-  /** The SQL the view shows the rows of (the tab's hash's `xsql`); `undefined`: the chart's result. */
-  #edited: string | undefined;
-  /** The chart's SQL as last fetched, written into the editor; `undefined` before. */
-  #materialized: string | undefined;
+  /** The query the view shows the rows of (the tab's hash's `exploreSql`); `undefined`: the chart's result. */
+  #edited: EditedQuery | undefined;
+  /** The chart's SQL and parameters as last fetched, the SQL written into the editor; `undefined` before. */
+  #chartSql: ChartSql | undefined;
   #loadingSql: AbortController | undefined;
-  /** The editor is open, as "SQL" toggles it; it shows once the server allows editing (`#sqlAllowed`) or while edited. */
+  /** The editor is open, as "SQL" toggles it; always while edited. */
   #sqlOpen = true;
-  #sqlAllowed = false;
   #pointer = { x: 0, y: 0 };
 
   constructor(
@@ -163,21 +168,25 @@ class ExploreView {
       }
     });
     this.#sqlText.addEventListener('input', () => this.#showSqlNote());
-    const backToChart = () => options.navigate(withEditedSql(options.hash(), undefined));
+    const backToChart = () => options.navigate(withEditedQuery(options.hash(), undefined));
     const resetSql: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-sql-reset">Reset to the chart’s query</button>`;
     resetSql.onclick = backToChart;
     this.#editedNote.append('Edited query: the page’s time range and filters do not apply. ', resetSql);
-    this.#sqlPanel.append(this.#sqlText, html`<div class="d-explore-view__sql-bar">${run}${this.#sqlNote}</div>`, this.#sqlError);
+    this.#sqlPanel.append(
+      html`<div class="d-explore-view__sql-edit">${this.#sqlText}${this.#parameters}</div>`,
+      html`<div class="d-explore-view__sql-bar">${run}${this.#sqlNote}</div>`,
+      this.#sqlError,
+    );
     el.replaceChildren(html`<div class="d-explore-view" data-testid="explore-view">
       <div class="d-explore-view__bar">
         <h2 class="d-explore-view__title">Explore: ${title}</h2>
-        ${this.#status}${this.#ignored}${this.#sqlOff}
+        ${this.#status}${this.#ignored}
         <span class="d-explore-view__actions">${this.#sqlButton}${reset}${close}</span>
       </div>
       ${this.#sqlPanel}${this.#editedNote}${this.#notes}${this.#body}
     </div>`);
     this.#body.append(this.#message);
-    this.#edited = editedSql(options.hash());
+    this.#edited = editedQuery(options.hash());
     this.#showEdited();
     // the page's colour scheme, followed while the view is open
     const scheme = el.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
@@ -220,8 +229,6 @@ class ExploreView {
       return;
     }
     if (loading.signal.aborted) return;
-    this.#sqlAllowed = answer.sqlEditable;
-    this.#showSqlPanel();
     const ignored = answer.diagnostics.ignored ?? [];
     this.#ignored.hidden = ignored.length === 0;
     this.#ignored.textContent = `ignores ${ignored.join(', ')}`;
@@ -290,16 +297,16 @@ class ExploreView {
   }
 
   /**
-   * Fetches the chart's SQL with the page's query state into the editor; a draft (a text that differs from the SQL
-   * fetched before) stays. Its error shows below the editor.
+   * Fetches the chart's SQL with the page's query state into the editor, its parameters beside it; a draft (a text
+   * that differs from the SQL fetched before) stays. Its error shows below the editor.
    */
   async #loadSql(): Promise<void> {
     this.#loadingSql?.abort();
     const loading = new AbortController();
     this.#loadingSql = loading;
-    let sql: string;
+    let chartSql: ChartSql;
     try {
-      sql = await fetchSql(sqlRequest(this.options.widget.dataUrl, this.options.query.requestParams()), loading.signal);
+      chartSql = await fetchSql(sqlRequest(this.options.widget.dataUrl, this.options.query.requestParams()), loading.signal);
     } catch (error) {
       if (loading.signal.aborted) return;
       this.#sqlError.hidden = false;
@@ -308,9 +315,10 @@ class ExploreView {
     }
     if (loading.signal.aborted || this.#edited !== undefined) return;
     this.#sqlError.hidden = true;
-    const draft = this.#sqlText.value !== (this.#materialized ?? '') && this.#sqlText.value !== '';
-    this.#materialized = sql;
-    if (!draft) this.#sqlText.value = sql;
+    const draft = this.#sqlText.value !== (this.#chartSql?.sql ?? '') && this.#sqlText.value !== '';
+    this.#chartSql = chartSql;
+    if (!draft) this.#sqlText.value = chartSql.sql;
+    this.#showParameters();
     this.#showSqlNote();
   }
 
@@ -319,22 +327,34 @@ class ExploreView {
     this.#showSqlPanel();
   }
 
-  /** Shows the editor while it is open and editing is allowed or the hash holds an edit; on showing, the chart's SQL. */
+  /** Shows the editor while it is open; on showing, the chart's SQL. */
   #showSqlPanel(): void {
-    const allowed = this.#sqlAllowed || this.#edited !== undefined;
     const wasHidden = this.#sqlPanel.hidden;
-    this.#sqlButton.hidden = !allowed;
     this.#sqlButton.setAttribute('aria-pressed', String(this.#sqlOpen));
-    this.#sqlOff.hidden = allowed;
-    this.#sqlPanel.hidden = !(allowed && this.#sqlOpen);
+    this.#sqlPanel.hidden = !this.#sqlOpen;
     if (wasHidden && !this.#sqlPanel.hidden && this.#edited === undefined) void this.#loadSql();
   }
 
-  /** Run: the editor's text into the tab's hash; the chart's SQL as fetched last follows the chart again. */
+  /**
+   * Run: the editor's text into the tab's hash, with the parameters listed (the edited query's, else the chart's as
+   * fetched last); the chart's SQL as fetched last follows the chart again.
+   */
   #run(): void {
     const text = this.#sqlText.value;
-    const following = this.#edited === undefined && text === this.#materialized;
-    this.options.navigate(withEditedSql(this.options.hash(), following ? undefined : text));
+    const following = this.#edited === undefined && text === this.#chartSql?.sql;
+    this.options.navigate(withEditedQuery(this.options.hash(), following ? undefined : { sql: text, parameters: this.#shownParameters() }));
+  }
+
+  /** The values of the parameters the editor's SQL is run with: the edited query's, else the chart's. */
+  #shownParameters(): Readonly<Record<string, string>> {
+    return this.#edited?.parameters ?? this.#chartSql?.parameters ?? {};
+  }
+
+  /** Lists `#shownParameters` beside the editor by name, `{name}` and its value; hidden without any. */
+  #showParameters(): void {
+    const entries = Object.entries(this.#shownParameters()).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    this.#parameters.replaceChildren(...entries.map(([name, value]) => html.fragment`<dt><code>{${name}}</code></dt><dd>${value}</dd>`));
+    this.#parameters.hidden = entries.length === 0;
   }
 
   /** Shows what the hash says: the editor and the note while edited, the editor's text the hash's. */
@@ -342,15 +362,16 @@ class ExploreView {
     const edited = this.#edited !== undefined;
     this.#editedNote.hidden = !edited;
     if (edited) {
-      this.#sqlText.value = this.#edited!;
+      this.#sqlText.value = this.#edited!.sql;
       this.#setSqlOpen(true);
-    } else if (this.#materialized !== undefined) this.#sqlText.value = this.#materialized;
+    } else if (this.#chartSql !== undefined) this.#sqlText.value = this.#chartSql.sql;
+    this.#showParameters();
     this.#showSqlNote();
   }
 
   /** "not run" while the editor's text is not the SQL whose rows are shown. */
   #showSqlNote(): void {
-    const shown = this.#edited ?? this.#materialized;
+    const shown = this.#edited?.sql ?? this.#chartSql?.sql;
     this.#sqlNote.textContent = shown !== undefined && this.#sqlText.value !== shown ? 'not run' : '';
   }
 
@@ -359,9 +380,9 @@ class ExploreView {
    * from or to the chart's result.
    */
   #hashChanged(): void {
-    const edited = editedSql(this.options.hash());
+    const edited = editedQuery(this.options.hash());
     const otherRows = (edited === undefined) !== (this.#edited === undefined);
-    if (edited !== this.#edited) {
+    if (!sameQuery(edited, this.#edited)) {
       this.#edited = edited;
       this.#showEdited();
     }

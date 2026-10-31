@@ -1,9 +1,10 @@
 // Tests for QueryHandler.HandleRows, HandleSql and HandleEditedRows against a real ClickHouse: a chart's result, its
-// materialized SQL giving the same rows, an edited query read-only and limited.
+// SQL with its parameters giving the same rows, an edited query read-only and limited.
 package httpserver
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -50,36 +51,45 @@ func TestHandleRows_AChartsResultWithItsBucketSize(t *testing.T) {
 	}
 }
 
-// handler is a QueryHandler on the testing config's ClickHouse.
+// handler is a QueryHandler on the testing config's ClickHouse, Explore enabled.
 func handler(t *testing.T) QueryHandler {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
-	return QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+	return QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), ExploreEnabled: true}
 }
 
-// editedRows answers the edited query `text` on the default connection, with the row limit `limit`.
-func editedRows(t *testing.T, text string, limit int) (*httptest.ResponseRecorder, error) {
+// editedRows answers the edited query `text` with the parameters `params` on the default connection, with the row
+// limit `limit`.
+func editedRows(t *testing.T, text string, params map[string]string, limit int) (*httptest.ResponseRecorder, error) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	return rec, handler(t).HandleEditedRows(sql.New(sql.From(caddyRows)), text, limit, rec, httptest.NewRequest(http.MethodGet, "/rows", nil))
+	return rec, handler(t).HandleEditedRows(sql.New(sql.From(caddyRows)), text, params, limit, rec, httptest.NewRequest(http.MethodGet, "/rows", nil))
 }
 
-func TestHandleSql_TheMaterializedTextGivesTheRowsOfTheChart(t *testing.T) {
-	chart := sql.New(sql.From(caddyRows), sql.Select(sql.Field("id")), sql.Where("status = {__f0:String}"))
-	r := httptest.NewRequest(http.MethodGet, "/sql?time=1h&f=status:eq:500&sql="+url.QueryEscape("customer_project = 'sandstorm.shop'"), nil)
+// chartSql is what HandleSql answers for `chart` with the query state of `r`.
+func chartSql(t *testing.T, chart sql.SqlQueryable, r *http.Request) ChartSql {
+	t.Helper()
 	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
-	text := httptest.NewRecorder()
-	if err := handler(t).HandleSql(chart, state, filter.Diagnostics{}, text, r); err != nil {
+	rec := httptest.NewRecorder()
+	if err := handler(t).HandleSql(chart, state, filter.Diagnostics{}, rec, r); err != nil {
 		t.Fatalf("HandleSql: %v", err)
 	}
-	if strings.Contains(text.Body.String(), "{") {
-		t.Fatalf("a placeholder is left: %s", text.Body)
+	var answer ChartSql
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("HandleSql answered %s: %v", rec.Body, err)
 	}
+	return answer
+}
 
-	rec, err := editedRows(t, text.Body.String(), 100)
+func TestHandleSql_TheSqlWithItsParametersGivesTheRowsOfTheChart(t *testing.T) {
+	chart := sql.New(sql.From(caddyRows), sql.Select(sql.Field("id")), sql.Where("status = {status:UInt16}"))
+	r := httptest.NewRequest(http.MethodGet, "/sql?time=1h&wp="+url.QueryEscape(`{"status":"500"}`)+"&sql="+url.QueryEscape("customer_project = 'sandstorm.shop'"), nil)
+	answer := chartSql(t, chart, r)
+
+	rec, err := editedRows(t, answer.Sql, answer.Parameters, 100)
 
 	if err != nil {
 		t.Fatalf("HandleEditedRows: %v", err)
@@ -91,45 +101,34 @@ func TestHandleSql_TheMaterializedTextGivesTheRowsOfTheChart(t *testing.T) {
 	}
 }
 
-func TestHandleSql_AnInlinedValueIsTheValueClickHouseBinds(t *testing.T) {
+func TestHandleSql_ItsParametersSentAgainAreTheValuesTheChartBinds(t *testing.T) {
 	tests := map[string]struct {
 		typ   string
 		value string
 	}{
 		"a String with escape sequences": {typ: "String", value: `a\nb\tc\\d'e`},
-		"DateTime64 from unix seconds":   {typ: "DateTime64", value: "1761724800"},
-		"DateTime64 from an ISO value":   {typ: "DateTime64", value: "2026-10-31T10:00"},
-		"DateTime64(3, tz) from ISO":     {typ: "DateTime64(3, 'Asia/Tokyo')", value: "2026-10-31T10:00:00.250"},
-		"DateTime from unix seconds":     {typ: "DateTime", value: "1761724800"},
-		"DateTime from an ISO value":     {typ: "DateTime", value: "2026-10-31T10:00"},
+		"DateTime64 from an ISO value":   {typ: "DateTime64(3, 'Asia/Tokyo')", value: "2026-10-31T10:00:00.250"},
 		"Nullable(String) NULL":          {typ: "Nullable(String)", value: `\N`},
-		"Nullable(String) a value":       {typ: "Nullable(String)", value: "x"},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			p := "{v:" + tt.typ + "}"
 			chart := sql.FromStringWithoutFilters("SELECT " + p + " = " + p + " AS same, " + p + " AS v")
 			r := httptest.NewRequest(http.MethodGet, "/sql?time=1h&wp="+url.QueryEscape(`{"v":"`+strings.ReplaceAll(tt.value, `\`, `\\`)+`"}`), nil)
-			state, err := ParseQueryState(r)
-			if err != nil {
-				t.Fatalf("ParseQueryState: %v", err)
-			}
-			text := httptest.NewRecorder()
-			if err := handler(t).HandleSql(chart, state, filter.Diagnostics{}, text, r); err != nil {
-				t.Fatalf("HandleSql: %v", err)
-			}
+			answer := chartSql(t, chart, r)
+			state, _ := ParseQueryState(r)
 			bound := httptest.NewRecorder()
 			if err := handler(t).HandleRows(chart, state, filter.Diagnostics{}, bound, r); err != nil {
 				t.Fatalf("HandleRows: %v", err)
 			}
 
-			inlined, err := editedRows(t, text.Body.String(), 100)
+			edited, err := editedRows(t, answer.Sql, answer.Parameters, 100)
 
 			if err != nil {
-				t.Fatalf("HandleEditedRows of %q: %v", text.Body, err)
+				t.Fatalf("HandleEditedRows of %q: %v", answer.Sql, err)
 			}
-			if !bytes.Equal(inlined.Body.Bytes(), bound.Body.Bytes()) {
-				t.Errorf("the inlined text %q answers other rows than the bound value", text.Body)
+			if !bytes.Equal(edited.Body.Bytes(), bound.Body.Bytes()) {
+				t.Errorf("%q with %v answers other rows than the chart", answer.Sql, answer.Parameters)
 			}
 		})
 	}
@@ -148,7 +147,7 @@ func TestHandleEditedRows_IsReadOnly(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := editedRows(t, tt.text, 100)
+			_, err := editedRows(t, tt.text, nil, 100)
 
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("want %s, got %v", tt.want, err)
@@ -167,7 +166,7 @@ func TestHandleEditedRows_AnswersExactlyTheLimitWithoutAnError(t *testing.T) {
 	}
 	for name, text := range tests {
 		t.Run(name, func(t *testing.T) {
-			rec, err := editedRows(t, text, 1000)
+			rec, err := editedRows(t, text, nil, 1000)
 
 			if err != nil {
 				t.Fatalf("HandleEditedRows: %v", err)

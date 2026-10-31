@@ -30,12 +30,21 @@ func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
 		return rec.Body.String()
 	}
 
-	if got := get(); got != `{"menu":[]}`+"\n" {
+	if got := get(); got != `{"menu":[],"explore":false}`+"\n" {
 		t.Errorf("before any group: %s", got)
 	}
 	d.RegisterDashboardGroup("Shop")
-	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}]}`+"\n" {
+	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}],"explore":false}`+"\n" {
 		t.Errorf("after registering: %s", got)
+	}
+}
+
+func TestWorkbenchJson_SaysWhetherExploreIsEnabled(t *testing.T) {
+	rec := httptest.NewRecorder()
+	(&DashicaImpl{deps: rendering.Dependencies{ExploreEnabled: true}}).serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
+
+	if got := rec.Body.String(); got != `{"menu":[],"explore":true}`+"\n" {
+		t.Errorf("got %s", got)
 	}
 }
 

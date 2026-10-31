@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Tests for renderExploreView in view.ts, Perspective faked at its module boundary: the rows with the page's query
 // state, their description, the config from the chart or kept per chart, Reset, a refresh, the SQL editor (following
-// the chart, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a click on a group row.
+// the chart, its parameters listed, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a
+// click on a group row.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
@@ -9,12 +10,12 @@ import type { Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import type { ViewerConfig } from './mapping';
 import {
-  editedSql,
+  editedQuery,
   persistable,
   renderExploreView,
   type ChartWithRows,
   stateKey,
-  withEditedSql,
+  withEditedQuery,
   type Perspective,
   type PerspectiveTable,
   type PerspectiveViewer,
@@ -96,14 +97,15 @@ let hash: string;
 let hashChanged: EventEmitter<void>;
 let navigations: string[];
 
-const rowsResponse = (body = 'rows-1', headers: Record<string, string> = {}) => new Response(body, { headers: { 'X-Dashica-Sql': 'editable', ...headers } });
+const rowsResponse = (body = 'rows-1', headers: Record<string, string> = {}) => new Response(body, { headers });
 /**
- * The server's answer: at /sql the chart's SQL, its time range written in (`… time=1h`); at /rows the chart's result,
- * or an edited query's rows (`edited:<text>`), at most 3.
+ * The server's answer: at /sql the chart's SQL with its time range (`… time=1h`) and the parameter `__from`
+ * (`from-1h`); at /rows the chart's result, or an edited query's rows (`edited:<text>`), at most 3.
  */
 const serve = (result: string) => (url: URL) => {
-  if (url.pathname.endsWith('/sql')) return new Response(`SELECT time=${url.searchParams.get('time')}`);
-  const edited = url.searchParams.get('xsql');
+  const time = url.searchParams.get('time');
+  if (url.pathname.endsWith('/sql')) return Response.json({ sql: `SELECT time=${time}`, parameters: { __from: `from-${time}` } });
+  const edited = url.searchParams.get('exploreSql');
   return edited === null ? rowsResponse(result) : rowsResponse(`edited:${edited}`, { 'X-Dashica-Rows-Limit': '3' });
 };
 
@@ -170,7 +172,7 @@ describe('renderExploreView', () => {
   it('fetches the chart’s result with the page’s query state', async () => {
     open();
     await settle();
-    expect(requests[0]).toBe('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa');
+    expect(requests).toContain('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa');
     expect(tables.map((t) => t.data)).toEqual(['rows-1']);
     expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: Requests');
     expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('3 rows of the chart’s result');
@@ -289,8 +291,7 @@ describe('renderExploreView', () => {
     expect(button.hidden).toBe(false);
     expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(find('explore-view-sql-panel').hidden).toBe(false);
-    expect(find('explore-view-sql-off').hidden).toBe(true);
-    expect(requests).toEqual(['/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa', '/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa']);
+    expect(requests).toEqual(['/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa', '/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa']);
     expect(sqlText().value).toBe('SELECT time=1h');
     query.time.setRange('3h');
     await settle();
@@ -316,14 +317,14 @@ describe('renderExploreView', () => {
     expect(sqlText().value).toBe('SELECT time=3h');
   });
 
-  it('offers no SQL editor when the server does not allow it, saying it is off (explore.enabled)', async () => {
-    answer = () => new Response('rows-1');
+  it('lists the values of the chart’s parameters beside the editor, fetched again on a refresh', async () => {
     open();
     await settle();
-    expect(find<HTMLButtonElement>('explore-view-sql').hidden).toBe(true);
-    expect(find('explore-view-sql-panel').hidden).toBe(true);
-    expect(find('explore-view-sql-off').hidden).toBe(false);
-    expect(requests.some((url) => url.includes('/sql'))).toBe(false);
+    const listed = () => [...find('explore-view-parameters').children].map((child) => child.textContent);
+    expect(listed()).toEqual(['{__from}', 'from-1h']);
+    query.time.setRange('3h');
+    await settle();
+    expect(listed()).toEqual(['{__from}', 'from-3h']);
   });
 
   it('runs the edited SQL through the tab’s hash: its rows in a new viewer, the note, the limit; Reset goes back', async () => {
@@ -334,8 +335,8 @@ describe('renderExploreView', () => {
     type('SELECT * FROM http_logs');
     find<HTMLButtonElement>('explore-view-run').click();
     await settle();
-    expect(navigations).toEqual(['#explore=3&xsql=SELECT+*+FROM+http_logs']);
-    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?xsql=SELECT+*+FROM+http_logs');
+    expect(navigations).toEqual(['#explore=3&exploreSql=SELECT+*+FROM+http_logs&param___from=from-1h']);
+    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?exploreSql=SELECT+*+FROM+http_logs&param___from=from-1h');
     expect(tables.map(({ data, deleted }) => ({ data, deleted }))).toEqual([
       { data: 'rows-1', deleted: true },
       { data: 'edited:SELECT * FROM http_logs', deleted: false },
@@ -356,15 +357,16 @@ describe('renderExploreView', () => {
   });
 
   it('opens with the edited SQL of the tab’s hash (a reload, a link): its rows, the editor open; the page’s state does not change them', async () => {
-    hash = withEditedSql('#explore=3', 'SELECT 1');
+    hash = withEditedQuery('#explore=3', { sql: 'SELECT {v:UInt8}', parameters: { v: '1' } });
     open();
     await settle();
-    expect(requests).toEqual(['/p/shop/api/3/rows?xsql=SELECT+1']);
+    expect(requests).toEqual(['/p/shop/api/3/rows?exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1']);
     expect(find('explore-view-sql-panel').hidden).toBe(false);
-    expect(sqlText().value).toBe('SELECT 1');
+    expect(sqlText().value).toBe('SELECT {v:UInt8}');
+    expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
     query.time.setRange('3h');
     await settle();
-    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?xsql=SELECT+1');
+    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1');
   });
 
   it('follows the chart again when Run gets the chart’s SQL unchanged', async () => {
@@ -381,7 +383,7 @@ describe('renderExploreView', () => {
     await settle();
     type('SELECT 2');
     sqlText().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
-    expect(editedSql(hash)).toBe('SELECT 2');
+    expect(editedQuery(hash)).toEqual({ sql: 'SELECT 2', parameters: { __from: 'from-1h' } });
   });
 
   it('keeps a draft over a refresh, saying it was not run', async () => {
@@ -399,7 +401,7 @@ describe('renderExploreView', () => {
 
   it('shows the error of an edited query in place of the viewer, the editor keeping its text', async () => {
     answer = (url) =>
-      url.searchParams.has('xsql') ? new Response('Code: 62. DB::Exception: Syntax error', { status: 500 }) : serve('rows-1')(url);
+      url.searchParams.has('exploreSql') ? new Response('Code: 62. DB::Exception: Syntax error', { status: 500 }) : serve('rows-1')(url);
     open();
     await settle();
     await settle();
@@ -425,7 +427,7 @@ describe('renderExploreView', () => {
     open();
     await settle();
     expect(viewer.restored).toEqual([{ plugin: 'Y Line', theme: 'Pro Light' }]);
-    hash = withEditedSql(hash, 'SELECT 1');
+    hash = withEditedQuery(hash, { sql: 'SELECT 1', parameters: {} });
     hashChanged.fire();
     await settle();
     expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
@@ -462,7 +464,7 @@ describe('renderExploreView', () => {
   });
 
   it('offers nothing from an edited query’s rows, whose columns the page’s filters do not reach', async () => {
-    hash = withEditedSql(hash, 'SELECT customer_project FROM http_logs');
+    hash = withEditedQuery(hash, { sql: 'SELECT customer_project FROM http_logs', parameters: {} });
     schema = { customer_project: 'string' };
     open();
     await settle();
@@ -486,12 +488,18 @@ describe('renderExploreView', () => {
   });
 });
 
-describe('editedSql and withEditedSql', () => {
-  it('read and write the edited SQL of the tab’s hash, keeping its other keys', () => {
-    expect(editedSql('#explore=3')).toBeUndefined();
-    const edited = withEditedSql('#explore=3', "SELECT * FROM t WHERE a = 'x&y' # z");
-    expect(editedSql(edited)).toBe("SELECT * FROM t WHERE a = 'x&y' # z");
-    expect(withEditedSql(edited, undefined)).toBe('#explore=3');
+describe('editedQuery and withEditedQuery', () => {
+  it('read and write the edited query of the tab’s hash, keeping its other keys', () => {
+    expect(editedQuery('#explore=3')).toBeUndefined();
+    const query = { sql: "SELECT * FROM t WHERE a = {a:String} # z", parameters: { a: "x&y'" } };
+    const edited = withEditedQuery('#explore=3', query);
+    expect(editedQuery(edited)).toEqual(query);
+    expect(withEditedQuery(edited, undefined)).toBe('#explore=3');
+  });
+
+  it('replace the parameters of the query before', () => {
+    const before = withEditedQuery('#explore=3', { sql: 'SELECT {a:UInt8}', parameters: { a: '1', b: '2' } });
+    expect(editedQuery(withEditedQuery(before, { sql: 'SELECT 1', parameters: { a: '3' } }))).toEqual({ sql: 'SELECT 1', parameters: { a: '3' } });
   });
 });
 

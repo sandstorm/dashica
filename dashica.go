@@ -166,6 +166,8 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 type WorkbenchJson struct {
 	// Menu is the dashboards by group, in registration order, each with its outline.
 	Menu []rendering.MenuGroup `json:"menu"`
+	// Explore: the Explore view is on (explore.enabled); else the client leaves it out, and its endpoints answer 404.
+	Explore bool `json:"explore"`
 }
 
 // serveWorkbenchJson serves the WorkbenchJson of the groups as they are when asked (dashboards register after New).
@@ -175,7 +177,7 @@ func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request)
 		menu = []rendering.MenuGroup{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu}); err != nil {
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.ExploreEnabled}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

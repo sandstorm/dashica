@@ -20,6 +20,8 @@ type QueryHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
 	Logger                  zerolog.Logger
 	FileSystem              fs.ReadFileFS
+	// ExploreEnabled: HandleSql and HandleEditedRows answer (explore.enabled); else ErrExploreNotEnabled.
+	ExploreEnabled bool
 }
 
 // HandleQuery answers `queryObj` as Arrow, filtered by `state` (ParseQueryState of `r`): its window and its SQL
@@ -104,10 +106,23 @@ func (qh QueryHandler) client(queryObj sql.SqlQueryable) (*clickhouse.Client, er
 	return client, nil
 }
 
-// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, its parameters
-// written in as literals (clickhouse.InlineParameters), as text/plain: the Explore view's editor starts from it. Its
-// window is resolved at the server's now, as for HandleQuery. A skipped chart answers 204.
+// ChartSql is what HandleSql answers: the SQL a chart sends to ClickHouse and the values bound to its placeholders,
+// which the Explore view's editor starts from.
+type ChartSql struct {
+	// Sql is the query as ClickHouse gets it, its `{name:Type}` placeholders in it ("WHERE path = {path:String}").
+	Sql string `json:"sql"`
+	// Parameters are the values of its placeholders by name ("__from": "1761724800"); an edited query sends them again
+	// as `param_<name>` (EditedParameters).
+	Parameters map[string]string `json:"parameters"`
+}
+
+// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state` and the parameters
+// bound to it, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
+// chart answers 204; ErrExploreNotEnabled unless qh.ExploreEnabled.
 func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	if !qh.ExploreEnabled {
+		return ErrExploreNotEnabled
+	}
 	WriteDiagnostics(w, diagnostics)
 	if diagnostics.Skipped != "" {
 		w.WriteHeader(http.StatusNoContent)
@@ -117,9 +132,8 @@ func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, di
 	if err != nil {
 		return err
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, err = io.WriteString(w, clickhouse.InlineParameters(p.query, p.opts.Parameters))
-	return err
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(ChartSql{Sql: p.query, Parameters: p.opts.Parameters})
 }
 
 // writeHeaders tells the client the window (so that charts also show the full range if they have no data at

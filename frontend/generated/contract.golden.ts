@@ -35,7 +35,8 @@ export const workbench = {
         }
       ]
     }
-  ]
+  ],
+  "explore": false
 } satisfies WorkbenchJson;
 
 export const page = {

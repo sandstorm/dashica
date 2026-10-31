@@ -56,9 +56,9 @@ func (c FiltersConfig) CheckFilterSecret() error {
 
 // ExploreConfig is what the Explore view may show beyond what the charts show.
 type ExploreConfig struct {
-	// Enabled: every viewer may edit a chart's SQL in the Explore view and run it, read-only, on the chart's
-	// ClickHouse connection, raw rows included; off by default, since they may hold personal data the chart
-	// aggregates away.
+	// Enabled: the Explore view is on, and every viewer may edit a chart's SQL in it and run it, read-only, on the
+	// chart's ClickHouse connection, raw rows included; off by default, since they may hold personal data the chart
+	// aggregates away. Off, the client leaves the view out and its endpoints answer 404.
 	Enabled bool `koanf:"enabled"`
 }
 

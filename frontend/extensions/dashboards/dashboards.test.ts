@@ -22,6 +22,7 @@ beforeEach(async () => {
   workbench = createWorkbench(host, {
     extensions: [dashboards, dashboardPage, searchEverywhere],
     workbench: {
+      explore: false,
       menu: [
         {
           title: 'Shop',

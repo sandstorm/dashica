@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for exploreView in explore-view.ts: the chart menu's entry opening a tab, the view as the page kind `explore`
-// named in the tab's hash, its title, Close, the widget found in the page's tree.
+// Tests for exploreView in explore-view.ts: nothing while Explore is not enabled, the chart menu's entry opening a tab,
+// the view as the page kind `explore` named in the tab's hash, its title, Close, the widget found in the page's tree.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
@@ -37,10 +37,16 @@ beforeEach(() => {
   query.load({ search: '?time=1h' });
   subscriptions = [];
   vi.stubGlobal('fetch', async () => new Response('rows'));
+  activate(true);
+});
+
+/** Activates the extension, Explore enabled (`explore`) or not, on fakes that record what it registers. */
+function activate(explore: boolean): void {
   const context = {
     subscriptions,
     globalState: { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} },
     page: {
+      workbench: { menu: [], explore },
       activeTab: { id: '1', url: '/p/shop?time=1h#w=2', title: 'Shop' },
       navigate: async (url: string, options?: { newTab?: boolean }) => void navigated.push({ url, ...options }),
       registerPageRenderer: (kind: string, renderer: PageRenderer) => (renderers.set(kind, renderer), new Disposable(() => renderers.delete(kind))),
@@ -55,7 +61,7 @@ beforeEach(() => {
     commands: { registerCommand: (_id: string, command: typeof run) => ((run = command), new Disposable(() => {})) },
   };
   exploreView.activate(context as unknown as ExtensionContext);
-});
+}
 
 afterEach(() => {
   for (const subscription of subscriptions.reverse()) subscription.dispose();
@@ -72,6 +78,15 @@ function renderTab(hash: string) {
 }
 
 describe('exploreView', () => {
+  it('registers nothing while Explore is not enabled: no menu entry, no page kind', () => {
+    for (const subscription of subscriptions.splice(0).reverse()) subscription.dispose();
+    menuItems = [];
+    activate(false);
+    expect(subscriptions).toEqual([]);
+    expect(menuItems).toEqual([]);
+    expect(renderers.size).toBe(0);
+  });
+
   it('is in the menu of a chart with rows, not of one without', () => {
     expect(menuItems.map(({ menuId, title }) => ({ menuId, title }))).toEqual([{ menuId: 'widget/context', title: 'Open in Explore view' }]);
     const when = menuItems[0].when!;

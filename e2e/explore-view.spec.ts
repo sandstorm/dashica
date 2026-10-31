@@ -1,8 +1,9 @@
 // Tests for the Explore view (docs/2026-10-30-perspective.md §4.4): "Open in Explore view" in a chart's menu opens a
 // new tab with the chart's result in Perspective (the dashboard's URL with `#explore=<id>`, docs/2026-10-28-workbench.md
-// §3.4.1); "SQL" shows the chart's SQL with its values written in, an edited query runs as written and stays over a
-// reload until "Reset to the chart's query" (§4.7; needs `explore.enabled`, else that test is skipped); the link
-// opens it, Close closes its tab, Back shows the dashboard's tab, a changed config is kept per chart until Reset.
+// §3.4.1); "SQL" shows the chart's SQL with its placeholders and their values beside it, an edited query runs with
+// them and stays over a reload until "Reset to the chart's query" (§4.7, §4.8); the link opens it, Close closes its
+// tab, Back shows the dashboard's tab, a changed config is kept per chart until Reset. All of it needs
+// `explore.enabled` (workbench.json's `explore`), else every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance", over the last 7 days. Another page and chart: DASHICA_E2E_EXPLORE_PAGE,
@@ -26,6 +27,11 @@ async function openExplore(page: Page) {
 
 const tabs = (page: Page) => page.getByTestId('wb-tab-bar').getByRole('tab');
 
+test.beforeEach(async ({request}) => {
+    const workbench = await (await request.get('/workbench.json')).json();
+    test.skip(!workbench.explore, 'Explore is off: set explore.enabled: true in the dashica config');
+});
+
 test('opens the chart’s result in Perspective in a new tab, the dashboard’s URL with #explore=<id>', async ({page}) => {
     const view = await openExplore(page);
     await expect(page).toHaveURL(/\?time=168h#explore=\d+$/);
@@ -39,23 +45,20 @@ test('opens the chart’s result in Perspective in a new tab, the dashboard’s 
 
 test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY, Run, a reload, Reset', async ({page}) => {
     const view = await openExplore(page);
-    const sqlButton = view.getByTestId('explore-view-sql');
-    // the button shows once the chart's result is in, when the server allows editing
-    await expect(view.locator('.d-explore-view__status')).toHaveText(/rows of the chart’s result$/);
-    test.skip(await sqlButton.isHidden(), '"SQL" is hidden: set explore.enabled: true in the dashica config');
-    await sqlButton.click();
+    // open from the start
+    await expect(view.getByTestId('explore-view-sql')).toHaveAttribute('aria-pressed', 'true');
     const text = view.getByTestId('explore-view-sql-text');
     await expect(text).toHaveValue(/GROUP BY/);
     const sql = await text.inputValue();
     expect(sql).not.toContain('{{DASHICA_FILTERS}}');
-    expect(sql).not.toMatch(/\{\w+:\w+/);
+    await expect(view.getByTestId('explore-view-parameters')).toContainText('{__from}');
 
     // the chart's rows, aggregated no more
     await text.fill(sql.replace(/GROUP BY[\s\S]*$/, '').replace(/SELECT[\s\S]*?FROM/, 'SELECT * FROM'));
-    const ran = page.waitForRequest((request) => /\/rows\?xsql=/.test(request.url()));
+    const ran = page.waitForRequest((request) => /\/rows\?exploreSql=.*&param___from=/.test(request.url()));
     await view.getByTestId('explore-view-run').click();
     await ran;
-    await expect(page).toHaveURL(/#explore=\d+&xsql=/);
+    await expect(page).toHaveURL(/#explore=\d+&exploreSql=.*&param___from=/);
     await expect(view.getByTestId('explore-view-edited')).toBeVisible();
     await expect(view.locator('.d-explore-view__status')).toHaveText(/^(the first )?[\d,]+ rows( \(limit\))?$/);
 
@@ -64,7 +67,7 @@ test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY,
     await expect(view.getByTestId('explore-view-sql-text')).not.toHaveValue(/GROUP BY/);
 
     await view.getByTestId('explore-view-sql-reset').click();
-    await expect(page).not.toHaveURL(/xsql=/);
+    await expect(page).not.toHaveURL(/exploreSql=/);
     await expect(view.getByTestId('explore-view-edited')).toBeHidden();
     await expect(view.locator('.d-explore-view__status')).toHaveText(/rows of the chart’s result$/);
     await expect(view.getByTestId('explore-view-sql-text')).toHaveValue(/GROUP BY/);
@@ -73,8 +76,6 @@ test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY,
 test('an edited query that fails shows ClickHouse’s message, the editor keeping the text', async ({page}) => {
     const view = await openExplore(page);
     await expect(view.locator('.d-explore-view__status')).toHaveText(/rows of the chart’s result$/);
-    test.skip(await view.getByTestId('explore-view-sql').isHidden(), '"SQL" is hidden: set explore.enabled: true in the dashica config');
-    await view.getByTestId('explore-view-sql').click();
     const text = view.getByTestId('explore-view-sql-text');
     await text.fill('SELEC 1');
     await view.getByTestId('explore-view-run').click();

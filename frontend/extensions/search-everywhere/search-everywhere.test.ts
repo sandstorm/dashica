@@ -31,7 +31,7 @@ function setup() {
         activate: ({ commands, subscriptions }) => subscriptions.push(commands.registerCommand('timeRange.refresh', () => ran.push('refresh'))),
       },
     ],
-    workbench: { menu: [] },
+    workbench: { menu: [], explore: false },
   });
   const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input');
   const options = () => [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);

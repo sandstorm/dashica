@@ -44,7 +44,8 @@
   margin-left: auto;
 }
 
-/* the SQL editor below the bar: its text, Run with "not run" beside it, an error of the chart's SQL */
+/* the SQL editor below the bar: its text with its parameters' values beside it, Run with "not run" beside it, an
+   error of the chart's SQL */
 .d-explore-view__sql {
   display: flex;
   flex-direction: column;
@@ -53,8 +54,36 @@
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
+.d-explore-view__sql-edit {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
 .d-explore-view__sql-text {
+  flex: 1;
+  min-width: 0;
   resize: vertical;
+}
+
+/* the placeholders' values, a name and its value per row */
+.d-explore-view__parameters {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  max-width: 40%;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.d-explore-view__parameters dt {
+  color: var(--color-text-muted);
+}
+
+.d-explore-view__parameters dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .d-explore-view__sql-bar {

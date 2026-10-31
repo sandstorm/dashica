@@ -5,11 +5,12 @@ import { chartTitle, renderExploreView, type ChartWithRows, type Perspective } f
 import './explore-view.css';
 
 /**
- * The Explore view: "Open in Explore view" in a chart's menu (`widget/context`, charts with a `rowsUrl`) opens a new
- * tab with the chart's result in `<perspective-viewer>`, its config rebuilt from the chart's props, while the tab's
- * time range and filters keep working on it. With Explore enabled, "SQL" shows the chart's SQL as it runs, its
- * values written in; the viewer edits it and runs it (`#explore=3&xsql=…`), and the page's time range and filters no
- * longer apply until "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
+ * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore.enabled): "Open in Explore view"
+ * in a chart's menu (`widget/context`, charts with a `rowsUrl`) opens a new tab with the chart's result in
+ * `<perspective-viewer>`, its config rebuilt from the chart's props, while the tab's time range and filters keep
+ * working on it. "SQL" shows the chart's SQL as it runs, its placeholders kept and their values beside it; the viewer
+ * edits it and runs it (`#explore=3&exploreSql=…`), and the page's time range and filters no longer apply until
+ * "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
  * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
  * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab. A click on a
  * group row's value of the chart's result offers to filter the tab by it or exclude it. Perspective loads on first
@@ -18,6 +19,7 @@ import './explore-view.css';
 export const exploreView: Extension = {
   id: 'exploreView',
   activate({ ui, page, widgets, commands, globalState, subscriptions }) {
+    if (!page.workbench.explore) return;
     subscriptions.push(
       page.registerPageRenderer('explore', (el, shown, context) => {
         const id = new URLSearchParams(context.hash.slice(1)).get('explore') ?? '';

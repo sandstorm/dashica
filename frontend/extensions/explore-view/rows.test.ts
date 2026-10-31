@@ -1,14 +1,31 @@
-// Tests for rows.ts: the URLs with the query state or the edited SQL, what the answers say, the description.
+// Tests for rows.ts: the URLs with the query state or the edited query, an edited query's keys, what the answers say,
+// the description.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeRows, fetchRows, fetchSql, rowsRequest, sqlRequest } from './rows';
+import { describeRows, editedQueryKeys, editedQueryOf, fetchRows, fetchSql, rowsRequest, sqlRequest } from './rows';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('rowsRequest', () => {
-  it('is the rows URL with the page’s query state, or with the edited SQL alone', () => {
+  it('is the rows URL with the page’s query state, or with the edited query alone', () => {
     const params = new URLSearchParams([['time', '1h'], ['f', 'host:eq:a'], ['f', 'status:ne:200']]);
     expect(rowsRequest('/p/shop/api/3/rows', params)).toBe('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa&f=status%3Ane%3A200');
-    expect(rowsRequest('/p/shop/api/3/rows', params, "SELECT 'a&b'")).toBe('/p/shop/api/3/rows?xsql=SELECT+%27a%26b%27');
+    expect(rowsRequest('/p/shop/api/3/rows', params, { sql: "SELECT 'a&b'", parameters: { __from: '1761724800' } })).toBe(
+      '/p/shop/api/3/rows?exploreSql=SELECT+%27a%26b%27&param___from=1761724800',
+    );
+  });
+});
+
+describe('editedQueryKeys and editedQueryOf', () => {
+  it('write an edited query as exploreSql and a param_ per parameter, and read it back', () => {
+    const edited = { sql: 'SELECT {v:String}', parameters: { v: "a'b&c", __to: '1761728400' } };
+    const keys = new URLSearchParams(editedQueryKeys(edited));
+    expect([...keys]).toEqual([['exploreSql', 'SELECT {v:String}'], ['param_v', "a'b&c"], ['param___to', '1761728400']]);
+    expect(editedQueryOf(keys)).toEqual(edited);
+  });
+
+  it('read nothing without exploreSql, and only the param_ keys with a name', () => {
+    expect(editedQueryOf(new URLSearchParams('explore=3&param_v=1'))).toBeUndefined();
+    expect(editedQueryOf(new URLSearchParams('explore=3&exploreSql=SELECT+1&param_=x&time=1h'))).toEqual({ sql: 'SELECT 1', parameters: {} });
   });
 });
 
@@ -19,11 +36,11 @@ describe('sqlRequest', () => {
 });
 
 describe('fetchSql', () => {
-  it('reads the text, nothing for a skipped chart, and rejects with the server’s message', async () => {
-    vi.stubGlobal('fetch', async () => new Response('SELECT 1'));
-    expect(await fetchSql('/sql')).toBe('SELECT 1');
+  it('reads the SQL and its parameters, nothing for a skipped chart, and rejects with the server’s message', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ sql: 'SELECT {v:String}', parameters: { v: 'a' } }));
+    expect(await fetchSql('/sql')).toEqual({ sql: 'SELECT {v:String}', parameters: { v: 'a' } });
     vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
-    expect(await fetchSql('/sql')).toBe('');
+    expect(await fetchSql('/sql')).toEqual({ sql: '', parameters: {} });
     vi.stubGlobal('fetch', async () => new Response('Explore is not enabled', { status: 404 }));
     await expect(fetchSql('/sql')).rejects.toThrow('404 Explore is not enabled');
   });
@@ -31,15 +48,15 @@ describe('fetchSql', () => {
 
 describe('fetchRows', () => {
   it('reads the rows and what the headers say about them', async () => {
-    vi.stubGlobal('fetch', async () => new Response('arrow', { headers: { 'X-Dashica-Sql': 'editable', 'X-Dashica-Rows-Limit': '100000', 'X-Dashica-Diagnostics': '{"ignored":["host"]}' } }));
+    vi.stubGlobal('fetch', async () => new Response('arrow', { headers: { 'X-Dashica-Rows-Limit': '100000', 'X-Dashica-Diagnostics': '{"ignored":["host"]}' } }));
     const answer = await fetchRows('/rows');
     expect(new TextDecoder().decode(answer.arrow)).toBe('arrow');
-    expect({ ...answer, arrow: undefined }).toEqual({ arrow: undefined, sqlEditable: true, limit: 100000, diagnostics: { ignored: ['host'] } });
+    expect({ ...answer, arrow: undefined }).toEqual({ arrow: undefined, limit: 100000, diagnostics: { ignored: ['host'] } });
   });
 
-  it('reads a chart’s result whose SQL is not editable, and a skipped chart without rows', async () => {
+  it('reads a chart’s result without a limit, and a skipped chart without rows', async () => {
     vi.stubGlobal('fetch', async () => new Response('arrow'));
-    expect(await fetchRows('/rows')).toMatchObject({ sqlEditable: false, limit: undefined, diagnostics: {} });
+    expect(await fetchRows('/rows')).toMatchObject({ limit: undefined, diagnostics: {} });
     vi.stubGlobal('fetch', async () => new Response(null, { status: 204, headers: { 'X-Dashica-Diagnostics': '{"skipped":"pick a host"}' } }));
     expect(await fetchRows('/rows')).toMatchObject({ arrow: undefined, diagnostics: { skipped: 'pick a host' } });
   });

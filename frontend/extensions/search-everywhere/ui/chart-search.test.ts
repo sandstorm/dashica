@@ -6,6 +6,7 @@ import type { SearchItem, SearchProvider } from '../../../hosts/ui/ui';
 import { chartSearch } from './chart-search';
 
 const workbench: WorkbenchJson = {
+  explore: false,
   menu: [
     {
       title: 'Shop',
