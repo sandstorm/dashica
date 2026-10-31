@@ -53,6 +53,9 @@ func (f *autoBucketFieldImpl) WithAlias(s string) SqlField {
 	return &cloned
 }
 
+// FilterAs is the bucket itself: a time bucket filters nothing.
+func (f *autoBucketFieldImpl) FilterAs(func(value string) string) SqlField { return f }
+
 func (f *autoBucketFieldImpl) withRounding(roundingFn string, sizeMs int64) autoBucketField {
 	cloned := *f
 	cloned.definition = fmt.Sprintf("%s(%s)::DateTime64", roundingFn, f.column_)
@@ -141,4 +144,30 @@ func IsCategory(f SqlField) bool {
 		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0
 	}
 	return true
+}
+
+// Condition is the WHERE condition of a pill on `f` (docs/2026-10-28-workbench.md §3.8): the rows where `f` shows
+// `value`, or with `negate` the others. By default `(<definition>) = <quoted value>` (`!=` with `negate`); a field
+// with FilterAs its condition (`NOT (…)` with `negate`). False for a field that cannot filter (IsCategory).
+func Condition(f SqlField, value string, negate bool) (string, bool) {
+	if f == nil || !IsCategory(f) {
+		return "", false
+	}
+	if own, ok := f.(*fieldImpl); ok && own.filterAs != nil {
+		if negate {
+			return "NOT (" + own.filterAs(value) + ")", true
+		}
+		return own.filterAs(value), true
+	}
+	op := "="
+	if negate {
+		op = "!="
+	}
+	return fmt.Sprintf("(%s) %s %s", f.Definition(), op, Quote(value)), true
+}
+
+// Quote is `value` as a ClickHouse string literal: in single quotes, each `\` and `'` escaped with a backslash
+// (`it's` is `'it\'s'`), so it never ends the literal.
+func Quote(value string) string {
+	return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(value) + "'"
 }

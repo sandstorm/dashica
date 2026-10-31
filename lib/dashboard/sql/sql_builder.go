@@ -2,6 +2,7 @@ package sql
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -20,7 +21,8 @@ type SqlQuery struct {
 	fillStep              string
 	shouldSkipFilters     bool
 	database              string
-	autoBucketPlaceholder bool // routed to *SqlFile via With(); ignored on *SqlQuery itself
+	autoBucketPlaceholder bool   // routed to *SqlFile via With(); ignored on *SqlQuery itself
+	table                 string // routed to *SqlFile via With() (Table); ignored on *SqlQuery itself, whose table is its From
 }
 
 type SqlBuilderOption func(*SqlQuery)
@@ -56,6 +58,17 @@ func From(table string) SqlBuilderOption {
 		b.from = table
 	}
 }
+
+// Table names the table a SQL file reads at its {{DASHICA_FILTERS}} (`default.http_logs`, or `http_logs` in the
+// connection's database), so that it takes the pills on that table (docs/2026-10-28-workbench.md §3.8):
+// `sql.FromFile("src/shop/by_host.sql", sql.Table("http_logs"))`. A SQL file without it takes no pills, only the time
+// range and the SQL chips. Has no effect on *SqlQuery, whose table is its From.
+func Table(table string) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.table = table
+	}
+}
+
 func Where(clause string) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.where = append(b.where, clause)
@@ -256,15 +269,25 @@ func (b *SqlQuery) Build() string {
 	return query
 }
 
-// BaseTable is the table `q` reads (its From) and the ClickHouse server it runs on (OnDatabase, "" for "default");
-// ok only for a builder query (New), since a SQL file's tables are only in its text.
-func BaseTable(q SqlQueryable) (table, database string, ok bool) {
-	b, ok := q.(*SqlQuery)
-	if !ok {
-		return "", "", false
+// TableOf is the table whose pills `q` takes, as its author wrote it (`http_logs`, `monitoring.full_logs`): a builder
+// query's From, a SQL file's Table; false without one, and for a From that is no table (a subquery). The connection is
+// q.Database().
+func TableOf(q SqlQueryable) (string, bool) {
+	var table string
+	switch q := q.(type) {
+	case *SqlQuery:
+		table = q.from
+	case *SqlFile:
+		table = q.table
+	case *SqlString:
+		table = q.table
 	}
-	return b.from, b.database, true
+	table = strings.TrimSpace(table)
+	return table, plainTable.MatchString(table)
 }
+
+// plainTable is a table by name, its database before it or not.
+var plainTable = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
 
 // SelectFields are the fields of its SELECT, in order; empty for SELECT *.
 func (b *SqlQuery) SelectFields() []SqlField {
@@ -274,4 +297,14 @@ func (b *SqlQuery) SelectFields() []SqlField {
 // GroupByFields are the fields of its GROUP BY, in order.
 func (b *SqlQuery) GroupByFields() []SqlField {
 	return b.groupBy
+}
+
+// BaseTable is the table `q` reads (its From) and the ClickHouse server it runs on (OnDatabase, "" for "default");
+// ok only for a builder query (New), since a SQL file's tables are only in its text.
+func BaseTable(q SqlQueryable) (table, database string, ok bool) {
+	b, ok := q.(*SqlQuery)
+	if !ok {
+		return "", "", false
+	}
+	return b.from, b.database, true
 }

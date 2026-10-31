@@ -181,12 +181,12 @@ var (
 // queryDTO is the wire form of every SqlQueryable. The "kind" discriminator
 // selects which subset of keys is meaningful:
 //   - "table": table, select, where, groupBy, orderBy, limit, fillStep, ...
-//   - "file":  path, where, database, skipFilters, autoBucket
-//   - "raw":   sql, where, database, skipFilters, autoBucket
+//   - "file":  path, table (its Table), where, database, skipFilters, autoBucket
+//   - "raw":   sql, table (its Table), where, database, skipFilters, autoBucket
 type queryDTO struct {
 	Kind queryKind `json:"kind"`
 
-	// table (SqlQuery)
+	// table (SqlQuery: its From; SqlFile, SqlString: its Table)
 	Table                 string            `json:"table,omitempty"`
 	Select                []json.RawMessage `json:"select,omitempty"`
 	GroupBy               []json.RawMessage `json:"groupBy,omitempty"`
@@ -272,6 +272,7 @@ func (f *SqlFile) MarshalJSON() ([]byte, error) {
 	return json.Marshal(queryDTO{
 		Kind:        queryFile,
 		Path:        f.path,
+		Table:       f.table,
 		Where:       f.where,
 		Database:    f.database,
 		SkipFilters: f.shouldSkipFilters,
@@ -286,6 +287,7 @@ func (f *SqlFile) UnmarshalJSON(b []byte) error {
 	}
 	*f = SqlFile{
 		path:              dto.Path,
+		table:             dto.Table,
 		shouldSkipFilters: dto.SkipFilters,
 		where:             dto.Where,
 		database:          dto.Database,
@@ -298,6 +300,7 @@ func (s *SqlString) MarshalJSON() ([]byte, error) {
 	return json.Marshal(queryDTO{
 		Kind:        queryRaw,
 		Sql:         s.content,
+		Table:       s.table,
 		Where:       s.where,
 		Database:    s.database,
 		SkipFilters: s.shouldSkipFilters,
@@ -312,6 +315,7 @@ func (s *SqlString) UnmarshalJSON(b []byte) error {
 	}
 	*s = SqlString{
 		content:           dto.Sql,
+		table:             dto.Table,
 		shouldSkipFilters: dto.SkipFilters,
 		where:             dto.Where,
 		database:          dto.Database,

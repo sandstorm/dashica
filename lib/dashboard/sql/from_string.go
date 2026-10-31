@@ -17,6 +17,8 @@ type SqlString struct {
 	shouldSkipFilters bool
 	where             []string
 	database          string
+	// table is the table it reads at its {{DASHICA_FILTERS}}, whose pills it takes (Table); "" for none
+	table string
 
 	// auto-bucket placeholder substitution (mirrors SqlFile)
 	autoBucket     bool   // opt-in via AutoBucketPlaceholder()
@@ -89,18 +91,19 @@ func (s *SqlString) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
 	return &cloned, &sizeMs
 }
 
-// With applies SqlBuilderOptions. As with SqlFile, only Where(), OnDatabase()
-// and AutoBucketPlaceholder() are meaningful — the SQL is already complete.
+// With applies SqlBuilderOptions. As with SqlFile, only Where(), OnDatabase(),
+// Table() and AutoBucketPlaceholder() are meaningful — the SQL is already complete.
 func (s *SqlString) With(opts ...SqlBuilderOption) SqlQueryable {
 	cloned := *s
 	cloned.where = append([]string(nil), s.where...)
-	proxy := &SqlQuery{where: cloned.where, database: cloned.database, autoBucketPlaceholder: cloned.autoBucket}
+	proxy := &SqlQuery{where: cloned.where, database: cloned.database, autoBucketPlaceholder: cloned.autoBucket, table: cloned.table}
 	for _, opt := range opts {
 		opt(proxy)
 	}
 	cloned.where = proxy.where
 	cloned.database = proxy.database
 	cloned.autoBucket = proxy.autoBucketPlaceholder
+	cloned.table = proxy.table
 	return &cloned
 }
 

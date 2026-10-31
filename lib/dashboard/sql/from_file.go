@@ -28,6 +28,8 @@ type SqlFile struct {
 	shouldSkipFilters bool
 	where             []string
 	database          string
+	// table is the table it reads at its {{DASHICA_FILTERS}}, whose pills it takes (Table); "" for none
+	table string
 
 	// auto-bucket placeholder substitution
 	autoBucket     bool   // opt-in via AutoBucketPlaceholder()
@@ -48,11 +50,16 @@ func (f *SqlFile) Database() string {
 // genuinely should not be filtered (system tables, alerts that own their own
 // WHERE, week-over-week comparisons, ...) must use FromFileWithoutFilters
 // instead. Placeholder validation happens when the query is built with the
-// project filesystem so embedded files can be used at runtime.
-func FromFile(path string) *SqlFile {
-	return &SqlFile{
+// project filesystem so embedded files can be used at runtime. `opts` are applied
+// as With applies them; sql.Table names the table whose pills it takes.
+func FromFile(path string, opts ...SqlBuilderOption) *SqlFile {
+	f := &SqlFile{
 		path: path,
 	}
+	if len(opts) == 0 {
+		return f
+	}
+	return f.With(opts...).(*SqlFile)
 }
 
 // FromFileWithoutFilters is the explicit opt-out from dashboard filter handling.
@@ -154,22 +161,25 @@ func (f *SqlFile) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
 	return &cloned, &sizeMs
 }
 
-// With applies SqlBuilderOptions. Only Where() and OnDatabase() are meaningful for
-// SqlFile — Where() clauses get substituted into DASHICA_FILTERS placeholders by
-// Build(); OnDatabase() routes the query to a non-default ClickHouse. Other options
+// With applies SqlBuilderOptions. Only Where(), OnDatabase(), Table() and
+// AutoBucketPlaceholder() are meaningful for SqlFile — Where() clauses get
+// substituted into DASHICA_FILTERS placeholders by Build(); OnDatabase() routes
+// the query to a non-default ClickHouse; Table() names the table whose pills it
+// takes. Other options
 // (Select, From, GroupBy, ...) are ignored because the file's SQL is already complete.
 func (b *SqlFile) With(opts ...SqlBuilderOption) SqlQueryable {
 	cloned := *b
 	cloned.where = append([]string(nil), b.where...)
 	// Run the options against a throwaway SqlQuery so the *same* option functions
-	// can target both query types — this captures Where() and OnDatabase() additions.
-	proxy := &SqlQuery{where: cloned.where, database: cloned.database, autoBucketPlaceholder: cloned.autoBucket}
+	// can target both query types — this captures Where(), OnDatabase() and Table() additions.
+	proxy := &SqlQuery{where: cloned.where, database: cloned.database, autoBucketPlaceholder: cloned.autoBucket, table: cloned.table}
 	for _, opt := range opts {
 		opt(proxy)
 	}
 	cloned.where = proxy.where
 	cloned.database = proxy.database
 	cloned.autoBucket = proxy.autoBucketPlaceholder
+	cloned.table = proxy.table
 	return &cloned
 }
 
