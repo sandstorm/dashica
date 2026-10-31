@@ -39,49 +39,34 @@ afterEach(() => {
 const urlParams = () => Object.fromEntries(new URLSearchParams(searches.at(-1) ?? ''));
 
 describe('QueryHost', () => {
-  it('takes the state from the URL, the page default for a missing time range', () => {
-    query.load({ search: '?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D', defaultTime: '168h' });
-    expect(query.time.range).toBe('168h');
+  it('takes the state from the URL', () => {
+    query.load({ search: '?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D' });
     expect(query.filters.chips).toEqual([{ kind: 'sql', sql: 'status >= 500' }]);
     expect(query.params.values).toEqual({ path: '^/api' });
     expect(refreshes).toBe(1);
   });
 
-  it('falls back to 24h for a page without a default time range, and to no params for a broken wp', () => {
+  it('falls back to no params for a broken wp', () => {
     query.load({ search: '?wp=%5B1%5D' });
-    expect(query.time.range).toBe('24h');
     expect(query.params.values).toEqual({});
   });
 
-  it('sends the keys of the page URL, the default time range included', () => {
+  it('sends the keys of the page URL', () => {
     query.load();
     query.filters.add('status >= 500');
     query.params.set('path', '^/api');
     const sent = query.requestParams();
-    expect([...sent.keys()]).toEqual(['time', 'sql', 'wp']);
-    expect(sent.get('time')).toBe('24h');
+    expect([...sent.keys()]).toEqual(['sql', 'wp']);
     expect(sent.get('sql')).toBe('status >= 500');
     expect(JSON.parse(sent.get('wp')!)).toEqual({ path: '^/api' });
   });
 
-  it('sends a custom range with its ends', () => {
-    query.load();
-    query.time.setCustom('now-6h', 'now-1h');
-    expect(query.requestParams().toString()).toBe(new URLSearchParams({ time: 'custom', range: 'now-6h to now-1h' }).toString());
-  });
-
-  it('sends only the time range while there is no SQL filter and no param', () => {
-    query.load();
-    expect(query.requestParams().toString()).toBe('time=24h');
-  });
-
-  it('asks the widgets to query again when the time, the filter or a param changes', () => {
+  it('asks the widgets to query again when the filter or a param changes', () => {
     query.load();
     refreshes = 0;
-    query.time.setRange('1h');
     query.filters.add('status >= 500');
     query.params.set('path', '^/api');
-    expect(refreshes).toBe(3);
+    expect(refreshes).toBe(2);
   });
 
   it('adds a condition as a SQL chip of its own, once; one of only spaces is none', () => {
@@ -129,7 +114,7 @@ describe('QueryHost', () => {
       ['f', keyOf('host ≠ a')],
       ['sql', "level != 'info'"],
     ]);
-    expect([...query.requestParams()].slice(1)).toEqual([...written].slice(1));
+    expect([...query.requestParams()]).toEqual([...written].slice(1));
     const chips = query.filters.chips;
     query.load({ search: searches.at(-1) });
     expect(query.filters.chips).toEqual(chips);
@@ -166,7 +151,7 @@ describe('QueryHost', () => {
     query.filters.add(pill('status = 500'));
     query.filters.add(pill('host ≠ a'));
     const sent = query.requestParams();
-    expect([...sent.keys()]).toEqual(['time', 'f', 'f']);
+    expect([...sent.keys()]).toEqual(['f', 'f']);
     expect(sent.getAll('f')).toEqual([keyOf('status = 500'), keyOf('host ≠ a')]);
   });
 
@@ -207,42 +192,27 @@ describe('QueryHost', () => {
   });
 
   it('gives the query string after a pause, leaving out what is the default', () => {
-    query.load({ defaultTime: '1h' });
-    query.time.setRange('3h');
+    query.load();
     query.filters.add('a');
+    query.params.set('path', 'x');
     expect(searches).toEqual([]);
     vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ time: '3h', sql: 'a' });
-    query.time.setRange('1h');
+    expect(urlParams()).toEqual({ sql: 'a', wp: '{"path":"x"}' });
     query.filters.clear();
+    query.params.set('path', 'y');
     vi.advanceTimersByTime(200);
-    expect(searches).toEqual(['?time=3h&sql=a', '']);
+    expect(searches).toEqual(['?sql=a&wp=%7B%22path%22%3A%22x%22%7D', '?wp=%7B%22path%22%3A%22y%22%7D']);
   });
 
   it('keeps the other keys of the query string it was loaded from, and gives nothing for a state as loaded', () => {
-    query.load({ search: '?tab=2&time=1h', defaultTime: '24h' });
-    query.time.setRange('3h');
-    query.time.setRange('1h');
+    query.load({ search: '?tab=2&sql=a' });
+    query.filters.add('b');
+    query.filters.remove(1);
     vi.advanceTimersByTime(200);
     expect(searches).toEqual([]);
-    query.time.setRange('6h');
+    query.filters.add('c');
     vi.advanceTimersByTime(200);
-    expect(searches).toEqual(['?tab=2&time=6h']);
-  });
-
-  it('writes a custom range of local times as it is', () => {
-    query.load();
-    query.time.setCustom('2026-10-29 10:00', '2026-10-29 12:30');
-    vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ time: 'custom', range: '2026-10-29 10:00 to 2026-10-29 12:30' });
-    expect(query.time.custom).toBe('2026-10-29 10:00 to 2026-10-29 12:30');
-  });
-
-  it('writes a custom range relative to now as it is', () => {
-    query.load();
-    query.time.setCustom('now-6h', 'now-1h');
-    vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ time: 'custom', range: 'now-6h to now-1h' });
+    expect(searches).toEqual(['?tab=2&sql=a&sql=c']);
   });
 
   it('keeps a change from before a load out of the query string of the next page', () => {
@@ -274,6 +244,21 @@ describe('registered states', () => {
     query.load({ search: '?colors=red,blue' });
     expect(changes).toEqual([['red', 'blue']]);
     expect(query.state('colors')?.get()).toEqual(['red', 'blue']);
+  });
+
+  it('reads and writes a state with the default of the page loaded', () => {
+    const size = query.registerState<string>('size', {
+      keys: ['size'],
+      parse: (url, page) => url.get('size') ?? page?.title ?? '',
+      format: (value, page) => (value !== page?.title ? [['size', value]] : []),
+    });
+    query.load({ page: { kind: 'dashboard', title: 'xl', filterBar: false, filterButtons: [], widgets: [] } });
+    expect(size.get()).toBe('xl');
+    size.set('s');
+    vi.advanceTimersByTime(200);
+    size.set('xl');
+    vi.advanceTimersByTime(200);
+    expect(searches).toEqual(['?size=s', '']);
   });
 
   it('reads a state registered after the load from the URL loaded', () => {
@@ -346,18 +331,16 @@ describe('registered states', () => {
 
 describe('parseSearch and formatSearch', () => {
   it('read the state of a query string, the default for what it lacks', () => {
-    expect(parseSearch(`?time=custom&range=now-6h+to+now&f=${keyOf('host = a')}&f=&wp=%7B%22path%22%3A%22x%22%7D`, '1h')).toEqual({
-      range: 'custom',
-      custom: 'now-6h to now',
+    expect(parseSearch(`?time=custom&f=${keyOf('host = a')}&f=&wp=%7B%22path%22%3A%22x%22%7D`)).toEqual({
       chips: [{ kind: 'pill', ...pill('host = a') }],
       params: { path: 'x' },
     });
-    expect(parseSearch('', '1h')).toEqual({ range: '1h', custom: '', chips: [], params: {} });
+    expect(parseSearch('')).toEqual({ chips: [], params: {} });
   });
 
   it('write it back, leaving out the default and keeping the other keys', () => {
-    const state = parseSearch('?time=3h&sql=a&f=k.mac', '1h');
-    expect(formatSearch(state, '1h', '?tab=x&time=6h')).toBe('?tab=x&time=3h&sql=a&f=k.mac');
-    expect(formatSearch(parseSearch('', '1h'), '1h', '?sql=a')).toBe('');
+    const state = parseSearch('?time=3h&sql=a&f=k.mac');
+    expect(formatSearch(state, '?tab=x&sql=b')).toBe('?tab=x&sql=a&f=k.mac');
+    expect(formatSearch(parseSearch(''), '?sql=a')).toBe('');
   });
 });

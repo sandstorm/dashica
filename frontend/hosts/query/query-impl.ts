@@ -1,7 +1,8 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import { Disposable } from '../../core/disposable/disposable';
-import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, QueryEntries, QueryState, QueryStateSpec, TimeModel } from './query';
+import type { PageJson } from '../../generated/zz_generated.dashica';
+import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, QueryEntries, QueryState, QueryStateSpec } from './query';
 
 /**
  * The states registered for every tab (`QueryApi.registerState`), in the order registered: the tabs' query hosts share
@@ -34,7 +35,6 @@ export class QueryStates {
  * `onDidChangeSearch` gives the query string of the state after a change, which the tab puts into its URL.
  */
 export class QueryHost implements QueryApi {
-  readonly time: TimeState;
   readonly filters: FiltersState;
   readonly params: ParamsState;
   readonly #onDidRequestRefresh = new EventEmitter<void>();
@@ -42,7 +42,8 @@ export class QueryHost implements QueryApi {
   readonly #onDidChangeSearch = new EventEmitter<string>();
   /** Fires a moment after the last change with the query string of the state (`?time=3h`, '' for none), when it differs from the one before. */
   readonly onDidChangeSearch = this.#onDidChangeSearch.event;
-  #defaultTime = DEFAULT_TIME;
+  /** The page the state was loaded for, whose defaults the states take (its `defaultTime`). */
+  #page: PageJson | undefined;
   #searchWrite: ReturnType<typeof setTimeout> | undefined;
   /** The query string that holds the state, as last loaded or given by `onDidChangeSearch`; its other keys stay. */
   #search = '';
@@ -55,26 +56,23 @@ export class QueryHost implements QueryApi {
       this.#writeSearchSoon();
       this.refresh();
     };
-    this.time = new TimeState(changed);
     this.filters = new FiltersState(changed);
     this.params = new ParamsState(changed);
   }
 
   /**
-   * Takes the state from `search` (`?time=1h&f=<key>`), for a page about to be shown or after the browser's back
-   * and forward; what it lacks is the default (`defaultTime`: the page's time range, else 24h). Fires every model's
-   * `onDidChange` and one `onDidRequestRefresh`.
+   * Takes the state from `search` (`?time=1h&f=<key>`), for `page` about to be shown or after the browser's back and
+   * forward; what it lacks is the default, which may be the page's (its `defaultTime`). Fires every model's and read
+   * state's `onDidChange` and one `onDidRequestRefresh`.
    */
-  load({ search = '', defaultTime }: { search?: string; defaultTime?: string } = {}): void {
+  load({ search = '', page }: { search?: string; page?: PageJson } = {}): void {
     clearTimeout(this.#searchWrite);
-    this.#defaultTime = defaultTime || DEFAULT_TIME;
-    const state = parseSearch(search, this.#defaultTime);
+    this.#page = page;
+    const state = parseSearch(search);
     this.#search = search;
-    this.time.load(state.range, state.custom);
     this.filters.load(state.chips);
     this.params.load(state.params);
     for (const held of this.#values.values()) held.known = false;
-    this.time.fire();
     this.filters.fire();
     this.params.fire();
     for (const held of this.#values.values()) held.changed.fire();
@@ -103,13 +101,12 @@ export class QueryHost implements QueryApi {
   }
 
   requestParams(): URLSearchParams {
-    const request = new URLSearchParams({ time: this.time.range });
-    if (this.time.range === 'custom') request.set('range', this.time.custom);
-    appendChips(request, this.filters.chips);
-    if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
+    const request = new URLSearchParams();
     for (const [id, spec] of this.states.entries()) {
       if (spec.request) for (const [key, value] of spec.request(this.#get(id))) request.append(key, value);
     }
+    appendChips(request, this.filters.chips);
+    if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
     return request;
   }
 
@@ -118,7 +115,6 @@ export class QueryHost implements QueryApi {
     this.#onDidRequestRefresh.dispose();
     this.#onDidChangeSearch.dispose();
     for (const held of this.#values.values()) held.changed.dispose();
-    this.time.dispose();
     this.filters.dispose();
     this.params.dispose();
   }
@@ -131,7 +127,7 @@ export class QueryHost implements QueryApi {
   /** `held`'s value, parsed from the query string when it was not read since the last load. */
   #valueOf(id: string, held: HeldState): unknown {
     if (!held.known) {
-      held.value = this.states.get(id)!.parse(new URLSearchParams(this.#search));
+      held.value = this.states.get(id)!.parse(new URLSearchParams(this.#search), this.#page);
       held.known = true;
     }
     return held.value;
@@ -140,7 +136,7 @@ export class QueryHost implements QueryApi {
   /** Sets the state `id` to `value`, unless the URL holds both alike; a state the handlers read asks for a refresh. */
   #set(id: string, held: HeldState, value: unknown): void {
     const spec = this.states.get(id);
-    if (!spec || sameEntries(spec.format(this.#valueOf(id, held)), spec.format(value))) return;
+    if (!spec || sameEntries(spec.format(this.#valueOf(id, held), this.#page), spec.format(value, this.#page))) return;
     held.value = value;
     held.known = true;
     held.changed.fire();
@@ -150,10 +146,10 @@ export class QueryHost implements QueryApi {
 
   /** The query string `formatSearch` writes, then each registered state's entries (`value`: its value) in place of its keys. */
   #formatSearch(state: SearchState, value: (id: string) => unknown): string {
-    const url = new URLSearchParams(formatSearch(state, this.#defaultTime, this.#search));
+    const url = new URLSearchParams(formatSearch(state, this.#search));
     const states = this.states.entries();
     for (const [, spec] of states) for (const key of spec.keys) url.delete(key);
-    for (const [id, spec] of states) for (const [key, entry] of spec.format(value(id))) url.append(key, entry);
+    for (const [id, spec] of states) for (const [key, entry] of spec.format(value(id), this.#page)) url.append(key, entry);
     const text = url.toString();
     return text ? `?${text}` : '';
   }
@@ -163,15 +159,13 @@ export class QueryHost implements QueryApi {
     clearTimeout(this.#searchWrite);
     this.#searchWrite = setTimeout(() => {
       const state: SearchState = {
-        range: this.time.range,
-        custom: this.time.custom,
         chips: this.filters.chips,
         params: this.params.values,
       };
       const search = this.#formatSearch(state, (id) => this.#get(id));
       // as the query string before is written, so a state as loaded gives no change
       const loaded = new URLSearchParams(this.#search);
-      if (search === this.#formatSearch(parseSearch(this.#search, this.#defaultTime), (id) => this.states.get(id)!.parse(loaded))) return;
+      if (search === this.#formatSearch(parseSearch(this.#search), (id) => this.states.get(id)!.parse(loaded, this.#page))) return;
       this.#search = search;
       this.#onDidChangeSearch.fire(search);
     }, SEARCH_WRITE_DELAY_MS);
@@ -191,42 +185,32 @@ function sameEntries(a: QueryEntries, b: QueryEntries): boolean {
   return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && value === b[i][1]);
 }
 
-/** What a query string (`?time=1h&f=<key>&sql=…&wp=…`) says about the query state. */
+/** What a query string (`?f=<key>&sql=…&wp=…`) says about the filters and the params. */
 export interface SearchState {
-  readonly range: string;
-  /** The custom range; '' unless `range` is `custom`. */
-  readonly custom: string;
   /** The filter chips, in the order of their `f` and `sql`. */
   readonly chips: readonly FilterChip[];
   readonly params: Readonly<Record<string, string>>;
 }
 
 /**
- * The state `search` holds; what it lacks is the default (`defaultTime` for the range). Each `f` and `sql` is one chip,
- * in their order; an empty `f`, an `sql` of only spaces and a `wp` that is no JSON object of strings are left out. An
- * `f` is kept as it is, whatever it holds: the server checks its signature.
+ * The filters and params `search` holds. Each `f` and `sql` is one chip, in their order; an empty `f`, an `sql` of only
+ * spaces and a `wp` that is no JSON object of strings are left out. An `f` is kept as it is, whatever it holds: the
+ * server checks its signature.
  */
-export function parseSearch(search: string, defaultTime = DEFAULT_TIME): SearchState {
+export function parseSearch(search: string): SearchState {
   const url = new URLSearchParams(search);
-  const range = url.get('time') || defaultTime;
   return {
-    range,
-    custom: range === 'custom' ? (url.get('range') ?? '') : '',
     chips: [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),
     params: parseParams(url.get('wp')),
   };
 }
 
 /**
- * The query string of `state` (`?time=3h&sql=a`, '' for none), its other keys taken from `search`; what is the
- * default (`defaultTime`, no filter) is left out.
+ * The query string of `state` (`?sql=a&wp=…`, '' for none), its other keys taken from `search`; what is the default
+ * (no filter, no param) is left out.
  */
-export function formatSearch(state: SearchState, defaultTime: string, search = ''): string {
+export function formatSearch(state: SearchState, search = ''): string {
   const url = new URLSearchParams(search);
-  if (state.range !== defaultTime) url.set('time', state.range);
-  else url.delete('time');
-  if (state.range === 'custom' && state.custom) url.set('range', state.custom);
-  else url.delete('range');
   url.delete('sql');
   url.delete('f');
   appendChips(url, state.chips);
@@ -236,43 +220,11 @@ export function formatSearch(state: SearchState, defaultTime: string, search = '
   return text ? `?${text}` : '';
 }
 
-/** The time range of a page that declares none. */
-const DEFAULT_TIME = '24h';
-
 /** Typing into a text input changes the query string once, after a pause. */
 const SEARCH_WRITE_DELAY_MS = 200;
 
 class Model extends EventEmitter<void> {
   readonly onDidChange = this.event;
-}
-
-class TimeState extends Model implements TimeModel {
-  range = DEFAULT_TIME;
-  custom = '';
-
-  constructor(private readonly changed: () => void) {
-    super();
-  }
-
-  load(range: string, custom: string): void {
-    this.range = range;
-    this.custom = range === 'custom' ? custom : '';
-  }
-
-  setRange(range: string): void {
-    if (range === this.range) return;
-    this.range = range;
-    if (range !== 'custom') this.custom = '';
-    this.fire();
-    this.changed();
-  }
-
-  setCustom(from: string, to: string): void {
-    this.range = 'custom';
-    this.custom = `${from} to ${to}`;
-    this.fire();
-    this.changed();
-  }
 }
 
 class FiltersState extends Model implements FiltersModel {

@@ -1,4 +1,5 @@
 import type { Event } from '../../core/event-emitter/event-emitter';
+import type { PageJson } from '../../generated/zz_generated.dashica';
 
 /**
  * The state every query of a tab's page depends on: its time range and auto refresh, its filters, the values of its
@@ -8,7 +9,6 @@ import type { Event } from '../../core/event-emitter/event-emitter';
  * `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
 export interface QueryApi {
-  readonly time: TimeModel;
   readonly filters: FiltersModel;
   readonly params: ParamsModel;
   /**
@@ -48,10 +48,13 @@ export interface QueryState<T> {
 export interface QueryStateSpec<T> {
   /** The URL's keys it is kept in (`['f', 'sql']`). */
   readonly keys: readonly string[];
-  /** The value the URL's keys hold (`url`, the tab's query string); the default for what they lack. */
-  parse(url: URLSearchParams): T;
-  /** The entries of the URL that hold `value`, in order (`[['refresh', '30']]`); none for the default. */
-  format(value: T): QueryEntries;
+  /**
+   * The value the URL's keys hold (`url`, the tab's query string); the default for what they lack, which may be the
+   * page's (`page`, the page the tab shows: its `defaultTime`; `undefined` before one is).
+   */
+  parse(url: URLSearchParams, page: PageJson | undefined): T;
+  /** The entries of the URL that hold `value`, in order (`[['refresh', '30']]`); none for the default (`page`: as `parse`). */
+  format(value: T, page: PageJson | undefined): QueryEntries;
   /**
    * What the data handlers read of `value` (`requestParams`); a state without it is not sent, and its change queries
    * nothing again (auto refresh).
@@ -61,20 +64,6 @@ export interface QueryStateSpec<T> {
 
 /** Entries of a query string, in order (`[['f', '<key>'], ['sql', 'a > 1']]`). */
 export type QueryEntries = readonly (readonly [string, string])[];
-
-export interface TimeModel {
-  /** A preset as a Go duration (`1h`, `168h`), or `custom` for `custom`. */
-  readonly range: string;
-  /** The custom range as the server reads it (`2026-10-29 10:00 to now-1h`); '' unless `range` is `custom`. */
-  readonly custom: string;
-  setRange(range: string): void;
-  /**
-   * Sets the range to `custom`, each end a time as the server reads it: `2026-10-29 10:00` (a selection on a time
-   * chart, `time-library/formatTime`) or relative to now, `now-6h` (the time picker).
-   */
-  setCustom(from: string, to: string): void;
-  readonly onDidChange: Event<void>;
-}
 
 export interface FiltersModel {
   /** The chips, in the order they were added, as the URL holds them (`?f=<key>&sql=status >= 500`). */

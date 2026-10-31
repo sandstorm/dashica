@@ -4,6 +4,7 @@ import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { Diagnostics, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import { formatTime } from '../time-library/format-time';
+import { TIME_STATE, customRange, type TimeRange } from '../time-library/time-state';
 import './chart-frame.css';
 
 export interface ChartFrameOptions {
@@ -110,7 +111,9 @@ export class ChartFrame {
 
   readonly #onSchemeChange = () => void this.#draw();
 
-  readonly #onTimeSelect = (from: Date, to: Date) => this.#ctx.state.time.setCustom(formatTime(from), formatTime(to));
+  /** A range dragged across a time chart becomes its tab's time range (while the time-range extension keeps one). */
+  readonly #onTimeSelect = (from: Date, to: Date) =>
+    this.#ctx.state.state<TimeRange>(TIME_STATE)?.set(customRange(formatTime(from), formatTime(to)));
 
   async #query(): Promise<void> {
     this.#running?.abort();

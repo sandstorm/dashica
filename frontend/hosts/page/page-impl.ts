@@ -267,7 +267,7 @@ export class PageHost implements PageApi {
     open.loading?.abort.abort();
     const after = new URL(url, 'http://dashica');
     if (after.pathname === before.pathname && open.page) {
-      if (after.search !== before.search) open.query.load({ search: after.search, defaultTime: open.page.defaultTime });
+      if (after.search !== before.search) open.query.load({ search: after.search, page: open.page });
       if (after.hash !== before.hash) this.#hashChanged(open);
       return;
     }
@@ -319,7 +319,7 @@ export class PageHost implements PageApi {
   #show(open: OpenTab, target: URL, page: PageJson): void {
     this.#unrender(open);
     open.page = page;
-    open.query.load({ search: target.search, defaultTime: page.defaultTime });
+    open.query.load({ search: target.search, page });
     this.#render(open);
   }
 

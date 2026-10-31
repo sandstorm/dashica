@@ -1,15 +1,16 @@
 import { html } from 'htl';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement } from 'lucide';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import type { QueryApi } from '../../hosts/query/query';
+import type { QueryApi, QueryState } from '../../hosts/query/query';
 import { formatTime } from '../time-library/format-time';
 import { REFRESH_STATE, type AutoRefresh } from '../time-library/refresh-state';
+import { TIME_STATE, customRange, presetRange, timeState, type TimeRange } from '../time-library/time-state';
 import './time-range.css';
 
 /**
- * The time range of the page's queries, in the top bar: a button showing the range ("Last 1 hour",
- * "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the window by its length, ⊖ zooming out to twice the
- * window. On every page, the start page too.
+ * The time range of the page's queries (the query state `time`: `?time=1h`, `?time=custom&range=…`), in the top bar:
+ * a button showing the range ("Last 1 hour", "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the
+ * window by its length, ⊖ zooming out to twice the window. On every page, the start page too.
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
  * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply
  * asks it (`/time-range`) and shows its reason when it cannot. A range ending at a fixed time does not move, so
@@ -19,9 +20,11 @@ import './time-range.css';
 export const timeRange: Extension = {
   id: 'timeRange',
   activate({ ui, query, globalState, subscriptions }) {
-    const picker = new TimeRangePicker(query, globalState);
+    const time = query.registerState(TIME_STATE, timeState);
+    subscriptions.push(time);
+    const picker = new TimeRangePicker(time, query, globalState);
     picker.show();
-    subscriptions.push(query.time.onDidChange(() => picker.show()));
+    subscriptions.push(time.onDidChange(() => picker.show()));
     subscriptions.push(ui.registerBarItem('top', picker.el, { alignment: 'right', priority: 30 }));
     subscriptions.push({ dispose: () => picker.close() });
   },
@@ -45,7 +48,7 @@ const PRESETS = [
 ];
 
 /**
- * The range button with its panel, shift and zoom out; `show` shows `query.time`. The panel closes on Escape, on a
+ * The range button with its panel, shift and zoom out; `show` shows `time`. The panel closes on Escape, on a
  * click outside, and once a range is picked or applied.
  */
 class TimeRangePicker {
@@ -73,7 +76,9 @@ class TimeRangePicker {
   readonly el: HTMLElement;
 
   constructor(
-    private readonly query: QueryApi,
+    private readonly time: QueryState<TimeRange>,
+    /** Where the auto refresh is, turned off for a range that does not move. */
+    private readonly query: Pick<QueryApi, 'state'>,
     private readonly globalState: Memento,
   ) {
     const form: HTMLFormElement = html`<form class="d-time-picker__section">
@@ -144,7 +149,7 @@ class TimeRangePicker {
   }
 
   open(): void {
-    const { range, custom } = this.query.time;
+    const { range, custom } = this.time.get();
     const [from = '', to = ''] = custom.split(' to ');
     // a range without preset (`90m`) is a Go duration, and as such `now-90m`
     this.#from.value = range === 'custom' ? from : (PRESETS.find((preset) => preset.value === range)?.from ?? `now-${range}`);
@@ -171,7 +176,7 @@ class TimeRangePicker {
 
   /** What the button says: the preset, or the custom range with its day once (`2026-10-29 10:00 to 12:00`). */
   #label(): string {
-    const { range, custom } = this.query.time;
+    const { range, custom } = this.time.get();
     if (range !== 'custom') return PRESETS.find((preset) => preset.value === range)?.label ?? `Last ${range}`;
     const [from = '', to = ''] = custom.split(' to ');
     const [fromDay] = from.split(' ');
@@ -185,9 +190,9 @@ class TimeRangePicker {
     this.#quickRanges.replaceChildren(
       ...PRESETS.filter((preset) => preset.label.toLowerCase().includes(search)).map((preset) => {
         const item: HTMLButtonElement = html`<button type="button" class="d-list__item">${preset.label}</button>`;
-        item.classList.toggle('d-list__item--active', preset.value === this.query.time.range);
+        item.classList.toggle('d-list__item--active', preset.value === this.time.get().range);
         item.addEventListener('click', () => {
-          this.query.time.setRange(preset.value);
+          this.time.set(presetRange(preset.value));
           this.close();
         });
         return html`<li>${item}</li>`;
@@ -210,7 +215,7 @@ class TimeRangePicker {
       this.#apply.disabled = false;
     }
     if (!to.startsWith('now')) this.#stopAutoRefresh();
-    this.query.time.setCustom(from, to);
+    this.time.set(customRange(from, to));
     const custom = `${from} to ${to}`;
     void this.globalState.update('recent', [custom, ...this.#recentRanges().filter((range) => range !== custom)].slice(0, 3));
     this.close();
@@ -247,10 +252,11 @@ class TimeRangePicker {
 
   /** Moves the window by its length, back (`-1`) or forward (`1`); a moved window is fixed, so auto refresh goes off. */
   async #shift(direction: -1 | 1): Promise<void> {
-    const { from, to } = await resolveTimeRange(this.query.time.range, this.query.time.custom);
+    const { range, custom } = this.time.get();
+    const { from, to } = await resolveTimeRange(range, custom);
     const by = direction * (to - from);
     this.#stopAutoRefresh();
-    this.query.time.setCustom(formatTime(new Date(from + by)), formatTime(new Date(to + by)));
+    this.time.set(customRange(formatTime(new Date(from + by)), formatTime(new Date(to + by))));
   }
 
   /**
@@ -258,14 +264,14 @@ class TimeRangePicker {
    * length on each side.
    */
   async #zoomOut(): Promise<void> {
-    const { range, custom } = this.query.time;
+    const { range, custom } = this.time.get();
     const { from, to } = await resolveTimeRange(range, custom);
     const length = to - from;
     if (range !== 'custom' || custom.endsWith(' to now')) {
-      this.query.time.setRange(formatGoDuration(2 * length));
+      this.time.set(presetRange(formatGoDuration(2 * length)));
       return;
     }
-    this.query.time.setCustom(formatTime(new Date(from - length / 2)), formatTime(new Date(to + length / 2)));
+    this.time.set(customRange(formatTime(new Date(from - length / 2)), formatTime(new Date(to + length / 2))));
   }
 }
 

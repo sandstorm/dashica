@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
+import { TIME_STATE, timeState } from '../../extensions/time-library/time-state';
 import { QueryHost } from '../query/query';
 import { WidgetsHost, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
@@ -13,6 +14,8 @@ let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  // as the time-range extension keeps it, which every request carries
+  testbed.query.registerState(TIME_STATE, timeState);
 });
 
 afterEach(() => testbed.dispose());

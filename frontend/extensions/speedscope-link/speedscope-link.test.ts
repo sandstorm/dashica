@@ -2,12 +2,14 @@
 // Tests for speedscope-link.ts: the viewer's link on the profile with the page's state; a click opens it in a tab.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
 import { speedscopeLink } from './speedscope-link';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  testbed.query.registerState(TIME_STATE, timeState);
   testbed.activate(speedscopeLink);
 });
 
@@ -51,7 +53,7 @@ describe('speedscopeLink', () => {
 
   it('follows a change of the time range', () => {
     const { el } = testbed.render({ type: 'speedscopeLink', props: { title: 'Flame graph' }, dataUrl: '/p/shop/api/4' });
-    testbed.query.time.setRange('1h');
+    testbed.query.state<TimeRange>(TIME_STATE)!.set(presetRange('1h'));
     const link = el.querySelector('a')!;
     expect(link.textContent).toBe('Flame graph');
     expect(profileUrl(link).searchParams.get('time')).toBe('1h');

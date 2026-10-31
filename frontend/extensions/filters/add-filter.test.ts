@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
+import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
 import { addFilter, fetchValues, fieldSource, filterableTables, pickValue } from './add-filter';
 import { OP_ICONS } from './offer';
@@ -41,6 +42,7 @@ async function pick(...labels: string[]): Promise<void> {
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
+  query.registerState(TIME_STATE, timeState);
   query.load();
   host = document.body.appendChild(document.createElement('div'));
   anchor = host.appendChild(document.createElement('button'));
@@ -91,7 +93,7 @@ describe('fieldSource', () => {
 describe('addFilter', () => {
   it('asks table, field, operator and value, and adds the pill of the field’s chart', async () => {
     values = (search) => ['admin', 'login'].filter((v) => v.includes(search));
-    query.time.setRange('1h');
+    query.state<TimeRange>(TIME_STATE)!.set(presetRange('1h'));
     const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor);
 
     await pick('default.http_logs default', 'audit logs');

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../extension-host/extension-host';
+import { TIME_STATE, presetRange, timeState, type TimeRange } from '../../extensions/time-library/time-state';
 import { settle } from '../widgets/widgets-testing';
 import type { PageContext } from './page';
 import { PageHost } from './page';
@@ -38,8 +39,15 @@ function createHost(browserWindow: Window = window): PageHost {
     contexts[shown.title] = context;
     return new Disposable(() => rendered.push(`disposed ${shown.title}`));
   });
+  // as the time-range extension keeps it: a page opens in its own time range
+  created.activeQuery.registerState(TIME_STATE, timeState);
   return created;
 }
+
+/** The active tab's time range (`1h`). */
+const timeRange = () => host.activeQuery.state<TimeRange>(TIME_STATE)!.get().range;
+
+const setTimeRange = (range: string) => host.activeQuery.state<TimeRange>(TIME_STATE)!.set(presetRange(range));
 
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
@@ -117,7 +125,7 @@ describe('PageHost', () => {
     await host.start();
     expect(shownText()).toBe('Shop');
     expect(host.current?.title).toBe('Shop');
-    expect(host.activeQuery.time.range).toBe('168h');
+    expect(timeRange()).toBe('168h');
     expect(document.title).toBe('Shop · Dashica');
     expect(changes).toEqual(['Shop']);
     expect(host.tabs).toEqual([{ id: host.activeTab.id, url: '/p/shop', title: 'Shop' }]);
@@ -126,18 +134,18 @@ describe('PageHost', () => {
 
   it('navigates as a new history entry, taking the page shown down first; the target opens in its own time range', async () => {
     await host.start();
-    host.activeQuery.time.setRange('1h');
+    setTimeRange('1h');
     await host.navigate('/p/checkout');
     expect(location.pathname).toBe('/p/checkout');
     expect(shownText()).toBe('Checkout');
     expect(rendered).toEqual(['Shop', 'disposed Shop', 'Checkout']);
-    expect(host.activeQuery.time.range).toBe('24h');
+    expect(timeRange()).toBe('24h');
     expect(host.activeTab.title).toBe('Checkout');
   });
 
   it('goes to a hash on the page shown without loading it again, keeping its query state, and tells the page', async () => {
     await host.start();
-    host.activeQuery.time.setRange('1h');
+    setTimeRange('1h');
     await new Promise((resolve) => setTimeout(resolve, 250));
     const hashes: string[] = [];
     contexts.Shop.onDidChangeHash(() => hashes.push(contexts.Shop.hash));
@@ -148,12 +156,12 @@ describe('PageHost', () => {
     await host.navigate('/p/shop#w=3');
     expect(hashes).toEqual(['#w=3', '#w=3']);
     expect(rendered).toEqual(['Shop']);
-    expect(host.activeQuery.time.range).toBe('1h');
+    expect(timeRange()).toBe('1h');
   });
 
   it('tells the page of a change of only the hash by the browser (a link, back and forward), querying nothing again', async () => {
     await host.start();
-    host.activeQuery.time.setRange('1h');
+    setTimeRange('1h');
     await new Promise((resolve) => setTimeout(resolve, 250));
     const before = fetched().length;
     let refreshes = 0;
@@ -169,7 +177,7 @@ describe('PageHost', () => {
     expect(fetched().length).toBe(before);
     expect(refreshes).toBe(0);
     expect(rendered).toEqual(['Shop']);
-    expect(host.activeQuery.time.range).toBe('1h');
+    expect(timeRange()).toBe('1h');
   });
 
   it('goes to a hash on the page shown when the page asked for before has not loaded yet', async () => {
@@ -210,10 +218,10 @@ describe('PageHost', () => {
   it('goes back to the page before; on the same page, back only takes its query state from the URL', async () => {
     await host.start();
     await host.navigate('/p/shop?time=1h');
-    expect(host.activeQuery.time.range).toBe('1h');
+    expect(timeRange()).toBe('1h');
     history.replaceState(history.state, '', '/p/shop?time=6h');
     window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
-    expect(host.activeQuery.time.range).toBe('6h');
+    expect(timeRange()).toBe('6h');
     expect(rendered).toEqual(['Shop', 'disposed Shop', 'Shop']);
 
     history.replaceState(history.state, '', '/p/checkout');
@@ -226,7 +234,7 @@ describe('PageHost', () => {
     reloadAt('/p/shop#w=3');
     await host.start();
     const entries = history.length;
-    host.activeQuery.time.setRange('1h');
+    setTimeRange('1h');
     await new Promise((resolve) => setTimeout(resolve, 250));
     expect(address()).toBe('/p/shop?time=1h#w=3');
     expect(host.activeTab.url).toBe('/p/shop?time=1h#w=3');
@@ -267,7 +275,7 @@ describe('PageHost', () => {
       expect(shopElement.hidden).toBe(true);
       expect(shopElement.textContent).toBe('Shop');
       expect(rendered).toEqual(['Shop', 'Checkout']);
-      expect(host.activeQuery.time.range).toBe('1h');
+      expect(timeRange()).toBe('1h');
       // none while it loads, then its page
       expect(changes).toEqual([undefined, 'Checkout']);
       expect(host.tabs[0]).toEqual(shop);
@@ -284,7 +292,7 @@ describe('PageHost', () => {
 
     it('switches tabs in place of the entry shown, the page and the query state each tab’s own', async () => {
       await host.start();
-      host.activeQuery.time.setRange('1h');
+      setTimeRange('1h');
       await new Promise((resolve) => setTimeout(resolve, 250));
       await host.navigate('/p/checkout', { newTab: true });
       const entries = history.length;
@@ -294,7 +302,7 @@ describe('PageHost', () => {
       expect(history.length).toBe(entries);
       expect(address()).toBe('/p/shop?time=1h');
       expect(host.current?.title).toBe('Shop');
-      expect(host.activeQuery.time.range).toBe('1h');
+      expect(timeRange()).toBe('1h');
       expect(shownText()).toBe('Shop');
       expect(changes).toEqual(['Shop']);
       expect(rendered).toEqual(['Shop', 'Checkout']);
@@ -340,7 +348,7 @@ describe('PageHost', () => {
       let refreshes = 0;
       shop.onDidRequestRefresh(() => refreshes++);
       await host.navigate('/p/checkout', { newTab: true });
-      host.activeQuery.time.setRange('1h');
+      setTimeRange('1h');
       host.activeQuery.refresh();
       expect(refreshes).toBe(0);
     });

@@ -1,7 +1,7 @@
 // See QueryApi in query.ts.
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter, type Event } from '../../core/event-emitter/event-emitter';
-import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, QueryState, QueryStateSpec, TimeModel } from './query';
+import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, QueryState, QueryStateSpec } from './query';
 
 /** Where `activeQuery` finds the active tab's query state: the `page` host. */
 export interface ActiveQuerySource {
@@ -17,7 +17,6 @@ export interface ActiveQuerySource {
  * show the active tab's state with the code they have for one page.
  */
 export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): void } {
-  const timeChanged = new EventEmitter<void>();
   const filtersChanged = new EventEmitter<void>();
   const paramsChanged = new EventEmitter<void>();
   const refreshRequested = new EventEmitter<void>();
@@ -26,7 +25,6 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
   const active = () => source.activeQuery;
   const listen = (query: QueryApi) =>
     Disposable.from(
-      query.time.onDidChange(() => timeChanged.fire()),
       query.filters.onDidChange(() => filtersChanged.fire()),
       query.params.onDidChange(() => paramsChanged.fire()),
       query.onDidRequestRefresh(() => refreshRequested.fire()),
@@ -43,7 +41,6 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
       forwarded.listening.dispose();
       forwarded.listening = listenTo(id, forwarded.changed);
     }
-    timeChanged.fire();
     filtersChanged.fire();
     paramsChanged.fire();
     for (const { changed } of states.values()) changed.fire();
@@ -64,17 +61,6 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
     return forwarded.state as QueryState<T>;
   };
 
-  const time: TimeModel = {
-    get range() {
-      return active().time.range;
-    },
-    get custom() {
-      return active().time.custom;
-    },
-    setRange: (range) => active().time.setRange(range),
-    setCustom: (from, to) => active().time.setCustom(from, to),
-    onDidChange: timeChanged.event,
-  };
   const filters: FiltersModel = {
     get chips(): readonly FilterChip[] {
       return active().filters.chips;
@@ -97,14 +83,13 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
   const dispose = new Disposable(() => {
     onTabs.dispose();
     listening.dispose();
-    for (const emitter of [timeChanged, filtersChanged, paramsChanged, refreshRequested]) emitter.dispose();
+    for (const emitter of [filtersChanged, paramsChanged, refreshRequested]) emitter.dispose();
     for (const { changed, listening: forwarding } of states.values()) {
       forwarding.dispose();
       changed.dispose();
     }
   });
   return {
-    time,
     filters,
     params,
     registerState: <T>(id: string, spec: QueryStateSpec<T>) => {

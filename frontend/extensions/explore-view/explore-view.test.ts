@@ -10,6 +10,7 @@ import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica'
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
+import { TIME_STATE, timeState } from '../time-library/time-state';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { blankExploreUrl, chartsOf, confirmReset, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
 
@@ -44,6 +45,7 @@ beforeEach(() => {
   renderers = new Map();
   closed = 0;
   query = new QueryHost();
+  query.registerState(TIME_STATE, timeState);
   query.load({ search: '?time=1h' });
   subscriptions = [];
   vi.stubGlobal('fetch', async () => new Response('rows'));
