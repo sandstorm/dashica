@@ -3,7 +3,7 @@
 // a switch of tabs fires the models' changes once and no refresh.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import { QueryHost, activeQuery } from './query';
+import { QueryHost, QueryStates, activeQuery } from './query';
 
 let shop: QueryHost;
 let checkout: QueryHost;
@@ -13,8 +13,10 @@ let query: ReturnType<typeof activeQuery>;
 let events: string[];
 
 beforeEach(() => {
-  shop = new QueryHost(window);
-  checkout = new QueryHost(window);
+  // one tab's registrations are every tab's
+  const states = new QueryStates();
+  shop = new QueryHost(window, states);
+  checkout = new QueryHost(window, states);
   shop.load({ search: '?time=1h&f=pill-host-a' });
   checkout.load({ search: '?time=6h' });
   tabsChanged = new EventEmitter<void>();
@@ -73,6 +75,23 @@ describe('activeQuery', () => {
     query.time.setRange('2h');
     expect(checkout.time.range).toBe('2h');
     expect(shop.time.range).toBe('3h');
+  });
+
+  it('gives a registered state’s value in the active tab, firing its change once on a switch', () => {
+    const colors = query.registerState<string>('colors', { keys: ['colors'], parse: (url) => url.get('colors') ?? '', format: (value) => (value ? [['colors', value]] : []) });
+    shop.load({ search: '?colors=red' });
+    checkout.load({ search: '?colors=blue' });
+    events = [];
+    colors.onDidChange(() => events.push(`colors ${colors.get()}`));
+    switchTo(checkout);
+    expect(events).toContain('colors blue');
+    colors.set('green');
+    expect(checkout.state('colors')?.get()).toBe('green');
+    expect(shop.state('colors')?.get()).toBe('red');
+    events = [];
+    shop.state<string>('colors')!.set('black');
+    expect(events).toEqual([]);
+    expect(query.state('colors')).toBe(query.state('colors'));
   });
 
   it('fires nothing for a change of the tabs that keeps the active one', () => {

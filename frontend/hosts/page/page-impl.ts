@@ -3,7 +3,7 @@ import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../extension-host/extension-host';
-import { QueryHost } from '../query/query';
+import { QueryHost, QueryStates } from '../query/query';
 import type { PageApi, PageContext, PageRenderer, PoppedView } from './page';
 import { closeTab, openTab, restoreTabs, showTab, storedTabs, titleOf, updateTab, type Tab, type TabList } from './tabs';
 
@@ -25,6 +25,8 @@ export class PageHost implements PageApi {
   /** What each open tab shows, by its id. */
   readonly #open = new Map<string, OpenTab>();
   readonly #listeners: Disposable;
+  /** The query states the extensions registered, the same in every tab. */
+  readonly #states = new QueryStates();
 
   constructor(
     private readonly browserWindow: Window,
@@ -150,7 +152,7 @@ export class PageHost implements PageApi {
     const el = this.content.appendChild(this.browserWindow.document.createElement('div'));
     el.className = 'd-workbench__tab-page';
     el.hidden = id !== this.#list.active;
-    const query = new QueryHost(this.browserWindow);
+    const query = new QueryHost(this.browserWindow, this.#states);
     query.setShown(!el.hidden);
     const hashChanged = new EventEmitter<void>();
     const context: PageContext = {

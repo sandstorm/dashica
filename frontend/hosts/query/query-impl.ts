@@ -1,6 +1,33 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, TimeModel } from './query';
+import { Disposable } from '../../core/disposable/disposable';
+import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, QueryEntries, QueryState, QueryStateSpec, TimeModel } from './query';
+
+/**
+ * The states registered for every tab (`QueryApi.registerState`), in the order registered: the tabs' query hosts share
+ * one.
+ */
+export class QueryStates {
+  readonly #specs = new Map<string, QueryStateSpec<unknown>>();
+
+  /** Registers `spec` as the state `id` until disposed; throws for an id or a URL key registered already. */
+  register<T>(id: string, spec: QueryStateSpec<T>): Disposable {
+    if (this.#specs.has(id)) throw new Error(`There is a query state ${id} already`);
+    const taken = spec.keys.find((key) => [...this.#specs.values()].some((other) => other.keys.includes(key)));
+    if (taken !== undefined) throw new Error(`The URL key ${taken} of the query state ${id} is another state's`);
+    this.#specs.set(id, spec as QueryStateSpec<unknown>);
+    return new Disposable(() => this.#specs.get(id) === spec && this.#specs.delete(id));
+  }
+
+  get(id: string): QueryStateSpec<unknown> | undefined {
+    return this.#specs.get(id);
+  }
+
+  /** The states registered, by id, in the order registered. */
+  entries(): [string, QueryStateSpec<unknown>][] {
+    return [...this.#specs];
+  }
+}
 
 /**
  * The `QueryApi` of one tab, holding the state of a query string (the tab's URL's): `load` takes the state from one,
@@ -28,10 +55,15 @@ export class QueryHost implements QueryApi {
   #shown = true;
   /** The query string that holds the state, as last loaded or given by `onDidChangeSearch`; its other keys stay. */
   #search = '';
+  /** The registered states' values read or set here, by id; a state not read since the last load is not in it. */
+  readonly #values = new Map<string, HeldState>();
   readonly #onVisibilityChange = () => this.#catchUp();
 
-  /** `browserWindow`: whose document being hidden pauses auto refresh. */
-  constructor(private readonly browserWindow: Window) {
+  /** `browserWindow`: whose document being hidden pauses auto refresh. `states`: the registered states, all tabs'. */
+  constructor(
+    private readonly browserWindow: Window,
+    private readonly states = new QueryStates(),
+  ) {
     browserWindow.document.addEventListener('visibilitychange', this.#onVisibilityChange);
     const changed = (refresh: boolean) => {
       this.#writeSearchSoon();
@@ -54,16 +86,34 @@ export class QueryHost implements QueryApi {
     clearTimeout(this.#searchWrite);
     this.#defaultTime = defaultTime || DEFAULT_TIME;
     const state = parseSearch(search, this.#defaultTime);
-    // as `formatSearch` writes it, so an unchanged state gives no change
-    this.#search = formatSearch(state, this.#defaultTime, search);
+    this.#search = search;
     this.time.load(state.range, state.custom, state.autoRefresh);
     this.filters.load(state.chips);
     this.params.load(state.params);
+    for (const held of this.#values.values()) held.known = false;
     this.#restartAutoRefresh();
     this.time.fire();
     this.filters.fire();
     this.params.fire();
+    for (const held of this.#values.values()) held.changed.fire();
     this.refresh();
+  }
+
+  registerState<T>(id: string, spec: QueryStateSpec<T>): QueryState<T> & { dispose(): void } {
+    const registration = this.states.register(id, spec);
+    return { ...this.state<T>(id)!, dispose: () => registration.dispose() };
+  }
+
+  state<T>(id: string): QueryState<T> | undefined {
+    if (!this.states.get(id)) return undefined;
+    let held = this.#values.get(id);
+    if (!held) this.#values.set(id, (held = { value: undefined, known: false, changed: new EventEmitter<void>() }));
+    const read = held;
+    return {
+      get: () => this.#valueOf(id, read) as T,
+      set: (value) => this.#set(id, read, value),
+      onDidChange: read.changed.event,
+    };
   }
 
   /**
@@ -85,6 +135,9 @@ export class QueryHost implements QueryApi {
     if (this.time.range === 'custom') request.set('range', this.time.custom);
     appendChips(request, this.filters.chips);
     if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
+    for (const [id, spec] of this.states.entries()) {
+      if (spec.request) for (const [key, value] of spec.request(this.#get(id))) request.append(key, value);
+    }
     return request;
   }
 
@@ -94,9 +147,45 @@ export class QueryHost implements QueryApi {
     this.browserWindow.document.removeEventListener('visibilitychange', this.#onVisibilityChange);
     this.#onDidRequestRefresh.dispose();
     this.#onDidChangeSearch.dispose();
+    for (const held of this.#values.values()) held.changed.dispose();
     this.time.dispose();
     this.filters.dispose();
     this.params.dispose();
+  }
+
+  /** The value of the registered state `id`. */
+  #get(id: string): unknown {
+    return this.state(id)!.get();
+  }
+
+  /** `held`'s value, parsed from the query string when it was not read since the last load. */
+  #valueOf(id: string, held: HeldState): unknown {
+    if (!held.known) {
+      held.value = this.states.get(id)!.parse(new URLSearchParams(this.#search));
+      held.known = true;
+    }
+    return held.value;
+  }
+
+  /** Sets the state `id` to `value`, unless the URL holds both alike; a state the handlers read asks for a refresh. */
+  #set(id: string, held: HeldState, value: unknown): void {
+    const spec = this.states.get(id);
+    if (!spec || sameEntries(spec.format(this.#valueOf(id, held)), spec.format(value))) return;
+    held.value = value;
+    held.known = true;
+    held.changed.fire();
+    this.#writeSearchSoon();
+    if (spec.request) this.refresh();
+  }
+
+  /** The query string `formatSearch` writes, then each registered state's entries (`value`: its value) in place of its keys. */
+  #formatSearch(state: SearchState, value: (id: string) => unknown): string {
+    const url = new URLSearchParams(formatSearch(state, this.#defaultTime, this.#search));
+    const states = this.states.entries();
+    for (const [, spec] of states) for (const key of spec.keys) url.delete(key);
+    for (const [id, spec] of states) for (const [key, entry] of spec.format(value(id))) url.append(key, entry);
+    const text = url.toString();
+    return text ? `?${text}` : '';
   }
 
   #paused(): boolean {
@@ -126,23 +215,38 @@ export class QueryHost implements QueryApi {
   #writeSearchSoon(): void {
     clearTimeout(this.#searchWrite);
     this.#searchWrite = setTimeout(() => {
-      const state: QueryState = {
+      const state: SearchState = {
         range: this.time.range,
         custom: this.time.custom,
         autoRefresh: this.time.autoRefresh,
         chips: this.filters.chips,
         params: this.params.values,
       };
-      const search = formatSearch(state, this.#defaultTime, this.#search);
-      if (search === this.#search) return;
+      const search = this.#formatSearch(state, (id) => this.#get(id));
+      // as the query string before is written, so a state as loaded gives no change
+      const loaded = new URLSearchParams(this.#search);
+      if (search === this.#formatSearch(parseSearch(this.#search, this.#defaultTime), (id) => this.states.get(id)!.parse(loaded))) return;
       this.#search = search;
       this.#onDidChangeSearch.fire(search);
     }, SEARCH_WRITE_DELAY_MS);
   }
 }
 
+/** A registered state's value in one tab, and its change event. */
+interface HeldState {
+  value: unknown;
+  /** Whether `value` is the one of the query string or set since: false until read after a load. */
+  known: boolean;
+  readonly changed: EventEmitter<void>;
+}
+
+/** Whether `a` and `b` are the same entries in the same order. */
+function sameEntries(a: QueryEntries, b: QueryEntries): boolean {
+  return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && value === b[i][1]);
+}
+
 /** What a query string (`?time=1h&f=<key>&sql=…&wp=…&refresh=30`) says about the query state. */
-export interface QueryState {
+export interface SearchState {
   readonly range: string;
   /** The custom range; '' unless `range` is `custom`. */
   readonly custom: string;
@@ -157,7 +261,7 @@ export interface QueryState {
  * in their order; an empty `f`, an `sql` of only spaces and a `wp` that is no JSON object of strings are left out. An
  * `f` is kept as it is, whatever it holds: the server checks its signature.
  */
-export function parseSearch(search: string, defaultTime = DEFAULT_TIME): QueryState {
+export function parseSearch(search: string, defaultTime = DEFAULT_TIME): SearchState {
   const url = new URLSearchParams(search);
   const range = url.get('time') || defaultTime;
   const refresh = Number(url.get('refresh'));
@@ -174,7 +278,7 @@ export function parseSearch(search: string, defaultTime = DEFAULT_TIME): QuerySt
  * The query string of `state` (`?time=3h&refresh=30`, '' for none), its other keys taken from `search`; what is the
  * default (`defaultTime`, no filter) is left out.
  */
-export function formatSearch(state: QueryState, defaultTime: string, search = ''): string {
+export function formatSearch(state: SearchState, defaultTime: string, search = ''): string {
   const url = new URLSearchParams(search);
   if (state.range !== defaultTime) url.set('time', state.range);
   else url.delete('time');
