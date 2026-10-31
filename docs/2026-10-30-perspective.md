@@ -4,7 +4,7 @@ Status: **draft (2026-10-30); simplified (2026-10-31, after the maintainer's not
 `spike/perspective`, not yet run in a browser: see §8. Decided 2026-10-31: the view shows the chart's materialized SQL
 in an editor, and an edited query runs as it is written; this replaces "Remove grouping" (§4.7). Decided 2026-10-31
 as well (§4.8, workbench §3.14 D8–D13): placeholders instead of literals, `exploreSql`, Explore off means off (✅ built
-2026-10-31, step 8g; the Schema view in step 8h); planned: a global "Explore" without a chart, CodeMirror.**
+2026-10-31, step 8g; the Schema view in step 8h; a global "Explore" without a chart in step 8i); planned: CodeMirror.**
 
 Builds on the workbench concept (`docs/2026-10-28-workbench.md`: §3.8 selections, §6 "Explore rebuilt", "drill to
 detail", "Perspective instead of the Tabulator table").
@@ -208,6 +208,8 @@ handler) is not planned.
 - **Entry:** `ui.registerMenuItem('widget/context', { command: 'exploreView.openWidget', title: 'Open in Explore
   view', group: 'data' })` for charts (`rowsUrl` in the widget's node), only while `workbench.json` says `explore`
   (explore.enabled; since step 8g, §4.8 D8); else the extension registers only "Explore" greyed in the global menu.
+  With Explore on, the global menu's "Explore" and "Start from chart…" open a blank Explore, the same view without a
+  chart (`#explore=&connection=<name>`, §4.8 D10).
 - **Place** (a tab since 2026-10-31, workbench §3.4.1, step 7a): a new tab of the page kind `explore`, named in its
   hash; its URL is the source tab's with `#explore=<id>` (the id of the chart's `dataUrl`), so it starts with a copy of
   that tab's query state and a link or a reload opens it again. The top bar (time picker, refresh) and the filter
@@ -380,7 +382,7 @@ only the greyed "Explore". Playwright (`e2e/explore-view.spec.ts`, skipped while
 editor open with `{__from}` listed, delete the `GROUP BY`, Run (more rows, the note, `exploreSql` and `param___from`
 in the URL), reload (still edited), Reset.
 
-### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, the rest planned)
+### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, D10 in step 8i, the rest planned)
 
 The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each step rewrites what it changes above.
 
@@ -389,8 +391,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   handlers** (`HandleSql`, the edited-rows handler, the free SQL endpoint of D10) and answer 404 before any query.
   The only trace in the UI: the global "…" menu (D10) shows "Explore" greyed, hovered "Explore is not enabled
   (explore.enabled)". Built as §4.4, §4.5 and §4.7 say: the client reads `workbench.json`'s `explore`; the greyed
-  entry is a menu entry that is not `enabled` (workbench §3.11), its command `exploreView.open` registered by step 8i
-  *(proposed)*; the free SQL endpoint comes with 8i.
+  entry is a menu entry that is not `enabled` (workbench §3.11), its command `exploreView.open`, which only Explore on
+  registers (step 8i) *(proposed)*; the free SQL endpoint is `/rows?connection=` of D10.
 - **D9 Placeholders, not literals (step 8g, ✅ 2026-10-31):** the key `xsql` is renamed `exploreSql` everywhere (Go,
   TS, the tab's hash, the docs). The editor shows the chart's SQL with its ClickHouse parameter placeholders
   (`{__from:DateTime64}` …), not their values written in; the values are listed beside the editor, and Run sends them
@@ -398,10 +400,28 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   `{name:Type}` placeholder" of §4.7 for parameters; `{{DASHICA_FILTERS}}` stays filled in *(proposed)*. Built as §4.5
   and §4.7 say; the values travel as `param_<name>` keys, ClickHouse's HTTP names, in the tab's hash and the rows
   request *(proposed)*.
-- **D10 Explore without a chart (step 8i):** the global "…" menu, left of the Dashica icon. Its "Explore" opens a
-  blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an empty editor, run on
-  a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts as the edited rows);
-  "Start from chart…" fills the editor from one of the shown page's charts.
+- **D10 Explore without a chart (step 8i, ✅ 2026-10-31):** the global "…" menu, left of the Dashica icon. Its
+  "Explore" opens a blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an
+  empty editor, run on a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts
+  as the edited rows); "Start from chart…" fills the editor from one of the shown page's charts. Built as:
+  - **Server:** `GET /rows?connection=<name>&exploreSql=<text>&param_<name>=…` (`httpserver.ConnectionRowsHandler`)
+    answers the text on that connection as an edited query is answered (`readonly=2`, the LIMIT around it,
+    `httpserver.ExploreRowLimit` = 100000, `PlainArrowCast`, the `param_` values bound), its check of the flag first
+    (404 before any query), then 404 for a connection not in dashica_config, 400 for an empty text. Free SQL keeps the
+    trust model of the edited query (all authenticated users trusted; ClickHouse refuses writes): nothing of it is a
+    pill, and pills stay signed.
+  - **Tab:** the page kind `explore` with an empty id, `#explore=&connection=<name>` on the URL of the tab it was
+    opened from (its time range is not used); Run puts `exploreSql` and `param_<name>` into the hash, as for a chart,
+    so a reload or a link runs it again; the picker sets `connection` in the hash and runs the query again there. The
+    tab says "Explore"; before a Run the body says "Write a query; Run shows its rows."; its rows open as a datagrid of
+    all their columns, one viewer config kept for all blank tabs (`view:blank`); no "Reset to the chart's query" and
+    no click to filter (edited rows offer none) *(proposed)*.
+  - **Menu:** "Explore" (`exploreView.open`) picks the connection of the shown page's first chart, else the first of
+    `workbench.json`'s `connections` *(proposed)*. "Start from chart…" (`exploreView.startFromChart`, greyed while the
+    shown page has no chart with rows) asks in the quick pick for one of the page's charts (title, its connection
+    beside it), fetches its `/sql` with the active tab's query state and opens a blank tab on its connection with that
+    SQL and those parameters in the hash, so it runs at once *(proposed)*; a chart that does not run (204) gives an
+    empty editor.
 - **D11 Schema view (step 8h, ✅ 2026-10-31):** a left side panel "Schema": a tree connection › database › table, the
   shown page's connections first, the others below. A table opens structured as DataGrip shows it: columns with type,
   default and comment; engine, ORDER BY, PARTITION BY, primary key, TTL, skip indices. One cached query set per
@@ -486,8 +506,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
 6. **The batch of 2026-10-31** (§4.8; workbench steps): ✅ 8g D8 + D9 (Explore off, `exploreSql`, placeholders;
    2026-10-31: vitest, typecheck, top comments, `go vet` and the Go tests without ClickHouse green; the ClickHouse
    tests and Playwright written, not run, deviations in §4.8); ✅ 8h D11 (Schema view, 2026-10-31, the same checks,
-   deviations in §4.8); planned, not built: 8i D10
-   (global "…" menu, blank Explore), 8j D12 (CodeMirror), 8k D13 (settings panel, Reset asks).
+   deviations in §4.8); ✅ 8i D10 (global "…" menu, blank Explore, `/rows?connection=`, 2026-10-31, the same checks,
+   deviations in §4.8); planned, not built: 8j D12 (CodeMirror), 8k D13 (settings panel, Reset asks).
 
 ## 7. Open questions
 
