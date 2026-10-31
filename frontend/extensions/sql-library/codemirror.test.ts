@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Tests for codemirror.ts: the editor's text, the keys that take it (Enter in an input box, Cmd / Ctrl+Enter always),
-// a new line by Shift+Enter, the change event, the selection, and completion of ClickHouse's words and the schema's names.
+// a new line by Shift+Enter, Escape left to what holds the editor, the change event, the selection, and completion of
+// ClickHouse's words and the schema's names.
 import { currentCompletions, startCompletion } from '@codemirror/autocomplete';
 import { EditorView } from '@codemirror/view';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -73,6 +74,16 @@ describe('sqlEditors', () => {
     press('Enter', { ctrlKey: true });
     press('Enter', { metaKey: true });
     expect(accepted).toHaveBeenCalled();
+  });
+
+  it('leaves Escape to what holds it, its selection kept', () => {
+    create({ value: 'status = 1' });
+    editor.select(0, 10);
+    const escaped = vi.fn();
+    document.body.addEventListener('keydown', (event) => escaped(event.defaultPrevented));
+    press('Escape');
+    expect(escaped).toHaveBeenCalledWith(false);
+    expect(EditorView.findFromDOM(editor.element)!.state.selection.main.to).toBe(10);
   });
 
   it('selects the part asked, kept inside its text', () => {

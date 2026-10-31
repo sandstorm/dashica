@@ -11,6 +11,12 @@ import { tags } from '@lezer/highlight';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { SqlCompletion, SqlEditor, SqlEditorOptions, SqlEditors } from './sql-editor';
 
+/**
+ * CodeMirror's default keys but Escape (its simplifySelection): Escape belongs to the completion and to what holds the
+ * editor, so a single Escape closes the input box even while its prefilled text is selected.
+ */
+const DEFAULT_KEYS = defaultKeymap.filter((binding) => binding.key !== 'Escape');
+
 /** ClickHouse's statements, clauses and operators that read as words (its SQL reference). */
 const KEYWORDS =
   'add after alias all alter and anti any array as asc asof attach between both by case cast cluster codec collate ' +
@@ -133,7 +139,7 @@ export const sqlEditors: SqlEditors = {
               ...(options.enterAccepts ? [{ key: 'Enter', run: accept }, { key: 'Shift-Enter', run: insertNewlineAndIndent }] : []),
             ]),
           ),
-          keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
+          keymap.of([...closeBracketsKeymap, ...DEFAULT_KEYS, ...historyKeymap]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) changed.fire();
           }),
