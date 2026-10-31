@@ -119,7 +119,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Region | Holds |
 |---|---|
 | Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
-| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles in place, pressed while their filter is set, without a chip of their own (step 8f); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles in place, pressed while their filter is set, without a chip of their own (step 8f); "Add filter" after the chips while a chart filters a table (step 8m); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
 | Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -614,6 +614,28 @@ the server made:
   chip model, the filter bar, `offerFilters` asking `/pill` (`widgetTestbed` answers every `/pill`, `pill(…)` gives
   its chip). Playwright (written, not run): `e2e/filter-chips.spec.ts` signs its pills through a chart's `/pill`, an
   unsigned `f` fails the charts with 400.
+
+✅ **Built in 8m (2026-10-31): "Add filter"**, a pill without a click on a chart (§3.14 D15, as Grafana's ad hoc
+filters):
+
+- **The node names its table:** `table` beside `filterable` in `page.json` (`default.http_logs`, as `filter.Table`
+  names it), set when the node has filterable fields; with its `connection` it groups the page's fields by table
+  (`filterableTables`: each field once, served by the first chart naming it).
+- **The filter bar's "Add filter"** after the chips, while a chart of the page filters a table (so the bar shows on
+  such a page even without chips or buttons *(proposed)*): quick picks below the button for the table (skipped when
+  there is one *(proposed)*), the field, `=` or `≠`, then the value; the value goes to that chart's `/pill` and the pill
+  into the filters; Escape at any step adds nothing.
+- **The value** (`pickValue`, `ui.createQuickPick`): the values `<dataUrl>/values?field=<alias>&search=<text>` answers
+  in the tab's query state, asked again 200 ms after the typing rests (the request before aborted); the typed text
+  itself first, "as typed", when it is none of them, so a value beyond the first 100 can be chosen *(proposed)*.
+- **`/values`** (`valuesHandler`, `sql.Values`, `httpserver.HandleValues`): a JSON array of at most 100 strings, sorted.
+  A builder query's base (its From and Where, without its own SELECT, GROUP BY, ORDER BY and LIMIT): `SELECT
+  toString(<definition>) AS __value FROM <table> WHERE <its Where> AND positionCaseInsensitive(toString(<definition>),
+  {__search:String}) > 0 AND <time range, SQL chips, pills> GROUP BY __value ORDER BY __value LIMIT 100`. A SQL file's
+  field is a column of its result, so its values come from that result in a subquery (its own LIMIT included)
+  *(proposed)*. The search is a bound parameter, never SQL text. 422 for a field that cannot filter (as `/pill`), 400
+  for an unsigned pill. The pills on the asked field are left out *(proposed)*, so a second value can be OR-ed to one
+  filtered by.
 
 **To check** (against CI's ClickHouse; written as `query_filters_e2e_test.go`, not run in the sandbox): a quoted
 literal compares with the column types the bound `String` did (below, checked 2026-10-30 for parameters):
@@ -1363,7 +1385,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   then a field (the filterable fields the shown page's widgets declare, per table), then `eq` / `ne`, then a value
   from a lazy `SELECT DISTINCT <expression> … LIMIT 100` over the time range on the base query of a widget with that
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
-  that widget's `/pill`.
+  that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
 ## 4. Alternatives considered
 
@@ -1477,7 +1499,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8j | **D12 SQL editor:** CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 8k ✅ | **D13 Explore:** settings panel open from the start; "Reset" asks first (Perspective §4.8): `PerspectiveViewer.toggleConfig(true)` on each new viewer after its config; `persistable` leaves out `settings`; "Reset" asks `confirmReset` (`ui.showQuickPick` below the button: "Reset" / "Cancel"); `e2e/explore-view.spec.ts` checks the panel and Cancel / Reset. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the kept config never reopens or closes the panel; Escape or a press elsewhere is Cancel; Reset leaves the panel as it is *(all proposed)* | the viewer's settings at hand, Reset not by accident |
 | 8l ✅ | **D14 view pop-out** (§3.4.6): `PageApi.popOut({title, render})` (a new tab `<page>#view=<tab id>`, the page kind `view` rendered by the host while its view is in memory, the page shown taken without fetching `page.json` again, the view forgotten when its tab closes); `storedTabs(list, kept)` leaves the popped tabs out (active: the one of the others shown last); Debug's "Pop out" (`panel/debug`, `debug.popOut`: "Debug: <title>", `followDebug` shared with the panel); Details' "Pop out" (`panel/details`, `details.popOut`: "Details: <title>", `drawComparison`); "Open Speedscope" pops out the viewer in an `<iframe>`; the widget testbed's `page.popOut` records the views (`popped`); `e2e/pop-out.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the popped tab's time range and filters change nothing it shows; Debug's tab follows its widget's status, Details' keeps the records of the pop (the table clears them on each answer); a `#view=` link or a reload shows the page; Speedscope stays a link for a modifier click *(all proposed)* | views as tabs |
-| 8m | **D15 ad hoc pills:** "add filter" on the filter bar: table, field, `eq` / `ne`, a value from `<dataUrl>/values?field=…&search=…` (`SELECT DISTINCT … LIMIT 100` over the time range), signed through that widget's `/pill` | filters without a click on a chart |
+| 8m ✅ | **D15 ad hoc pills** (§3.8): Go `sql.Values` (a builder query's base: its From and Where, `SELECT toString(<definition>) AS __value … GROUP BY __value ORDER BY __value LIMIT 100`, `positionCaseInsensitive(…, {__search:String}) > 0`; a SQL file's or string's result in a subquery), `httpserver.HandleValues` (JSON array of strings, `ValuesLimit` 100), `<dataUrl>/values?field=…&search=…` (`valuesHandler`: 422 as `/pill`, 400 for an unsigned pill, the time range, SQL chips and the other pills applied); the node's `table` in `page.json` (generator, golden contract); client: `filterableTables` (per table each field once, with the first chart naming it), `addFilter` (table, skipped when there is one; field; `=` / `≠`; value) and `pickValue` (`createQuickPick`, asked again 200 ms after the typing rests, the earlier request aborted), `fetchValues`, `fetchPill` exported from the `widgets` host; "Add filter" after the chips in the filter bar; `e2e/add-filter.spec.ts`. ✅ 2026-10-31 (Go vet and tests green but the ClickHouse-bound ones (sandbox; `TestHandleValues_TheValuesOfAFieldThatContainTheSearch` written, not run); vitest, typecheck, top comments green; Playwright written, not run), deviations: the pills on the asked field (its table) are left out of `/values`, so a value beside one filtered by is still offered; a SQL file's values come from its result (its own LIMIT included), since its field is a column of the result; the typed text is offered first as a value of its own ("as typed"); "Add filter" makes the filter bar show on every page with `filterBar` whose charts filter a table; the table step is skipped for one table *(all proposed)* | filters without a click on a chart |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |
