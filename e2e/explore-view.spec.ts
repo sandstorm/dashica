@@ -2,8 +2,10 @@
 // new tab with the chart's result in Perspective (the dashboard's URL with `#explore=<id>`, docs/2026-10-28-workbench.md
 // §3.4.1); "SQL" shows the chart's SQL with its placeholders and their values beside it, an edited query runs with
 // them and stays over a reload until "Reset to the chart's query" (§4.7, §4.8); the link opens it, Close closes its
-// tab, Back shows the dashboard's tab, a changed config is kept per chart until Reset. All of it needs
-// `explore.enabled` (workbench.json's `explore`), else every test is skipped.
+// tab, Back shows the dashboard's tab, a changed config is kept per chart until Reset; the global "…" menu's "Explore"
+// opens a blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from
+// chart…" one with a chart's SQL (§4.8, D10). All of it needs `explore.enabled` (workbench.json's `explore`), else
+// every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance", over the last 7 days. Another page and chart: DASHICA_E2E_EXPLORE_PAGE,
@@ -145,4 +147,38 @@ test('keeps the config the viewer changed for the chart, until Reset', async ({p
     await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).plugin)).toBe('Datagrid');
     await view.getByTestId('explore-view-reset').click();
     await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).plugin)).not.toBe('Datagrid');
+});
+
+test('the global "…" menu’s "Explore" opens a blank Explore: a connection, an empty editor, its query run there', async ({page}) => {
+    await page.goto('/');
+    await page.getByTestId('wb-global-menu').click();
+    await page.getByRole('option', {name: 'Explore', exact: true}).click();
+    const view = page.getByTestId('explore-view');
+    await expect(view.locator('.d-explore-view__title')).toHaveText('Explore');
+    await expect(page).toHaveURL(/#explore=&connection=[^&]+$/);
+    await expect(tabs(page)).toHaveCount(2);
+    await expect(view.getByTestId('explore-view-sql-text')).toHaveValue('');
+    await expect(view.getByTestId('explore-view-connection')).toBeVisible();
+
+    await view.getByTestId('explore-view-sql-text').fill('SELECT number FROM system.numbers LIMIT 5');
+    const ran = page.waitForRequest((request) => /\/rows\?connection=[^&]+&exploreSql=/.test(request.url()));
+    await view.getByTestId('explore-view-run').click();
+    await ran;
+    await expect(view.locator('.d-explore-view__status')).toHaveText('5 rows');
+    await page.reload();
+    await expect(page.getByTestId('explore-view').getByTestId('explore-view-sql-text')).toHaveValue('SELECT number FROM system.numbers LIMIT 5');
+});
+
+test('"Start from chart…" opens a blank Explore with the picked chart’s SQL, run with its parameters', async ({page}) => {
+    await page.goto(`${PAGE}?time=168h`);
+    await page.getByTestId('wb-global-menu').click();
+    await page.getByRole('option', {name: 'Start from chart…'}).click();
+    const ran = page.waitForRequest((request) => /\/rows\?connection=[^&]+&exploreSql=.*&param___from=/.test(request.url()));
+    await page.getByRole('option', {name: CHART}).first().click();
+    await ran;
+    const view = page.getByTestId('explore-view');
+    await expect(view.locator('.d-explore-view__title')).toHaveText('Explore');
+    await expect(view.getByTestId('explore-view-sql-text')).toHaveValue(/GROUP BY/);
+    await expect(view.getByTestId('explore-view-parameters')).toContainText('{__from}');
+    await expect(view.locator('perspective-viewer')).toBeVisible();
 });

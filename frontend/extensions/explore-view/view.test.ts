@@ -2,7 +2,8 @@
 // Tests for renderExploreView in view.ts, Perspective faked at its module boundary: the rows with the page's query
 // state, their description, the config from the chart or kept per chart, Reset, a refresh, the SQL editor (following
 // the chart, its parameters listed, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a
-// click on a group row.
+// click on a group row; a blank Explore (its connection picker, Run on the picked connection, a chart's SQL from the
+// hash).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
@@ -12,6 +13,8 @@ import type { ViewerConfig } from './mapping';
 import {
   editedQuery,
   persistable,
+  pickedConnection,
+  withConnection,
   renderExploreView,
   type ChartWithRows,
   stateKey,
@@ -139,9 +142,11 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function open(): void {
+/** Opens the view of `shown.widget` (a blank Explore for `undefined`) on the tab's hash `hash`. */
+function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
   view = renderExploreView(el, {
-    widget,
+    widget: shown.widget,
+    connections: ['default', 'logs'],
     query,
     state,
     perspective: async () => perspective,
@@ -157,6 +162,7 @@ function open(): void {
   });
 }
 
+const openBlank = () => open({ widget: undefined });
 const find = <T extends HTMLElement>(testId: string) => el.querySelector<T>(`[data-testid="${testId}"]`)!;
 const sqlText = () => find<HTMLTextAreaElement>('explore-view-sql-text');
 /** Types `text` into the SQL editor. */
@@ -485,6 +491,76 @@ describe('renderExploreView', () => {
     await settle();
     expect(tables[0].deleted).toBe(true);
     expect(el.children).toHaveLength(0);
+  });
+});
+
+describe('renderExploreView of a blank Explore', () => {
+  beforeEach(() => {
+    hash = '#explore=&connection=logs';
+  });
+
+  it('starts with an empty editor and the hash’s connection picked, asking nothing before a Run', async () => {
+    openBlank();
+    await settle();
+    expect(requests).toEqual([]);
+    expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore');
+    expect(find<HTMLSelectElement>('explore-view-connection').value).toBe('logs');
+    expect([...find<HTMLSelectElement>('explore-view-connection').options].map((option) => option.value)).toEqual(['default', 'logs']);
+    expect(sqlText().value).toBe('');
+    expect(el.querySelector('.d-explore-view__body')!.textContent).toBe('Write a query; Run shows its rows.');
+    expect(find('explore-view-edited').hidden).toBe(true);
+  });
+
+  it('runs the text on the picked connection through the tab’s hash, its rows a datagrid, no note to go back to a chart', async () => {
+    openBlank();
+    await settle();
+    type('SELECT 1');
+    find<HTMLButtonElement>('explore-view-run').click();
+    await settle();
+    expect(navigations).toEqual(['#explore=&connection=logs&exploreSql=SELECT+1']);
+    expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+1']);
+    expect(tables.map((t) => t.data)).toEqual(['edited:SELECT 1']);
+    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: Object.keys(schema) })]);
+    expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
+    expect(find('explore-view-edited').hidden).toBe(true);
+  });
+
+  it('runs the query again on the connection picked next, the pick in the hash', async () => {
+    hash = withEditedQuery(hash, { sql: 'SELECT 1', parameters: {} });
+    openBlank();
+    await settle();
+    const picker = find<HTMLSelectElement>('explore-view-connection');
+    picker.value = 'default';
+    picker.dispatchEvent(new Event('change'));
+    await settle();
+    expect(navigations).toEqual(['#explore=&connection=default&exploreSql=SELECT+1']);
+    expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+1', '/rows?connection=default&exploreSql=SELECT+1']);
+    expect(tables.map((t) => ({ data: t.data, replaced: t.replaced }))).toEqual([{ data: 'edited:SELECT 1', replaced: ['edited:SELECT 1'] }]);
+  });
+
+  it('opens with a chart’s SQL and parameters of the hash (Start from chart), sending them along', async () => {
+    hash = withEditedQuery(hash, { sql: 'SELECT {v:UInt8}', parameters: { v: '1' } });
+    openBlank();
+    await settle();
+    expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1']);
+    expect(sqlText().value).toBe('SELECT {v:UInt8}');
+    expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
+  });
+
+  it('keeps one viewer config for every blank Explore', () => {
+    expect(stateKey(undefined, true)).toBe('view:blank');
+  });
+});
+
+describe('pickedConnection and withConnection', () => {
+  it('picks the hash’s connection when it is one of them, else the first', () => {
+    expect(pickedConnection('#explore=&connection=logs', ['default', 'logs'])).toBe('logs');
+    expect(pickedConnection('#explore=&connection=gone', ['default', 'logs'])).toBe('default');
+    expect(pickedConnection('#explore=', [])).toBe('default');
+  });
+
+  it('sets the connection, keeping the other keys', () => {
+    expect(withConnection('#explore=&connection=logs&exploreSql=SELECT+1', 'default')).toBe('#explore=&connection=default&exploreSql=SELECT+1');
   });
 });
 

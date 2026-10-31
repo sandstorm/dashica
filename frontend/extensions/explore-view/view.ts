@@ -8,7 +8,18 @@ import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { FilterCandidate } from '../../hosts/widgets/widgets';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';
-import { describeRows, editedQueryKeys, editedQueryOf, fetchRows, fetchSql, rowsRequest, sqlRequest, type EditedQuery, type RowsAnswer } from './rows';
+import {
+  connectionRowsRequest,
+  describeRows,
+  editedQueryKeys,
+  editedQueryOf,
+  fetchRows,
+  fetchSql,
+  rowsRequest,
+  sqlRequest,
+  type EditedQuery,
+  type RowsAnswer,
+} from './rows';
 
 /** Perspective as the view uses it, from the lazily loaded module (perspective.ts). */
 export interface Perspective {
@@ -46,13 +57,21 @@ export interface PerspectiveViewer extends HTMLElement {
 export type ChartWithRows = Extract<WidgetNode, { rowsUrl?: string }> & { readonly rowsUrl: string };
 
 export interface ExploreViewOptions {
-  /** The chart whose rows the view shows. */
-  readonly widget: ChartWithRows;
+  /**
+   * The chart whose rows the view shows; `undefined`: a blank Explore, the rows of the SQL the viewer writes on the
+   * connection the tab's hash names (`connection`, one of `connections`).
+   */
+  readonly widget: ChartWithRows | undefined;
+  /** The ClickHouse connections of dashica_config a blank Explore picks from (`workbench.json`'s `connections`). */
+  readonly connections: readonly string[];
   readonly query: QueryApi;
   /** Keeps the viewer's config per chart and mode for this viewer (`stateKey`). */
   readonly state: Memento;
   readonly perspective: () => Promise<Perspective>;
-  /** The tab's hash (`#explore=3`, `#explore=3&exploreSql=…&param_…` while the SQL is edited), as it is now. */
+  /**
+   * The tab's hash (`#explore=3`, `#explore=3&exploreSql=…&param_…` while the SQL is edited; a blank Explore's
+   * `#explore=&connection=default`), as it is now.
+   */
   hash(): string;
   /** Fires when the tab's hash changed (Run, Reset, back and forward). */
   readonly onDidChangeHash: PageContext['onDidChangeHash'];
@@ -73,21 +92,41 @@ export interface ExploreViewOptions {
  * both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the listed values into the hash
  * (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's time range and filters do
  * not change, until "Reset to the chart's query". It keeps the config the viewer changed per chart and mode; "Reset"
- * goes back to the chart's.
+ * goes back to the chart's. A blank Explore (no `widget`) has a connection picker in its bar in place of the chart's
+ * state: its editor starts empty, Run shows the rows of its text on the picked connection (`/rows?connection=…`), and
+ * the pick is the hash's `connection`.
  */
 export function renderExploreView(el: HTMLElement, options: ExploreViewOptions): Disposable {
   const view = new ExploreView(el, options);
   return new Disposable(() => view.dispose());
 }
 
-/** What the view calls `widget`: its title, else its type. */
-export function chartTitle(widget: WidgetNode): string {
+/** What the view calls `widget`: its title, else its type; a blank Explore (`undefined`) is "Explore". */
+export function chartTitle(widget: WidgetNode | undefined): string {
+  if (widget === undefined) return 'Explore';
   return 'title' in widget.props && widget.props.title ? widget.props.title : widget.type;
 }
 
-/** The key of `widget`'s viewer config in the view's state, on its result or (`edited`) the rows of an edited query. */
-export function stateKey(widget: { readonly dataUrl: string }, edited = false): string {
+/**
+ * The key of `widget`'s viewer config in the view's state, on its result or (`edited`) the rows of an edited query;
+ * one key for every blank Explore (`undefined`).
+ */
+export function stateKey(widget: { readonly dataUrl: string } | undefined, edited = false): string {
+  if (widget === undefined) return 'view:blank';
   return edited ? `view:${widget.dataUrl}:edited` : `view:${widget.dataUrl}`;
+}
+
+/** The connection a blank Explore's hash `hash` picks (`connection`), else the first of `connections`. */
+export function pickedConnection(hash: string, connections: readonly string[]): string {
+  const named = new URLSearchParams(hash.replace(/^#/, '')).get('connection');
+  return named !== null && connections.includes(named) ? named : (connections[0] ?? 'default');
+}
+
+/** `hash` picking the connection `connection` (`connection`), its other keys kept. */
+export function withConnection(hash: string, connection: string): string {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  params.set('connection', connection);
+  return `#${params}`;
 }
 
 /** The query the tab's hash `hash` holds (`#explore=3&exploreSql=…&param_…`); `undefined` while the view follows the chart. */
@@ -132,6 +171,7 @@ class ExploreView {
   readonly #notes: HTMLElement = html`<ul class="d-explore-view__notes" hidden></ul>`;
   readonly #body: HTMLElement = html`<div class="d-explore-view__body"></div>`;
   readonly #message: HTMLElement = html`<div class="d-explore-view__message"><span class="d-spinner"></span></div>`;
+  readonly #connection: HTMLSelectElement = html`<select class="d-field" aria-label="Connection" data-testid="explore-view-connection"></select>`;
   readonly #listening: Disposable;
   #loading: AbortController | undefined;
   #disposed = false;
@@ -177,10 +217,13 @@ class ExploreView {
       html`<div class="d-explore-view__sql-bar">${run}${this.#sqlNote}</div>`,
       this.#sqlError,
     );
+    this.#connection.replaceChildren(...options.connections.map((name) => html`<option value=${name}>${name}</option>`));
+    this.#connection.value = pickedConnection(options.hash(), options.connections);
+    this.#connection.onchange = () => options.navigate(withConnection(options.hash(), this.#connection.value));
     el.replaceChildren(html`<div class="d-explore-view" data-testid="explore-view">
       <div class="d-explore-view__bar">
-        <h2 class="d-explore-view__title">Explore: ${title}</h2>
-        ${this.#status}${this.#ignored}
+        <h2 class="d-explore-view__title">${options.widget ? `Explore: ${title}` : title}</h2>
+        ${options.widget ? '' : this.#connection}${this.#status}${this.#ignored}
         <span class="d-explore-view__actions">${this.#sqlButton}${reset}${close}</span>
       </div>
       ${this.#sqlPanel}${this.#editedNote}${this.#notes}${this.#body}
@@ -211,7 +254,8 @@ class ExploreView {
 
   /**
    * Fetches the rows, the chart's result with the page's query state or the edited SQL's, then shows them; following
-   * the chart with the editor open, its SQL too.
+   * the chart with the editor open, its SQL too. A blank Explore fetches the rows of its query on the picked
+   * connection; before a Run it says how to start.
    */
   async #load(): Promise<void> {
     this.#loading?.abort();
@@ -219,11 +263,15 @@ class ExploreView {
     this.#loading = loading;
     this.#status.textContent = 'loading…';
     const { widget, query } = this.options;
-    const params = query.requestParams();
-    if (this.#edited === undefined && !this.#sqlPanel.hidden) void this.#loadSql();
+    if (widget === undefined && this.#edited === undefined) {
+      this.#showMessage('Write a query; Run shows its rows.', 'notice');
+      return;
+    }
+    if (widget !== undefined && this.#edited === undefined && !this.#sqlPanel.hidden) void this.#loadSql();
+    const url = widget === undefined ? connectionRowsRequest(this.#connection.value, this.#edited!) : rowsRequest(widget.rowsUrl, query.requestParams(), this.#edited);
     let answer: RowsAnswer;
     try {
-      answer = await fetchRows(rowsRequest(widget.rowsUrl, params, this.#edited), loading.signal);
+      answer = await fetchRows(url, loading.signal);
     } catch (error) {
       if (!loading.signal.aborted) this.#showMessage(error, 'error');
       return;
@@ -301,6 +349,7 @@ class ExploreView {
    * that differs from the SQL fetched before) stays. Its error shows below the editor.
    */
   async #loadSql(): Promise<void> {
+    if (!this.options.widget) return;
     this.#loadingSql?.abort();
     const loading = new AbortController();
     this.#loadingSql = loading;
@@ -357,10 +406,13 @@ class ExploreView {
     this.#parameters.hidden = entries.length === 0;
   }
 
-  /** Shows what the hash says: the editor and the note while edited, the editor's text the hash's. */
+  /**
+   * Shows what the hash says: the editor and the note while edited (a blank Explore has no chart to go back to, so no
+   * note), the editor's text the hash's.
+   */
   #showEdited(): void {
     const edited = this.#edited !== undefined;
-    this.#editedNote.hidden = !edited;
+    this.#editedNote.hidden = !edited || !this.options.widget;
     if (edited) {
       this.#sqlText.value = this.#edited!.sql;
       this.#setSqlOpen(true);
@@ -380,6 +432,7 @@ class ExploreView {
    * from or to the chart's result.
    */
   #hashChanged(): void {
+    this.#connection.value = pickedConnection(this.options.hash(), this.options.connections);
     const edited = editedQuery(this.options.hash());
     const otherRows = (edited === undefined) !== (this.#edited === undefined);
     if (!sameQuery(edited, this.#edited)) {

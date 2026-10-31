@@ -44,6 +44,14 @@ export function rowsRequest(rowsUrl: string, params: URLSearchParams, edited?: E
   return `${rowsUrl}?${request}`;
 }
 
+/**
+ * The URL of the rows of a blank Explore's query `edited` on the ClickHouse connection `connection` of dashica_config
+ * (`/rows?connection=…&exploreSql=…&param_…`, httpserver.ConnectionRowsHandler).
+ */
+export function connectionRowsRequest(connection: string, edited: EditedQuery): string {
+  return `/rows?${new URLSearchParams([['connection', connection], ...editedQueryKeys(edited)])}`;
+}
+
 /** The URL of the SQL the chart at `dataUrl` runs with the page's query state `params`, and its parameters. */
 export function sqlRequest(dataUrl: string, params: URLSearchParams): string {
   return `${dataUrl}/sql?${params}`;

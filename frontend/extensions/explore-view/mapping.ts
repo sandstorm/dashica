@@ -32,9 +32,11 @@ export interface InitialView {
  * The viewer config that rebuilds `widget`'s chart on its result: its plugin, the dimensions as `group_by` /
  * `split_by` and the measure as `columns`, each by its alias (a column of the result), a count summed, any other
  * measure its last value. A dimension the result lacks is left out, with a note. The rows of an edited query get that
- * config when they have every column it names, else a datagrid of all their columns.
+ * config when they have every column it names, else a datagrid of all their columns; so do the rows of a blank
+ * Explore, which has no chart (`widget` `undefined`).
  */
-export function initialView(widget: WidgetNode, rows: RowsShape): InitialView {
+export function initialView(widget: WidgetNode | undefined, rows: RowsShape): InitialView {
+  if (widget === undefined) return new ViewBuilder(rows).build();
   const chart = chartView(widget, rows);
   if (rows.kind === 'edited' && chart.notes.length > 0) return new ViewBuilder(rows).build();
   return chart;
