@@ -12,7 +12,8 @@ import type { MenuAnchor } from '../ui/ui';
  * one selection (`select`, or `choose` among candidates), its selected records (`selectRecords`: a table's ticked rows).
  * Charts put themselves into one `ChartFrame` (title, spinner, error, menu button). Each tab has an active widget: the
  * widget with data the viewer last pressed or focused in (its menu button, a mark, a table cell) or ticked records on,
- * outlined; `active` is the active tab's, as Debug, Details and the status bar show it.
+ * outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one, and the widget itself
+ * tells its status and its records, each with its own event: Debug follows its status, Details its records.
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -33,22 +34,26 @@ export interface WidgetsApi {
   /** Ends the selection; its floating bar goes away. */
   clearSelection(): void;
   /**
-   * The active tab's active widget and how its last query went; `undefined` while the viewer has not pressed or
-   * focused in a widget with data of that tab, or after it was removed.
+   * The active tab's active widget, the same object as long as it is rendered; `undefined` while the viewer has not
+   * pressed or focused in a widget with data of that tab, or after it was removed.
    */
-  readonly active: ActiveWidget | undefined;
-  /**
-   * Fires when `active` changes: another widget or tab, the widget removed, its query started, answered or failed, its
-   * selected records changed.
-   */
+  readonly active: RenderedWidget | undefined;
+  /** Fires when `active` is another widget: another one pressed, another tab shown, the widget removed. */
   readonly onDidChangeActive: Event<void>;
 }
 
-/** The active widget as it is now (`WidgetsApi.active`): what its menu is shown for, its query's status, its records. */
-export interface ActiveWidget extends WidgetMenuContext {
+/**
+ * A widget with data as it is rendered (`WidgetsApi.active`): what its menu is shown for, its query's status and its
+ * selected records, each with the event that tells their change. Its events end when it is removed.
+ */
+export interface RenderedWidget extends WidgetMenuContext {
   readonly status: WidgetStatus;
+  /** Fires when its query started, answered or failed. */
+  readonly onDidChangeStatus: Event<void>;
   /** The records the viewer selected on it (a table's ticked rows, in the order ticked); empty while none. */
   readonly records: readonly WidgetRecord[];
+  /** Fires when its selected records changed. */
+  readonly onDidChangeRecords: Event<void>;
 }
 
 /** One record of a widget's result, by column name (`{ path: '/api', status: 500 }`). */
@@ -117,7 +122,7 @@ export interface WidgetContext {
   /** Ends the selection, whichever widget it is on. */
   clearSelection(): void;
   /**
-   * Makes `records` the widget's selected records (`ActiveWidget.records`), in place of those before; with records,
+   * Makes `records` the widget's selected records (`RenderedWidget.records`), in place of those before; with records,
    * the widget becomes its tab's active widget.
    */
   selectRecords(records: readonly WidgetRecord[]): void;

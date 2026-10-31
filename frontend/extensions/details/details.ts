@@ -1,8 +1,9 @@
 import { html } from 'htl';
 import { ListChecks, createElement } from 'lucide';
+import type { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { createView } from '../../hosts/ui/ui';
-import { widgetTitle, type ActiveWidget, type WidgetRecord } from '../../hosts/widgets/widgets';
+import { widgetTitle, type RenderedWidget, type WidgetRecord } from '../../hosts/widgets/widgets';
 import { tryPrettyJson } from '../chart-library/table';
 import './details.css';
 
@@ -10,9 +11,9 @@ import './details.css';
  * The left side panel "Details" and the status bar's item, both about the active widget's selected records
  * (`widgets.active.records`: a table's ticked rows). The panel shows the widget's title, then a view per record, its
  * fields one below the other (a JSON value pretty-printed, a value of several lines as it is), drawn anew when the
- * records or the active widget change; each view starts open, its collapsed state not kept (a place in one selection
- * says nothing about another's). The status bar says "3 records selected" while there are some (else the item is
- * hidden); a click on it opens the panel.
+ * active widget or its records change (`onDidChangeRecords`), not on its status; each view starts open, its collapsed
+ * state not kept (a place in one selection says nothing about another's). The status bar says "3 records selected"
+ * while there are some (else the item is hidden); a click on it opens the panel.
  */
 export const details: Extension = {
   id: 'details',
@@ -21,23 +22,22 @@ export const details: Extension = {
     const status: HTMLButtonElement = html`<button type="button" class="d-details-status" data-testid="details-status" title="Show Details" onclick=${() => panel.show()}></button>`;
     subscriptions.push(panel, ui.registerBarItem('status', status, { alignment: 'left' }));
 
-    /** What the panel shows, to draw it only when that changes. */
-    let shown: Pick<ActiveWidget, 'widget' | 'records'> | undefined;
     const update = () => {
       const active = widgets.active;
       const records = active?.records ?? [];
       status.textContent = recordsSelected(records.length);
       status.hidden = records.length === 0;
-      if (!panel.visible) {
-        shown = undefined;
-        return;
-      }
-      if (shown && active && shown.widget === active.widget && shown.records === active.records) return;
-      shown = active && { widget: active.widget, records: active.records };
-      panel.body.replaceChildren(drawDetails(active));
+      if (panel.visible) panel.body.replaceChildren(drawDetails(active));
     };
-    update();
-    subscriptions.push(widgets.onDidChangeActive(update), panel.onDidChangeVisibility(update));
+    /** The active widget's records, listened to. */
+    let following: Disposable | undefined;
+    const follow = () => {
+      following?.dispose();
+      following = widgets.active?.onDidChangeRecords(update);
+      update();
+    };
+    follow();
+    subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(update), { dispose: () => following?.dispose() });
   },
 };
 
@@ -47,7 +47,7 @@ export function recordsSelected(count: number): string {
 }
 
 /** The panel's content for `active`: its title and a view per record, each open, else a hint. */
-function drawDetails(active: ActiveWidget | undefined): HTMLElement {
+function drawDetails(active: RenderedWidget | undefined): HTMLElement {
   if (!active || active.records.length === 0) return html`<div class="d-details__hint">Tick rows of a table to see them here.</div>`;
   return html`<div class="d-details">
     <h2 class="d-details__title">${widgetTitle(active.widget)}</h2>

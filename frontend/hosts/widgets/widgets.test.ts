@@ -290,10 +290,25 @@ describe('WidgetsHost', () => {
       expect(testbed.widgets.active?.widget).toBe(requests);
     });
 
+    it('is the widget itself, the same object on each read, which tells its status by its own event', async () => {
+      testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
+      const { el } = testbed.render(requests);
+      press(el);
+      const active = testbed.widgets.active!;
+      let statuses = 0;
+      active.onDidChangeStatus(() => statuses++);
+      await contexts[0].query();
+      expect(testbed.widgets.active).toBe(active);
+      expect(statuses).toBe(2);
+      expect(changes).toBe(1);
+    });
+
     it('tells how its query goes: rows and time, an error, its diagnostics', async () => {
       testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host"]}' });
       const { el } = testbed.render(requests);
       press(el);
+      let statuses = 0;
+      testbed.widgets.active!.onDidChangeStatus(() => statuses++);
       expect(testbed.widgets.active?.status).toEqual({ kind: 'idle' });
       const answered = contexts[0].query();
       expect(testbed.widgets.active?.status).toEqual({ kind: 'loading' });
@@ -305,7 +320,8 @@ describe('WidgetsHost', () => {
       testbed.serveText('/p/shop/api/1/query', 'Code: 60. Table default.http_logs does not exist', 500);
       await expect(contexts[0].query()).rejects.toThrow();
       expect(testbed.widgets.active?.status).toMatchObject({ kind: 'error', message: 'Code: 60. Table default.http_logs does not exist' });
-      expect(changes).toBe(5);
+      expect(statuses).toBe(4);
+      expect(changes).toBe(1);
     });
 
     it('tells the latest query only: an aborted earlier one keeps it loading, an aborted latest one puts back the last answer', async () => {
@@ -341,26 +357,37 @@ describe('WidgetsHost', () => {
       expect(testbed.widgets.active?.status).not.toBe(answered);
     });
 
-    it('holds the records selected on it; selecting records makes a widget active, none leave it so', () => {
+    it('holds the records selected on it, told by their own event; selecting records makes a widget active, none leave it so', () => {
       const first = testbed.render(requests);
-      testbed.render(errors);
+      const second = testbed.render(errors);
       press(first.el);
       expect(testbed.widgets.active?.records).toEqual([]);
       expect(changes).toBe(1);
+      let told: unknown[] = [];
+      // the second one becomes active before its records are told, so who follows the active widget hears them
+      testbed.widgets.onDidChangeActive(() => {
+        told.push('active');
+        testbed.widgets.active?.onDidChangeRecords(() => told.push(testbed.widgets.active?.records));
+      });
       contexts[1].selectRecords([{ status: 500 }, { status: 502 }]);
       expect(testbed.widgets.active?.widget).toBe(errors);
-      expect(testbed.widgets.active?.records).toEqual([{ status: 500 }, { status: 502 }]);
+      expect(told).toEqual(['active', [{ status: 500 }, { status: 502 }]]);
       expect(changes).toBe(2);
+      told = [];
       contexts[1].selectRecords([{ status: 502 }]);
-      expect(testbed.widgets.active?.records).toEqual([{ status: 502 }]);
-      expect(changes).toBe(3);
+      expect(told).toEqual([[{ status: 502 }]]);
+      expect(changes).toBe(2);
       // the first one's records: none yet, and none tell nothing
       contexts[0].selectRecords([]);
-      expect(changes).toBe(3);
       contexts[1].selectRecords([]);
       expect(testbed.widgets.active?.widget).toBe(errors);
-      expect(testbed.widgets.active?.records).toEqual([]);
-      expect(changes).toBe(4);
+      expect(told).toEqual([[{ status: 502 }], []]);
+      expect(changes).toBe(2);
+      // removed: its events end
+      second.rendered.dispose();
+      told = [];
+      contexts[1].selectRecords([{ status: 500 }]);
+      expect(told).toEqual([]);
     });
 
     it('is kept per tab: switching tabs shows that tab’s active widget', () => {

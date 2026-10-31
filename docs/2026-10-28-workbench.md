@@ -342,9 +342,11 @@ As the active editor: the **active widget** is the widget with data the viewer p
 cell. A quiet accent outline marks it (`d-widget--active`). Each tab has its own; switching tabs shows that tab's.
 Escape keeps it; removing the widget (its page rendered anew, its tab closed) ends it.
 
-- **API (`widgets` host; reworked by step 8b, §3.14 D2):** `widgets.active: ActiveWidget | undefined` (`{widget, url(path), lastResult, status}`, a
-  value taken anew on each read) and `widgets.onDidChangeActive` (another widget or tab, the widget removed, its query
-  started, answered or failed). `WidgetStatus` = `idle` | `loading` | `done {rows, ms, diagnostics}` | `error {message,
+- **API (`widgets` host; step 8b, §3.14 D2):** as VS Code's `window.activeTextEditor`, `widgets.active: RenderedWidget
+  | undefined` refers to the widget itself (`{widget, url(path), lastResult, status, onDidChangeStatus, records,
+  onDidChangeRecords}`, the same object as long as it is rendered; its events end when it is removed), and
+  `widgets.onDidChangeActive` fires only when another widget or tab becomes active or the widget is removed. The
+  widget's `onDidChangeStatus` fires when its query started, answered or failed. `WidgetStatus` = `idle` | `loading` | `done {rows, ms, diagnostics}` | `error {message,
   ms}`, set by `ctx.query()` itself, so every widget with data has one; `ms` is the time until the answer in the
   browser *(proposed)*. Only the latest `ctx.query()` sets the status and `lastResult`: an earlier one still answering
   changes neither, so a refresh during a load keeps "querying…"; an aborted latest one puts back the status of the last
@@ -358,8 +360,9 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   summary of the chart's answer, closed), EXPLAIN plan, Pipeline (graph and steps, closed), Syntax (closed), Result (the
   last result as a table); their collapsed state in the extension's `globalState` *(proposed)*. It asks
   `<dataUrl>/debug` only while it is shown: when shown, when another widget becomes active, and when the active
-  widget's query answered or failed (a query state change queries the chart again); while that query runs it keeps
-  what it shows, and a change of its records alone (the same status value as when it asked) asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
+  widget's query answered or failed (a query state change queries the chart again). It listens to the active widget's
+  `onDidChangeStatus` only, so a change of its records asks nothing; while that query runs it keeps what it shows, and
+  an aborted query putting back the status it asked for asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
   panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
 - **Status bar:** one item of the `debug` extension, there on every page: the active widget's "1,234
   rows · 87 ms" (not its title, since 2026-10-31), "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red;
@@ -378,10 +381,10 @@ a category for the floating bar (§3.8), unchanged; the two never mix.
 
 - **API (`widgets` host):** `ctx.selectRecords(records)` puts the widget's records (`WidgetRecord`: a row by column
   name) in place of those before; with records the widget becomes its tab's active widget (the press on the checkbox
-  made it so already; ticking by keyboard does too). `ActiveWidget.records` (in the order ticked *(proposed)*, empty
-  while none); `onDidChangeActive` also fires when the active widget's records change. No `widgets.records` and no
-  event of its own *(proposed)*: one value, one event, as for the status. *(Reversed 2026-10-31, D2, step 8b: the
-  widget carries its records with their own change event.)*
+  made it so already; ticking by keyboard does too). `RenderedWidget.records` (in the order ticked *(proposed)*, empty
+  while none), told by the widget's own `onDidChangeRecords` (step 8b, D2; as VS Code's
+  `onDidChangeTextEditorSelection`). A widget that becomes active by its records is made active before its records'
+  event fires, so whoever follows the active widget hears them *(proposed)*. No `widgets.records`.
 - **The table:** `drawTable(…, { selectRecords })` draws the checkbox column only with it (so Debug's result table has
   none *(proposed)*), its `rowSelectionChanged` calls it. Each draw starts with no row ticked, so the table's renderer
   clears the records before each draw: a new answer, and also another width or color scheme, drops them *(proposed)*.
@@ -977,14 +980,16 @@ interface QueryApi {
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
   registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
-  readonly active: ActiveWidget | undefined;              // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
-  readonly onDidChangeActive: Event<void>;                // another widget or tab, its status, its records
+  readonly active: RenderedWidget | undefined;            // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
+  readonly onDidChangeActive: Event<void>;                // another widget or tab, the widget removed
 }
 
-interface ActiveWidget {                                  // a value, taken anew on each read
+interface RenderedWidget {                                // the widget itself, as window.activeTextEditor (step 8b)
   readonly widget: WidgetNode; url(path: string): string; readonly lastResult: QueryResult | undefined;
   readonly status: WidgetStatus;                          // idle | loading | done {rows, ms, diagnostics} | error {message, ms}
+  readonly onDidChangeStatus: Event<void>;
   readonly records: readonly WidgetRecord[];              // a table's ticked rows (§3.4.5)
+  readonly onDidChangeRecords: Event<void>;
 }
 
 interface WidgetContext {                                 // what a renderer gets; excerpt
@@ -1372,7 +1377,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7f.3 ✅ | **review fix: §3.11 sketch** follows the code: `registerBottomPanel` dropped (gone since 7e), `createView` (7c), `ActiveWidget` with `records` and an excerpt of `WidgetContext` with `selectRecords` (7f), the `details` extension in the table. ✅ 2026-10-31 | — |
 | 8 ✅ | **the batch of 2026-10-31 planned** (§3.14): D1–D15 written into this concept (§3.14, §3.8 rewritten for the signed pills) and into the Perspective concept (§4.8); docs only. ✅ 2026-10-31 | — |
 | 8a ✅ | **D1 start page** (§3.4.3): the time range, refresh and Debug's status item registered once with `ui.registerBarItem`, so they show on every page, "/" included ("No active chart" there); `hasQueries` (`hosts/page/page.ts`) and `registerBarItemWhile` (`hosts/ui/bar/bar.ts`) deleted; Details' "N records selected" stays registered and is `hidden` while none *(proposed)*; tests: the "not on the start page" cases dropped, Details' status checked by `hidden`; `e2e/start-page.spec.ts` checks the time range, refresh and status bar on "/". ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run) | "/" with the time range and the status bar |
-| 8b | **D2 active widget:** `widgets.active` a reference, `onDidChangeActive` only on another widget or tab; the widget carries status and records, each with its event; `ActiveWidget`'s copies go; Debug on the status, Details on the records (§3.4.4, §3.4.5) | Debug and Details as before |
+| 8b ✅ | **D2 active widget** (§3.4.4, §3.4.5): `widgets.active` is the widget itself (`RenderedWidget`: `status` + `onDidChangeStatus`, `records` + `onDidChangeRecords`; the impl class `WidgetInstance` is its renderer's context too), `onDidChangeActive` only on another widget or tab or its removal; `ActiveWidget` and its copies gone, the host's `statusChanged` / `recordsChanged` gone; Debug follows the active widget's status, Details its records (resubscribed on `onDidChangeActive`); Details' draw guard gone (only records or the widget redraw it); tests: `fakeWidget` in `widgets-testing.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright not run, the e2e specs see no API and stay), deviations: the type is named `RenderedWidget`, events carry no value (read `status` / `records`); with records a widget is activated before its records' event fires; a removed widget's late `selectRecords` is ignored; Debug keeps the guard for an aborted query putting back the status it asked for *(all proposed)* | Debug and Details as before |
 | 8c | **D3 + D4 quick input, click to filter:** `ui.showQuickPick` / `showInputBox` / `createQuickPick` in place; `showChoices`, the floating bar and the selection model go; chart candidates, context menus, search everywhere move to it; a mark's click offers ⊕ / ⊖ per field and adds the pill at once | click to filter in one step |
 | 8d | **D5 layout:** tabs in the top row (`[…][Dashica][tabs][+] … [time range][refresh]`), the title bar goes; search everywhere a rail button; side panel headers in caps with "…"; rail tooltips with name and shortcut (§3.4) | the new top row |
 | 8e | **D6 signed pills:** `<dataUrl>/pill` (422 for fields that cannot filter), `.FilterAs`, `sql.Quote`, `sql.Table`; the key (connection, table, condition, HMAC-SHA-256 with `filters.secret`, required at start); a chart applies the pills of its base table; 400 for a tampered pill; `filter.Apply`'s rules, `DESCRIBE` and its cache, bound `__f<i>`, `withFilters` removed; filterable fields in `page.json` props; generator and golden contract regenerated (§3.8) | filters as signed pills |

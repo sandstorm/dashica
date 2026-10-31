@@ -5,23 +5,24 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { ActiveQuerySource, FilterOp, QueryApi } from '../query/query';
 import type { FloatingBar, MenuAnchor, UiApi } from '../ui/ui';
-import type { ActiveWidget, QueryResult, Selection, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type { QueryResult, RenderedWidget, Selection, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
  * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). It shows the floating bar
  * `widget/selection` for the selection, and listens for Escape and clicks while there is one. The active widget of
- * each tab is kept under the tab's query state; `tabs` tells which tab is active.
+ * each tab is kept under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a
+ * `WidgetInstance`: its renderer's context and, as `active`, the widget itself.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
   readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
   readonly #selectionBar: FloatingBar<Selection>;
-  #selection: { selection: Selection; owner: RenderedWidget | undefined; listening: Disposable } | undefined;
+  #selection: { selection: Selection; owner: WidgetInstance | undefined; listening: Disposable } | undefined;
   /** Each tab's active widget, by the tab's query state. */
-  readonly #active = new Map<QueryApi, RenderedWidget>();
+  readonly #active = new Map<QueryApi, WidgetInstance>();
   /** The active widget as told last through `onDidChangeActive`. */
-  #told: RenderedWidget | undefined;
+  #told: WidgetInstance | undefined;
   readonly #onDidChangeActive = new EventEmitter<void>();
   readonly onDidChangeActive = this.#onDidChangeActive.event;
   readonly #onDidChangeTabs: Disposable;
@@ -38,14 +39,12 @@ export class WidgetsHost implements WidgetsApi {
     this.#onDidChangeTabs = tabs.onDidChangeTabs(() => this.#tell());
   }
 
-  get active(): ActiveWidget | undefined {
-    const widget = this.#active.get(this.tabs.activeQuery);
-    if (!widget) return undefined;
-    return { widget: widget.widget, url: (path) => widget.url(path), lastResult: widget.lastResult, status: widget.status, records: widget.records };
+  get active(): RenderedWidget | undefined {
+    return this.#active.get(this.tabs.activeQuery);
   }
 
   /** Makes `widget` its tab's active widget, outlining its element in place of the one before. */
-  activate(widget: RenderedWidget): void {
+  activate(widget: WidgetInstance): void {
     const before = this.#active.get(widget.state);
     if (before === widget) return;
     before?.el.classList.remove(ACTIVE);
@@ -55,23 +54,13 @@ export class WidgetsHost implements WidgetsApi {
   }
 
   /** `widget` is removed: its tab has no active widget if it was that one. */
-  deactivate(widget: RenderedWidget): void {
+  deactivate(widget: WidgetInstance): void {
     if (this.#active.get(widget.state) !== widget) return;
     widget.el.classList.remove(ACTIVE);
     this.#active.delete(widget.state);
     this.#tell();
   }
 
-  /** `widget`'s status changed: told when it is the active one. */
-  statusChanged(widget: RenderedWidget): void {
-    if (widget === this.#told) this.#onDidChangeActive.fire();
-  }
-
-  /** `widget`'s selected records changed: with records it becomes active; told when it is the active one. */
-  recordsChanged(widget: RenderedWidget): void {
-    if (widget.records.length > 0 && this.#active.get(widget.state) !== widget) this.activate(widget);
-    else this.statusChanged(widget);
-  }
 
   /** Fires `onDidChangeActive` when the active tab's active widget is another one than told last. */
   #tell(): void {
@@ -96,7 +85,7 @@ export class WidgetsHost implements WidgetsApi {
   }
 
   /** Selects `selection` of `owner` (`undefined`: of no rendered widget), ending the one before. */
-  selectOf(owner: RenderedWidget | undefined, selection: Selection): void {
+  selectOf(owner: WidgetInstance | undefined, selection: Selection): void {
     this.clearSelection();
     const doc = selection.anchor.ownerDocument;
     // the click that selected is past the document already; the next one, wherever it lands, ends the selection
@@ -136,7 +125,7 @@ export class WidgetsHost implements WidgetsApi {
       return new Disposable(() => el.replaceChildren());
     }
     try {
-      const ctx = new RenderedWidget(widget, el, this, state, this.ui);
+      const ctx = new WidgetInstance(widget, el, this, state, this.ui);
       const rendered = renderer(el, widget, ctx);
       const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
@@ -144,6 +133,7 @@ export class WidgetsHost implements WidgetsApi {
         listening.dispose();
         this.deactivate(ctx);
         rendered.dispose();
+        ctx.dispose();
         el.replaceChildren();
       });
     } catch (error) {
@@ -156,7 +146,7 @@ export class WidgetsHost implements WidgetsApi {
    * A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. The
    * press is heard on its way down (capture), since a chart stops the presses on its marks (selectOnClick).
    */
-  #activateOn(el: HTMLElement, ctx: RenderedWidget): Disposable {
+  #activateOn(el: HTMLElement, ctx: WidgetInstance): Disposable {
     const onEvent = (event: Event) => {
       if (event.target instanceof Element && event.target.closest('[data-data-url]') === el) this.activate(ctx);
     };
@@ -172,15 +162,24 @@ export class WidgetsHost implements WidgetsApi {
 /** The class of the active widget's element in each tab: its outline. */
 const ACTIVE = 'd-widget--active';
 
-/** The context of one rendered widget; also what its menu `widget/context` is shown for. */
-class RenderedWidget implements WidgetContext, WidgetMenuContext {
+/**
+ * One rendered widget: its renderer's context, what its menu `widget/context` is shown for, and, with data, the
+ * `RenderedWidget` that `active` refers to.
+ */
+class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget {
   lastResult: QueryResult | undefined;
-  status: WidgetStatus = { kind: 'idle' };
-  records: readonly WidgetRecord[] = [];
+  #status: WidgetStatus = { kind: 'idle' };
+  readonly #onDidChangeStatus = new EventEmitter<void>();
+  readonly onDidChangeStatus = this.#onDidChangeStatus.event;
+  #records: readonly WidgetRecord[] = [];
+  readonly #onDidChangeRecords = new EventEmitter<void>();
+  readonly onDidChangeRecords = this.#onDidChangeRecords.event;
+  /** Removed: a late `selectRecords` neither makes it active nor tells anything. */
+  #removed = false;
   /** The calls of `query` so far: only the latest one sets the status. */
   #queries = 0;
   /** The status of the last query that answered or failed, put back when the latest one is aborted. */
-  #settled: WidgetStatus = this.status;
+  #settled: WidgetStatus = this.#status;
 
   constructor(
     readonly widget: WidgetNode,
@@ -190,6 +189,14 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
     readonly state: QueryApi,
     private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices'>,
   ) {}
+
+  get status(): WidgetStatus {
+    return this.#status;
+  }
+
+  get records(): readonly WidgetRecord[] {
+    return this.#records;
+  }
 
   url(path: string): string {
     if (!('dataUrl' in this.widget)) throw new Error(`the widget ${this.widget.type} has no data`);
@@ -217,9 +224,9 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   }
 
   #setStatus(status: WidgetStatus): void {
-    this.status = status;
+    this.#status = status;
     if (status.kind !== 'loading') this.#settled = status;
-    this.host.statusChanged(this);
+    this.#onDidChangeStatus.fire();
   }
 
   renderChild(el: HTMLElement, child: WidgetNode): Disposable {
@@ -249,10 +256,19 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
     this.host.clearSelection();
   }
 
+  /** With records it becomes its tab's active widget first, so the records' change is told to whoever follows it. */
   selectRecords(records: readonly WidgetRecord[]): void {
-    if (records.length === 0 && this.records.length === 0) return;
-    this.records = records;
-    this.host.recordsChanged(this);
+    if (this.#removed || (records.length === 0 && this.#records.length === 0)) return;
+    this.#records = records;
+    if (records.length > 0) this.host.activate(this);
+    this.#onDidChangeRecords.fire();
+  }
+
+  /** It is removed: its events end. */
+  dispose(): void {
+    this.#removed = true;
+    this.#onDidChangeStatus.dispose();
+    this.#onDidChangeRecords.dispose();
   }
 }
 

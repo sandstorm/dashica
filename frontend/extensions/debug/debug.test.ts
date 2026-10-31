@@ -3,7 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
-import type { ActiveWidget, WidgetStatus } from '../../hosts/widgets/widgets';
+import type { WidgetStatus } from '../../hosts/widgets/widgets';
+import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
 import { debug, statusParts } from './debug';
 
 let body: HTMLElement;
@@ -11,7 +12,7 @@ let status: HTMLElement;
 let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
-let active: ActiveWidget | undefined;
+let active: FakeWidget | undefined;
 let runCommand: () => void;
 let menuItems: { menuId: string; title?: string }[];
 let requested: string[];
@@ -80,15 +81,16 @@ const settle = async () => {
 };
 
 /** A chart with the data under `/p/shop/api/<api>`. */
-function chart(widgetStatus: WidgetStatus, api = 1): ActiveWidget {
-  return {
-    widget: { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: `/p/shop/api/${api}` } as ActiveWidget['widget'],
-    url: (path) => `/p/shop/api/${api}${path}?time=24h`,
-    lastResult: undefined,
-    status: widgetStatus,
-    records: [],
-  };
+function chart(widgetStatus: WidgetStatus, api = 1): FakeWidget {
+  const widget = { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: `/p/shop/api/${api}` } as FakeWidget['widget'];
+  return fakeWidget(widget, { url: (path) => `/p/shop/api/${api}${path}?time=24h`, status: widgetStatus });
 }
+
+/** Makes `widget` the active one, as the host tells it. */
+const activate = (widget: FakeWidget | undefined) => {
+  active = widget;
+  activeChanged.fire();
+};
 
 const showPanel = () => {
   panel.visible = true;
@@ -103,8 +105,8 @@ describe('debug', () => {
   });
 
   it('asks nothing while hidden; shown without an active widget, it hints to click a chart', () => {
-    active = chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} });
-    activeChanged.fire();
+    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
+    active!.setStatus({ kind: 'done', rows: 4, ms: 9, diagnostics: {} });
     expect(requested).toEqual([]);
     active = undefined;
     showPanel();
@@ -112,7 +114,7 @@ describe('debug', () => {
   });
 
   it('shows the active widget’s query and EXPLAIN as views, and follows it', async () => {
-    active = chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} });
+    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
     showPanel();
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
@@ -122,46 +124,49 @@ describe('debug', () => {
     expect(body.textContent).toContain('The chart has not queried yet.');
 
     // its query running again: kept; answered: asked again
-    active = { ...active, status: { kind: 'loading' } };
-    activeChanged.fire();
+    active!.setStatus({ kind: 'loading' });
     expect(requested).toHaveLength(1);
-    active = { ...active, status: { kind: 'done', rows: 4, ms: 9, diagnostics: {} } };
-    activeChanged.fire();
+    active!.setStatus({ kind: 'done', rows: 4, ms: 9, diagnostics: {} });
     await settle();
     expect(requested).toHaveLength(2);
 
-    // another widget, though still loading
-    active = chart({ kind: 'loading' }, 2);
-    activeChanged.fire();
+    // another widget, though still loading; the one before is no longer listened to
+    const before = active!;
+    activate(chart({ kind: 'loading' }, 2));
+    await settle();
+    before.setStatus({ kind: 'done', rows: 5, ms: 3, diagnostics: {} });
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h', '/p/shop/api/1/debug?time=24h', '/p/shop/api/2/debug?time=24h']);
 
     // hidden: nothing more
     panel.visible = false;
     visibility.fire();
-    active = chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 3);
-    activeChanged.fire();
+    activate(chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 3));
+    active!.setStatus({ kind: 'done', rows: 2, ms: 5, diagnostics: {} });
     expect(requested).toHaveLength(3);
   });
 
-  it('asks nothing again when only the shown widget’s records change', async () => {
-    active = chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} });
+  it('asks nothing again when only the shown widget’s records change, or an aborted query puts back its status', async () => {
+    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
     showPanel();
     await settle();
     expect(requested).toHaveLength(1);
     const drawn = body.querySelector('.d-debug');
-    active = { ...active, records: [{ status: 500 }] };
-    activeChanged.fire();
-    active = { ...active, records: [{ status: 500 }, { status: 502 }] };
-    activeChanged.fire();
+    active!.setRecords([{ status: 500 }]);
+    active!.setRecords([{ status: 500 }, { status: 502 }]);
     await settle();
     expect(requested).toHaveLength(1);
     expect(body.querySelector('.d-debug')).toBe(drawn);
+    const answered = active!.status;
+    active!.setStatus({ kind: 'loading' });
+    active!.setStatus(answered);
+    await settle();
+    expect(requested).toHaveLength(1);
   });
 
   it('shows the server’s error in the panel', async () => {
     vi.stubGlobal('fetch', async () => new Response('Code: 60. Table default.http_logs does not exist', { status: 500 }));
-    active = chart({ kind: 'idle' });
+    activate(chart({ kind: 'idle' }));
     showPanel();
     await settle();
     expect(body.querySelector('.d-notice--error')!.textContent).toContain('does not exist');
@@ -169,8 +174,9 @@ describe('debug', () => {
 
   it('says the active widget’s status in the status bar; a click opens the panel', () => {
     expect(status.textContent).toBe('No active chart');
-    active = chart({ kind: 'done', rows: 1234, ms: 87, diagnostics: { ignored: ['host'] } });
-    activeChanged.fire();
+    activate(chart({ kind: 'loading' }));
+    expect(status.textContent).toBe('querying…');
+    active!.setStatus({ kind: 'done', rows: 1234, ms: 87, diagnostics: { ignored: ['host'] } });
     expect([...status.children].map((part) => part.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host']);
     status.click();
     expect(panel.shown).toBe(1);

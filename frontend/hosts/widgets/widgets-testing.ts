@@ -8,7 +8,7 @@ import { CommandsHost } from '../commands/commands';
 import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
 import { QueryHost } from '../query/query';
 import { UiHost, type ContextMenuOptions } from '../ui/ui';
-import { WidgetsHost } from './widgets';
+import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
@@ -16,7 +16,8 @@ import { WidgetsHost } from './widgets';
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
  * shown, `choices()` / `choose` the choices `ctx.choose` shows, `floatingBar()` the floating bar shown. `dispose` in
- * `afterEach`.
+ * `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a `RenderedWidget` whose
+ * status and records the test sets.
  */
 export function widgetTestbed() {
   history.replaceState(null, '', '/p/shop');
@@ -132,4 +133,38 @@ export function widgetTestbed() {
 /** Lets the pending fetches, Arrow decoding and draws finish. */
 export async function settle(): Promise<void> {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** A `RenderedWidget` whose status and records the test sets (`setStatus`, `setRecords`), each telling its change. */
+export interface FakeWidget extends RenderedWidget {
+  setStatus(status: WidgetStatus): void;
+  setRecords(records: readonly WidgetRecord[]): void;
+}
+
+/** `widget` as rendered, with `url` and `status` (default: answered, 2 rows) and no records yet. */
+export function fakeWidget(widget: WidgetNode, { url = (path: string) => path, status = { kind: 'done', rows: 2, ms: 5, diagnostics: {} } }: { url?: (path: string) => string; status?: WidgetStatus } = {}): FakeWidget {
+  const statusChanged = new EventEmitter<void>();
+  const recordsChanged = new EventEmitter<void>();
+  let records: readonly WidgetRecord[] = [];
+  return {
+    widget,
+    url,
+    lastResult: undefined,
+    get status() {
+      return status;
+    },
+    onDidChangeStatus: statusChanged.event,
+    get records() {
+      return records;
+    },
+    onDidChangeRecords: recordsChanged.event,
+    setStatus(changed) {
+      status = changed;
+      statusChanged.fire();
+    },
+    setRecords(selected) {
+      records = selected;
+      recordsChanged.fire();
+    },
+  };
 }
