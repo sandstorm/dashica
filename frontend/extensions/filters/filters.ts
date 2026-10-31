@@ -11,10 +11,10 @@ import './filters.css';
  * The filters of a page that has them (`page.json`'s `filterBar`): the filter bar shows one chip per filter, a pill
  * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
  * SQL chip's text edits it, a pill is not edited (its condition is the server's). The funnel
- * button in the top bar adds a SQL chip. The page's filter buttons are toggles: pressed while a SQL chip has their
- * condition (`status >= 500`; a `...` in it is asked for), which is then labelled with the button's title. The bar
- * shows while it has a chip or a button, else the page has no bar for nothing. A click on a chart adds its pills
- * (`WidgetsApi.offerFilters`).
+ * button in the top bar adds a SQL chip. The page's filter buttons are toggles in their place: pressed while a SQL
+ * filter has their condition (`status >= 500`; a `...` in it is asked for, its value shown on the button), which then
+ * has no chip of its own. The bar shows while it has a chip or a button, else the page has no bar for nothing. A
+ * click on a chart adds its pills (`WidgetsApi.offerFilters`).
  */
 export const filters: Extension = {
   id: 'filters',
@@ -126,15 +126,25 @@ class FilterBar {
   #draw(): void {
     const chips = this.query.filters.chips;
     this.#editor = undefined;
-    const shown = chips.map((chip, index) => (this.#editing === index && chip.kind === 'sql' ? this.#editorOf(chip, index) : this.#chipOf(chip, index)));
+    // a button's condition shows as the button pressed, not as a chip
+    const ofButton = chips.map((chip) => (chip.kind === 'sql' ? buttonOf(chip.sql, this.#pageButtons) : undefined));
+    const shown = chips.flatMap((chip, index) =>
+      ofButton[index] ? [] : [this.#editing === index && chip.kind === 'sql' ? this.#editorOf(chip, index) : this.#chipOf(chip, index)],
+    );
     if (this.#editing === 'new') shown.push(this.#editorOf({ kind: 'sql', sql: '' }, 'new'));
     this.#chips.hidden = shown.length === 0;
     this.#chips.replaceChildren(...shown);
     this.#buttons.hidden = this.#pageButtons.length === 0;
     this.#buttons.replaceChildren(
       ...this.#pageButtons.map((button) => {
-        const pressed = chips.some((chip) => chip.kind === 'sql' && buttonOf(chip.sql, [button]) !== undefined);
-        const el: HTMLButtonElement = html`<button type="button" class="d-button" aria-pressed=${String(pressed)}>${button.title}</button>`;
+        const matches = ofButton.filter((match) => match?.button === button);
+        const pressed = matches.length > 0;
+        const values = matches.flatMap((match) => match!.values).join(', ');
+        const el: HTMLButtonElement = html`<button
+          type="button"
+          class="d-button"
+          title=${button.queryPart}
+          aria-pressed=${String(pressed)}>${button.title}${values ? `: ${values}` : ''}</button>`;
         el.addEventListener('click', () => (pressed ? this.#release(button) : void this.#press(button, el)));
         return el;
       }),
@@ -143,18 +153,9 @@ class FilterBar {
 
   #chipOf(chip: FilterChip, index: number): HTMLElement {
     const edit = chip.kind === 'sql' ? () => this.#edit(index) : undefined;
-    let label = '';
-    let value: string;
-    let whole: string;
-    if (chip.kind === 'sql') {
-      const pressed = buttonOf(chip.sql, this.#pageButtons);
-      label = pressed ? pressed.button.title + (pressed.values.length > 0 ? ':' : '') : 'SQL:';
-      value = pressed ? pressed.values.join(', ') : chip.sql.replace(/\s+/g, ' ');
-      whole = chip.sql;
-    } else {
-      value = chip.label;
-      whole = chip.label;
-    }
+    const label = chip.kind === 'sql' ? 'SQL:' : '';
+    const value = chip.kind === 'sql' ? chip.sql.replace(/\s+/g, ' ') : chip.label;
+    const whole = chip.kind === 'sql' ? chip.sql : chip.label;
     return html`<span class=${chip.kind === 'pill' ? 'd-filter-chip d-filter-chip--pill' : 'd-filter-chip'} data-testid="filter-chip" title=${whole}>
       ${label ? html`<span class="d-filter-chip__label" onclick=${edit}>${label}</span>` : ''}
       <span class="d-filter-chip__value" onclick=${edit}>${value}</span>

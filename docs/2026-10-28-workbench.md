@@ -119,7 +119,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Region | Holds |
 |---|---|
 | Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; its entries come with 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
-| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles in place, pressed while their filter is set, without a chip of their own (step 8f); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
 | Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -835,7 +835,7 @@ WHERE is gone. What exists today, and what changes:
 |---|---|---|
 | one `?sql=` (`url.get('sql')`), one string in `FiltersModel.sql`, typed live into a textarea under the funnel | `frontend/hosts/query/query-impl.ts` (`FiltersState`, `parseSearch`, `formatSearch`, `requestParams`), `frontend/extensions/filters/filters.ts` (`FilterBar`) | one `?sql=` per SQL chip, repeatable; a SQL chip is applied on Enter, not per keystroke |
 | `add(condition)` appends `\nAND <condition>` to that string (filter buttons, the table cell menu's "Contains" and "Time ±…") | `query-impl.ts`, `filters.ts`, `frontend/extensions/table/table.ts` | `add(condition)` adds one SQL chip (once: the same text again is no change); the callers stay as they are |
-| a filter button adds its `queryPart` to the SQL string (asking for `...`), nothing shows it was pressed | `filters.ts` (`showButtons`, `#add`); `dashboard.Builder.FilterButton`, `rendering.FilterButton` | a toggle: pressed while a SQL chip matches it, its chip labelled with its title |
+| a filter button adds its `queryPart` to the SQL string (asking for `...`), nothing shows it was pressed | `filters.ts` (`showButtons`, `#add`); `dashboard.Builder.FilterButton`, `rendering.FilterButton` | a toggle: pressed while a SQL chip matches it, that chip not shown in the chip row (step 8f) |
 | `QueryState.Sql string` (`query.Get("sql")`); `SqlClause` adds `AND (<sql>)` after the window | `lib/httpserver/query_state.go`, `lib/httpserver/time_range.go` | `QueryState.Sql []string`; `SqlClause` adds `AND (<sql>)` per chip |
 
 Unchanged: how Go applies the result. `SqlClause` is still the one condition `prepare` adds as `sql.Where` (so a SQL
@@ -893,17 +893,18 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
     edit, not per keystroke.
   - **Shown** while there is a chip, the page has buttons, or a chip is being added; on a page with `filterBar` only,
     as today.
-- **A filter button shows as a chip while toggled on** (proposed): the chip is a plain SQL chip, its text the
-  button's `queryPart` (the `...` filled in, as today); no new URL key. A pure function in `filters.ts`,
-  `buttonOf(sql, buttons)`, gives the button a SQL chip's text matches: equal to its `queryPart`, or for a `queryPart`
-  with `...` equal with a non-empty text in place of every `...` (`request__host = '...'` matches
-  `request__host = 'app.wetell.de'`, the value `app.wetell.de`). Such a chip is labelled with the button's title
-  (`Host: app.wetell.de`, `Errors only`), its SQL in its `title`. The button is pressed (`aria-pressed="true"`) while
-  a chip matches it; pressing a pressed button removes every chip that matches it, pressing it otherwise adds its
-  chip (asking for `...` as today). So a link with `?sql=status NOT BETWEEN 200 AND 399` opens with "Errors only"
-  pressed, and editing a button's chip into other SQL makes it a plain SQL chip, the button released. A chip from
-  a `...` button whose value contains the text around `...` (`'` inside `'...'`) may match no button; it stays a
-  plain SQL chip.
+- **A filter button is pressed in place while toggled on** (step 8f, D7): its filter is a plain SQL chip in the
+  model, its text the button's `queryPart` (the `...` filled in, as today); no new URL key. A pure function in
+  `filters.ts`, `buttonOf(sql, buttons)`, gives the button a SQL chip's text matches: equal to its `queryPart`, or for
+  a `queryPart` with `...` equal with a non-empty text in place of every `...` (`request__host = '...'` matches
+  `request__host = 'app.wetell.de'`, the value `app.wetell.de`). Such a chip is not drawn in the chip row; the button
+  stays where it is, pressed (`aria-pressed="true"`), its `title` its `queryPart`. A `...` button shows the values
+  after its title (`Host: app.wetell.de`; several chips of it: `Host: a, b`) *(proposed)*. Pressing a pressed button
+  removes every chip that matches it, pressing it otherwise adds its chip (asking for `...` with `showInputBox`). So a
+  link with `?sql=status NOT BETWEEN 200 AND 399` opens with "Errors only" pressed and no chip. A button's filter is
+  not edited in the bar (release and press it again); on a page without that button it is a plain SQL chip
+  *(proposed)*. A chip from a `...` button whose value contains the text around `...` (`'` inside `'...'`) may match
+  no button; it stays a plain SQL chip.
 - **The table cell menu** ("Filter: Contains this value", the timestamp entries) adds a SQL chip through `add(condition)`
   as before; each entry is now a chip of its own, removable alone.
 - **The Explore view's tab** shows the same chips; how they apply to an edited query is the Perspective concept's
@@ -911,9 +912,9 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
 - **Tests:** `query.test.ts` (two `sql` and `f` interleaved keep their order through `parseSearch` / `formatSearch`, a
   single old `sql` is one chip, `?sql=` none, `add(condition)` once, `replace`, `remove`), `filters.test.ts` (a SQL chip
   from the funnel, editing a SQL and a structured chip, Escape, `buttonOf` with and without `...`, a pressed button
-  removes its chip), Go: `query_state_test.go` (several `sql`, an empty one), `time_range_test.go` (`SqlClause` with
+  has no chip and removes its filter, a `...` button shows its values), Go: `query_state_test.go` (several `sql`, an empty one), `time_range_test.go` (`SqlClause` with
   two chips). Playwright: `e2e/filter-chips.spec.ts` (a link with two `sql` shows two chips, the funnel adds one, × on
-  one, a filter button toggles).
+  one, a filter button toggles in place without a chip).
 
 ### 3.9 Go actions
 
@@ -1437,7 +1438,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8c ✅ | **D3 + D4 quick input, click to filter** (§3.8, §3.11): `ui.showQuickPick(items, {title, placeholder, anchor})` (typing narrows, fuzzy by label else description, headings only with their items) and `ui.showInputBox({title, prompt, placeholder, value, anchor})`, both and `createQuickPick` (`anchor`) at a point or below an element, else at the top in the middle (search everywhere stays there); items with an icon (`{svg, label}`) and `checked`, separators without a label as lines; the fuzzy matcher moved to `frontend/core/fuzzy`; `showContextMenu` draws every registered menu in it (`context-menu.ts` builds the items, the old menu list and its CSS gone); a filter button's `...` asked with `showInputBox` below the button instead of `prompt()`; a click on a mark, a table cell or an Explore group row: `offerFilters` (Filter / Exclude per candidate, the pill at once); `showChoices`, the floating bar, the selection model and `widget/selection` deleted; `selectOnClick` renamed `filterOnClick`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: `=` in both labels, the icon (and its accessible name) tells filter from exclude; no new right-click menus (only `table/cell` opens on one, as before); a menu's command runs synchronously as the box closes (`QuickInput.pickOne`), `showQuickPick`'s promise after it *(all proposed)* | click to filter in one step |
 | 8d ✅ | **D5 layout** (§3.4): one top bar (`WindowLayout.topBar`, `registerBarItem('top', …)`: `left` items, the tab bar, `center` / `right` items; `Bar` takes the tab bar as its fixed middle), the title bar gone; the global menu's "…" (`workbench/global`, hidden while empty) and the Dashica icon (`ChartColumn`) before the tabs, "+" after them (`TabBar.onDidAdd`: "/" in a new tab); `ui.registerRailButton` (a rail button running a command, its tooltip with the key), search everywhere's first in the left rail (its field and `search-everywhere.css` gone); every side panel under a header (name in caps, "…" showing `panel/<id>` with "Hide", `workbench.view.<id>.hide`); a panel button's tooltip already named its name and key (since the layout's port), now shared by panel and command buttons; `e2e/top-bar.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: "Hide" in every panel menu so "…" is never empty; the global "…" hidden until 8i gives it entries; "+" opens "/"; the icon is lucide's, not a logo; tooltips stay the native `title` *(all proposed)* | the new top row |
 | 8e ✅ | **D6 signed pills** (§3.8): `sql.Quote`, `sql.Condition`, `.FilterAs`, `sql.Table` (`sql.FromFile(path, opts...)`), `sql.TableOf`; `filter.TableOf` / `New` / `Sign` / `Open` / `Apply` (key `<payload>.<mac>`, HMAC-SHA256 with `filters.secret`, checked at start by `dashica.New`); `<dataUrl>/pill` (`{key, label}`, 422 for a field that cannot filter, 400 for another op); the pills of the chart's table into its WHERE, `eq` OR-ed and `ne` AND-ed per field; 400 for a pill that does not open; the node's `filterable` in `page.json` (generator, golden contract); deleted: `filter.Filter` / `Condition` / `Param` / `Columns`, the own-field and `DESCRIBE` rules, `clickhouse` `columns.go` and its cache, bound `__f<i>`, `withFilters`, the table's `categories` prop, `WidgetContext.addFilter`, the chip's op flip; client: a pick asks `/pill`, chips `{kind: 'pill', key, label}`; outer dashboards: `sql.Table` on the single-table SQL files, `FilterAs` on their computed fields. ✅ 2026-10-31 (Go vet and tests green but the ClickHouse-bound ones (sandbox); vitest, typecheck, top comments green; Playwright written, not run), deviations: the label inside the signed payload; `filterable` on the node, not in the props; the secret at least 32 characters, checked by `New` only; a pill chip is not edited *(all proposed)* | filters as signed pills |
-| 8f | **D7 filter buttons:** pressed while active, no duplicate chip | buttons as toggles in place |
+| 8f ✅ | **D7 filter buttons** (§3.8): a SQL chip that matches one of the page's buttons (`buttonOf`) is not drawn in the chip row; the button shows pressed in its place, its `title` the `queryPart`; the chip's "button title" label and the edit of a button's chip gone; `e2e/filter-chips.spec.ts` expects no chip. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: a pressed `...` button shows its values after its title (`Path: /api/`, several joined by `, `); a button's filter is not edited in the bar; on a page without the button it is a plain SQL chip *(all proposed)* | buttons as toggles in place |
 | 8g | **D8 + D9 Explore off, Explore SQL:** with `explore.enabled` false no Explore extension, the handlers answer 404 before any query, "Explore" greyed in the global menu; `xsql` → `exploreSql`; the editor shows placeholders, parameters listed beside it and sent on Run; `inline_parameters.go` removed (Perspective §4.8) | Explore with placeholders |
 | 8h | **D11 schema view:** the left side panel "Schema" (connection › database › table, the table structured as DataGrip), one cached query set per connection, refreshable (Perspective §4.8) | the schema of every connection |
 | 8i | **D10 global "…" menu:** left of the Dashica icon; "Explore" a blank Explore tab (connection picker, per-connection endpoint behind `explore.enabled`); "Start from chart…" (Perspective §4.8) | Explore without a chart |

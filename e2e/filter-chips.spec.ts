@@ -1,6 +1,6 @@
-// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b and 8e): a link's `f` and `sql`
+// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e and 8f): a link's `f` and `sql`
 // show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the charts, the
-// funnel adds a SQL chip, a chip's × removes it from the URL, a filter button toggles its chip.
+// funnel adds a SQL chip, a chip's × removes it from the URL, a filter button toggles in place, without a chip.
 //
 // The page defaults to the Sandstorm instance's "/clickhouse/table_sizes": its tables use `FromFileWithoutFilters`,
 // so every chart ignores every pill. Another page: DASHICA_E2E_FILTER_PAGE. The pills are signed by a chart of
@@ -112,15 +112,14 @@ test('a SQL chip is edited in place', async ({page}) => {
     await expect(page).toHaveURL(/sql=1(\+|%20)%3D(\+|%20)2/);
 });
 
-test('a filter button toggles its chip, labelled with its title', async ({page}) => {
+test('a filter button toggles in place, pressed while its filter is set, without a chip', async ({page}) => {
     await page.goto(BUTTON_PAGE);
     const button = page.getByTestId('wb-filter-bar').getByRole('button', {name: BUTTON, exact: true});
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(button).toHaveAttribute('aria-pressed', 'false');
     await button.click();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
-    await expect(chips).toHaveCount(1);
-    await expect(chips.first()).toContainText(BUTTON);
+    await expect(chips).toHaveCount(0);
     await expect(page).toHaveURL(/[?&]sql=/);
 
     await page.reload();

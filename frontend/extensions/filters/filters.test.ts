@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
-// edited, removed), the buttons as toggles (buttonOf), a button's value asked for in an input box.
+// edited, removed), the buttons as toggles in place (buttonOf), without a chip of their own, a button's value asked
+// for in an input box and shown on it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
@@ -71,7 +72,9 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((b) => b.textContent === title)!;
+/** The filter button `title`; a pressed `...` one reads `<title>: <values>`. */
+const button = (title: string) =>
+  [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((b) => b.textContent === title || b.textContent?.startsWith(`${title}: `))!;
 const funnel = () => topBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
 const editor = () => bar.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-testid=filter-chip-editor] textarea, [data-testid=filter-chip-editor] input');
 const chips = () => [...bar.querySelectorAll<HTMLElement>('[data-testid=filter-chip]')];
@@ -101,13 +104,29 @@ describe('buttonOf', () => {
 });
 
 describe('filters', () => {
-  it('adds a filter button’s condition as a SQL chip labelled by the button, and shows the button pressed', () => {
+  it('adds a filter button’s condition as a SQL filter and shows the button pressed, with no chip for it', () => {
     expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
     button('Errors').click();
     expect(query.filters.chips).toEqual([{ kind: 'sql', sql: 'status >= 500' }]);
-    expect(chips().map(chipText)).toEqual(['Errors']);
-    expect(chips()[0].title).toBe('status >= 500');
+    expect(chips()).toEqual([]);
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
+    expect(button('Errors').title).toBe('status >= 500');
+  });
+
+  it('keeps the chips of other filters in their order, a button’s condition among them', () => {
+    query.load({ search: `?sql=a&sql=status+%3E%3D+500&f=${keyOf('host = a')}` });
+    expect(chips().map(chipText)).toEqual(['SQL: a', 'host = a']);
+    chips()[1].querySelector<HTMLButtonElement>('button[aria-label="Remove host = a"]')!.click();
+    expect(query.filters.chips).toEqual([
+      { kind: 'sql', sql: 'a' },
+      { kind: 'sql', sql: 'status >= 500' },
+    ]);
+  });
+
+  it('shows a button’s condition as a SQL chip on a page without that button', () => {
+    query.load({ search: '?sql=status+%3E%3D+500' });
+    show({ ...shop, title: 'Checkout', filterButtons: [] });
+    expect(chips().map(chipText)).toEqual(['SQL: status >= 500']);
   });
 
   it('removes the chip of a pressed button when it is pressed again', () => {
@@ -122,18 +141,19 @@ describe('filters', () => {
     query.load({ search: `?sql=path+LIKE+%27%2Fa%25%27&f=${keyOf('host = a')}&sql=path+LIKE+%27%2Fb%25%27` });
     let changes = 0;
     query.filters.onDidChange(() => changes++);
+    expect(button('Path').textContent).toBe('Path: /a, /b');
     button('Path').click();
     expect(query.filters.chips).toEqual([chipOf('host = a')]);
     expect(changes).toBe(1);
   });
 
-  it('asks for the value of a `...` in a condition in an input box below the button; nothing when the viewer cancels', async () => {
+  it('asks for the value of a `...` in a condition in an input box below the button, shown on it; nothing when the viewer cancels', async () => {
     answer = '/api/';
     const pressed = button('Path');
     pressed.click();
     await vi.waitFor(() => expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '/api/%'" }]));
     expect(asked).toEqual([{ title: 'Parameter value', prompt: "Path: path LIKE '...%'", anchor: pressed }]);
-    expect(chips().map(chipText)).toEqual(['Path: /api/']);
+    expect([button('Path').textContent, button('Path').getAttribute('aria-pressed'), chips()]).toEqual(['Path: /api/', 'true', []]);
     query.filters.clear();
     answer = undefined;
     button('Path').click();
@@ -194,16 +214,6 @@ describe('filters', () => {
     expect(editor()).toBeNull();
     expect(chips()[0].querySelector('.d-filter-chip__op, .d-filter-chip__label')).toBeNull();
     expect(chips()[0].classList).toContain('d-filter-chip--pill');
-  });
-
-  it('edits a filter button’s chip into other SQL, the button released', () => {
-    button('Errors').click();
-    chips()[0].querySelector<HTMLElement>('.d-filter-chip__label')!.click();
-    expect(editor()!.value).toBe('status >= 500');
-    type('status >= 400');
-    key(editor()!, 'Enter');
-    expect(chips().map(chipText)).toEqual(['SQL: status >= 400']);
-    expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('has no filter bar on a page without filter buttons until the funnel adds a SQL chip', () => {

@@ -17,7 +17,7 @@
   gap: var(--space-2);
 }
 
-/* a chip: `SQL:` (or a filter button's title) and its text, or a pill's label; and a × that removes it */
+/* a chip: `SQL:` and its text, or a pill's label; and a × that removes it */
 .d-filter-chip {
   display: inline-flex;
   align-items: center;
