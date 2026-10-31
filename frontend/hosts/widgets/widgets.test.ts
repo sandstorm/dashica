@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { TIME_STATE, timeState } from '../../extensions/time-library/time-state';
+import { TIME_STATE, presetRange, timeState, type TimeRange } from '../../extensions/time-library/time-state';
 import { QueryHost } from '../query/query';
 import { WidgetsHost, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
@@ -88,13 +88,13 @@ describe('WidgetsHost', () => {
     });
 
     it('queries the widget’s handler with the page’s query state, and reads what the server says in the headers', async () => {
-      testbed.query.filters.add('status >= 500');
+      testbed.query.state<TimeRange>(TIME_STATE)!.set(presetRange('1h'));
       testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Bucket-Size': '900000', 'X-Dashica-Resolved-Time-Range': '{"from":1,"to":2}' });
       const result = await ctx.query();
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);
       expect(result.dashicaBucketSize).toBe(900000);
       expect(result.dashicaResolvedTimeRange).toEqual({ from: 1, to: 2 });
-      expect(testbed.requests[0].searchParams.get('sql')).toBe('status >= 500');
+      expect(testbed.requests[0].searchParams.get('time')).toBe('1h');
     });
 
     it('reads the chart’s diagnostics, empty without the header', async () => {
@@ -109,13 +109,6 @@ describe('WidgetsHost', () => {
       const result = await ctx.query();
       expect(result.numRows).toBe(0);
       expect(result.dashicaDiagnostics).toEqual({ skipped: 'pick a host' });
-    });
-
-    it('sends the page’s pills with the next query, their keys', async () => {
-      testbed.query.filters.add({ key: 'k1.mac' });
-      testbed.serve('/p/shop/api/1/query', { cnt: [3] });
-      await ctx.query();
-      expect(testbed.requests[0].searchParams.getAll('f')).toEqual(['k1.mac']);
     });
 
     it('rejects with the server’s message', async () => {

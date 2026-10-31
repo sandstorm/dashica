@@ -1,5 +1,5 @@
 // See pillLabel, pillButton and pillField.
-import type { FilterOp } from '../../hosts/query/query';
+import type { FilterOp } from './chips';
 
 /** What a field's pill filters (`pillField`): the rows of `table` where `field` shows `value` (`eq`) or does not (`ne`). */
 export interface PillField {

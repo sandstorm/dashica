@@ -12,15 +12,15 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
  * they clear rows that were ticked. The press on a checkbox makes the table active, as any press in a widget does.
  * A click on a cell offers to filter by its value or exclude it (by its column's name; the command `filters.offer`).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
- * page's SQL filter, only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`); a column header's
- * (`table/header`) size the columns.
+ * page's SQL filter (the command `filters.addSql`), only while the server takes SQL chips (`workbench.json`'s
+ * `sqlEnabled`); a column header's (`table/header`) size the columns.
  */
 export const table: Extension = {
   id: 'table',
-  activate: ({ widgets, commands, ui, query, page, subscriptions }) => {
+  activate: ({ widgets, commands, ui, page, subscriptions }) => {
     subscriptions.push(widgets.registerWidget('table', (el, widget, ctx) => renderTable(el, widget, ctx, commands)));
     for (const [order, filter] of page.workbench.sqlEnabled ? CELL_FILTERS.entries() : []) {
-      subscriptions.push(commands.registerCommand(filter.command, (cell: TableCellMenuContext) => query.filters.add(filter.condition(cell))));
+      subscriptions.push(commands.registerCommand(filter.command, (cell: TableCellMenuContext) => commands.executeCommand(ADD_SQL, filter.condition(cell))));
       subscriptions.push(ui.registerMenuItem<TableCellMenuContext>('table/cell', { command: filter.command, title: filter.title, when: filter.when, order }));
     }
     subscriptions.push(
@@ -31,6 +31,9 @@ export const table: Extension = {
     );
   },
 };
+
+/** The command a cell's SQL filter runs with its condition, which adds it as a SQL chip (the `filters` extension's). */
+const ADD_SQL = 'filters.addSql';
 
 /** The command a table runs with `{ widget, records }` on each change of its ticked rows (the `details` extension's). */
 const SHOW_RECORDS = 'details.showRecords';

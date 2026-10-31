@@ -121,7 +121,7 @@ const serve = (result: string) => (url: URL) => {
 beforeEach(() => {
   query = new QueryHost();
   query.registerState(TIME_STATE, timeState);
-  query.load({ search: '?time=1h&f=host:eq:a' });
+  query.load({ search: '?time=1h' });
   tables = [];
   schema = { time: 'datetime', status: 'integer', host: 'string', requests: 'integer' };
   failRestoreOf = undefined;
@@ -188,7 +188,7 @@ describe('renderExploreView', () => {
   it('fetches the chart’s result with the page’s query state', async () => {
     open();
     await settle();
-    expect(requests).toContain('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa');
+    expect(requests).toContain('/p/shop/api/3/rows?time=1h');
     expect(tables.map((t) => t.data)).toEqual(['rows-1']);
     expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: Requests');
     expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('3 rows of the chart’s result');
@@ -270,7 +270,7 @@ describe('renderExploreView', () => {
     answer = serve('rows-2');
     query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
     await settle();
-    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?time=3h&f=host%3Aeq%3Aa');
+    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?time=3h');
     expect(tables).toHaveLength(1);
     expect(tables[0].replaced).toEqual(['rows-2']);
     expect(viewer.restored).toHaveLength(1);
@@ -321,7 +321,7 @@ describe('renderExploreView', () => {
     expect(button.hidden).toBe(false);
     expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(find('explore-view-sql-panel').hidden).toBe(false);
-    expect(requests).toEqual(['/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa', '/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa']);
+    expect(requests).toEqual(['/p/shop/api/3/sql?time=1h', '/p/shop/api/3/rows?time=1h']);
     expect(sqlText().value).toBe('SELECT time=1h');
     query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
     await settle();
@@ -340,7 +340,7 @@ describe('renderExploreView', () => {
     const asked = requests.length;
     query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
     await settle();
-    expect(requests.slice(asked)).toEqual(['/p/shop/api/3/rows?time=3h&f=host%3Aeq%3Aa']);
+    expect(requests.slice(asked)).toEqual(['/p/shop/api/3/rows?time=3h']);
     button.click();
     await settle();
     expect(find('explore-view-sql-panel').hidden).toBe(false);
@@ -380,7 +380,7 @@ describe('renderExploreView', () => {
     find<HTMLButtonElement>('explore-view-sql-reset').click();
     await settle();
     expect(navigations.at(-1)).toBe('#explore=3');
-    expect(requests.slice(-2).sort()).toEqual(['/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa', '/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa']);
+    expect(requests.slice(-2).sort()).toEqual(['/p/shop/api/3/rows?time=1h', '/p/shop/api/3/sql?time=1h']);
     expect(tables.at(-1)!.data).toBe('rows-1');
     expect(sqlText().value).toBe('SELECT time=1h');
     expect(find('explore-view-edited').hidden).toBe(true);

@@ -9,7 +9,6 @@ import type { PageJson } from '../../generated/zz_generated.dashica';
  * `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
 export interface QueryApi {
-  readonly filters: FiltersModel;
   readonly params: ParamsModel;
   /**
    * Keeps the state `id` in the URL's keys `spec.keys` of every tab until disposed; one registration per id, and a key
@@ -64,52 +63,6 @@ export interface QueryStateSpec<T> {
 
 /** Entries of a query string, in order (`[['f', '<key>'], ['sql', 'a > 1']]`). */
 export type QueryEntries = readonly (readonly [string, string])[];
-
-export interface FiltersModel {
-  /** The chips, in the order they were added, as the URL holds them (`?f=<key>&sql=status >= 500`). */
-  readonly chips: readonly FilterChip[];
-  /** Adds the SQL chip `condition` ("Filter: Contains this value" in a table); once, when it is there already. */
-  add(condition: string): void;
-  /** Adds the pill `pill` (as a widget's `/pill` answered it, or a filter button's); once, when its key is there already. */
-  add(pill: Pill): void;
-  /**
-   * Puts `chip` in place of the chip at `index` (an edit); a SQL chip of only spaces removes it, and so does a chip
-   * that is there already (once in the URL, as `add` keeps it).
-   */
-  replace(index: number, chip: FilterChip): void;
-  /** Removes the chip at index `which` of `chips`, or every chip `which` holds for (a released filter button's), in one change. */
-  remove(which: number | ((chip: FilterChip) => boolean)): void;
-  /** Removes every chip. */
-  clear(): void;
-  readonly onDidChange: Event<void>;
-}
-
-/** `eq`: the field equals `value` (Filter by …); `ne`: it differs (Exclude …). */
-export type FilterOp = 'eq' | 'ne';
-
-/** A chip of the filter bar: a pill (`?f=`), or a SQL condition every query of the page adds to its WHERE (`?sql=`). */
-export type FilterChip = PillFilter | SqlFilter;
-
-/**
- * A pill: a condition on a table that the server wrote from a widget's field and signed (`<dataUrl>/pill`); every
- * chart on that table applies it, the others say they ignore it. Or a filter button's condition, signed the same
- * (`page.json`'s `key`, or `<page>/button`), which every query that takes filters applies. The client only keeps and
- * sends its key; what the key says of itself (its label, field or button) is the filters extension's to read.
- */
-export interface Pill {
-  /** What the URL holds (`?f=<key>`): the signed pill. */
-  readonly key: string;
-}
-
-export interface PillFilter extends Pill {
-  readonly kind: 'pill';
-}
-
-/** A SQL condition (`duration > 2000`); several AND together, each in its own parentheses. */
-export interface SqlFilter {
-  readonly kind: 'sql';
-  readonly sql: string;
-}
 
 /** The values of the page's form widgets by name, sent to ClickHouse as query parameters (`{path:String}`). */
 export interface ParamsModel {

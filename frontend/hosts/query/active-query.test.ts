@@ -30,11 +30,10 @@ beforeEach(() => {
   source = { activeQuery: shop, onDidChangeTabs: tabsChanged.event };
   query = activeQuery(source);
   colors = query.registerState('colors', colorsSpec);
-  shop.load({ search: '?colors=red&f=pill-host-a' });
+  shop.load({ search: '?colors=red' });
   checkout.load({ search: '?colors=blue' });
   events = [];
   colors.onDidChange(() => events.push(`colors ${colors.get()}`));
-  query.filters.onDidChange(() => events.push('filters'));
   query.params.onDidChange(() => events.push('params'));
   query.onDidRequestRefresh(() => events.push('refresh'));
 });
@@ -53,19 +52,12 @@ const switchTo = (tab: QueryHost) => {
 describe('activeQuery', () => {
   it('reads and changes the active tab’s state', () => {
     expect(colors.get()).toBe('red');
-    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'pill-host-a' }]);
-    query.filters.add({ key: 'pill-status-500' });
-    query.filters.add('path LIKE \'/api%\'');
-    query.filters.replace(0, { kind: 'pill', key: 'pill-host-not-a' });
+    colors.set('green');
     query.params.set('path', '/x');
-    expect(shop.filters.chips).toEqual([
-      { kind: 'pill', key: 'pill-host-not-a' },
-      { kind: 'pill', key: 'pill-status-500' },
-      { kind: 'sql', sql: "path LIKE '/api%'" },
-    ]);
+    expect(shop.state('colors')?.get()).toBe('green');
     expect(shop.params.values).toEqual({ path: '/x' });
-    expect(query.requestParams().get('colors')).toBe('red');
-    expect(checkout.filters.chips).toEqual([]);
+    expect(query.requestParams().get('colors')).toBe('green');
+    expect(checkout.state('colors')?.get()).toBe('blue');
   });
 
   it('forwards the active tab’s events, and none of another tab', () => {
@@ -76,11 +68,11 @@ describe('activeQuery', () => {
 
   it('fires each model’s change once on a switch, no refresh, then follows the tab shown', () => {
     switchTo(checkout);
-    expect(events).toEqual(['filters', 'params', 'colors blue']);
+    expect(events).toEqual(['params', 'colors blue']);
     events = [];
     shop.state<string>('colors')!.set('green');
-    checkout.filters.add('status >= 500');
-    expect(events).toEqual(['filters', 'refresh']);
+    checkout.params.set('path', '/x');
+    expect(events).toEqual(['params', 'refresh']);
     colors.set('black');
     expect(checkout.state('colors')?.get()).toBe('black');
     expect(shop.state('colors')?.get()).toBe('green');

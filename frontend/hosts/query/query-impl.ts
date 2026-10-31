@@ -2,7 +2,7 @@
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import { Disposable } from '../../core/disposable/disposable';
 import type { PageJson } from '../../generated/zz_generated.dashica';
-import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, QueryEntries, QueryState, QueryStateSpec } from './query';
+import type { ParamsModel, QueryApi, QueryEntries, QueryState, QueryStateSpec } from './query';
 
 /**
  * The states registered for every tab (`QueryApi.registerState`), in the order registered: the tabs' query hosts share
@@ -35,7 +35,6 @@ export class QueryStates {
  * `onDidChangeSearch` gives the query string of the state after a change, which the tab puts into its URL.
  */
 export class QueryHost implements QueryApi {
-  readonly filters: FiltersState;
   readonly params: ParamsState;
   readonly #onDidRequestRefresh = new EventEmitter<void>();
   readonly onDidRequestRefresh = this.#onDidRequestRefresh.event;
@@ -56,7 +55,6 @@ export class QueryHost implements QueryApi {
       this.#writeSearchSoon();
       this.refresh();
     };
-    this.filters = new FiltersState(changed);
     this.params = new ParamsState(changed);
   }
 
@@ -70,10 +68,8 @@ export class QueryHost implements QueryApi {
     this.#page = page;
     const state = parseSearch(search);
     this.#search = search;
-    this.filters.load(state.chips);
     this.params.load(state.params);
     for (const held of this.#values.values()) held.known = false;
-    this.filters.fire();
     this.params.fire();
     for (const held of this.#values.values()) held.changed.fire();
     this.refresh();
@@ -105,7 +101,6 @@ export class QueryHost implements QueryApi {
     for (const [id, spec] of this.states.entries()) {
       if (spec.request) for (const [key, value] of spec.request(this.#get(id))) request.append(key, value);
     }
-    appendChips(request, this.filters.chips);
     if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
     return request;
   }
@@ -115,7 +110,6 @@ export class QueryHost implements QueryApi {
     this.#onDidRequestRefresh.dispose();
     this.#onDidChangeSearch.dispose();
     for (const held of this.#values.values()) held.changed.dispose();
-    this.filters.dispose();
     this.params.dispose();
   }
 
@@ -159,7 +153,6 @@ export class QueryHost implements QueryApi {
     clearTimeout(this.#searchWrite);
     this.#searchWrite = setTimeout(() => {
       const state: SearchState = {
-        chips: this.filters.chips,
         params: this.params.values,
       };
       const search = this.#formatSearch(state, (id) => this.#get(id));
@@ -185,35 +178,22 @@ function sameEntries(a: QueryEntries, b: QueryEntries): boolean {
   return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && value === b[i][1]);
 }
 
-/** What a query string (`?f=<key>&sql=…&wp=…`) says about the filters and the params. */
+/** What a query string (`?wp=…`) says about the params. */
 export interface SearchState {
-  /** The filter chips, in the order of their `f` and `sql`. */
-  readonly chips: readonly FilterChip[];
   readonly params: Readonly<Record<string, string>>;
 }
 
-/**
- * The filters and params `search` holds. Each `f` and `sql` is one chip, in their order; an empty `f`, an `sql` of only
- * spaces and a `wp` that is no JSON object of strings are left out. An `f` is kept as it is, whatever it holds: the
- * server checks its signature.
- */
+/** The params `search` holds; a `wp` that is no JSON object of strings is none. */
 export function parseSearch(search: string): SearchState {
   const url = new URLSearchParams(search);
   return {
-    chips: [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),
     params: parseParams(url.get('wp')),
   };
 }
 
-/**
- * The query string of `state` (`?sql=a&wp=…`, '' for none), its other keys taken from `search`; what is the default
- * (no filter, no param) is left out.
- */
+/** The query string of `state` (`?wp=…`, '' for none), its other keys taken from `search`; no param is left out. */
 export function formatSearch(state: SearchState, search = ''): string {
   const url = new URLSearchParams(search);
-  url.delete('sql');
-  url.delete('f');
-  appendChips(url, state.chips);
   if (Object.keys(state.params).length > 0) url.set('wp', JSON.stringify(state.params));
   else url.delete('wp');
   const text = url.toString();
@@ -225,74 +205,6 @@ const SEARCH_WRITE_DELAY_MS = 200;
 
 class Model extends EventEmitter<void> {
   readonly onDidChange = this.event;
-}
-
-class FiltersState extends Model implements FiltersModel {
-  chips: readonly FilterChip[] = [];
-
-  constructor(private readonly changed: () => void) {
-    super();
-  }
-
-  load(chips: readonly FilterChip[]): void {
-    this.chips = chips;
-  }
-
-  add(condition: string): void;
-  add(pill: Pill): void;
-  add(conditionOrPill: string | Pill): void {
-    const added: FilterChip =
-      typeof conditionOrPill === 'string' ? { kind: 'sql', sql: conditionOrPill } : { kind: 'pill', key: conditionOrPill.key };
-    if (isEmpty(added) || this.chips.some((chip) => sameChip(chip, added))) return;
-    this.#setChips([...this.chips, added]);
-  }
-
-  replace(index: number, chip: FilterChip): void {
-    if (index < 0 || index >= this.chips.length || sameChip(this.chips[index], chip)) return;
-    // an edit that makes a chip another one already is (`host = a` switched to the `host ≠ a` beside it) removes it
-    const removed = isEmpty(chip) || this.chips.some((old) => sameChip(old, chip));
-    this.#setChips(removed ? this.chips.filter((_, i) => i !== index) : this.chips.map((old, i) => (i === index ? chip : old)));
-  }
-
-  remove(which: number | ((chip: FilterChip) => boolean)): void {
-    const kept = this.chips.filter((chip, i) => (typeof which === 'number' ? i !== which : !which(chip)));
-    if (kept.length < this.chips.length) this.#setChips(kept);
-  }
-
-  clear(): void {
-    if (this.chips.length > 0) this.#setChips([]);
-  }
-
-  #setChips(chips: readonly FilterChip[]): void {
-    this.chips = chips;
-    this.fire();
-    this.changed();
-  }
-}
-
-function sameChip(a: FilterChip, b: FilterChip): boolean {
-  if (a.kind === 'sql') return b.kind === 'sql' && a.sql === b.sql;
-  return b.kind === 'pill' && a.key === b.key;
-}
-
-/** A SQL chip of only spaces: it filters nothing, the server leaves it out. */
-function isEmpty(chip: FilterChip): boolean {
-  return chip.kind === 'sql' && chip.sql.trim() === '';
-}
-
-/** Appends each of `chips` to `url` in order, an `f` or an `sql`. */
-function appendChips(url: URLSearchParams, chips: readonly FilterChip[]): void {
-  for (const chip of chips) {
-    if (chip.kind === 'sql') url.append('sql', chip.sql);
-    else url.append('f', chip.key);
-  }
-}
-
-/** The chip of the URL's entry `key`=`value`; `undefined` for another key, an empty `f`, an `sql` of only spaces. */
-function parseChip(key: string, value: string): FilterChip | undefined {
-  if (key === 'f' && value !== '') return { kind: 'pill', key: value };
-  if (key === 'sql' && value.trim() !== '') return { kind: 'sql', sql: value };
-  return undefined;
 }
 
 class ParamsState extends Model implements ParamsModel {

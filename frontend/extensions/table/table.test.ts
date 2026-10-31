@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell of a
 // category column running filters.offer with its value and the table's pills, a cell's menu (`table/cell`) adding a
-// condition to the page's SQL filter (none while SQL filters are off), a column header's (`table/header`) sizing the
+// condition to the page's SQL filter by `filters.addSql` (none while SQL filters are off), a column header's (`table/header`) sizing the
 // columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,9 +9,13 @@ import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { table } from './table';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The conditions a cell's SQL filter added through `filters.addSql`, the filters extension's, in order. */
+let addedSql: string[];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  addedSql = [];
+  testbed.commands.registerCommand('filters.addSql', (condition: string) => void addedSql.push(condition));
   testbed.activate(table);
   // Tabulator draws only the rows that fit its height, and jsdom lays out nothing; CSS: the search highlight
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(500);
@@ -163,7 +167,7 @@ describe('table', () => {
     const time = unfiltering(openCellMenu(el, 'timestamp', 0));
     expect(labels(time)).toEqual(['Filter: Equals this timestamp', 'Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
     await click(time, 'Filter: Time ±1 hour');
-    expect(testbed.query.filters.chips).toEqual([{ kind: 'sql', sql: 'timestamp BETWEEN 1761726400 AND 1761733600' }]);
+    expect(addedSql).toEqual(['timestamp BETWEEN 1761726400 AND 1761733600']);
   });
 
   it('shows table/header from a column header’s menu button; its entries size the columns', async () => {
@@ -188,7 +192,7 @@ describe('table', () => {
 
     await click(openCellMenu(el, 'path', 0), 'Filter: Contains this value');
 
-    expect(testbed.query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '%/api%'" }]);
+    expect(addedSql).toEqual(["path LIKE '%/api%'"]);
   });
 
   it('has no SQL entries in a cell’s menu while SQL filters are off', async () => {

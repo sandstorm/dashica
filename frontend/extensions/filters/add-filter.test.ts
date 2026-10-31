@@ -4,7 +4,8 @@
 // the value's quick pick asking the server as the text changes (pickValue), and the request of /values (fetchValues).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { QueryHost } from '../../hosts/query/query';
+import { QueryHost, type QueryState } from '../../hosts/query/query';
+import { FILTERS_STATE, chipsState, type FilterChip } from './chips';
 import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
 import { addFilter, fetchValues, fieldSource, filterableTables, pickValue } from './add-filter';
@@ -22,6 +23,7 @@ let host: HTMLElement;
 let anchor: HTMLButtonElement;
 let quickInput: QuickInput;
 let query: QueryHost;
+let chips: QueryState<readonly FilterChip[]>;
 /** The URLs fetched, and what `/values` answers (by `search`). */
 let fetched: URL[];
 let values: (search: string) => string[];
@@ -42,6 +44,7 @@ async function pick(...labels: string[]): Promise<void> {
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
+  chips = query.registerState(FILTERS_STATE, chipsState);
   query.registerState(TIME_STATE, timeState);
   query.load();
   host = document.body.appendChild(document.createElement('div'));
@@ -94,7 +97,7 @@ describe('addFilter', () => {
   it('asks table, field, operator and value, and adds the pill of the field’s chart', async () => {
     values = (search) => ['admin', 'login'].filter((v) => v.includes(search));
     query.state<TimeRange>(TIME_STATE)!.set(presetRange('1h'));
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor);
+    const done = addFilter(quickInput, query, chips, filterableTables([byHost, audit]), anchor);
 
     await pick('default.http_logs default', 'audit logs');
     await pick('host', 'status');
@@ -102,14 +105,14 @@ describe('addFilter', () => {
     await pick('admin', 'login');
     await done;
 
-    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'key:host:eq:admin' }]);
+    expect(chips.get()).toEqual([{ kind: 'pill', key: 'key:host:eq:admin' }]);
     const asked = fetched.find((url) => url.pathname === '/p/shop/api/1/values')!;
     expect([asked.searchParams.get('field'), asked.searchParams.get('search'), asked.searchParams.get('time')]).toEqual(['host', '', '1h']);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');
   });
 
   it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor);
+    void addFilter(quickInput, query, chips, filterableTables([audit]), anchor);
 
     await pick('action');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -118,14 +121,14 @@ describe('addFilter', () => {
   });
 
   it('asks no table when the page has one, and adds nothing on Escape', async () => {
-    const done = addFilter(quickInput, query, filterableTables([audit]), anchor);
+    const done = addFilter(quickInput, query, chips, filterableTables([audit]), anchor);
 
     await pick('action');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await done;
 
-    expect(query.filters.chips).toEqual([]);
+    expect(chips.get()).toEqual([]);
   });
 });
 

@@ -3,16 +3,18 @@ import { Filter, ListFilterPlus, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { FilterChip, FilterOp, Pill, PillFilter, QueryApi, SqlFilter } from '../../hosts/query/query';
+import type { QueryApi, QueryState } from '../../hosts/query/query';
 import type { MenuAnchor, UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
+import { FILTERS_STATE, addChip, chipsState, removeChips, replaceChip, type FilterChip, type FilterOp, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { addFilter, fetchValues, fieldSource, filterableTables, pickValue, type FilterableTable } from './add-filter';
 import { fetchPill, offerFilters } from './offer';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
 import './filters.css';
 
 /**
- * The filters of a page that has them (`page.json`'s `filterBar`): the filter bar shows one chip per filter, a pill
+ * The filters of a page, kept in its tab's query state `filters` (`chipsState`: `?f=<key>&sql=…`), and the filter
+ * bar of a page that has one (`page.json`'s `filterBar`): it shows one chip per filter, a pill
  * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
  * SQL chip's text edits it. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
  * switches `=` / `≠`, one on its value asks a new one (as "Add filter" does); each edit asks a chart of the page on the
@@ -26,16 +28,21 @@ import './filters.css';
  * tables the page's charts filter (`addFilter`), while there is one. The bar shows while it has a chip, a button or
  * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
  * runs the command `filters.offer` (`(at, candidates, { dataUrl, filterable })`): its quick pick adds the pill chosen to
- * the tab shown (`offerFilters`).
+ * the tab shown (`offerFilters`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
+ * condition as a SQL chip.
  */
 export const filters: Extension = {
   id: 'filters',
   activate({ ui, page, query, commands, subscriptions }) {
     const { sqlEnabled } = page.workbench;
+    const chips = query.registerState(FILTERS_STATE, chipsState);
+    subscriptions.push(chips);
     subscriptions.push(
       commands.registerCommand('filters.offer', (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
-        offerFilters(ui, query, at, candidates, source),
+        offerFilters(ui, chips, at, candidates, source),
       ),
+      // a table cell's SQL filters ("Filter: Contains this value")
+      commands.registerCommand('filters.addSql', (condition: string) => chips.set(addChip(chips.get(), { kind: 'sql', sql: condition }))),
     );
     let button: Disposable | undefined;
     let bar: Disposable | undefined;
@@ -48,7 +55,7 @@ export const filters: Extension = {
       }
       filterBar.focusEditor();
     };
-    const filterBar = new FilterBar(query, ui, sqlEnabled, showBar);
+    const filterBar = new FilterBar(query, chips, ui, sqlEnabled, showBar);
     const showForPage = () => {
       button?.dispose();
       button = undefined;
@@ -58,7 +65,7 @@ export const filters: Extension = {
     };
     subscriptions.push(page.onDidChangePage(showForPage));
     subscriptions.push(
-      query.filters.onDidChange(() => {
+      chips.onDidChange(() => {
         filterBar.show();
         showBar();
       }),
@@ -96,7 +103,7 @@ const OP_SIGNS: Readonly<Record<FilterOp, string>> = { eq: '=', ne: '≠' };
 type Editing = number | 'new' | undefined;
 
 /**
- * The funnel button (`toggle`) and the filter bar's content (`el`): the chips of `query`, "Add filter" for the page's
+ * The funnel button (`toggle`) and the filter bar's content (`el`): `chips`, "Add filter" for the page's
  * filterable tables and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only while
  * `sqlEnabled`. `onDidChangeWanted` is called when an edit starts (the funnel's new SQL chip
  * among them) or ends without a change of the chips.
@@ -121,7 +128,9 @@ class FilterBar {
   #editor: HTMLElement | undefined;
 
   constructor(
-    private readonly query: QueryApi,
+    /** The state the values of "Add filter" and of a pill's edit are asked for in. */
+    private readonly query: Pick<QueryApi, 'requestParams'>,
+    private readonly chips: QueryState<readonly FilterChip[]>,
     /** Asks for the value of a button's `...`, and "Add filter"'s table, field, operator and value. */
     private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
     /** The server takes SQL chips (filters.sqlEnabled). */
@@ -129,12 +138,12 @@ class FilterBar {
     private readonly onDidChangeWanted: () => void,
   ) {
     this.toggle.addEventListener('click', () => this.#edit('new'));
-    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add));
+    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.chips, this.#tables, this.#add));
   }
 
   /** Whether the filter bar has something to show: a chip, the page's buttons, "Add filter", or the SQL chip being added. */
   get wanted(): boolean {
-    return this.query.filters.chips.length > 0 || this.#pageButtons.length > 0 || this.#tables.length > 0 || this.#editing === 'new';
+    return this.chips.get().length > 0 || this.#pageButtons.length > 0 || this.#tables.length > 0 || this.#editing === 'new';
   }
 
   /** The page's filter buttons, and the tables its charts filter ("Add filter"). */
@@ -158,7 +167,7 @@ class FilterBar {
   }
 
   #draw(): void {
-    const chips = this.query.filters.chips;
+    const chips = this.chips.get();
     this.#editor = undefined;
     // a button's pill shows as the button pressed, not as a chip
     const ofButton = chips.map((chip) => buttonOf(chip, this.#pageButtons));
@@ -217,7 +226,7 @@ class FilterBar {
         class="d-filter-chip__remove"
         title=${`Remove ${whole}`}
         aria-label=${`Remove ${whole}`}
-        onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
+        onclick=${() => this.#remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
     </span>`;
   }
 
@@ -246,7 +255,7 @@ class FilterBar {
         class="d-filter-chip__remove"
         title=${`Remove ${label}`}
         aria-label=${`Remove ${label}`}
-        onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
+        onclick=${() => this.#remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
     </span>`;
   }
 
@@ -265,7 +274,7 @@ class FilterBar {
   async #remake(chip: PillFilter, index: number, source: PillSource, { field, op, value }: PillField): Promise<void> {
     try {
       const pill = await fetchPill(source.dataUrl, { fieldId: field, op, value });
-      if (this.query.filters.chips[index] === chip) this.query.filters.replace(index, { kind: 'pill', ...pill });
+      if (this.chips.get()[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
     } catch (error) {
       console.error(`Filter ${field} ${OP_SIGNS[op]} ${value} failed:`, error);
     }
@@ -285,11 +294,11 @@ class FilterBar {
     const done = (apply: boolean) => {
       if (this.#editing !== index) return;
       this.#editing = undefined;
-      const before = this.query.filters.chips;
-      if (apply && index === 'new') this.query.filters.add(field.value);
-      else if (apply && typeof index === 'number') this.query.filters.replace(index, { kind: 'sql', sql: field.value });
+      const before = this.chips.get();
+      if (apply && index === 'new') this.chips.set(addChip(before, { kind: 'sql', sql: field.value }));
+      else if (apply && typeof index === 'number') this.#replace(index, { kind: 'sql', sql: field.value });
       // the chips did not change (cancelled, empty, the same again), so no `onDidChange` draws them
-      if (this.query.filters.chips === before) {
+      if (this.chips.get() === before) {
         this.#draw();
         this.onDidChangeWanted();
       }
@@ -319,10 +328,10 @@ class FilterBar {
    */
   async #press(button: FilterButton, el: HTMLElement, index?: number): Promise<void> {
     if (!button.url) {
-      if (button.key) this.query.filters.add({ key: button.key });
+      if (button.key) this.chips.set(addChip(this.chips.get(), { kind: 'pill', key: button.key }));
       return;
     }
-    const shown = index === undefined ? undefined : this.query.filters.chips[index];
+    const shown = index === undefined ? undefined : this.chips.get()[index];
     const value = await this.ui.showInputBox({
       title: 'Parameter value',
       prompt: `${button.title}: ${button.queryPart}`,
@@ -332,8 +341,8 @@ class FilterBar {
     if (!value) return;
     try {
       const pill = await fetchButtonPill(button.url, value);
-      if (index === undefined) this.query.filters.add(pill);
-      else if (this.query.filters.chips[index] === shown) this.query.filters.replace(index, { kind: 'pill', ...pill });
+      if (index === undefined) this.chips.set(addChip(this.chips.get(), { kind: 'pill', ...pill }));
+      else if (this.chips.get()[index] === shown) this.#replace(index, { kind: 'pill', ...pill });
     } catch (error) {
       console.error(`Filter button ${button.title} failed:`, error);
     }
@@ -341,6 +350,14 @@ class FilterBar {
 
   /** Removes every pill of `button`, in one change. */
   #release(button: FilterButton): void {
-    this.query.filters.remove((chip) => buttonOf(chip, [button]) !== undefined);
+    this.#remove((chip) => buttonOf(chip, [button]) !== undefined);
+  }
+
+  #replace(index: number, chip: FilterChip): void {
+    this.chips.set(replaceChip(this.chips.get(), index, chip));
+  }
+
+  #remove(which: number | ((chip: FilterChip) => boolean)): void {
+    this.chips.set(removeChips(this.chips.get(), which));
   }
 }

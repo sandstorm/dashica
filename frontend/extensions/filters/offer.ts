@@ -1,20 +1,21 @@
 // See offerFilters.
 import { Filter, Minus, createElement } from 'lucide';
-import type { FilterOp, Pill, QueryApi } from '../../hosts/query/query';
+import type { QueryState } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickIcon, QuickPickItem, UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
+import { addChip, type FilterChip, type FilterOp, type Pill } from './chips';
 
 /**
  * The command `filters.offer` (docs/2026-10-28-workbench.md §3.8): a click on a chart's mark, a table's cell or an
  * Explore view's group row offers, in a quick pick "Filter" at `at`, to filter by each of `candidates` ("status = 500"
  * with a filter icon) or to exclude it (the same with a minus icon), in order, those of them whose field `source` names
- * `filterable`; choosing one asks `source`'s `/pill` for its pill and adds it to `query`'s filters (the active tab's:
- * the click happened in the tab shown). A failed answer adds none, it goes to the console. Nothing without such
+ * `filterable`; choosing one asks `source`'s `/pill` for its pill and adds it to `chips` (the active tab's: the click
+ * happened in the tab shown). A failed answer adds none, it goes to the console. Nothing without such
  * candidates.
  */
 export async function offerFilters(
   ui: Pick<UiApi, 'showQuickPick'>,
-  query: QueryApi,
+  chips: QueryState<readonly FilterChip[]>,
   at: MenuAnchor,
   candidates: readonly FilterCandidate[],
   source: PillSource,
@@ -24,7 +25,8 @@ export async function offerFilters(
   const picked = await ui.showQuickPick(items, { anchor: at, title: 'Filter' });
   if (!picked) return;
   try {
-    query.filters.add(await fetchPill(source.dataUrl, picked));
+    const { key } = await fetchPill(source.dataUrl, picked);
+    chips.set(addChip(chips.get(), { kind: 'pill', key }));
   } catch (error) {
     console.error(`Filter ${picked.fieldId} failed:`, error);
   }

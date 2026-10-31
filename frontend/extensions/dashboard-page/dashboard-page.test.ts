@@ -88,9 +88,8 @@ describe('dashboardPage', () => {
     const states: unknown[] = [];
     testbed.widgets.registerWidget('stats', (_el, _widget, ctx) => (states.push(ctx.state), { dispose() {} }));
     testbed.serveText('/p/stats/page.json', JSON.stringify({ ...shop, widgets: [{ type: 'stats', props: {}, dataUrl: '/p/stats/api/1' }] }));
-    const shown = await start('/p/stats?f=pill-host-a');
+    const shown = await start('/p/stats');
     expect(states).toEqual([shown.activeQuery]);
-    expect(shown.activeQuery.filters.chips).toEqual([{ kind: 'pill', key: 'pill-host-a' }]);
   });
 
   it('takes the widgets down with the page', async () => {

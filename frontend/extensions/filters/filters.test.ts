@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
-import { QueryHost, type FilterChip } from '../../hosts/query/query';
+import { QueryHost } from '../../hosts/query/query';
+import { FILTERS_STATE, addChip, replaceChip, type FilterChip } from './chips';
 import { buttonOf, filters } from './filters';
 
 let query: QueryHost;
@@ -60,6 +61,12 @@ let fetched: string[];
 /** The pill labelled `label`, as `/pill` answers it, and the chip it is. */
 const pill = (label: string) => ({ key: keyOf(label), label });
 const chipOf = (label: string) => ({ kind: 'pill', key: pill(label).key });
+
+/** The tab's filter chips, the query state the extension registered. */
+const state = () => query.state<readonly FilterChip[]>(FILTERS_STATE)!;
+const held = () => state().get();
+const addPill = ({ key }: { key: string }) => state().set(addChip(held(), { kind: 'pill', key }));
+const addSql = (sql: string) => state().set(addChip(held(), { kind: 'sql', sql }));
 
 /** Shows `shown` as the page; `undefined`: a tab without one (loading, or it could not be loaded). */
 function show(shown: PageJson | undefined): void {
@@ -149,7 +156,7 @@ describe('filters', () => {
   it('adds a filter button’s signed pill and shows the button pressed, with no chip for it', () => {
     expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
     button('Errors').click();
-    expect(query.filters.chips).toEqual([{ kind: 'pill', key: errorsKey }]);
+    expect(held()).toEqual([{ kind: 'pill', key: errorsKey }]);
     expect(chips()).toEqual([]);
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
     expect(button('Errors').title).toBe('status >= 500');
@@ -159,7 +166,7 @@ describe('filters', () => {
     query.load({ search: `?sql=a&f=${errorsKey}&f=${keyOf('host = a')}` });
     expect(chips().map(chipText)).toEqual(['SQL: a', 'host = a']);
     chips()[1].querySelector<HTMLButtonElement>('button[aria-label="Remove host = a"]')!.click();
-    expect(query.filters.chips).toEqual([
+    expect(held()).toEqual([
       { kind: 'sql', sql: 'a' },
       { kind: 'pill', key: errorsKey },
     ]);
@@ -180,17 +187,17 @@ describe('filters', () => {
     query.load({ search: `?f=${errorsKey}&f=${keyOf('host = a')}` });
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
     button('Errors').click();
-    expect(query.filters.chips).toEqual([chipOf('host = a')]);
+    expect(held()).toEqual([chipOf('host = a')]);
     expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('removes every chip of a released `...` button in one change: one history entry', () => {
     query.load({ search: `?f=${pathPill('/a').key}&f=${keyOf('host = a')}&f=${pathPill('/b').key}` });
     let changes = 0;
-    query.filters.onDidChange(() => changes++);
+    state().onDidChange(() => changes++);
     expect(values('Path').map((b) => b.textContent)).toEqual(['/a', '/b']);
     button('Path').click();
-    expect(query.filters.chips).toEqual([chipOf('host = a')]);
+    expect(held()).toEqual([chipOf('host = a')]);
     expect(changes).toBe(1);
   });
 
@@ -198,15 +205,15 @@ describe('filters', () => {
     answer = "O'Brien";
     const pressed = button('Path');
     pressed.click();
-    await vi.waitFor(() => expect(query.filters.chips).toEqual([pathChip("O'Brien")]));
+    await vi.waitFor(() => expect(held()).toEqual([pathChip("O'Brien")]));
     expect(fetched).toEqual([`/p/shop/button?i=1&value=O%27Brien`]);
     expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: undefined, anchor: pressed }]);
     expect([button('Path').getAttribute('aria-pressed'), values('Path').map((b) => b.textContent), chips()]).toEqual(['true', ["O'Brien"], []]);
-    query.filters.clear();
+    state().set([]);
     answer = undefined;
     button('Path').click();
     await Promise.resolve();
-    expect([query.filters.chips, asked.length, fetched.length]).toEqual([[], 2, 1]);
+    expect([held(), asked.length, fetched.length]).toEqual([[], 2, 1]);
   });
 
   it('asks a new value for a pressed `...` button on a click on its value, the old one shown, and puts its pill in the chip’s place', async () => {
@@ -214,7 +221,7 @@ describe('filters', () => {
     answer = '/b';
     const value = values('Path')[0];
     value.click();
-    await vi.waitFor(() => expect(query.filters.chips).toEqual([chipOf('host = a'), pathChip('/b'), chipOf('host = b')]));
+    await vi.waitFor(() => expect(held()).toEqual([chipOf('host = a'), pathChip('/b'), chipOf('host = b')]));
     expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: '/a', anchor: value }]);
   });
 
@@ -224,7 +231,7 @@ describe('filters', () => {
     answer = 'x';
     button('Path').click();
     await vi.waitFor(() => expect(logged).toHaveBeenCalled());
-    expect(query.filters.chips).toEqual([]);
+    expect(held()).toEqual([]);
     logged.mockRestore();
   });
 
@@ -240,14 +247,14 @@ describe('filters', () => {
     expect(document.activeElement).toBe(editor());
     type("method = 'POST'");
     key(editor()!, 'Enter');
-    expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "method = 'POST'" }]);
+    expect(held()).toEqual([{ kind: 'sql', sql: "method = 'POST'" }]);
     expect(editor()).toBeNull();
     funnel().click();
     type('status >= 500');
     key(editor()!, 'Escape');
     funnel().click();
     key(editor()!, 'Enter');
-    expect(query.filters.chips).toHaveLength(1);
+    expect(held()).toHaveLength(1);
     expect(editor()).toBeNull();
   });
 
@@ -255,7 +262,7 @@ describe('filters', () => {
     funnel().click();
     type('a');
     expect(key(editor()!, 'Enter', { shiftKey: true, cancelable: true })).toBe(true);
-    expect(query.filters.chips).toEqual([]);
+    expect(held()).toEqual([]);
   });
 
   it('edits a SQL chip in place: Enter or leaving the field applies, Escape cancels, an empty text removes it', () => {
@@ -264,19 +271,19 @@ describe('filters', () => {
     expect(editor()!.value).toBe('status >= 400');
     type('status >= 500');
     key(editor()!, 'Escape');
-    expect(query.filters.chips[1]).toEqual({ kind: 'sql', sql: 'status >= 400' });
+    expect(held()[1]).toEqual({ kind: 'sql', sql: 'status >= 400' });
     chips()[1].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
     type('status >= 300');
     editor()!.dispatchEvent(new Event('blur'));
-    expect(query.filters.chips[1]).toEqual({ kind: 'sql', sql: 'status >= 300' });
+    expect(held()[1]).toEqual({ kind: 'sql', sql: 'status >= 300' });
     chips()[1].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
     type('');
     key(editor()!, 'Enter');
-    expect(query.filters.chips).toEqual([chipOf('host = a')]);
+    expect(held()).toEqual([chipOf('host = a')]);
   });
 
   it('does not edit a pill without a field: its condition is the server’s', () => {
-    query.filters.add(pill('host = a'));
+    addPill(pill('host = a'));
     chips()[0].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
     expect(editor()).toBeNull();
     expect(chips()[0].querySelector('.d-filter-chip__op, .d-filter-chip__label, button.d-filter-chip__value')).toBeNull();
@@ -293,8 +300,8 @@ describe('filters', () => {
   });
 
   it('shows a chip per pill, its label', () => {
-    query.filters.add(pill('host = a'));
-    query.filters.add(pill('path ≠ /api'));
+    addPill(pill('host = a'));
+    addPill(pill('path ≠ /api'));
     expect(chips().map(chipText)).toEqual(['host = a', 'path ≠ /api']);
   });
 
@@ -305,21 +312,21 @@ describe('filters', () => {
   });
 
   it('removes a chip with its ×', () => {
-    query.filters.add(pill('host = a'));
-    query.filters.add('status >= 400');
-    query.filters.add(pill('host = b'));
+    addPill(pill('host = a'));
+    addSql('status >= 400');
+    addPill(pill('host = b'));
     chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove host = a"]')!.click();
     chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove status >= 400"]')!.click();
-    expect(query.filters.chips).toEqual([chipOf('host = b')]);
+    expect(held()).toEqual([chipOf('host = b')]);
     expect(chips().map(chipText)).toEqual(['host = b']);
   });
 
   it('shows the filter bar while there are chips, on a page without filter buttons', () => {
     show({ ...shop, title: 'Checkout', filterButtons: [] });
     expect(bar.children.length).toBe(0);
-    query.filters.add(pill('host = a'));
+    addPill(pill('host = a'));
     expect(bar.children.length).toBe(1);
-    query.filters.clear();
+    state().set([]);
     expect(bar.children.length).toBe(0);
   });
 
@@ -329,7 +336,7 @@ describe('filters', () => {
     expect(add()).toBeUndefined();
 
     show({ ...shop, title: 'Checkout', filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
-    query.filters.add('a');
+    addSql('a');
 
     expect(bar.children.length).toBe(1);
     expect(bar.querySelector('.d-filter-bar__chips')!.lastElementChild).toBe(add());
@@ -407,7 +414,7 @@ describe('filters, a field’s pill edited', () => {
   it('switches the operator on a click, the pill made again by the chart and put in the chip’s place', async () => {
     query.load({ search: `?f=${keyOf('path = /a')}&f=${hostPill('eq', 'a').key}&sql=b` });
     op(chips()[1]).click();
-    await vi.waitFor(() => expect(query.filters.chips).toEqual([chipOf('path = /a'), hostChip('ne', 'a'), { kind: 'sql', sql: 'b' }]));
+    await vi.waitFor(() => expect(held()).toEqual([chipOf('path = /a'), hostChip('ne', 'a'), { kind: 'sql', sql: 'b' }]));
     expect(fetched).toEqual(['/p/shop/api/1/pill?field=host&op=ne&value=a']);
   });
 
@@ -416,7 +423,7 @@ describe('filters, a field’s pill edited', () => {
     picked = 'b';
     const clicked = value(chips()[0]);
     clicked.click();
-    await vi.waitFor(() => expect(query.filters.chips).toEqual([hostChip('ne', 'b'), hostChip('ne', 'z')]));
+    await vi.waitFor(() => expect(held()).toEqual([hostChip('ne', 'b'), hostChip('ne', 'z')]));
     expect([valueBox?.title, valueBox?.anchor]).toEqual(['host ≠', clicked]);
     expect(fetched[0]).toMatch(/^\/p\/shop\/api\/1\/values\?.*field=host&search=$/);
     expect(fetched.at(-1)).toBe('/p/shop/api/1/pill?field=host&op=ne&value=b');
@@ -430,17 +437,17 @@ describe('filters, a field’s pill edited', () => {
     expect(fetched.some((url) => url.includes('/pill'))).toBe(false);
 
     op(chips()[0]).click();
-    query.filters.replace(0, hostChip('eq', 'q') as FilterChip);
+    state().set(replaceChip(held(), 0, hostChip('eq', 'q') as FilterChip));
     await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve));
-    expect(query.filters.chips).toEqual([hostChip('eq', 'q')]);
-    query.filters.replace(0, hostChip('eq', 'a') as FilterChip);
+    expect(held()).toEqual([hostChip('eq', 'q')]);
+    state().set(replaceChip(held(), 0, hostChip('eq', 'a') as FilterChip));
 
     vi.stubGlobal('fetch', async () => new Response('"host" cannot filter this chart\'s table', { status: 422 }));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     op(chips()[0]).click();
     await vi.waitFor(() => expect(logged).toHaveBeenCalled());
-    expect(query.filters.chips[0]).toEqual(hostChip('eq', 'a'));
+    expect(held()[0]).toEqual(hostChip('eq', 'a'));
     logged.mockRestore();
   });
 
@@ -458,7 +465,7 @@ describe('filters with SQL filters off', () => {
 
   it('still presses a filter button: its pill is signed', () => {
     button('Errors').click();
-    expect([query.filters.chips, button('Errors').getAttribute('aria-pressed')]).toEqual([[{ kind: 'pill', key: errorsKey }], 'true']);
+    expect([held(), button('Errors').getAttribute('aria-pressed')]).toEqual([[{ kind: 'pill', key: errorsKey }], 'true']);
   });
 
   it('has no funnel: the bar offers no way to type SQL', () => {
@@ -472,15 +479,25 @@ describe('filters with SQL filters off', () => {
     expect(editor()).toBeNull();
     expect(chips()[0].title).toBe('status >= 400\nSQL filters are not enabled (filters.sqlEnabled)');
     chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove status >= 400"]')!.click();
-    expect(query.filters.chips).toEqual([]);
+    expect(held()).toEqual([]);
   });
 
   it('still shows the pills and "Add filter"', () => {
     const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
     show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
-    query.filters.add(pill('host = a'));
+    addPill(pill('host = a'));
     expect(chips().map(chipText)).toEqual(['host = a']);
     expect([...bar.querySelectorAll('.d-filter-bar__chips button')].some((b) => b.textContent === 'Add filter')).toBe(true);
+  });
+});
+
+describe('filters.addSql', () => {
+  beforeEach(() => activate(true));
+
+  it('adds a table cell’s condition as a SQL chip, once', () => {
+    commands.get('filters.addSql')!("path LIKE '%/api%'");
+    commands.get('filters.addSql')!("path LIKE '%/api%'");
+    expect(held()).toEqual([{ kind: 'sql', sql: "path LIKE '%/api%'" }]);
   });
 });
 
@@ -493,6 +510,6 @@ describe('filters.offer', () => {
 
     expect(picks).toEqual([{ labels: ['host = a', 'host = a'], anchor: { x: 10, y: 20 } }]);
     expect(new URL(fetched.at(-1)!, 'http://x').pathname).toBe('/p/shop/api/1/pill');
-    expect(query.filters.chips).toHaveLength(1);
+    expect(held()).toHaveLength(1);
   });
 });

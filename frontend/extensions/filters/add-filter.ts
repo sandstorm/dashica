@@ -1,8 +1,9 @@
 // See addFilter.
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { FilterOp, QueryApi } from '../../hosts/query/query';
+import type { QueryApi, QueryState } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
 import type { PillSource } from '../../hosts/widgets/widgets';
+import { addChip, type FilterChip, type FilterOp } from './chips';
 import { OP_ICONS, fetchPill } from './offer';
 import type { PillField } from './pill-key';
 
@@ -52,9 +53,15 @@ export function fieldSource(tables: readonly FilterableTable[], { connection, ta
  * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15): asks in quick
  * picks at `anchor` for one of `tables` (none asked when there is only one), one of its fields, `=` or `≠`, and a value
  * (`pickValue`, from the field's chart's `/values` in `query`'s state); the value becomes that chart's pill
- * (`fetchPill`), added to `query`'s filters. Escape at any step adds nothing; a failed `/pill` goes to the console.
+ * (`fetchPill`), added to `chips`. Escape at any step adds nothing; a failed `/pill` goes to the console.
  */
-export async function addFilter(ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick'>, query: QueryApi, tables: readonly FilterableTable[], anchor: MenuAnchor): Promise<void> {
+export async function addFilter(
+  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick'>,
+  query: Pick<QueryApi, 'requestParams'>,
+  chips: QueryState<readonly FilterChip[]>,
+  tables: readonly FilterableTable[],
+  anchor: MenuAnchor,
+): Promise<void> {
   const table =
     tables.length === 1
       ? tables[0]
@@ -79,7 +86,8 @@ export async function addFilter(ui: Pick<UiApi, 'showQuickPick' | 'createQuickPi
   );
   if (value === undefined) return;
   try {
-    query.filters.add(await fetchPill(field.widget.dataUrl, { fieldId: field.field, op: op.op, value }));
+    const { key } = await fetchPill(field.widget.dataUrl, { fieldId: field.field, op: op.op, value });
+    chips.set(addChip(chips.get(), { kind: 'pill', key }));
   } catch (error) {
     console.error(`Filter ${field.field} ${sign} ${value} failed:`, error);
   }

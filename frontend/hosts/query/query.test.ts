@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// Tests for QueryHost: the state from and into a query string (parseSearch, formatSearch), the filter chips,
-// what each change asks of the widgets; the states extensions register
-// (registerState): read from the URL, written into it, sent, shared by the tabs.
+// Tests for QueryHost: the params from and into a query string (parseSearch, formatSearch); the states extensions
+// register (registerState): read from the URL, written into it, sent, shared by the tabs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryHost, QueryStates, formatSearch, parseSearch, type QueryStateSpec } from './query';
 
@@ -9,17 +8,6 @@ let query: QueryHost;
 let refreshes: number;
 /** The query strings `onDidChangeSearch` gave, in order. */
 let searches: string[];
-
-/** A key as the server signs a pill (`<payload>.<mac>`, the payload base64url JSON) with `label`; its mac is none. */
-function keyOf(label: string, payload: object = {}): string {
-  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label, ...payload }));
-  return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
-}
-
-/** The pill of `keyOf(label)`, as the filters extension adds it. */
-function pill(label: string) {
-  return { key: keyOf(label) };
-}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -38,190 +26,24 @@ afterEach(() => {
 /** The keys of the query string given last. */
 const urlParams = () => Object.fromEntries(new URLSearchParams(searches.at(-1) ?? ''));
 
-describe('QueryHost', () => {
-  it('takes the state from the URL', () => {
-    query.load({ search: '?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D' });
-    expect(query.filters.chips).toEqual([{ kind: 'sql', sql: 'status >= 500' }]);
+describe('params', () => {
+  it('takes them from the URL, none for a broken wp, and sends them', () => {
+    query.load({ search: '?wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D' });
     expect(query.params.values).toEqual({ path: '^/api' });
     expect(refreshes).toBe(1);
-  });
-
-  it('falls back to no params for a broken wp', () => {
+    query.params.set('path', '/x');
+    expect(refreshes).toBe(2);
+    expect(JSON.parse(query.requestParams().get('wp')!)).toEqual({ path: '/x' });
     query.load({ search: '?wp=%5B1%5D' });
     expect(query.params.values).toEqual({});
   });
 
-  it('sends the keys of the page URL', () => {
+  it('gives the query string after a pause', () => {
     query.load();
-    query.filters.add('status >= 500');
-    query.params.set('path', '^/api');
-    const sent = query.requestParams();
-    expect([...sent.keys()]).toEqual(['sql', 'wp']);
-    expect(sent.get('sql')).toBe('status >= 500');
-    expect(JSON.parse(sent.get('wp')!)).toEqual({ path: '^/api' });
-  });
-
-  it('asks the widgets to query again when the filter or a param changes', () => {
-    query.load();
-    refreshes = 0;
-    query.filters.add('status >= 500');
-    query.params.set('path', '^/api');
-    expect(refreshes).toBe(2);
-  });
-
-  it('adds a condition as a SQL chip of its own, once; one of only spaces is none', () => {
-    query.load();
-    refreshes = 0;
-    query.filters.add('status >= 500');
-    query.filters.add("path = '/api'");
-    query.filters.add('status >= 500');
-    query.filters.add('  ');
-    expect(query.filters.chips).toEqual([
-      { kind: 'sql', sql: 'status >= 500' },
-      { kind: 'sql', sql: "path = '/api'" },
-    ]);
-    expect(refreshes).toBe(2);
-  });
-
-  it('takes the pills from the URL’s f as they are, opaque keys; an empty f none', () => {
-    query.load({ search: `?f=${keyOf('status = 500')}&f=&f=status:eq:500&f=${keyOf('path ≠ /api')}` });
-    expect(query.filters.chips).toEqual([
-      { kind: 'pill', key: keyOf('status = 500') },
-      { kind: 'pill', key: 'status:eq:500' },
-      { kind: 'pill', key: keyOf('path ≠ /api') },
-    ]);
-  });
-
-  it('takes one chip per f and sql in the URL’s order; an old sql written by appending is one chip, an empty one none', () => {
-    query.load({ search: `?sql=a+%0AAND+b&f=${keyOf('host = x')}&sql=&sql=duration+%3E+2000` });
-    expect(query.filters.chips).toEqual([
-      { kind: 'sql', sql: 'a \nAND b' },
-      { kind: 'pill', key: keyOf('host = x') },
-      { kind: 'sql', sql: 'duration > 2000' },
-    ]);
-  });
-
-  it('writes and sends the chips in their order, f and sql interleaved, and reads them back', () => {
-    query.load({ search: '?tab=2' });
-    query.filters.add('duration > 2000');
-    query.filters.add(pill('host ≠ a'));
-    query.filters.add("level != 'info'");
-    vi.advanceTimersByTime(200);
-    const written = new URLSearchParams(searches.at(-1));
-    expect([...written]).toEqual([
-      ['tab', '2'],
-      ['sql', 'duration > 2000'],
-      ['f', keyOf('host ≠ a')],
-      ['sql', "level != 'info'"],
-    ]);
-    expect([...query.requestParams()]).toEqual([...written].slice(1));
-    const chips = query.filters.chips;
-    query.load({ search: searches.at(-1) });
-    expect(query.filters.chips).toEqual(chips);
-  });
-
-  it('replaces a chip in its place; a SQL chip of only spaces removes it, the same chip again changes nothing', () => {
-    query.load({ search: `?sql=a&f=${keyOf('host = x')}&sql=b` });
-    refreshes = 0;
-    query.filters.replace(0, { kind: 'sql', sql: 'c' });
-    query.filters.replace(1, { kind: 'pill', ...pill('host ≠ y') });
-    query.filters.replace(1, { kind: 'pill', ...pill('host ≠ y') });
-    expect(query.filters.chips).toEqual([
-      { kind: 'sql', sql: 'c' },
-      { kind: 'pill', ...pill('host ≠ y') },
-      { kind: 'sql', sql: 'b' },
-    ]);
-    query.filters.replace(2, { kind: 'sql', sql: ' ' });
-    query.filters.replace(5, { kind: 'sql', sql: 'd' });
-    expect(query.filters.chips).toHaveLength(2);
-    expect(refreshes).toBe(3);
-  });
-
-  it('removes the chip it replaces when the new one is there already', () => {
-    query.load({ search: `?f=${keyOf('host = a')}&sql=b&f=${keyOf('host ≠ a')}` });
-    query.filters.replace(0, { kind: 'pill', ...pill('host ≠ a') });
-    expect(query.filters.chips).toEqual([
-      { kind: 'sql', sql: 'b' },
-      { kind: 'pill', ...pill('host ≠ a') },
-    ]);
-  });
-
-  it('sends the pills as one f each, their keys', () => {
-    query.load();
-    query.filters.add(pill('status = 500'));
-    query.filters.add(pill('host ≠ a'));
-    const sent = query.requestParams();
-    expect([...sent.keys()]).toEqual(['f', 'f']);
-    expect(sent.getAll('f')).toEqual([keyOf('status = 500'), keyOf('host ≠ a')]);
-  });
-
-  it('adds a pill once (by its key), removes a chip by its index and clears them all', () => {
-    query.load();
-    query.filters.add('status >= 500');
-    refreshes = 0;
-    query.filters.add(pill('host = a'));
-    query.filters.add({ key: keyOf('host = a') });
-    query.filters.add(pill('host ≠ b'));
-    query.filters.add(pill('path = /api'));
-    expect(refreshes).toBe(3);
-    query.filters.remove(2);
-    expect(query.filters.chips).toEqual([
-      { kind: 'sql', sql: 'status >= 500' },
-      { kind: 'pill', ...pill('host = a') },
-      { kind: 'pill', ...pill('path = /api') },
-    ]);
-    query.filters.clear();
-    expect(query.filters.chips).toEqual([]);
-    expect(refreshes).toBe(5);
-  });
-
-  it('removes every chip a predicate holds for in one change, and none that is not there', () => {
-    query.load({ search: `?sql=a+LIKE+%27x%25%27&f=${keyOf('host = a')}&sql=a+LIKE+%27y%25%27` });
-    refreshes = 0;
-    query.filters.remove((chip) => chip.kind === 'sql');
-    expect(query.filters.chips).toEqual([{ kind: 'pill', ...pill('host = a') }]);
-    query.filters.remove((chip) => chip.kind === 'sql');
-    query.filters.remove(5);
-    expect(refreshes).toBe(1);
-  });
-
-  it('keeps the structured filters of a page out of the next page', () => {
-    query.load({ search: '?f=host:eq:a' });
-    query.load({ search: '' });
-    expect(query.filters.chips).toEqual([]);
-  });
-
-  it('gives the query string after a pause, leaving out what is the default', () => {
-    query.load();
-    query.filters.add('a');
     query.params.set('path', 'x');
     expect(searches).toEqual([]);
     vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ sql: 'a', wp: '{"path":"x"}' });
-    query.filters.clear();
-    query.params.set('path', 'y');
-    vi.advanceTimersByTime(200);
-    expect(searches).toEqual(['?sql=a&wp=%7B%22path%22%3A%22x%22%7D', '?wp=%7B%22path%22%3A%22y%22%7D']);
-  });
-
-  it('keeps the other keys of the query string it was loaded from, and gives nothing for a state as loaded', () => {
-    query.load({ search: '?tab=2&sql=a' });
-    query.filters.add('b');
-    query.filters.remove(1);
-    vi.advanceTimersByTime(200);
-    expect(searches).toEqual([]);
-    query.filters.add('c');
-    vi.advanceTimersByTime(200);
-    expect(searches).toEqual(['?tab=2&sql=a&sql=c']);
-  });
-
-  it('keeps a change from before a load out of the query string of the next page', () => {
-    query.load();
-    query.filters.add('status >= 500');
-    query.load();
-    vi.advanceTimersByTime(200);
-    expect(searches).toEqual([]);
-    expect(query.filters.chips).toEqual([]);
+    expect(urlParams()).toEqual({ wp: '{"path":"x"}' });
   });
 });
 
@@ -259,6 +81,16 @@ describe('registered states', () => {
     size.set('xl');
     vi.advanceTimersByTime(200);
     expect(searches).toEqual(['?size=s', '']);
+  });
+
+  it('keeps a change from before a load out of the query string of the next page', () => {
+    const colors = query.registerState('colors', colorsSpec(false));
+    query.load();
+    colors.set(['red']);
+    query.load();
+    vi.advanceTimersByTime(200);
+    expect(searches).toEqual([]);
+    expect(colors.get()).toEqual([]);
   });
 
   it('reads a state registered after the load from the URL loaded', () => {
@@ -330,17 +162,13 @@ describe('registered states', () => {
 });
 
 describe('parseSearch and formatSearch', () => {
-  it('read the state of a query string, the default for what it lacks', () => {
-    expect(parseSearch(`?time=custom&f=${keyOf('host = a')}&f=&wp=%7B%22path%22%3A%22x%22%7D`)).toEqual({
-      chips: [{ kind: 'pill', ...pill('host = a') }],
-      params: { path: 'x' },
-    });
-    expect(parseSearch('')).toEqual({ chips: [], params: {} });
+  it('read the params of a query string, none for what it lacks', () => {
+    expect(parseSearch('?time=3h&wp=%7B%22path%22%3A%22x%22%7D')).toEqual({ params: { path: 'x' } });
+    expect(parseSearch('')).toEqual({ params: {} });
   });
 
-  it('write it back, leaving out the default and keeping the other keys', () => {
-    const state = parseSearch('?time=3h&sql=a&f=k.mac');
-    expect(formatSearch(state, '?tab=x&sql=b')).toBe('?tab=x&sql=a&f=k.mac');
-    expect(formatSearch(parseSearch(''), '?sql=a')).toBe('');
+  it('write them back, keeping the other keys', () => {
+    expect(formatSearch(parseSearch('?wp=%7B%22a%22%3A%221%22%7D'), '?tab=x&wp=1')).toBe('?tab=x&wp=%7B%22a%22%3A%221%22%7D');
+    expect(formatSearch(parseSearch(''), '?wp=1')).toBe('');
   });
 });
