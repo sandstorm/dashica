@@ -89,10 +89,3 @@
 .d-list__item--active ~ .d-dashboards-menu__star {
   color: var(--color-accent);
 }
-
-/* the Dashica icon at the top bar's start, before the tabs */
-.d-brand {
-  display: inline-flex;
-  align-items: center;
-  color: var(--color-accent);
-}

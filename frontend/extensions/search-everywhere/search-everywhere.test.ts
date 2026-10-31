@@ -40,9 +40,9 @@ function setup() {
 }
 
 describe('searchEverywhere', () => {
-  it('opens with Ctrl+K and from its button first in the left rail, whose tooltip names the key', () => {
+  it('opens with Ctrl+K and from its button first in the left rail (after the global menu’s "…"), whose tooltip names the key', () => {
     const { host, field, press } = setup();
-    const button = host.querySelector<HTMLButtonElement>('.d-workbench__side--left .d-workbench__rail-button')!;
+    const button = host.querySelector<HTMLButtonElement>('.d-workbench__side--left .d-workbench__rail > .d-workbench__rail-button')!;
     expect([button.dataset.testid, button.title]).toEqual(['wb-rail-button-search', 'Search everywhere (Ctrl+K)']);
     button.click();
     expect(document.activeElement).toBe(field());

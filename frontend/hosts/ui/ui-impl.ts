@@ -24,7 +24,10 @@ import type {
 import './layout/window-layout.css';
 import './quick-input/quick-input.css';
 
-/** The workbench's `UiApi`, laid out in `host`. `content`: the region the tabs' pages go into; `tabBar`: the tab bar's. */
+/**
+ * The workbench's `UiApi`, laid out in `host`. `content`: the region the tabs' pages go into; `tabBar`: the tab bar's;
+ * `railStart`: the global menu's "…", at the left rail's start.
+ */
 export class UiHost implements UiApi {
   readonly #layout: WindowLayout;
   readonly #bars: Record<'top' | 'filter' | 'status', Bar>;
@@ -53,6 +56,10 @@ export class UiHost implements UiApi {
 
   get tabBar(): HTMLElement {
     return this.#layout.tabBar;
+  }
+
+  get railStart(): HTMLElement {
+    return this.#layout.railStart;
   }
 
   registerSidePanel(id: string, options: SidePanelOptions): Panel {

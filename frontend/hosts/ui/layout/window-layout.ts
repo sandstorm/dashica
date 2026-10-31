@@ -7,10 +7,10 @@ import { html } from 'htl';
 import { restoreSideBarState, SideBar, type PanelCommands, type PanelMenus, type Side } from './side-bar';
 
 /**
- * The workbench's regions in one grid: the top bar above everything (its items around the tab bar); the left side (a
- * rail with a button per side panel and per command put there, and the shown panel); in the middle the filter bar and
- * the content; the right side (the shown panel and its rail, on the outer edge); the status bar below everything.
- * Each side shows one panel at a time;
+ * The workbench's regions in one grid: the left side (a rail with the global menu's "…" at its start, a button per side
+ * panel and per command put there, and the shown panel), full height above the status bar; in the middle the top bar
+ * (its items around the tab bar), the filter bar and the content; the right side (the shown panel and its rail, on the
+ * outer edge), full height as well; the status bar below everything. Each side shows one panel at a time;
  * clicking the shown one's rail button hides the side and the content takes the room. Sizes and the panels picked are
  * remembered for the session.
  *
@@ -21,6 +21,8 @@ export class WindowLayout {
   readonly topBar: HTMLElement;
   /** In the top bar, between its left and its other items: where the tab bar (`TabBar`) goes. */
   readonly tabBar: HTMLElement;
+  /** The left rail's start, above its buttons: where the global menu's "…" goes. */
+  readonly railStart: HTMLElement;
   readonly filterBar: HTMLElement;
   readonly content: HTMLElement;
   readonly statusBar: HTMLElement;
@@ -47,10 +49,11 @@ export class WindowLayout {
     this.topBar = html`<div class="d-workbench__top-bar" data-testid="wb-top-bar">${this.tabBar}</div>`;
     this.filterBar = html`<div class="d-workbench__filter-bar" data-testid="wb-filter-bar"></div>`;
     this.content = html`<div class="d-workbench__content"></div>`;
-    this.#center = html`<div class="d-workbench__center">${this.filterBar}${this.content}</div>`;
+    this.#center = html`<div class="d-workbench__center">${this.topBar}${this.filterBar}${this.content}</div>`;
     this.statusBar = html`<div class="d-workbench__status-bar"></div>`;
+    this.railStart = this.#sides.left.railStart;
     host.classList.add('d-workbench');
-    host.append(this.topBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
+    host.append(this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
     this.#watchWidth();
   }
 
@@ -81,7 +84,6 @@ export class WindowLayout {
     for (const stop of this.#cleanup) stop();
     this.#sides.left.dispose();
     this.#sides.right.dispose();
-    this.topBar.remove();
     this.#center.remove();
     this.statusBar.remove();
     this.host.classList.remove('d-workbench', 'd-workbench--narrow');

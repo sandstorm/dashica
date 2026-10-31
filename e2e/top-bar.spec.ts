@@ -1,7 +1,9 @@
-// Tests for the top row and the side panels' chrome (docs/2026-10-28-workbench.md §3.4, step 8d): one top bar with the
-// Dashica icon, the tabs, "+" and the time range, no title bar; "+" opens the start page in a new tab; search
-// everywhere opens from its button in the left rail, whose tooltip names its key; a panel shows under a header with
-// its name in caps and "…", whose "Hide" closes it; with Explore off the global "…" shows "Explore" greyed (8g).
+// Tests for the top row and the side panels' chrome (docs/2026-10-28-workbench.md §3.4, steps 8d and 9i): one top bar
+// over the content only, with the tabs, "+" and the time range, no title bar and no Dashica icon; the left rail and
+// panel reach from the window's top to the status bar, the global "…" first in the rail, above search everywhere; "+"
+// opens the start page in a new tab; search everywhere opens from its rail button, whose tooltip names its key; a panel
+// shows under a header with its name in caps and "…", whose "Hide" closes it; with Explore off the global "…" shows
+// "Explore" greyed (8g).
 import {expect, test} from '@playwright/test';
 
 test.beforeEach(async ({page}) => {
@@ -10,14 +12,33 @@ test.beforeEach(async ({page}) => {
     await page.reload();
 });
 
-test('has the Dashica icon, the tabs, "+" and the time range in one top bar', async ({page}) => {
+test('has the tabs, "+" and the time range in one top bar, without the Dashica icon', async ({page}) => {
     const top = page.getByTestId('wb-top-bar');
-    await expect(top.getByRole('link', {name: 'Dashica'})).toBeVisible();
+    await expect(top.getByRole('link', {name: 'Dashica'})).toHaveCount(0);
     await expect(top.getByRole('tab', {selected: true})).toHaveText('Home');
     await expect(top.getByRole('button', {name: 'New tab'})).toBeVisible();
     await expect(top.getByRole('button', {name: 'Shift back'})).toBeVisible();
     await expect(page.getByTestId('wb-tab-bar')).toHaveCount(1);
     await expect(page.locator('.d-workbench__title-bar')).toHaveCount(0);
+});
+
+test('the left rail and panel reach from the top to the status bar; the top bar is only over the content', async ({page}) => {
+    const box = async (locator: ReturnType<typeof page.locator>) => (await locator.boundingBox())!;
+    const rail = await box(page.locator('.d-workbench__side--left .d-workbench__rail'));
+    const panel = await box(page.getByTestId('wb-panel-header-dashboards'));
+    const top = await box(page.getByTestId('wb-top-bar'));
+    const status = await box(page.locator('.d-workbench__status-bar'));
+    expect(rail.y).toBe(0);
+    expect(panel.y).toBe(0);
+    expect(rail.y + rail.height).toBeCloseTo(status.y, 0);
+    expect(top.x).toBeGreaterThanOrEqual(panel.x + panel.width - 1);
+});
+
+test('has the global "…" first in the left rail, above search everywhere', async ({page}) => {
+    const buttons = page.locator('.d-workbench__side--left .d-workbench__rail button:visible');
+    await expect(buttons.nth(0)).toHaveAttribute('data-testid', 'wb-global-menu');
+    await expect(buttons.nth(1)).toHaveAttribute('data-testid', 'wb-rail-button-search');
+    await expect(page.getByTestId('wb-top-bar').getByTestId('wb-global-menu')).toHaveCount(0);
 });
 
 test('"+" opens the start page in a new tab', async ({page}) => {

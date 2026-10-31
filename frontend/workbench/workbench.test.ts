@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for workbench.ts: the top bar's controls showing the active tab's query state after a switch of tabs, "+" for
-// a new tab, the global menu's "…".
+// a new tab, the global menu's "…" at the left rail's start.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../core/disposable/disposable';
 import { dashboardPage } from '../extensions/dashboard-page/dashboard-page';
@@ -76,9 +76,10 @@ describe('createWorkbench', () => {
     expect(host.querySelectorAll('[role=tab]')[1].getAttribute('aria-selected')).toBe('true');
   });
 
-  it('shows the global menu’s "…" first in the top bar while the menu has entries, and the menu on a click', async () => {
+  it('shows the global menu’s "…" first in the left rail while the menu has entries, and the menu on a click', async () => {
     const button = host.querySelector<HTMLButtonElement>('[data-testid=wb-global-menu]')!;
-    expect(host.querySelector('[data-testid=wb-top-bar] button')).toBe(button);
+    expect(host.querySelector('.d-workbench__side--left .d-workbench__rail button')).toBe(button);
+    expect(host.querySelector('[data-testid=wb-top-bar] [data-testid=wb-global-menu]')).toBeNull();
     expect(button.hidden).toBe(true);
     const entry = ui.registerMenuItem('workbench/global', { command: 'test.global', title: 'Something global' });
     expect(button.hidden).toBe(false);

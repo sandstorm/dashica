@@ -1,18 +1,18 @@
-/* The workbench's regions (see WindowLayout in window-layout.ts): the top bar with the tabs, the two sides (rail,
-   resizable panel under its header; the left one an overlay when narrow), between them the filter bar and the content,
-   the status bar. All values are tokens (core/style/tokens.css), so light and dark apply. */
+/* The workbench's regions (see WindowLayout in window-layout.ts): the two sides, full height (rail, resizable panel
+   under its header; the left one an overlay when narrow), between them the top bar with the tabs, the filter bar and the
+   content, the status bar. All values are tokens (core/style/tokens.css), so light and dark apply. */
 .d-workbench {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(min(20rem, 25%), 1fr) var(--d-workbench-right-side, auto);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100vh;
   background: var(--color-surface);
   color: var(--color-text);
 }
 
-/* Above everything the top bar: its left items, the tabs, its other items; above the content the filter bar (hidden
-   while it has no item). */
+/* Above the content, between the sides, the top bar (its left items, the tabs, its other items) and the filter bar
+   (hidden while it has no item). */
 .d-workbench__top-bar,
 .d-workbench__filter-bar {
   display: flex;
@@ -23,8 +23,9 @@
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-surface-subtle);
 }
-.d-workbench__top-bar { grid-column: 1 / -1; grid-row: 1; align-items: stretch; min-height: 36px; font-size: var(--text-sm); }
+.d-workbench__top-bar,
 .d-workbench__filter-bar { flex: none; }
+.d-workbench__top-bar { align-items: stretch; min-height: 36px; font-size: var(--text-sm); }
 .d-workbench__top-bar[hidden],
 .d-workbench__filter-bar[hidden],
 .d-workbench__status-bar[hidden] { display: none; }
@@ -39,8 +40,7 @@
 .d-workbench__top-bar .d-workbench__bar-left,
 .d-workbench__top-bar .d-workbench__bar-center { flex: none; }
 .d-workbench__top-bar .d-workbench__bar-right { flex: none; padding-left: var(--space-2); }
-/* the global menu's "…" */
-.d-workbench__global-menu,
+/* a panel header's "…" */
 .d-workbench__panel-actions {
   display: inline-flex;
   align-items: center;
@@ -54,13 +54,11 @@
   color: var(--color-text-muted);
   cursor: pointer;
 }
-.d-workbench__global-menu[hidden] { display: none; }
-.d-workbench__global-menu:hover,
 .d-workbench__panel-actions:hover { background: var(--color-hover); color: var(--color-text); }
 
-/* The sides: a rail of buttons and the shown panel. */
+/* The sides, from the window's top to the status bar: a rail of buttons and the shown panel. */
 .d-workbench__side {
-  grid-row: 2;
+  grid-row: 1;
   position: relative;
   display: flex;
   min-width: 0;
@@ -77,6 +75,8 @@
   gap: var(--space-1);
   padding: var(--space-2) var(--space-1);
 }
+/* the rail's start (the left one: the global menu's "…"), its buttons laid out as the rail's own */
+.d-workbench__rail-start { display: contents; }
 /* the rail's bottom group (side panels with alignment: 'bottom') at its far end */
 .d-workbench__rail-bottom { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); margin-top: auto; }
 .d-workbench__rail-button {
@@ -221,10 +221,10 @@
 .d-workbench__tab-close:focus-visible,
 .d-workbench__tab-add:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
-/* The centre column: the filter bar, the content. */
+/* The centre column: the top bar, the filter bar, the content. */
 .d-workbench__center {
   grid-column: 2;
-  grid-row: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -239,7 +239,7 @@
 /* Below everything: the status bar. */
 .d-workbench__status-bar {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 2;
   display: flex;
   min-width: 0;
   min-height: 24px;

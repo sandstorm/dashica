@@ -20,6 +20,8 @@ import type { ContextMenuOptions, Panel, RailButtonOptions, SidePanelOptions } f
  */
 export class SideBar {
   readonly element: HTMLElement;
+  /** The rail's start, before its buttons: what the layout's owner puts there (the left one: the global menu's "…"). */
+  readonly railStart: HTMLElement;
   readonly #rail: HTMLElement;
   /** The rail's buttons at its far end (`alignment: 'bottom'`); the others go before it. */
   readonly #bottom: HTMLElement;
@@ -47,8 +49,9 @@ export class SideBar {
   ) {
     this.#size = SIZES[side];
     this.state.size = this.#clamp(state.size);
+    this.railStart = html`<div class="d-workbench__rail-start"></div>`;
     this.#bottom = html`<div class="d-workbench__rail-bottom"></div>`;
-    this.#rail = html`<div class="d-workbench__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.#bottom}</div>`;
+    this.#rail = html`<div class="d-workbench__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.railStart}${this.#bottom}</div>`;
     this.#resizer = this.#createResizer();
     this.#panel = html`<div class="d-workbench__panel">${this.#resizer}</div>`;
     const onkeydown = (event: KeyboardEvent) => {
@@ -190,7 +193,10 @@ export class SideBar {
     return button;
   }
 
-  /** Inserts `button` into the rail's top or bottom group, before the first of its buttons with a higher order. */
+  /**
+   * Inserts `button` into the rail's top or bottom group, before the first of its buttons with a higher order (the
+   * rail's start has none, so it stays first).
+   */
   #place(button: HTMLElement, order: number, bottom: boolean): void {
     this.#orders.set(button, order);
     const group = bottom ? this.#bottom : this.#rail;

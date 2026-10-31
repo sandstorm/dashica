@@ -198,9 +198,11 @@ describe('dashboards', () => {
   describe('the start page', () => {
     const home = () => host.querySelector<HTMLElement>('.d-home-page')!;
     const homeTitles = (selector: string) => [...home().querySelectorAll(selector)].map((el) => el.textContent);
+    /** "+" in the tab bar: the start page in a new tab. */
+    const newTab = () => host.querySelector<HTMLButtonElement>('[data-testid=wb-tab-add]')!.click();
 
-    it('is what the brand links to: a hint while there are no favorites, then the groups with their dashboards', async () => {
-      host.querySelector<HTMLAnchorElement>('.d-brand')!.click();
+    it('is what "+" opens: a hint while there are no favorites, then the groups with their dashboards', async () => {
+      newTab();
       await settle();
       expect(location.pathname).toBe('/');
       expect(homeTitles('h2')).toEqual(['Favorites', 'Shop']);
@@ -211,7 +213,7 @@ describe('dashboards', () => {
     it('shows the favorites as tiles with their group, in their order, as they change', async () => {
       const star = (n: number) => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')].at(n)!;
       star(-1).click();
-      host.querySelector<HTMLAnchorElement>('.d-brand')!.click();
+      newTab();
       await settle();
       expect(homeTitles('.d-home-page__tile')).toEqual(['CheckoutShop']);
       star(-2).click();

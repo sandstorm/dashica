@@ -1,6 +1,6 @@
 // Tests for the start page "/" (docs/2026-10-28-workbench.md §3.4.3): no redirect; a hint while there are no
 // favorites, then every group with its dashboards; a starred dashboard shows as a tile with its group and opens from
-// there; the Dashica icon leads back to it; the time range, refresh and the status bar show there too.
+// there; "+" leads back to it; the time range, refresh and the status bar show there too.
 //
 // The dashboard starred defaults to the Sandstorm instance's "/clickhouse/table_sizes". Another one:
 // DASHICA_E2E_START_PAGE.
@@ -24,7 +24,7 @@ test('shows a hint and every group with its dashboards at "/", the tab titled "H
     await expect(page.getByRole('tab', {selected: true})).toHaveText('Home');
 });
 
-test('shows a starred dashboard as a tile with its group, which opens it; the brand leads back', async ({page}) => {
+test('shows a starred dashboard as a tile with its group, which opens it; "+" leads back', async ({page}) => {
     const entry = page.locator('.d-dashboards-menu__entry', {has: page.locator(`a[href="${PAGE}"]`)}).last();
     await entry.hover();
     await entry.locator('.d-dashboards-menu__star').click();
@@ -34,7 +34,7 @@ test('shows a starred dashboard as a tile with its group, which opens it; the br
     await expect(page.locator('.d-home-page__hint')).toHaveCount(0);
     await tile.click();
     await expect(page).toHaveURL(new RegExp(`${PAGE}$`));
-    await page.locator('.d-brand').click();
+    await page.getByRole('button', {name: 'New tab'}).click();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator(`.d-home-page__tile[href="${PAGE}"]`)).toBeVisible();
 });

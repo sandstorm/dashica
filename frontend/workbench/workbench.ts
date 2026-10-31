@@ -13,8 +13,8 @@ import { WidgetsHost } from '../hosts/widgets/widgets';
 
 /**
  * The workbench in `host`: its hosts (commands, ui, page, query, widgets, extensions) and the extensions activated on
- * them, the tab bar with the commands `workbench.tabs.close` / `next` / `previous`, the global menu's "…" first in the
- * top bar, then the page of the URL in the active tab. `workbench` is what `/workbench.json` says. Bound keys work
+ * them, the tab bar with the commands `workbench.tabs.close` / `next` / `previous`, the global menu's "…" at the start
+ * of the left rail, then the page of the URL in the active tab. `workbench` is what `/workbench.json` says. Bound keys work
  * anywhere on the page. Lives as long as the page; `dispose` takes it all down (tests).
  */
 export function createWorkbench(host: HTMLElement, options: { extensions: readonly Extension[]; workbench: WorkbenchJson }): Disposable {
@@ -68,18 +68,19 @@ function showTabs(page: PageHost, region: HTMLElement, commands: CommandsHost): 
   );
 }
 
-/** The menu the "…" at the top bar's start shows (context and arguments none); the button is hidden while it is empty. */
+/** The menu the "…" at the left rail's start shows (context and arguments none); the button is hidden while it is empty. */
 const GLOBAL_MENU = 'workbench/global';
 
-/** The "…" at the top bar's start, left of the Dashica icon: it shows the menu `workbench/global`. */
+/** The "…" at the left rail's start, above search everywhere: it shows the menu `workbench/global`. */
 function showGlobalMenu(ui: UiHost): Disposable {
-  const button: HTMLButtonElement = html`<button type="button" class="d-workbench__global-menu" aria-label="Dashica menu" title="Menu"
+  const button: HTMLButtonElement = html`<button type="button" class="d-workbench__rail-button" aria-label="Dashica menu" title="Menu"
     aria-haspopup="dialog" data-testid="wb-global-menu" onclick=${() => ui.showContextMenu(GLOBAL_MENU, { anchor: button, title: 'Dashica' })}></button>`;
   button.append(createElement(Ellipsis, { width: 16, height: 16 }));
   const update = () => (button.hidden = ui.getMenuItems(GLOBAL_MENU).length === 0);
   update();
+  ui.railStart.append(button);
   return Disposable.from(
-    ui.registerBarItem('top', button, { alignment: 'left', priority: 100 }),
+    new Disposable(() => button.remove()),
     ui.onDidChangeMenu((id) => id === GLOBAL_MENU && update()),
   );
 }

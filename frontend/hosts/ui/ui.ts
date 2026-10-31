@@ -8,7 +8,7 @@ import type { MenuContext, MenuItem } from '../commands/commands';
  * items in the top bar around the tabs, the filter bar and the status bar), its menus, and what search everywhere
  * finds. Each panel has a command `workbench.view.<id>`: it shows and focuses the panel, or hides it while it is shown
  * and has the focus; its header's "…" shows its menu `panel/<id>` (context and arguments none), which has "Hide". The
- * "…" at the top bar's start shows the menu `workbench/global` (context and arguments none) and is hidden while it is
+ * "…" at the left rail's start shows the menu `workbench/global` (context and arguments none) and is hidden while it is
  * empty. Sizes and the panels picked are remembered for the browser session.
  */
 export interface UiApi {

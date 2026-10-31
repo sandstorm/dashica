@@ -62,18 +62,40 @@ afterEach(() => {
 });
 
 describe('WindowLayout', () => {
-  it('puts the top bar with the tab bar, the left side, filter bar and content between the sides, the right side and the status bar into the host', () => {
+  it('puts the left side, the top bar with the tab bar, filter bar and content between the sides, the right side and the status bar into the host', () => {
     const { host, layout } = setup();
     expect([...host.children].map((c) => c.className)).toEqual([
-      'd-workbench__top-bar',
       'd-workbench__side d-workbench__side--left',
       'd-workbench__center',
       'd-workbench__side d-workbench__side--right',
       'd-workbench__status-bar',
     ]);
     expect(layout.tabBar.parentElement).toBe(layout.topBar);
-    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__filter-bar', 'd-workbench__content']);
+    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual([
+      'd-workbench__top-bar',
+      'd-workbench__filter-bar',
+      'd-workbench__content',
+    ]);
     expect(layout.content.className).toBe('d-workbench__content');
+  });
+
+  it('the sides reach from the top to the status bar; the top bar is only over the content', () => {
+    const css = readFileSync('frontend/hosts/ui/layout/window-layout.css', 'utf8');
+    const rule = (selector: string) => new RegExp(`${selector.replace(/[.]/g, '\\.')} \\{([^}]*)\\}`).exec(css)?.[1] ?? '';
+    expect(rule('.d-workbench')).toMatch(/grid-template-rows:\s*minmax\(0, 1fr\) auto;/);
+    expect(rule('.d-workbench__side')).toMatch(/grid-row: 1;/);
+    expect(rule('.d-workbench__center')).toMatch(/grid-column: 2;\s*grid-row: 1;/);
+    expect(rule('.d-workbench__status-bar')).toMatch(/grid-column: 1 \/ -1;\s*grid-row: 2;/);
+  });
+
+  it('keeps what is put at the left rail’s start before every button, also ones added later', () => {
+    const { host, layout } = setup();
+    const menu = document.createElement('button');
+    layout.railStart.append(menu);
+    layout.addRailButton('search', { label: 'Search everywhere', icon: '<svg></svg>', command: 'test.search', order: -100 });
+    const rail = host.querySelector('.d-workbench__side--left .d-workbench__rail')!;
+    expect(rail.querySelector('button')).toBe(menu);
+    expect(rail.querySelectorAll('button')[1].getAttribute('aria-label')).toBe('Search everywhere');
   });
 
   it('places rail buttons by order, equal orders in registration order', () => {

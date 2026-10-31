@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -110,18 +110,19 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 ### 3.4 Workbench regions
 
 ```
-┌ […][▮] [Shop ×] [Explore: 500 per instance ×] [+] ── [⛛][Last 1h ▾][⟳ 30s] ┐   top bar (step 8d)
-│🔍│ DASHBOARDS   … │ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐inspector▌│   filter bar (above the content)
-│▦ │ favorites …     │ content (scrolls)                             │▐         ▌│   rail · panel · content · right
-│🐞│                 │                                               │▐         ▌│
-└─ Requests · 1,234 rows · 87 ms · ignores host · 2 records selected ┘   status bar: the active widget, Details' records
+┌──┬─────────────────┬───────────────────────────────────────────────┬───────────┐
+│… │ DASHBOARDS   …  │ [Shop ×] [Explore ×] [+] ─ [⛛][Last 1h ▾][⟳]  │▐inspector▌│   top bar, over the content only (8d, 9i)
+│🔍│ favorites …     │ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐         ▌│   filter bar (above the content)
+│▦ │                 │ content (scrolls)                             │▐         ▌│   rail · panel · content · right
+│🐞│                 │                                               │▐         ▌│   (the sides full height, 9i)
+└─ Requests · 1,234 rows · 87 ms · ignores host · 2 records selected ───────────┘   status bar: the active widget, Details' records
 ```
 
 | Region | Holds |
 |---|---|
-| Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
+| Top bar | one row over the content only (between the sides, step 9i), always visible: the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
-| Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
+| Rails | from the window's top to the status bar, as their panels (step 9i): at the left rail's start the global menu's "…" (menu `workbench/global`, `UiHost.railStart`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i); a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first after the "…"; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the ticked rows a table gave it by command, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
@@ -131,8 +132,8 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
   `panel/<id>` (context and arguments none). Every such menu has "Hide" (command `workbench.view.<id>.hide`), so "…"
   is never empty *(proposed)*; Debug's and Details' have "Pop out" too (step 8l, §3.4.6).
 - **"+"** opens the start page "/" in a new tab, or shows the tab that has it (`navigate('/', { newTab: true })`)
-  *(proposed)*. The Dashica icon is lucide's `ChartColumn` in the accent colour *(proposed: Dashica has no logo of its
-  own in the frontend; `/assets/favicon/…` is not served by the framework)*.
+  *(proposed)*. There is no Dashica icon or home button (step 9i): "+" and the dashboards (Dashboards panel, search
+  everywhere) reach the start page.
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
   resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
@@ -326,7 +327,7 @@ the rule between groups and the guide line); Debug's sections (step 7e, §3.4.4)
 
 "/" is a page of its own, not a dashboard and no redirect (the redirect to `/home` is gone): the viewer's favorites as
 tiles (title, its group muted below; in the viewer's order), then every menu group with its dashboards as links; with
-no favorites a hint to star one. The brand "Dashica" links to it; its tab is titled "Home".
+no favorites a hint to star one. "+" in the tab bar opens it (step 9i: no Dashica icon any more); its tab is titled "Home".
 
 - **Go:** `dashboard.CollectHome` mounts the shell at exactly `/` (the pattern `/{$}`, so other paths still 404) and
   `/page.json` (`dashboard.HomePage`: `{kind: "home", title: "Home"}`, no widgets, no filter bar), from `newDashicaImpl`
@@ -1362,7 +1363,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   (filter, a filter icon) and "⊖ `<field> = <value>`" (exclude, a minus icon) in the quick pick; choosing one adds the
   pill (D6). The floating "Filter by / Exclude" bar goes. No multi-value accumulation: pills on the same table and
   field combine, the `eq` ones OR-ed, the `ne` ones AND-ed (§3.8).
-- **D5 Layout (8d):** one top row `[… global menu][Dashica icon][tabs][+] … [time range][refresh]`; the separate
+- **D5 Layout (8d; changed by D23, 9i: the sides full height, the tab row over the content only, "…" in the left rail, no icon):** one top row `[… global menu][Dashica icon][tabs][+] … [time range][refresh]`; the separate
   title bar goes, the filter bar stays below. Search everywhere is a button in the left rail (as Typst), not a field.
   Each side panel has a header row with its name in caps ("DEBUG", "DASHBOARDS") and a "…" for its actions; rail
   buttons have a hover tooltip with name and keyboard shortcut (§3.4).
@@ -1379,7 +1380,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 - **D9 Explore SQL (8g):** the key `xsql` is renamed `exploreSql` everywhere (Go, TS, tab hash, docs); the editor
   shows the chart's SQL with its ClickHouse placeholders (`{__from:DateTime64}`), the values listed beside it, and Run
   sends them again as parameters; `lib/clickhouse/inline_parameters.go` goes.
-- **D10 Global "…" menu (8i, ✅ 2026-10-31):** left of the Dashica icon. "Explore" opens a blank Explore tab: a ClickHouse
+- **D10 Global "…" menu (8i, ✅ 2026-10-31):** left of the Dashica icon (since 9i at the left rail's start). "Explore" opens a blank Explore tab: a ClickHouse
   connection picker and an empty editor, run on a new per-connection endpoint behind `explore.enabled`; "Start from
   chart…" fills the editor from one of the shown page's charts.
 - **D11 Schema view (8h, ✅ 2026-10-31):** a left side panel "Schema", a tree connection › database › table; a table
@@ -1399,7 +1400,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9h)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9i)
 
 The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
@@ -1449,6 +1450,11 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `formatTime` (the time picker, `ChartFrame`'s dragged range) to `extensions/time-library/format-time.ts`
   *(proposed)*. `showWidgetError` stays in the `widgets` host, unexported: only the host shows an error in place
   of a widget (a type without renderer, a renderer that throws) *(proposed)*.
+- **D23 Layout fix of D5 (9i, decided after 9h):** the left rail and the left side panel go full height, from the
+  window's top to the status bar; the tab row (tabs, "+", at its end the funnel, time range, refresh) sits only above
+  the content (`WindowLayout`: the top bar is the centre column's first row); the global "…" moves to the left rail's
+  start, above search everywhere; the Dashica icon (home button) goes. The right side is full height as well, the
+  same rule on both sides *(proposed)*.
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1664,6 +1670,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9f ✅ | **D20 filter UI is the filters extension's; charts run filters.offer** (§3.8, §3.15): `WidgetsApi.offerFilters`, `WidgetContext.offerFilters`, `filterPicks`, `OP_ICONS`, `fetchPill` and the host's `showQuickPick` leave the `widgets` host; `extensions/filters/offer.ts` (`offerFilters(ui, query, at, candidates, source)`, `OP_ICONS`, `fetchPill`), registered as `filters.offer` on the extension's `ui` and `query` (the tab shown); `chart-library/filter-on-click.ts`: `OfferFilters` (the callback `filterOnClick` and `drawTable` are given) and `offerFiltersOf(commands, { dataUrl, filterable })`, which the renderers of `timeBar`, `timeLine`, `barVertical`, `barHorizontal`, `timeHeatmapOrdinal`, `table` and the Explore view use (they get `commands` from their extension's context); `widgetTestbed` registers a recording `filters.offer` (`offers`) in place of the extension, `choices` / `candidates` / `choose` / `pill` and its `/pill` answer gone; the host's tests moved to `extensions/filters/offer.test.ts`, the renderers' tests check the command's arguments, `filters.test.ts` the registered command. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: one helper `offerFiltersOf` names the command for all seven places instead of seven `executeCommand` calls; the candidates are filtered by `filterable` in the extension, as before in the host; without `filters` the unknown command goes to the console, as `details.showRecords` does; `filters.offer` resolves when the pick is done *(all proposed)* | the click's quick pick as before, owned by `filters` |
 | 9g ✅ | **D21 a pill's key read by the filters extension** (§3.15): `pillLabel`, `pillButton`, `pillField` and `PillField` move from `hosts/query/query-impl.ts` / `query.ts` to `extensions/filters/pill-key.ts`; the `query` host's chips are opaque (`{kind: 'pill', key}` / `{kind: 'sql', sql}`, `Pill` only `{key}`), `parseChip` and `filters.add` keep no label; the filter bar reads each chip's label from its key; `fetchPill` and `fetchButtonPill` give the key only; the key tests moved from `query.test.ts` to `pill-key.test.ts`, the chip expectations of the other tests lost their `label`. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `Pill` stays the type `filters.add` takes, now `{key}`; the server's `/pill` and `/button` answers keep their `label`, which the client ignores *(all proposed)* | chips as keys in the query host, read by `filters` |
 | 9h ✅ | **D22 chart frame and shared helpers into extension libraries** (§3.5, §3.15): `ChartFrame` (`chart-frame.ts` / `.css`) moves from `hosts/widgets/chart-frame/` to `extensions/chart-library/`, `widgets.ts` no longer exports it, `ChartFrameOptions` or `DrawOptions`; `widgetTitle` moves to `extensions/widget-library/widget-title.ts` (Debug, Details, and the Explore view's `chartTitle` on it instead of its own copy), `formatTime` to `extensions/time-library/format-time.ts` (the time picker, `ChartFrame`); all imports follow; the `ChartFrame` tests moved from `widgets.test.ts` to `chart-library/chart-frame.test.ts`, new tests for `widgetTitle` and `formatTime`, the query host's custom-range test sets local times as text. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: two library folders by the helpers' users (`widget-library`, `time-library`) instead of one; `showWidgetError` stays in the `widgets` host, unexported (only the host uses it); `.d-widget-error` stays in `widgets.css`, also used by `ChartFrame` *(all proposed)* | charts as before; the `widgets` host only renders and tracks the active widget |
+| 9i ✅ | **D23 layout fix of D5** (§3.4, §3.15): the grid has two rows (sides and centre, status bar); the left and the right side span the first, from the window's top to the status bar; the top bar (tabs, "+", the `left` / `center` / `right` items) is the centre column's first child, above the filter bar and the content; `SideBar.railStart` (a `display: contents` slot before the rail's buttons, which `#place` never passes) and `WindowLayout.railStart` / `UiHost.railStart` (the left one) take the global menu's "…", now a rail button (`wb-global-menu`), above search everywhere; the Dashica icon (`.d-brand`, `dashboards`) is gone; tests: the layout's regions and the grid rows (CSS), the rail start before later buttons, the "…" first in the left rail (`workbench.test.ts`), search everywhere first after it, the start page reached by "+"; `e2e/top-bar.spec.ts` (no icon, the sides full height, the top bar only over the content, the "…" above search) and `e2e/start-page.spec.ts` ("+" leads back). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright written, not run), deviations: the right side is full height too; the "…" sits in a slot of the rail rather than being a rail button with a command (it shows a menu at itself, a command knows no anchor); a left side without panels and rail buttons stays hidden, the "…" with it (the workbench always has Dashboards and search everywhere) *(all proposed)* | the sides from top to bottom, the tabs over the content, "…" in the rail |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

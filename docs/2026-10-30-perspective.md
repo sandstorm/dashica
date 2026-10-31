@@ -404,7 +404,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   `{name:Type}` placeholder" of §4.7 for parameters; `{{DASHICA_FILTERS}}` stays filled in *(proposed)*. Built as §4.5
   and §4.7 say; the values travel as `param_<name>` keys, ClickHouse's HTTP names, in the tab's hash and the rows
   request *(proposed)*.
-- **D10 Explore without a chart (step 8i, ✅ 2026-10-31):** the global "…" menu, left of the Dashica icon. Its
+- **D10 Explore without a chart (step 8i, ✅ 2026-10-31):** the global "…" menu (at the left rail's start since workbench step 9i). Its
   "Explore" opens a blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an
   empty editor, run on a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts
   as the edited rows); "Start from chart…" fills the editor from one of the shown page's charts. Built as:
