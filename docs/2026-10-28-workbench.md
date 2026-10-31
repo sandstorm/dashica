@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -174,7 +174,8 @@ functions on it (`frontend/hosts/page/tabs.ts`), tested without DOM *(proposed)*
 | the active widget (`widgets.active`) | | ✓, the widget pressed or focused in last (§3.4.4) |
 
 - **`QueryHost` per tab, without `location`.** It takes its state from a given query string
-  (`load({ search, defaultTime })`) and reports each change instead of writing the address bar:
+  (`load({ search, page })`, since 9j; the page for the defaults it declares) and reports each change instead of
+  writing the address bar:
   `onDidChangeSearch: Event<string>` (debounced as today; the hash is the tab's, not the query host's). Reading and
   writing the query string become pure functions, `parseSearch(search, defaultTime)` and
   `formatSearch(state, defaultTime, search)` *(proposed)*. The `page` host puts the new search into the tab's `url`,
@@ -266,9 +267,9 @@ background tab never scrolls.
 
 **A background tab** is `hidden`; its DOM stays. Its charts query nothing: its `QueryHost` fires
 `onDidRequestRefresh` on a change of its own state, which only the active tab's controls make, and on auto refresh.
-`QueryHost.setShown(false)` makes an auto refresh tick count as skipped, exactly as while `document.hidden` (§3.7,
-6a); `setShown(true)` refreshes once when one was skipped, the next tick a whole interval later, the same path as
-`visibilitychange`. A chart not yet in view queries once it is, as today (`ChartFrame`'s IntersectionObserver; a
+the `refresh` extension refreshes only the active tab (since 9j, §3.15 D24; before, `QueryHost.setShown`): a tab
+shown again refreshes once when its interval passed while it was in the background, else when it passes, the same
+path as `visibilitychange`. A chart not yet in view queries once it is, as today (`ChartFrame`'s IntersectionObserver; a
 hidden element never intersects). A relative range without auto refresh is not refreshed when the tab is shown, as
 in a hidden browser tab *(proposed)*.
 
@@ -287,7 +288,7 @@ names nothing and the dashboard renders.
 |---|---|
 | `hosts/page/tabs.ts` | new: the `Tab` value and the pure functions on the list (open, close, limit, the tab shown after a close, restore) |
 | `hosts/page/page-impl.ts` | the open tabs: per tab `QueryHost`, element, `page.json`, rendered page; `navigate(url, { newTab })`, `closeTab`; history `{ tab }`, `popstate`, hash changes per tab; the renderer by the hash's kind; sessionStorage |
-| `hosts/query/query-impl.ts` | state from a given search, `onDidChangeSearch`, `setShown`; `parseSearch` / `formatSearch` |
+| `hosts/query/query-impl.ts` | state from a given search, `onDidChangeSearch`; since 9j the registered states only (`QueryStates`, §3.7) |
 | `hosts/query/active-query.ts` | new: `activeQuery`, the active tab's `QueryApi` for extensions |
 | `hosts/ui/layout/tab-bar.ts` | new: `TabBar`, ported from Zwiebelfisch's `EditorTabs` (`role=tablist`, a button per tab with `aria-selected` and its id in `data-`, one click listener on the list, `update(tabs, active)`), plus a title, × and middle click (`onDidChoose`, `onDidClose`) |
 | `hosts/ui/layout/window-layout.ts` | the tab bar region above the filter bar; the over-content element gone |
@@ -448,7 +449,8 @@ a table's search box). Extensions may import a `-library` folder; hosts never do
 frame (`ChartFrame`, §3.6), the column check
 (`SchemaAnalyzer`), the time selection of the time charts (`timeBrush`: for now a drag sets the page's time range,
 through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and the table (`drawTable`: the widget type `table`, the Debug panel). `widget-library` holds `widgetTitle` (a widget's
-title, else its type), `time-library` `formatTime` (an end of a custom range, as `query.time.setCustom` takes it)
+title, else its type), `time-library` `formatTime` (an end of a custom range, as `customRange` takes it) and, since 9j, the specs of the
+query states `time` and `refresh` (§3.7)
 (9h, §3.15 D22).
 
 | Host | Offers |
@@ -457,11 +459,12 @@ title, else its type), `time-library` `formatTime` (an end of a custom range, as
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
 | `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status; a click to filter is the `filters` extension's command `filters.offer` (§3.8, 9f); the chart frame is `chart-library`'s (9h) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
-| `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
+| `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's; it knows no key: each extension registers its own (`registerState`, 9j) |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
 
 - Client extensions live only in `dashica-src`; the instances customize through Go.
-- **Extensions do not depend on each other (for now).** What several need goes into a host (e.g. `query.time`).
+- **Extensions do not depend on each other (for now).** What several need goes into a host or a library (e.g. the
+  query state `time`: its spec in `time-library`, registered by `time-range`, read by `ChartFrame` by its id).
   When that would turn a feature into a host only to share one model (Explore's tabs on `ExploreModel` are the likely
   case), take VS Code's way: `dependsOn: ['explore']`, and what `activate()` returns is its API to the dependents.
 - **Plain DOM, no Alpine, no reactivity library.** Models with private state and `onDidChange` events ("commands out,
@@ -480,7 +483,7 @@ function renderTimeBar(el, widget: WidgetOf<'timeBar'>, ctx): Disposable   // wi
 
 ctx.query(): Promise<QueryResult>          // Arrow table; tracks loading / ok / error itself (status bar, Debug)
 result.dashicaDiagnostics                  // {ignored: string[], skipped?: string}, from X-Dashica-Diagnostics (§3.8)
-ctx.state                                  // the QueryApi: time / filters / params / cursor (§3.7)
+ctx.state                                  // the QueryApi: the registered states by id, requestParams (§3.7)
 ctx.state.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
@@ -493,16 +496,36 @@ ctx.showMenu(menuId, anchor)               // any menu for this widget (its cont
   status, so the status bar and Debug work for every widget). The visual chart frame (render once visible, observe
   size, spinner, error, the chart's Diagnostics §3.8 as "ignores host" or "skipped: …", menu button) is **one optional
   helper**, `new ChartFrame(el, ctx, { draw })` (`chart-library`, since 9h); charts use it in one line, containers and markdown don't.
-- **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write `query.params`.
+- **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write the query state
+  `params` (`widget-library/params-state.ts`, `paramsOf(ctx.state)`), which `dashboardPage` registers (9j).
 
 ### 3.7 Query state and one request format
 
-| Model | Holds | URL | Scope |
-|---|---|---|---|
-| `time` | time range, auto refresh | `?time=1h` | per page; default declared in Go (`.DefaultTimeRange("168h")`, a Go duration as the presets send it; fallback `24h`); navigation opens the target with its own default (as Grafana) |
-| `filters` | one list of chips: structured filters and SQL chips (step 7b, §3.8); later a time-window filter | `?f=…&sql=…&tw=…`, `f` and `sql` each repeatable, in chip order | per page |
-| `params` | values of form widgets | `?wp=…` | per page |
-| `cursor` | hovered timestamp | — (ephemeral) | synchronized crosshair across all time charts |
+✅ **Registered by key (D24, step 9j, 2026-10-31):** the `query` host is a plain per-tab URL state store that knows no
+key of its own. An extension registers what it keeps, for every tab:
+`query.registerState(id, { keys, parse(url, page), format(value, page), request?(value) })` gives the state's value
+(`get` / `set` / `onDidChange`; to an extension the active tab's, `activeQuery`); a reader takes another extension's
+state by its id, `state<T>(id)` (`undefined` while none is registered), never by importing that extension. The host
+keeps each tab's values (parsed from the tab's query string when first read, so a state registered after a load
+reads the URL loaded), writes them into their keys of the tab's URL a moment after a change (the other keys kept as
+they are), fires the change, and `requestParams()` sends each state's `request` entries in the order registered. A
+state with `request` asks the widgets to query again on its change; one without does not (auto refresh). A `set` the
+URL would hold alike changes nothing. *(proposed)* The page shown is given to `parse` / `format` for the defaults it
+declares (`defaultTime`), in place of a `default` per state; one state may span several keys (`time` + `range`,
+`f` + `sql` in chip order), so `parse` reads the whole query string.
+
+| State (id) | Registered by | Holds | URL | Spec |
+|---|---|---|---|---|
+| `time` | `time-range` | time range | `?time=1h`, `?time=custom&range=…` | `time-library/time-state.ts`; default the page's (`.DefaultTimeRange("168h")`, fallback `24h`); sent also when the default |
+| `refresh` | `refresh` | auto refresh | `?refresh=30` | `time-library/refresh-state.ts`; not sent |
+| `filters` | `filters` | one list of chips: pills and SQL chips (step 7b, §3.8); later a time-window filter | `?f=…&sql=…`, each repeatable, in chip order | `filters/chips.ts` (`chipsState`, `addChip` / `replaceChip` / `removeChips`) |
+| `params` | `dashboardPage` | values of form widgets | `?wp=…` | `widget-library/params-state.ts` (`paramsOf`, `withParam`) |
+| `cursor` | — | hovered timestamp | — (ephemeral) | later: synchronized crosshair across all time charts |
+
+Who writes another extension's state: a range dragged across a time chart sets `time` (`ChartFrame`, by its id);
+a fixed range applied or shifted turns `refresh` off (`time-range`, by its id); a table cell's SQL filter runs the
+command `filters.addSql` *(proposed: a command, as `filters.offer`, so the chip rules stay the filters
+extension's)*; the form widgets set their param in `params`.
 
 Every data handler reads the same query parameters; the server parses them once in `lib/httpserver` into one
 `QueryState` (time, filters, params). Params stay what they are today: ClickHouse parameters (`param_<name>`); the
@@ -539,9 +562,11 @@ ClickHouse, so that request is cancelled as well. Missing: ClickHouse keeps runn
 away unless the query carries `cancel_http_readonly_queries_on_client_close=1`; `lib/clickhouse` sets it on every
 query.
 
-**Auto refresh pauses in a hidden tab** (decided 2026-10-30): the `query` host skips a tick while `document.hidden`,
-and refreshes once when the tab is shown again if it skipped one; the next tick follows a whole interval after that
-refresh.
+**Auto refresh pauses in a hidden tab** (decided 2026-10-30; the `refresh` extension's since 9j): it refreshes the
+active tab one interval after that tab's last refresh, of any cause (*(proposed)*: before, the interval kept its
+phase from the setting); nothing while `document.hidden` or for a tab in the background (`page.activeTab`,
+`onDidChangeTabs`); shown again, a tab whose interval passed meanwhile refreshes once, the next refresh a whole
+interval after that; picking an interval starts it anew.
 
 ✅ (step 6.1) **Alerts:** alert widgets only need the time range, so they read `time` / `range` like every other
 handler and never `sql`: an alert chart's `{{DASHICA_FILTERS}}` is the window alone (`httpserver.TimeClause`).
@@ -613,7 +638,7 @@ the server made:
   filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
   answers the first one that does not open with 400, also for the charts it does not apply to).
 - **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
-  (`FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and goes to the console. Since 9f (§3.15 D20) the quick
+  (`addChip` on the query state `filters` since 9j, before `FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and goes to the console. Since 9f (§3.15 D20) the quick
   pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
   a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
@@ -1088,11 +1113,10 @@ interface PageApi {
 }                                           // `dashboard` by the extension dashboardPage; a kind in the hash (`#explore=3`)
 
 // query — the state every query depends on (§3.7)
-interface QueryApi {
-  readonly time: TimeModel;                 // range, auto refresh; per page, URL-synced
-  readonly filters: FilterModel;            // chips: {fieldId, op, value} | {sql} (step 7b) + time window; URL-synced
-  readonly params: ParamsModel;             // form widget values; URL-synced
-  readonly cursor: CursorModel;             // hovered timestamp, synchronized across time charts (step 7)
+interface QueryApi {                        // knows no key of its own (9j)
+  registerState<T>(id: string, spec: { keys: string[]; parse(url, page): T; format(value: T, page): Entries;
+                                       request?(value: T): Entries }): QueryState<T> & Disposable;   // every tab's
+  state<T>(id: string): QueryState<T> | undefined;   // another extension's, by its id: time, refresh, filters, params
   refresh(): void;
   readonly onDidRequestRefresh: Event<void>;
   requestParams(): URLSearchParams;         // what every data handler reads; one format with step 6
@@ -1400,9 +1424,9 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9i)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9j)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1455,6 +1479,15 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   the content (`WindowLayout`: the top bar is the centre column's first row); the global "…" moves to the left rail's
   start, above search everywhere; the Dashica icon (home button) goes. The right side is full height as well, the
   same rule on both sides *(proposed)*.
+- **D24 Query state registered by key (9j, decided after 9i, "go all the way"):** the `query` host becomes a plain
+  per-tab URL state store without keys of its own (`registerState`, §3.7); `time-range` owns `time` / `range`
+  (`TimeModel` leaves the host), `filters` owns `f` / `sql` (`FiltersModel` leaves it), `refresh` owns `refresh` and
+  the auto refresh timer, paused for a background tab and a hidden window (`QueryHost.setShown` and the host's timer
+  go), `dashboardPage` owns `wp` (`ParamsModel` leaves it). Readers take a state by its id or `requestParams`, never
+  by importing another extension. The server's URL format stays; no Go change. Specs shared by several extensions
+  live in libraries (`time-library`, `widget-library`) *(proposed)*; the filter chips' spec stays in the `filters`
+  extension, and a table cell adds its SQL chip by the command `filters.addSql` *(proposed)*. A form widget without
+  the `params` state (no `dashboardPage`) shows "No extension keeps the page params" as its error *(proposed)*.
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1671,6 +1704,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9g ✅ | **D21 a pill's key read by the filters extension** (§3.15): `pillLabel`, `pillButton`, `pillField` and `PillField` move from `hosts/query/query-impl.ts` / `query.ts` to `extensions/filters/pill-key.ts`; the `query` host's chips are opaque (`{kind: 'pill', key}` / `{kind: 'sql', sql}`, `Pill` only `{key}`), `parseChip` and `filters.add` keep no label; the filter bar reads each chip's label from its key; `fetchPill` and `fetchButtonPill` give the key only; the key tests moved from `query.test.ts` to `pill-key.test.ts`, the chip expectations of the other tests lost their `label`. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `Pill` stays the type `filters.add` takes, now `{key}`; the server's `/pill` and `/button` answers keep their `label`, which the client ignores *(all proposed)* | chips as keys in the query host, read by `filters` |
 | 9h ✅ | **D22 chart frame and shared helpers into extension libraries** (§3.5, §3.15): `ChartFrame` (`chart-frame.ts` / `.css`) moves from `hosts/widgets/chart-frame/` to `extensions/chart-library/`, `widgets.ts` no longer exports it, `ChartFrameOptions` or `DrawOptions`; `widgetTitle` moves to `extensions/widget-library/widget-title.ts` (Debug, Details, and the Explore view's `chartTitle` on it instead of its own copy), `formatTime` to `extensions/time-library/format-time.ts` (the time picker, `ChartFrame`); all imports follow; the `ChartFrame` tests moved from `widgets.test.ts` to `chart-library/chart-frame.test.ts`, new tests for `widgetTitle` and `formatTime`, the query host's custom-range test sets local times as text. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: two library folders by the helpers' users (`widget-library`, `time-library`) instead of one; `showWidgetError` stays in the `widgets` host, unexported (only the host uses it); `.d-widget-error` stays in `widgets.css`, also used by `ChartFrame` *(all proposed)* | charts as before; the `widgets` host only renders and tracks the active widget |
 | 9i ✅ | **D23 layout fix of D5** (§3.4, §3.15): the grid has two rows (sides and centre, status bar); the left and the right side span the first, from the window's top to the status bar; the top bar (tabs, "+", the `left` / `center` / `right` items) is the centre column's first child, above the filter bar and the content; `SideBar.railStart` (a `display: contents` slot before the rail's buttons, which `#place` never passes) and `WindowLayout.railStart` / `UiHost.railStart` (the left one) take the global menu's "…", now a rail button (`wb-global-menu`), above search everywhere; the Dashica icon (`.d-brand`, `dashboards`) is gone; tests: the layout's regions and the grid rows (CSS), the rail start before later buttons, the "…" first in the left rail (`workbench.test.ts`), search everywhere first after it, the start page reached by "+"; `e2e/top-bar.spec.ts` (no icon, the sides full height, the top bar only over the content, the "…" above search) and `e2e/start-page.spec.ts` ("+" leads back). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright written, not run), deviations: the right side is full height too; the "…" sits in a slot of the rail rather than being a rail button with a command (it shows a menu at itself, a command knows no anchor); a left side without panels and rail buttons stays hidden, the "…" with it (the workbench always has Dashboards and search everywhere) *(all proposed)* | the sides from top to bottom, the tabs over the content, "…" in the rail |
+| 9j ✅ | **D24 query state registered by key** (§3.7, §3.15): `QueryApi.registerState(id, spec)` / `state(id)`, `QueryStates` shared by the tabs (the page host's), values parsed lazily from the tab's search and written into the spec's keys (other keys kept), `requestParams` the states' `request` entries in registration order; `time-library/time-state.ts` (`timeState`, `customRange`, `presetRange`) registered by `time-range`, set by `ChartFrame`'s dragged range; `time-library/refresh-state.ts` registered by `refresh`, which runs the timer (the active tab only, one interval after its last refresh, paused while hidden, catching up once; `setShown` gone); `filters/chips.ts` (`chipsState`, pure `addChip` / `replaceChip` / `removeChips`; `FilterChip` and friends leave the host), the command `filters.addSql` for the table's cell filters; `widget-library/params-state.ts` (`paramsState`, `paramsOf`, `withParam`) registered by `dashboardPage`; `load({ search, page })`; tests moved to the specs and extensions (`time-state`, `chips`, `params-state`, `refresh`). ✅ 2026-10-31 (vitest, typecheck, top-comments; Playwright not run) | the URLs as before; each extension owns its keys |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
