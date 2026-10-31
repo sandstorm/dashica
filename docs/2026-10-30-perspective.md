@@ -218,9 +218,9 @@ handler) is not planned.
   chart ignores, "SQL" (opens the SQL editor, §4.7; shown only when the answer says `X-Dashica-Sql: editable`), "Reset",
   "Close". "Remove grouping" goes (§4.7).
 - **Filters from the view:** `perspective-click` on a group row gives `[[column, '==', value], …]`; the deepest such
-  value on a column that is no date or time becomes a `category` selection, and the floating bar (`widget/selection`,
-  "Filter by", "Exclude") adds a page filter chip (all rows re-fetched); on the chart's result only, an edited query's rows
-  select nothing (§4.7). Perspective's own filters stay local.
+  value on a column that is no date or time is offered in the quick pick "Filter" at the click (since workbench step
+  8c: `widgets.offerFilters`, "Filter" / "Exclude"), which adds a page filter chip at once (all rows re-fetched); on
+  the chart's result only, an edited query's rows offer nothing (§4.7). Perspective's own filters stay local.
 - **State:** `viewer.save()` per chart and mode in the extension's `globalState` (localStorage), keys `view:<dataUrl>`
   and `view:<dataUrl>:edited` (was `:ungrouped`), kept once the viewer was used; "Reset" goes back to the config from
   props. The edited SQL itself is in the tab's hash (§4.7).
@@ -524,8 +524,9 @@ Updated 2026-10-31 to the SQL editor of §4.7, which replaced "Remove grouping" 
   range and filters no longer apply, and "Reset to the chart's query" returns to the chart's result. Removing a
   grouping is deleting its `GROUP BY`.
 - The time picker, refresh and filter bar above it re-fetch the rows; the viewer keeps its config.
-- A click on a group row of the chart's result opens the floating bar ("Filter by", "Exclude"); either adds a filter
-  chip and the rows re-fetch. The rows of an edited query offer no selection (§4.7).
+- A click on a group row of the chart's result opens the quick pick "Filter" ("Filter" / "Exclude" its value, since
+  workbench step 8c); either adds a filter chip at once and the rows re-fetch. The rows of an edited query offer
+  nothing (§4.7).
 - The viewer's config is kept per chart and mode once the user has changed it; "Reset" forgets it.
 
 Steps for the maintainer (none of them were run in the spike):

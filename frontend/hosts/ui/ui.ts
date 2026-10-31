@@ -30,20 +30,6 @@ export interface UiApi {
    */
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
   /**
-   * Pops up `entries` at `options.anchor` in the quick pick as `showContextMenu` pops up a menu's, for entries of the
-   * moment (a chart's categories to select); without entries it changes nothing, the open box stays. Choosing one calls
-   * its `run`, after the box closed and gave the focus back.
-   */
-  showChoices(entries: readonly Choice[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void;
-  /**
-   * Adds the floating bar `options.id` until disposed: a row of the entries of the menu `options.id`, which its owner
-   * shows for a context (`show`) at what `options.anchor` gives for it, above it, or below it where there is no room.
-   * It takes no focus and stays until its owner hides it, while the page around it keeps working; it follows its
-   * anchor when the page scrolls or resizes. Choosing an entry runs its command with the context. Hidden while the
-   * anchor is `null` or no entry applies.
-   */
-  registerFloatingBar<C extends object>(options: FloatingBarOptions<C>): FloatingBar<C>;
-  /**
    * Shows `items` in a quick pick at `options.anchor` (else at the top in the middle of the workbench); typing narrows
    * them (fuzzily, by label, else description), a heading shows while an item of its group does. Resolves with the
    * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
@@ -105,34 +91,7 @@ export interface ContextMenuOptions {
   readonly args?: readonly unknown[];
 }
 
-/** An entry of `showChoices`. */
-export interface Choice {
-  /** What it says ("instance = web-1"). */
-  readonly label: string;
-  run(): void;
-}
-
 export type MenuAnchor = Element | { readonly x: number; readonly y: number };
-
-export interface FloatingBarOptions<C extends object> {
-  /** Its menu's id (`widget/selection`), unique among the floating bars. */
-  readonly id: string;
-  /** The bar's accessible name ("Selection"). */
-  readonly title: string;
-  /** Where it lies when two bars overlap: the higher order on top; default 0. */
-  readonly order?: number;
-  /** Where `context` is in the viewport (a selected bar's box); `null` while it is gone. Asked on `show`, on scrolling and resizing. */
-  anchor(context: C): DOMRect | null;
-}
-
-/** A floating bar its owner shows for a context, as `UiApi.registerFloatingBar` says. */
-export interface FloatingBar<C extends object> {
-  /** Shows the bar for `context` with the entries whose `when` holds in it; moves it there while it shows another. */
-  show(context: C): void;
-  hide(): void;
-  /** Hides it for good. */
-  dispose(): void;
-}
 
 /** Where and how `showQuickPick` shows its box. */
 export interface QuickPickOptions {

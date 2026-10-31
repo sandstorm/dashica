@@ -5,6 +5,8 @@ import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
+import type { MenuAnchor } from '../../hosts/ui/ui';
+import type { FilterCandidate } from '../../hosts/widgets/widgets';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';
 import { describeRows, fetchRows, fetchSql, rowsRequest, sqlRequest, type RowsAnswer } from './rows';
 
@@ -39,14 +41,6 @@ export interface PerspectiveViewer extends HTMLElement {
   delete(): Promise<unknown>;
 }
 
-/** A value the viewer clicked on a group row, which the page can filter by. */
-export interface ViewSelection {
-  /** The clicked row's column (`host`), the id of a filter on it. */
-  readonly fieldId: string;
-  readonly value: string;
-  /** Where the click was; in the page while the view is. */
-  readonly anchor: Element;
-}
 
 /** A chart that serves its rows to the view: its result, and the rows of its SQL as the viewer edited it. */
 export type ChartWithRows = Extract<WidgetNode, { rowsUrl?: string }> & { readonly rowsUrl: string };
@@ -66,8 +60,8 @@ export interface ExploreViewOptions {
   navigate(hash: string): void;
   /** The view's "Close". */
   close(): void;
-  /** A click on a group row's value (`perspective-click`). */
-  select(selection: ViewSelection): void;
+  /** A click on a group row's value (`perspective-click`): offers to filter by it, at the click. */
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
 }
 
 /**
@@ -436,17 +430,17 @@ class ExploreView {
       void this.options.state.update(stateKey(this.options.widget, this.#edited !== undefined), persistable(getConfig()));
     });
     viewer.addEventListener('perspective-click', (event: Event) => {
-      const selection = this.#clicked((event as CustomEvent<{ config?: ViewerConfig }>).detail);
-      if (selection) this.options.select(selection);
+      const candidate = this.#clicked((event as CustomEvent<{ config?: ViewerConfig }>).detail);
+      if (candidate) this.options.offerFilters(this.#pointer, [candidate]);
     });
   }
 
   /**
-   * The value a click on a group row selects: the deepest of its group filters (`[column, '==', value]`) on a column
+   * The value a click on a group row offers: the deepest of its group filters (`[column, '==', value]`) on a column
    * of the rows that is no date or time; `undefined` for any other click, and for every click on the rows of an edited
    * query: their columns are whatever its text selects, and a page filter does not change the edited query.
    */
-  #clicked(detail: { config?: ViewerConfig } | undefined): ViewSelection | undefined {
+  #clicked(detail: { config?: ViewerConfig } | undefined): FilterCandidate | undefined {
     if (this.#edited !== undefined) return undefined;
     const schema = this.#shown?.schema ?? {};
     const filters = (detail?.config?.filter ?? []).filter(
@@ -454,13 +448,7 @@ class ExploreView {
     );
     const last = filters.at(-1);
     if (!last) return undefined;
-    const box = this.#body.getBoundingClientRect();
-    const anchor: HTMLElement = html`<span class="d-explore-view__anchor"></span>`;
-    anchor.style.left = `${this.#pointer.x - box.left}px`;
-    anchor.style.top = `${this.#pointer.y - box.top}px`;
-    this.#body.querySelector('.d-explore-view__anchor')?.remove();
-    this.#body.append(anchor);
-    return { fieldId: last[0], value: String(last[2]), anchor };
+    return { fieldId: last[0], value: String(last[2]) };
   }
 
   #showNotes(notes: readonly string[]): void {

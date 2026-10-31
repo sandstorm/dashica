@@ -2,18 +2,18 @@ import * as Plot from '@observablehq/plot';
 import type { TimeBarProps } from '../../generated/zz_generated.dashica';
 import type { DrawOptions, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from './schema';
-import { selectOnClick } from './select-on-click';
+import { filterOnClick } from './filter-on-click';
 import { timeBrush } from './time-brush';
 
 /**
  * A bar per time bucket (`x`) as high as its measure (`y`), stacked by `fill`, over the time range the server queried;
  * an alert's thresholds (`X-Dashica-Alert-If`) as red lines. The widget types `timeBar` and `alertDetail` draw it.
- * With `choose`, a click on a bar offers its fill and facets to select.
+ * With `offerFilters`, a click on a bar offers its fill and facets to filter by or exclude.
  *
  * The bucket size is the x field's, or the server's for an `AutoBucket` axis: the y axis then shows per second, since
  * a bucket size the server picks says nothing about the bars' height ("logs per 15 minutes or per 5?").
  */
-export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions, choose?: WidgetContext['choose']) {
+export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions, offerFilters?: WidgetContext['offerFilters']) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
   const xBucketSize = data.dashicaBucketSize ?? props.x.xBucketSizeMs;
@@ -68,7 +68,7 @@ export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: Dr
     },
     marks: [
       Plot.rectY(data, { ...bars, tip: tipChannels ? { channels: tipChannels } : true }),
-      choose ? selectOnClick(Plot.rectY, data, { ...bars, fields: [props.fill, props.fx, props.fy], choose }) : null,
+      offerFilters ? filterOnClick(Plot.rectY, data, { ...bars, fields: [props.fill, props.fx, props.fy], offerFilters }) : null,
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
       // Alert threshold lines from X-Dashica-Alert-If header

@@ -5,7 +5,7 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
 /**
  * The widget type `table`: the result rows (Tabulator) with a search box, filters per column, sticky tooltips that can
  * be pinned. The ticked rows are the widget's selected records (Details shows them); each answer starts with none.
- * A click on a cell selects its value (by its column's name).
+ * A click on a cell offers to filter by its value or exclude it (by its column's name).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter, a column header's (`table/header`) size the columns.
  */
@@ -37,7 +37,7 @@ function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetCont
       // the table of a new answer has no row ticked
       ctx.selectRecords([]);
       const table = drawTable(result, widget.props, {
-        select: (selection) => ctx.select(selection),
+        offerFilters: (at, candidates) => ctx.offerFilters(at, candidates),
         selectRecords: (records) => ctx.selectRecords(records),
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
       });
@@ -54,8 +54,8 @@ const around = (ms: number) => (cell: TableCellMenuContext) => {
 };
 
 /**
- * A cell's SQL filters, in menu order. A table that selects leaves "Equals" / "Not equals" to the floating bar
- * ("Filter by …" / "Exclude …"), and keeps the entries no filter op says.
+ * A cell's SQL filters, in menu order. A table whose cells filter on a click leaves "Equals" / "Not equals" to that
+ * click's quick pick, and keeps the entries no filter op says.
  */
 const CELL_FILTERS: readonly {
   command: string;
@@ -63,9 +63,9 @@ const CELL_FILTERS: readonly {
   when: (cell: TableCellMenuContext) => boolean;
   condition: (cell: TableCellMenuContext) => string;
 }[] = [
-  { command: 'table.filterEqualsTimestamp', title: 'Filter: Equals this timestamp', when: (c) => c.timestamp && !c.selecting, condition: (c) => `${c.column} = '${c.value}'` },
-  { command: 'table.filterEquals', title: 'Filter: Equals this value', when: (c) => !c.timestamp && !c.selecting, condition: (c) => `${c.column} = '${c.value}'` },
-  { command: 'table.filterNotEquals', title: 'Filter: Not equals this value', when: (c) => !c.timestamp && !c.selecting, condition: (c) => `${c.column} != '${c.value}'` },
+  { command: 'table.filterEqualsTimestamp', title: 'Filter: Equals this timestamp', when: (c) => c.timestamp && !c.filtering, condition: (c) => `${c.column} = '${c.value}'` },
+  { command: 'table.filterEquals', title: 'Filter: Equals this value', when: (c) => !c.timestamp && !c.filtering, condition: (c) => `${c.column} = '${c.value}'` },
+  { command: 'table.filterNotEquals', title: 'Filter: Not equals this value', when: (c) => !c.timestamp && !c.filtering, condition: (c) => `${c.column} != '${c.value}'` },
   { command: 'table.filterContains', title: 'Filter: Contains this value', when: (c) => !c.timestamp, condition: (c) => `${c.column} LIKE '%${c.value}%'` },
   { command: 'table.filterTime5m', title: 'Filter: Time ±5 minutes', when: (c) => c.timestamp, condition: around(5 * 60 * 1000) },
   { command: 'table.filterTime1h', title: 'Filter: Time ±1 hour', when: (c) => c.timestamp, condition: around(60 * 60 * 1000) },

@@ -3,13 +3,13 @@ import type { TimeHeatmapOrdinalProps, TimeHeatmapProps } from '../../generated/
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from '../chart-library/schema';
-import { selectOnClick } from '../chart-library/select-on-click';
+import { filterOnClick } from '../chart-library/filter-on-click';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
  * The widget types `timeHeatmap` and `timeHeatmapOrdinal`: a cell per time bucket (`x`) and `y` bucket, or per distinct
  * `y` value, colored by its measure (`fill`) in blues, inferno in dark mode. A click on a cell of an ordinal heatmap
- * offers its row (`y`) to select.
+ * offers its row (`y`) to filter by or exclude.
  */
 export const heatmap: Extension = {
   id: 'heatmap',
@@ -33,7 +33,7 @@ function renderTimeHeatmapOrdinal(el: HTMLElement, widget: WidgetOf<'timeHeatmap
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, (at, candidates) => ctx.choose(at, candidates)),
+    draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
   });
 }
 
@@ -85,7 +85,7 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
 }
 
 /** `color` and `colorScheme` are not used: a bug the port keeps (docs/2026-10-28-workbench.md §5). */
-function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, choose: WidgetContext['choose']) {
+function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
   const xBucketSize = props.x.xBucketSizeMs;
@@ -123,7 +123,7 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
     },
     marks: [
       Plot.barX(data, { ...cells, tip: true }),
-      selectOnClick(Plot.barX, data, { ...cells, fields: [props.y], choose }),
+      filterOnClick(Plot.barX, data, { ...cells, fields: [props.y], offerFilters }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

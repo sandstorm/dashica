@@ -100,14 +100,6 @@
   margin: var(--space-4);
 }
 
-/* Where a click on the viewer selected a value: the floating bar sits next to it. */
-.d-explore-view__anchor {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
-}
-
 .d-explore-view__body perspective-viewer.d-explore-view__viewer {
   flex: 1;
   min-height: 0;

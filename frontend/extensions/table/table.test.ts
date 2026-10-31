@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for table.ts: the rows drawn into a table, ticked rows as the widget's selected records, a click on a cell of a
-// category column selecting its value for the floating bar's filters, a cell's menu (`table/cell`) adding a condition
-// to the page's SQL filter, a column header's (`table/header`) sizing the columns.
+// category column offering to filter by its value or exclude it, a cell's menu (`table/cell`) adding a condition to
+// the page's SQL filter, a column header's (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
@@ -33,7 +33,6 @@ const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textCont
 
 const cellAt = (el: HTMLElement, column: string, row: number) =>
   el.querySelectorAll<HTMLElement>(`.tabulator-cell[tabulator-field="${column}"]`)[row];
-const entry = (title: string) => [...(testbed.floatingBar()?.querySelectorAll('button') ?? [])].find((button) => button.textContent === title);
 // Right-clicks the cell in `column` of row `row` (0-based): the menu it shows, and its entries
 const openCellMenu = (el: HTMLElement, column: string, row: number) => {
   cellAt(el, column, row).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 6 }));
@@ -80,50 +79,50 @@ describe('table', () => {
     expect(testbed.widgets.active?.records).toEqual([]);
   });
 
-  it('selects the value of a clicked cell by its column’s name; the floating bar filters by it', async () => {
+  it('offers the value of a clicked cell by its column’s name; "Exclude" adds it as ≠', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['path', 'status'] }, dataUrl: '/p/shop/api/1' });
     await inView();
 
     const cell = cellAt(el, 'status', 1);
-    expect(cell.classList.contains('d-table__selectable')).toBe(true);
+    expect(cell.classList.contains('d-table__filterable')).toBe(true);
     cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '1', fieldId: 'status', value: '500', anchor: cell });
-    entry('Exclude')!.click();
+    expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
+    await testbed.choose('Exclude status = 500');
 
     expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '500' }]);
   });
 
-  it('selects nothing from a NULL cell', async () => {
+  it('offers nothing from a NULL cell', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', null], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['path'] }, dataUrl: '/p/shop/api/1' });
     await inView();
 
     cellAt(el, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.widgets.selection).toBeUndefined();
+    expect(testbed.choices()).toEqual([]);
   });
 
-  it('selects only in its category columns: a measure, or a table without categories, selects nothing', async () => {
+  it('offers only in its category columns: a measure, or a table without categories, offers nothing', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], cnt: [3] });
     const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['path'] }, dataUrl: '/p/shop/api/1' });
     await inView();
 
     const cnt = cellAt(el, 'cnt', 0);
-    expect(cnt.classList.contains('d-table__selectable')).toBe(false);
+    expect(cnt.classList.contains('d-table__filterable')).toBe(false);
     cnt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.widgets.selection).toBeUndefined();
-    expect(cellAt(el, 'path', 0).classList.contains('d-table__selectable')).toBe(true);
+    expect(testbed.choices()).toEqual([]);
+    expect(cellAt(el, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
   });
 
-  it('selects nothing in a list column, even one named a category', async () => {
+  it('offers nothing in a list column, even one named a category', async () => {
     testbed.serve('/p/shop/api/1/query', new Table({ tags: vectorFromArray([['a', 'b']], new List(new Field('item', new Utf8(), true))) }));
     const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['tags'] }, dataUrl: '/p/shop/api/1' });
     await inView();
 
     const tags = cellAt(el, 'tags', 0);
-    expect(tags.classList.contains('d-table__selectable')).toBe(false);
+    expect(tags.classList.contains('d-table__filterable')).toBe(false);
     tags.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.widgets.selection).toBeUndefined();
+    expect(testbed.choices()).toEqual([]);
   });
 
   it('keeps only the SQL entries no filter op says in a cell’s menu', async () => {
@@ -144,14 +143,14 @@ describe('table', () => {
     expect(labels(openCellMenu(el, 'timestamp', 0))).toEqual(['Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
   });
 
-  it('has all SQL entries in the menu of a table that does not select, and a time window around a timestamp', async () => {
+  it('has all SQL entries in the menu of a table whose cells do not filter on a click, and a time window around a timestamp', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });
     const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
-    const unselecting = (menu: ReturnType<typeof openCellMenu>) => ({ ...menu, entries: testbed.ui.getMenuItems<object>(menu.menuId, { ...menu.options.context, selecting: false }) });
+    const unfiltering = (menu: ReturnType<typeof openCellMenu>) => ({ ...menu, entries: testbed.ui.getMenuItems<object>(menu.menuId, { ...menu.options.context, filtering: false }) });
 
-    expect(labels(unselecting(openCellMenu(el, 'path', 0)))).toEqual(['Filter: Equals this value', 'Filter: Not equals this value', 'Filter: Contains this value']);
-    const time = unselecting(openCellMenu(el, 'timestamp', 0));
+    expect(labels(unfiltering(openCellMenu(el, 'path', 0)))).toEqual(['Filter: Equals this value', 'Filter: Not equals this value', 'Filter: Contains this value']);
+    const time = unfiltering(openCellMenu(el, 'timestamp', 0));
     expect(labels(time)).toEqual(['Filter: Equals this timestamp', 'Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
     await click(time, 'Filter: Time ±1 hour');
     expect(testbed.query.filters.chips).toEqual([{ kind: 'sql', sql: 'timestamp BETWEEN 1761726400 AND 1761733600' }]);

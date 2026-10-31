@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for bar-vertical.ts: bars drawn from the widget’s data, sorted by their measure when asked, a click on a bar
-// offering its categories, choosing one selecting it for the floating bar's filters.
+// offering to filter by its categories or exclude them, choosing one adding the filter.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { clickMark, pointAt } from '../chart-library/plot-testing';
@@ -44,25 +44,19 @@ describe('barVertical', () => {
 
   describe('a click on a bar', () => {
     const bars = (el: HTMLElement) => [...el.querySelectorAll<SVGRectElement>('g[aria-label="bar"] rect')];
-    const entry = (title: string) => [...(testbed.floatingBar()?.querySelectorAll('button') ?? [])].find((button) => button.textContent === title);
     const byStatus = (more: object = {}) =>
       ({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', ...more }) as const;
 
-    it('offers its category, also as the only candidate; choosing it selects, and "Filter by" in the floating bar filters by it', async () => {
+    it('offers to filter by or exclude its category, also as the only candidate; choosing "Filter" adds the filter at once', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
       const { el } = testbed.render(byStatus());
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.choices()).toEqual(['status = 500']);
-      expect(testbed.widgets.selection).toBeUndefined();
-      testbed.choose('status = 500');
+      expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
+      expect(testbed.query.filters.chips).toEqual([]);
+      await testbed.choose('Filter status = 500');
       expect(testbed.choices()).toEqual([]);
-      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '1', fieldId: 'status', value: '500', anchor: bars(el)[1] });
-      entry('Filter by')!.click();
-      await settle();
       expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'eq', value: '500' }]);
-      expect(testbed.widgets.selection).toBeUndefined();
-      expect(testbed.floatingBar()).toBeNull();
       expect(testbed.requests.at(-1)!.searchParams.getAll('f')).toEqual(['status:eq:500']);
     });
 
@@ -72,10 +66,9 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus({ props }));
       await inView();
       await clickMark(bars(el).at(-1)!);
-      expect(testbed.choices()).toEqual(['status = 500', 'host = b', 'region = us']);
-      testbed.choose('host = b');
-      expect(testbed.widgets.selection).toMatchObject({ fieldId: 'host', value: 'b' });
-      expect(entry('Filter by')).toBeDefined();
+      expect(testbed.candidates()).toEqual(['status = 500', 'host = b', 'region = us']);
+      await testbed.choose('Filter host = b');
+      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'eq', value: 'b' }]);
     });
 
     it('offers again on the next click, on the same bar and on another: Plot does not pin its tip', async () => {
@@ -83,13 +76,13 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus());
       await inView();
       await clickMark(bars(el)[1]);
-      testbed.choose('status = 500');
+      escape();
       await clickMark(bars(el)[1]);
-      expect(testbed.choices()).toEqual(['status = 500']);
+      expect(testbed.candidates()).toEqual(['status = 500']);
       await clickMark(bars(el)[0]);
-      expect(testbed.choices()).toEqual(['status = 200']);
-      testbed.choose('status = 200');
-      expect(testbed.widgets.selection).toMatchObject({ fieldId: 'status', value: '200' });
+      expect(testbed.candidates()).toEqual(['status = 200']);
+      await testbed.choose('Exclude status = 200');
+      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '200' }]);
     });
 
     it('stops a mouse’s pointerdown on a bar, on which Plot would pin its tip, and lets a touch or pen pass', async () => {
@@ -109,16 +102,6 @@ describe('barVertical', () => {
       expect(seen).toEqual(['touch', 'pen']);
     });
 
-    it('"Exclude" adds the category as ≠', async () => {
-      testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
-      const { el } = testbed.render(byStatus());
-      await inView();
-      await clickMark(bars(el)[0]);
-      testbed.choose('status = 200');
-      entry('Exclude')!.click();
-      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '200' }]);
-    });
-
     // a time bucket as x, which is never a candidate
     const byBucket = (more: object = {}) => byStatus({ props: { ...byStatus().props, x: { kind: 'autoBucket', alias: 'status', xBucketSizeMs: 900000 } }, ...more });
 
@@ -128,7 +111,7 @@ describe('barVertical', () => {
       const { el } = testbed.render(byBucket({ props: { ...byBucket().props, fill } }));
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.choices()).toEqual(['host = b']);
+      expect(testbed.candidates()).toEqual(['host = b']);
       escape();
       const { el: without } = testbed.render(byBucket());
       await inView();
@@ -141,12 +124,12 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus());
       const { el: without } = testbed.render(byBucket());
       await inView();
-      const pointing = () => el.querySelector('.d-select-on-click--pointing') !== null;
-      expect(el.querySelector('.d-select-on-click')).not.toBeNull();
+      const pointing = () => el.querySelector('.d-filter-on-click--pointing') !== null;
+      expect(el.querySelector('.d-filter-on-click')).not.toBeNull();
       expect(pointing()).toBe(false);
       await pointAt(bars(el)[1]);
       expect(pointing()).toBe(true);
-      expect(without.querySelector('.d-select-on-click')).toBeNull();
+      expect(without.querySelector('.d-filter-on-click')).toBeNull();
     });
 
     it('never offers a measure, nor a NULL', async () => {
@@ -154,7 +137,7 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus({ props: { ...byStatus().props, fill: { kind: 'expr', alias: 'host' } } }));
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.choices()).toEqual(['host = b']);
+      expect(testbed.candidates()).toEqual(['host = b']);
       escape();
       const { el: measured } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } } });
       await inView();
@@ -167,7 +150,7 @@ describe('barVertical', () => {
       const { el } = testbed.render(byBucket({ props: { ...byBucket().props, fx: { kind: 'expr', alias: 'region' } } }));
       await inView();
       await clickMark(bars(el).at(-1)!);
-      expect(testbed.choices()).toEqual(['region = us']);
+      expect(testbed.candidates()).toEqual(['region = us']);
     });
   });
 });

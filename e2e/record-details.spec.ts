@@ -1,6 +1,6 @@
 // Tests for the selected records (docs/2026-10-28-workbench.md §3.4.5): ticking rows of a table makes it the active
 // widget, the status bar says how many records are selected, a click there opens the left side panel "Details" with a
-// view per record; a click on a cell still selects its value for the floating bar.
+// view per record; a click on a cell still offers to filter by its value.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its table
 // "20 slowest requests" (column `host_name`) and its time bar "HTTP non-2xx status by type". Others:
@@ -62,9 +62,9 @@ test('Details follows the active widget; a click on a cell still selects its val
     await expect(details).toContainText('Tick rows of a table to see them here.');
     await expect(page.getByTestId('details-status')).toBeHidden();
 
-    // a click on a cell makes the table active again, its records kept, and selects the cell's value
+    // a click on a cell makes the table active again, its records kept, and offers to filter by the cell's value
     const table = await chart(page, TABLE);
-    await table.locator(`.tabulator-cell.d-table__selectable[tabulator-field="${COLUMN}"]`).first().click();
+    await table.locator(`.tabulator-cell.d-table__filterable[tabulator-field="${COLUMN}"]`).first().click();
     await expect(details.locator('.d-view__title')).toHaveText(['Record 1']);
-    await expect(page.getByRole('toolbar', {name: 'Selection'}).getByRole('button')).toHaveText(['Filter by', 'Exclude']);
+    await expect(page.getByRole('dialog', {name: 'Filter'}).getByRole('option')).toHaveCount(2);
 });

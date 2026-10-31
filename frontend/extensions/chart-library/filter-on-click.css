@@ -1,0 +1,2 @@
+/* See filterOnClick in filter-on-click.ts. */
+svg:has(.d-filter-on-click--pointing) { cursor: pointer; }

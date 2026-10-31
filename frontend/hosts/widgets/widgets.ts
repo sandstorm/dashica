@@ -8,8 +8,8 @@ import type { MenuAnchor } from '../ui/ui';
 /**
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
- * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu and the workbench's
- * one selection (`select`, or `choose` among candidates), its selected records (`selectRecords`: a table's ticked rows).
+ * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu, the filters a
+ * click offers (`offerFilters`), its selected records (`selectRecords`: a table's ticked rows).
  * Charts put themselves into one `ChartFrame` (title, spinner, error, menu button). Each tab has an active widget: the
  * widget with data the viewer last pressed or focused in (its menu button, a mark, a table cell) or ticked records on,
  * outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one, and the widget itself
@@ -24,15 +24,13 @@ export interface WidgetsApi {
    * (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
    */
   render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable;
-  /** What the viewer selected on a chart, one at a time; `undefined` while nothing is. */
-  readonly selection: Selection | undefined;
   /**
-   * Selects `selection` in place of any other, on a view of the chart `selection.widgetId` outside the page's widgets
-   * (the Explore view); it ends as one on a chart does.
+   * Offers, in a quick pick "Filter" at `at`, to filter by each of `candidates` ("status = 500" with a filter icon) or
+   * to exclude it (the same with a minus icon), in order; choosing one adds it to `state`'s filters at once. Nothing
+   * without candidates. For a view of a chart outside the page's widgets (the Explore view), as `offerFilters` of a
+   * widget's context.
    */
-  select(selection: Selection): void;
-  /** Ends the selection; its floating bar goes away. */
-  clearSelection(): void;
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi): void;
   /**
    * The active tab's active widget, the same object as long as it is rendered; `undefined` while the viewer has not
    * pressed or focused in a widget with data of that tab, or after it was removed.
@@ -66,22 +64,11 @@ export type WidgetStatus =
   | { readonly kind: 'done'; readonly rows: number; readonly ms: number; readonly diagnostics: Diagnostics }
   | { readonly kind: 'error'; readonly message: string; readonly ms: number };
 
-/**
- * What the viewer selected on a chart (`WidgetContext.select`). The floating bar `widget/selection` shows next to it,
- * its context the selection; Escape or a click elsewhere ends it.
- */
-export type Selection = CategorySelection;
-
-/** A category's value: a bar's category, its fill, a table cell. */
-export interface CategorySelection {
-  readonly kind: 'category';
-  /** The chart's id on its page, as in its `dataUrl` (`3`). */
-  readonly widgetId: string;
+/** A category's value a click offers to filter by (a bar's category, its fill, a table cell). */
+export interface FilterCandidate {
   /** The alias of the clicked field's column (`host`), the id of a filter on it. */
   readonly fieldId: string;
   readonly value: string;
-  /** What the viewer clicked (a bar); the floating bar sits next to it while it is in the page. */
-  readonly anchor: Element;
 }
 
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
@@ -112,15 +99,11 @@ export interface WidgetContext {
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
   /** Adds the structured filter `fieldId` `op` `value` to the page (`fieldId`: a column's alias). */
   addFilter(fieldId: string, op: FilterOp, value: string): void;
-  /** Selects `selection` on this widget, in place of any other selection on the page. */
-  select(selection: Omit<Selection, 'widgetId'>): void;
   /**
-   * Pops up `candidates` at `at` (a click's point), one entry per candidate in order ("instance = web-1": its
-   * `fieldId` and `value`); choosing one selects it as `select`. Nothing without candidates (an open menu stays).
+   * Offers to filter by or exclude each of `candidates` at `at` (a click's point, a cell), as `WidgetsApi.offerFilters`
+   * with the widget's query state: choosing one adds the filter at once.
    */
-  choose(at: MenuAnchor, candidates: readonly Omit<Selection, 'widgetId'>[]): void;
-  /** Ends the selection, whichever widget it is on. */
-  clearSelection(): void;
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
   /**
    * Makes `records` the widget's selected records (`RenderedWidget.records`), in place of those before; with records,
    * the widget becomes its tab's active widget.

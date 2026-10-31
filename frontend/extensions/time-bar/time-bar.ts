@@ -4,7 +4,7 @@ import { drawTimeBars } from '../chart-library/time-bars';
 
 /**
  * The widget type `timeBar`: a bar per time bucket, drawn by `chart-library/time-bars.ts` in a chart frame. A click
- * on a bar offers its fill and facets to select.
+ * on a bar offers its fill and facets to filter by or exclude.
  */
 export const timeBar: Extension = {
   id: 'timeBar',
@@ -15,6 +15,6 @@ function renderTimeBar(el: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: Widget
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeBars(result, widget.props, options, (at, candidates) => ctx.choose(at, candidates)),
+    draw: (result, options) => drawTimeBars(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
   });
 }

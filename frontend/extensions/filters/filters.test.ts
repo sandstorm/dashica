@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (structured and SQL, added, edited,
-// removed), the buttons as toggles (buttonOf), the floating bar's entries for a selection.
+// removed), the buttons as toggles (buttonOf), a button's value asked for in an input box.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
-import { CommandsHost, type MenuItem } from '../../hosts/commands/commands';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
-import type { Selection } from '../../hosts/widgets/widgets';
 import { buttonOf, filters } from './filters';
 
 let query: QueryHost;
@@ -15,9 +13,6 @@ let titleBar: HTMLElement;
 let bar: HTMLElement;
 let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event'] };
 let pageChanged: EventEmitter<PageJson | undefined>;
-let menuItems: { menuId: string; item: MenuItem<Selection> }[];
-let commands: CommandsHost;
-let selectionCleared: number;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
 let asked: { title?: string; prompt?: string; anchor?: unknown }[];
@@ -53,23 +48,14 @@ beforeEach(() => {
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: { title?: string; prompt?: string; anchor?: unknown }) => (asked.push(options), answer),
-    registerMenuItem: (menuId: string, item: MenuItem<Selection>) => {
-      menuItems.push({ menuId, item });
-      return { dispose() {} };
-    },
   };
-  menuItems = [];
   asked = [];
-  commands = new CommandsHost(document.body);
-  selectionCleared = 0;
-  const widgets = { clearSelection: () => selectionCleared++ };
-  filters.activate({ query, page, ui, commands, widgets, subscriptions: [] } as unknown as ExtensionContext);
+  filters.activate({ query, page, ui, subscriptions: [] } as unknown as ExtensionContext);
   show(shop);
 });
 
 afterEach(() => {
   query.dispose();
-  commands.dispose();
   vi.unstubAllGlobals();
   document.body.replaceChildren();
   history.replaceState(null, '', '/');
@@ -263,27 +249,5 @@ describe('filters', () => {
     show(undefined);
     expect(bar.children.length).toBe(0);
     expect(titleBar.children.length).toBe(0);
-  });
-});
-
-describe('the floating bar widget/selection', () => {
-  const selected: Selection = { kind: 'category', widgetId: '3', fieldId: 'host', value: 'a', anchor: document.createElement('div') };
-  const entries = (selection: Selection) => menuItems.filter(({ menuId, item }) => menuId === 'widget/selection' && (item.when?.(selection) ?? true)).map(({ item }) => item);
-
-  it('offers "Filter by" and "Exclude" for a category', () => {
-    expect(entries(selected).map((item) => item.title)).toEqual(['Filter by', 'Exclude']);
-    expect(entries({ ...selected, kind: 'time' } as unknown as Selection)).toEqual([]);
-  });
-
-  it('adds the category as a structured filter, = or ≠, and ends the selection', async () => {
-    const [filterBy, exclude] = entries(selected);
-    await commands.executeCommand(filterBy.command, selected);
-    await commands.executeCommand(exclude.command, { ...selected, value: 'b' });
-    expect(query.filters.chips).toEqual([
-      { kind: 'field', fieldId: 'host', op: 'eq', value: 'a' },
-      { kind: 'field', fieldId: 'host', op: 'ne', value: 'b' },
-    ]);
-    expect(selectionCleared).toBe(2);
-    expect(bar.querySelectorAll('[data-testid=filter-chip]')).toHaveLength(2);
   });
 });

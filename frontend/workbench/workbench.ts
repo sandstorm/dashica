@@ -25,7 +25,7 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
   const widgets = new WidgetsHost(ui, page);
   const extensions = new ExtensionHost({ commands, ui, page, query, widgets, ownerDocument: doc });
   extensions.activate(options.extensions);
-  const tabs = showTabs(page, widgets, ui.tabBar, commands);
+  const tabs = showTabs(page, ui.tabBar, commands);
   void page.start();
   return new Disposable(() => {
     page.dispose();
@@ -39,18 +39,11 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
 }
 
 /**
- * The tab bar in `region`, drawn anew on each change of the tabs; a switch ends the selection. The tab commands work
- * on the active tab.
+ * The tab bar in `region`, drawn anew on each change of the tabs. The tab commands work on the active tab.
  */
-function showTabs(page: PageHost, widgets: WidgetsHost, region: HTMLElement, commands: CommandsHost): Disposable {
+function showTabs(page: PageHost, region: HTMLElement, commands: CommandsHost): Disposable {
   const bar = new TabBar(region, { onDidChoose: (id) => page.showTab(id), onDidClose: (id) => page.closeTab(id) });
-  let shown = page.activeTab.id;
-  const draw = () => {
-    bar.update(page.tabs, page.activeTab.id);
-    if (page.activeTab.id === shown) return;
-    shown = page.activeTab.id;
-    widgets.clearSelection();
-  };
+  const draw = () => bar.update(page.tabs, page.activeTab.id);
   draw();
   commands.declareCommands([
     { command: 'workbench.tabs.close', title: 'Close tab', category: 'Tabs' },

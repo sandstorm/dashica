@@ -30,14 +30,14 @@ describe('barHorizontal', () => {
     expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
-  it('offers the category and the fill of a clicked bar; choosing one selects it', async () => {
+  it('offers the category and the fill of a clicked bar; choosing one filters by it', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], host: ['a', 'b'], cnt: [30, 2] });
     const props = { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } } as const;
     const { el } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1' });
     await inView();
     await clickMark(el.querySelectorAll('g[aria-label="bar"] rect')[1]);
-    expect(testbed.choices()).toEqual(['path = /login', 'host = b']);
-    testbed.choose('path = /login');
-    expect(testbed.widgets.selection).toMatchObject({ kind: 'category', fieldId: 'path', value: '/login' });
+    expect(testbed.candidates()).toEqual(['path = /login', 'host = b']);
+    await testbed.choose('Filter path = /login');
+    expect(testbed.query.filters.chips).toContainEqual({ kind: 'field', fieldId: 'path', op: 'eq', value: '/login' });
   });
 });

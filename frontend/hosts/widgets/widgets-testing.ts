@@ -15,9 +15,9 @@ import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus 
  * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
- * shown, `choices()` / `choose` the choices `ctx.choose` shows, `floatingBar()` the floating bar shown. `dispose` in
- * `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a `RenderedWidget` whose
- * status and records the test sets.
+ * shown, `choices()` / `candidates()` / `choose` what `ctx.offerFilters` offers (in its quick pick "Filter").
+ * `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
+ * `RenderedWidget` whose status and records the test sets.
  */
 export function widgetTestbed() {
   history.replaceState(null, '', '/p/shop');
@@ -30,9 +30,13 @@ export function widgetTestbed() {
   const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
   const widgets = new WidgetsHost({
     showContextMenu: (menuId, options) => menus.push({ menuId, options }),
-    showChoices: (entries, options) => ui.showChoices(entries, options),
-    registerFloatingBar: (options) => ui.registerFloatingBar(options),
+    showQuickPick: (items, options) => ui.showQuickPick(items, options),
   }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
+  const filterOptions = () =>
+    [...workbench.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')].map((el) => ({
+      el,
+      label: `${el.querySelector('[role=img]')?.getAttribute('aria-label') ?? ''} ${el.textContent?.trim()}`.trim(),
+    }));
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -73,17 +77,18 @@ export function widgetTestbed() {
     ui,
     commands,
     menus,
-    /** The labels of the choices `ctx.choose` shows, `[]` while it shows none. */
-    choices: () => [...workbench.querySelectorAll('.d-workbench__quick-pick[aria-label="Select"] [role=option]')].map((item) => item.textContent),
-    /** Chooses the choice `label` that `ctx.choose` shows, as a click does. */
-    choose(label: string) {
-      const items = [...workbench.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Select"] [role=option]')];
-      const item = items.find((candidate) => candidate.textContent === label);
-      if (!item) throw new Error(`no choice ${label} among ${items.map((candidate) => candidate.textContent).join(', ')}`);
-      item.click();
+    /** What `ctx.offerFilters` offers, as its icon and label read ("Filter status = 500", "Exclude status = 500"); `[]` while it offers none. */
+    choices: () => filterOptions().map(({ label }) => label),
+    /** The candidates `ctx.offerFilters` offers, each once ("status = 500"; each comes as "Filter …" and "Exclude …"). */
+    candidates: () => [...new Set(filterOptions().map(({ el }) => el.textContent?.trim()))],
+    /** Chooses what `ctx.offerFilters` offers as `label` ("Exclude status = 500"), as a click does; resolves once its filter is added. */
+    async choose(label: string) {
+      const options = filterOptions();
+      const option = options.find((candidate) => candidate.label === label);
+      if (!option) throw new Error(`no choice ${label} among ${options.map((candidate) => candidate.label).join(', ')}`);
+      option.el.click();
+      await settle();
     },
-    /** The floating bar shown, `null` while none is. */
-    floatingBar: () => workbench.querySelector<HTMLElement>('[role=toolbar].d-workbench__floating-bar'),
     /** The page shown, for the extensions that read it. */
     page,
     /** The URLs fetched, in order. */

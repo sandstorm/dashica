@@ -3,13 +3,13 @@ import type { TimeLineProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from '../chart-library/schema';
-import { selectOnClick } from '../chart-library/select-on-click';
+import { filterOnClick } from '../chart-library/filter-on-click';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
  * The widget type `timeLine`: a line over time (`x`) through its measure (`y`), over the time range the server queried;
  * a line per value of `strokeField` (or of `zField`, in one color), else one in the color `stroke`. A click on a line
- * offers its `zField`, `strokeField` and facets to select.
+ * offers its `zField`, `strokeField` and facets to filter by or exclude.
  */
 export const timeLine: Extension = {
   id: 'timeLine',
@@ -20,11 +20,11 @@ function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: Widg
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeLine(result, widget.props, options, (at, candidates) => ctx.choose(at, candidates)),
+    draw: (result, options) => drawTimeLine(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
   });
 }
 
-function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, choose: WidgetContext['choose']) {
+function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
   const schema = new SchemaAnalyzer(data);
   if (!(data.dashicaBucketSize ?? props.x.xBucketSizeMs)) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
@@ -71,7 +71,7 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
     },
     marks: [
       Plot.line(data, { ...lines, tip: tipChannels ? { channels: tipChannels } : true }),
-      selectOnClick(Plot.line, data, { ...lines, fields: [props.zField, props.strokeField, props.fx, props.fy], choose }),
+      filterOnClick(Plot.line, data, { ...lines, fields: [props.zField, props.strokeField, props.fx, props.fy], offerFilters }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

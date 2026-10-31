@@ -18,7 +18,6 @@ import {
   type Perspective,
   type PerspectiveTable,
   type PerspectiveViewer,
-  type ViewSelection,
 } from './view';
 
 const widget = {
@@ -89,7 +88,8 @@ let el: HTMLElement;
 let view: Disposable;
 let requests: string[];
 let closed: number;
-let selected: ViewSelection[];
+/** What the view offered to filter by, and where. */
+let offered: { at: unknown; candidates: readonly unknown[] }[];
 let answer: (url: URL) => Response;
 /** The tab's hash, as Run and Reset navigate it. */
 let hash: string;
@@ -118,7 +118,7 @@ beforeEach(() => {
   stored = new Map();
   requests = [];
   closed = 0;
-  selected = [];
+  offered = [];
   answer = serve('rows-1');
   hash = '#explore=3';
   hashChanged = new EventEmitter<void>();
@@ -151,7 +151,7 @@ function open(): void {
       hashChanged.fire();
     },
     close: () => closed++,
-    select: (selection) => selected.push(selection),
+    offerFilters: (at, candidates) => offered.push({ at, candidates }),
   });
 }
 
@@ -450,24 +450,24 @@ describe('renderExploreView', () => {
     expect(el.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 47. Unknown identifier host');
   });
 
-  it('selects the deepest group value of a clicked row on a column of the rows, no time', async () => {
+  it('offers the deepest group value of a clicked row on a column of the rows, no time, at the pointer', async () => {
     open();
     await settle();
+    viewer.dispatchEvent(new MouseEvent('pointerdown', { clientX: 30, clientY: 40 }));
     const click = (filter: unknown[]) => viewer.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter } } }));
     click([['time', '==', 1], ['status', '==', 500], ['host', '==', 'a']]);
     click([['time', '==', 1]]);
     click([]);
-    expect(selected.map(({ fieldId, value }) => ({ fieldId, value }))).toEqual([{ fieldId: 'host', value: 'a' }]);
-    expect(selected[0].anchor.isConnected).toBe(true);
+    expect(offered).toEqual([{ at: { x: 30, y: 40 }, candidates: [{ fieldId: 'host', value: 'a' }] }]);
   });
 
-  it('selects nothing from an edited query’s rows, whose columns the page’s filters do not reach', async () => {
+  it('offers nothing from an edited query’s rows, whose columns the page’s filters do not reach', async () => {
     hash = withEditedSql(hash, 'SELECT customer_project FROM http_logs');
     schema = { customer_project: 'string' };
     open();
     await settle();
     viewer.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter: [['customer_project', '==', 'sandstorm.shop']] } } }));
-    expect(selected).toEqual([]);
+    expect(offered).toEqual([]);
   });
 
   it('closes on Close', async () => {

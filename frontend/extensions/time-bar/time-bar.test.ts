@@ -48,32 +48,33 @@ describe('timeBar', () => {
     };
     const bars = (el: HTMLElement) => [...el.querySelectorAll<SVGRectElement>('g[aria-label="rect"] rect')];
 
-    it('on a bar offers its fill, never its time bucket or measure; choosing it selects', async () => {
+    it('on a bar offers its fill, never its time bucket or measure; choosing it filters by it', async () => {
       const el = render();
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.choices()).toEqual(['level = error']);
-      testbed.choose('level = error');
-      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '1', fieldId: 'level', value: 'error', anchor: bars(el)[1] });
+      expect(testbed.candidates()).toEqual(['level = error']);
+      await testbed.choose('Filter level = error');
+      expect(testbed.query.filters.chips).toContainEqual({ kind: 'field', fieldId: 'level', op: 'eq', value: 'error' });
     });
 
     it('on the drag area offers the bar Plot points at below it, again on the next click', async () => {
       const el = render();
       await inView();
-      const overlay = el.querySelector('svg .overlay')!;
-      await clickMark(bars(el)[2], overlay);
-      expect(testbed.choices()).toEqual(['level = info']);
-      testbed.choose('level = info');
-      expect(testbed.widgets.selection).toMatchObject({ fieldId: 'level', value: 'info', anchor: overlay });
-      await clickMark(bars(el)[1], overlay);
-      expect(testbed.choices()).toEqual(['level = error']);
+      // the chart is drawn anew once a filter is added: its drag area too
+      const overlay = () => el.querySelector('svg .overlay')!;
+      await clickMark(bars(el)[2], overlay());
+      expect(testbed.candidates()).toEqual(['level = info']);
+      await testbed.choose('Filter level = info');
+      expect(testbed.query.filters.chips).toContainEqual({ kind: 'field', fieldId: 'level', op: 'eq', value: 'info' });
+      await clickMark(bars(el)[1], overlay());
+      expect(testbed.candidates()).toEqual(['level = error']);
     });
 
     it('on a bar offers its fill and its facet', async () => {
       const el = render({ props: { ...props, fy: { kind: 'expr', alias: 'region' } } });
       await inView();
       await clickMark(bars(el).at(-1)!);
-      expect(testbed.choices()).toEqual(['level = info', 'region = us']);
+      expect(testbed.candidates()).toEqual(['level = info', 'region = us']);
     });
 
     it('on a bar without a fill offers its facet', async () => {
@@ -81,7 +82,7 @@ describe('timeBar', () => {
       const el = render({ props: { ...unfilled, fy: { kind: 'expr', alias: 'region' } } });
       await inView();
       await clickMark(bars(el).at(-1)!);
-      expect(testbed.choices()).toEqual(['region = us']);
+      expect(testbed.candidates()).toEqual(['region = us']);
     });
   });
 });

@@ -424,8 +424,8 @@ export interface TableCellMenuContext {
   readonly value: unknown;
   /** Whether the column holds timestamps (a time type, or named `timestamp`). */
   readonly timestamp: boolean;
-  /** Whether a click on a cell selects (the floating bar then has "Filter by …" / "Exclude …"). */
-  readonly selecting: boolean;
+  /** Whether a click on a cell offers to filter by its value or exclude it (the quick pick "Filter"). */
+  readonly filtering: boolean;
 }
 
 /** What the menu `table/header` is shown for: a column, by its name, and how to size the columns to their rows. */
@@ -456,8 +456,8 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
 /**
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
  * tooltips that can be pinned. With `selectRecords`, a checkbox in front of each row (and one for all) ticks it, each
- * change calling `selectRecords` with the ticked rows. With `select`, a click on a cell of a column in
- * `props.categories` selects its value, its column's name the field id; a NULL selects nothing, and a Map, Array or
+ * change calling `selectRecords` with the ticked rows. With `offerFilters`, a click on a cell of a column in
+ * `props.categories` offers its value, its column's name the field id; a NULL offers nothing, and a Map, Array or
  * Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows the menu
  * `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
  * `TableHeaderMenuContext`); extensions add their entries there (the `table` extension: SQL filters, auto-size).
@@ -465,7 +465,7 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
 export function drawTable(
   queryResult: QueryResult,
   props: TableProps,
-  { select, selectRecords, showMenu }: { select?: WidgetContext['select']; selectRecords?: WidgetContext['selectRecords']; showMenu?: ShowTableMenu } = {},
+  { offerFilters, selectRecords, showMenu }: { offerFilters?: WidgetContext['offerFilters']; selectRecords?: WidgetContext['selectRecords']; showMenu?: ShowTableMenu } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
@@ -474,15 +474,15 @@ export function drawTable(
   // The search: each change calls applySearch
   let searchTerm = '';
 
-  // With `select`, a click on a cell of a category column selects (see the cellClick handler below)
-  const selecting = select !== undefined;
+  // With `offerFilters`, a click on a cell of a category column offers its value (see the cellClick handler below)
+  const filtering = offerFilters !== undefined;
   const categories = new Set(
     (queryResult?.schema?.fields ?? [])
       .filter((field: any) => props.categories?.includes(field.name))
       .filter((field: any) => !DataType.isMap(field) && !DataType.isList(field) && !DataType.isFixedSizeList(field) && !DataType.isStruct(field))
       .map((field: any) => field.name as string),
   );
-  const selectable = (fieldName: string) => selecting && categories.has(fieldName);
+  const filterable = (fieldName: string) => filtering && categories.has(fieldName);
 
   // Build columns with timestamp formatting
   const columns: ColumnDefinition[] = [];
@@ -516,13 +516,13 @@ export function drawTable(
           el.innerHTML = `${time} &nbsp; <span class="d-table__date">${date}</span>`;
           return el;
         },
-        cssClass: selectable(field.name) ? 'd-table__selectable' : undefined,
+        cssClass: filterable(field.name) ? 'd-table__filterable' : undefined,
       });
     } else {
       columns.push({
         title: field.name,
         field: field.name,
-        cssClass: selectable(field.name) ? 'd-table__selectable' : undefined,
+        cssClass: filterable(field.name) ? 'd-table__filterable' : undefined,
       });
     }
   });
@@ -641,15 +641,15 @@ export function drawTable(
     if (!showMenu) return;
     e.preventDefault();
     const { clientX: x, clientY: y } = e as MouseEvent;
-    const context: TableCellMenuContext = { column: cell.getField(), value: cell.getValue(), timestamp: timestampColumns.has(cell.getField()), selecting };
+    const context: TableCellMenuContext = { column: cell.getField(), value: cell.getValue(), timestamp: timestampColumns.has(cell.getField()), filtering };
     showMenu('table/cell', { x, y }, context);
   });
 
   tabulatorTable.on("cellClick", (e: UIEvent, cell: CellComponent) => {
     const fieldName = cell.getField();
     const value = cell.getValue();
-    if (!select || !selectable(fieldName) || value === null || value === undefined) return;
-    select({ kind: 'category', fieldId: fieldName, value: String(value), anchor: cell.getElement() });
+    if (!offerFilters || !filterable(fieldName) || value === null || value === undefined) return;
+    offerFilters(cell.getElement(), [{ fieldId: fieldName, value: String(value) }]);
   });
 
   // Re-paint search highlights after every (re)render — covers filter changes,

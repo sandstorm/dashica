@@ -8,7 +8,7 @@ import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica'
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
-import type { Selection, WidgetMenuContext } from '../../hosts/widgets/widgets';
+import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { exploreUrl, exploreView, findWidget } from './explore-view';
 
 const chart: WidgetNode = {
@@ -26,14 +26,12 @@ let navigated: { url: string; newTab?: boolean }[];
 let renderers: Map<string, PageRenderer>;
 let query: QueryHost;
 let subscriptions: { dispose(): unknown }[];
-let selections: Selection[];
 let closed: number;
 
 beforeEach(() => {
   menuItems = [];
   navigated = [];
   renderers = new Map();
-  selections = [];
   closed = 0;
   query = new QueryHost(window);
   query.load({ search: '?time=1h' });
@@ -47,7 +45,7 @@ beforeEach(() => {
       navigate: async (url: string, options?: { newTab?: boolean }) => void navigated.push({ url, ...options }),
       registerPageRenderer: (kind: string, renderer: PageRenderer) => (renderers.set(kind, renderer), new Disposable(() => renderers.delete(kind))),
     },
-    widgets: { select: (selection: Selection) => selections.push(selection) },
+    widgets: { offerFilters() {} },
     ui: {
       registerMenuItem: (menuId: string, item: { title?: string; when?: (context: WidgetMenuContext) => boolean }) => {
         menuItems.push({ menuId, ...item });

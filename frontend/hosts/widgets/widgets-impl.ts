@@ -1,24 +1,22 @@
 // See WidgetsApi in widgets.ts.
 import * as Arrow from 'apache-arrow';
+import { Filter, Minus, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { ActiveQuerySource, FilterOp, QueryApi } from '../query/query';
-import type { FloatingBar, MenuAnchor, UiApi } from '../ui/ui';
-import type { QueryResult, RenderedWidget, Selection, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type { MenuAnchor, QuickPickItem, UiApi } from '../ui/ui';
+import type { FilterCandidate, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
- * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). It shows the floating bar
- * `widget/selection` for the selection, and listens for Escape and clicks while there is one. The active widget of
- * each tab is kept under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a
- * `WidgetInstance`: its renderer's context and, as `active`, the widget itself.
+ * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). The active widget of each tab is kept
+ * under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a `WidgetInstance`:
+ * its renderer's context and, as `active`, the widget itself.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
   readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
-  readonly #selectionBar: FloatingBar<Selection>;
-  #selection: { selection: Selection; owner: WidgetInstance | undefined; listening: Disposable } | undefined;
   /** Each tab's active widget, by the tab's query state. */
   readonly #active = new Map<QueryApi, WidgetInstance>();
   /** The active widget as told last through `onDidChangeActive`. */
@@ -28,14 +26,9 @@ export class WidgetsHost implements WidgetsApi {
   readonly #onDidChangeTabs: Disposable;
 
   constructor(
-    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices' | 'registerFloatingBar'>,
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showQuickPick'>,
     private readonly tabs: ActiveQuerySource,
   ) {
-    this.#selectionBar = ui.registerFloatingBar<Selection>({
-      id: 'widget/selection',
-      title: 'Selection',
-      anchor: ({ anchor }) => (anchor.isConnected ? anchor.getBoundingClientRect() : null),
-    });
     this.#onDidChangeTabs = tabs.onDidChangeTabs(() => this.#tell());
   }
 
@@ -76,38 +69,12 @@ export class WidgetsHost implements WidgetsApi {
     this.#active.clear();
   }
 
-  get selection(): Selection | undefined {
-    return this.#selection?.selection;
-  }
-
-  select(selection: Selection): void {
-    this.selectOf(undefined, selection);
-  }
-
-  /** Selects `selection` of `owner` (`undefined`: of no rendered widget), ending the one before. */
-  selectOf(owner: WidgetInstance | undefined, selection: Selection): void {
-    this.clearSelection();
-    const doc = selection.anchor.ownerDocument;
-    // the click that selected is past the document already; the next one, wherever it lands, ends the selection
-    const onClick = () => this.clearSelection();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') this.clearSelection();
-    };
-    doc.addEventListener('click', onClick, true);
-    doc.addEventListener('keydown', onKey);
-    const listening = new Disposable(() => {
-      doc.removeEventListener('click', onClick, true);
-      doc.removeEventListener('keydown', onKey);
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi): void {
+    const items = filterPicks(candidates);
+    if (items.length === 0) return;
+    void this.ui.showQuickPick(items, { anchor: at, title: 'Filter' }).then((picked) => {
+      if (picked) state.filters.add(picked.fieldId, picked.op, picked.value);
     });
-    this.#selection = { selection, owner, listening };
-    this.#selectionBar.show(selection);
-  }
-
-  clearSelection(): void {
-    if (!this.#selection) return;
-    this.#selection.listening.dispose();
-    this.#selection = undefined;
-    this.#selectionBar.hide();
   }
 
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
@@ -129,7 +96,6 @@ export class WidgetsHost implements WidgetsApi {
       const rendered = renderer(el, widget, ctx);
       const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
-        if (this.#selection?.owner === ctx) this.clearSelection();
         listening.dispose();
         this.deactivate(ctx);
         rendered.dispose();
@@ -144,7 +110,7 @@ export class WidgetsHost implements WidgetsApi {
 
   /**
    * A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. The
-   * press is heard on its way down (capture), since a chart stops the presses on its marks (selectOnClick).
+   * press is heard on its way down (capture), since a chart stops the presses on its marks (filterOnClick).
    */
   #activateOn(el: HTMLElement, ctx: WidgetInstance): Disposable {
     const onEvent = (event: Event) => {
@@ -187,7 +153,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     readonly el: HTMLElement,
     private readonly host: WidgetsHost,
     readonly state: QueryApi,
-    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices'>,
+    private readonly ui: Pick<UiApi, 'showContextMenu'>,
   ) {}
 
   get status(): WidgetStatus {
@@ -242,18 +208,8 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     this.state.filters.add(fieldId, op, value);
   }
 
-  select(selection: Omit<Selection, 'widgetId'>): void {
-    const widgetId = 'dataUrl' in this.widget ? this.widget.dataUrl.split('/').pop()! : '';
-    this.host.selectOf(this, { ...selection, widgetId });
-  }
-
-  choose(at: MenuAnchor, candidates: readonly Omit<Selection, 'widgetId'>[]): void {
-    const entries = candidates.map((candidate) => ({ label: `${candidate.fieldId} = ${candidate.value}`, run: () => this.select(candidate) }));
-    this.ui.showChoices(entries, { anchor: at, title: 'Select' });
-  }
-
-  clearSelection(): void {
-    this.host.clearSelection();
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void {
+    this.host.offerFilters(at, candidates, this.state);
   }
 
   /** With records it becomes its tab's active widget first, so the records' change is told to whoever follows it. */
@@ -270,6 +226,25 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     this.#onDidChangeStatus.dispose();
     this.#onDidChangeRecords.dispose();
   }
+}
+
+/** What `offerFilters` offers for a candidate: to filter by it (`eq`) or to exclude it (`ne`). */
+interface FilterPick extends QuickPickItem, FilterCandidate {
+  readonly op: FilterOp;
+}
+
+const FILTER_ICON = { svg: createElement(Filter).outerHTML, label: 'Filter' };
+const EXCLUDE_ICON = { svg: createElement(Minus).outerHTML, label: 'Exclude' };
+
+/** For each candidate in order, "<field> = <value>" to filter by it (a filter icon), then to exclude it (a minus icon). */
+function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
+  return candidates.flatMap(({ fieldId, value }) => {
+    const label = `${fieldId} = ${value}`;
+    return [
+      { label, icon: FILTER_ICON, fieldId, value, op: 'eq' as const },
+      { label, icon: EXCLUDE_ICON, fieldId, value, op: 'ne' as const },
+    ];
+  });
 }
 
 /** A widget's title (`props.title`), else its type (`timeBar`). */

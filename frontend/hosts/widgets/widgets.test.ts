@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 // Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu, filters), the
-// selection, the active widget, the chart frame.
+// filters a click offers, the active widget, the chart frame.
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../query/query';
-import { ChartFrame, WidgetsHost, type Selection, type WidgetContext, type WidgetMenuContext } from './widgets';
+import { ChartFrame, WidgetsHost, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -142,10 +142,8 @@ describe('WidgetsHost', () => {
     });
   });
 
-  describe('the selection', () => {
+  describe('the filters a click offers', () => {
     const contexts: WidgetContext[] = [];
-    const bar = () => document.body.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'rect'));
-    const statusBar = (value: string) => ({ kind: 'category', fieldId: 'status', value, anchor: bar() }) as const;
 
     beforeEach(() => {
       contexts.length = 0;
@@ -153,82 +151,46 @@ describe('WidgetsHost', () => {
         contexts.push(given);
         return new Disposable(() => {});
       });
-      testbed.ui.registerMenuItem<Selection>('widget/selection', { command: 'test.filter', title: 'Filter by', when: (selection) => selection.kind === 'category' });
-      testbed.ui.registerMenuItem<Selection>('widget/selection', { command: 'test.zoom', title: 'Zoom', when: (selection) => selection.kind !== 'category' });
     });
 
     const byStatus: WidgetNode = { type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/3' };
-    const entries = () => [...(testbed.floatingBar()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
 
-    it('is one at a time: selecting on another widget ends the selection before', () => {
+    it('offers to filter by and to exclude each candidate in order, also a single one; choosing one adds the filter at once; none offer nothing', async () => {
       testbed.render(byStatus);
-      testbed.render({ ...byStatus, dataUrl: '/p/shop/api/4' });
-      contexts[0].select(statusBar('500'));
-      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '3', fieldId: 'status', value: '500' });
-      contexts[1].select(statusBar('404'));
-      expect(testbed.widgets.selection).toMatchObject({ widgetId: '4', value: '404' });
-      expect(document.querySelectorAll('.d-workbench__floating-bar')).toHaveLength(1);
-    });
-
-    it('shows the floating bar widget/selection with the entries for its kind', () => {
-      testbed.render(byStatus);
-      contexts[0].select(statusBar('500'));
-      expect(testbed.floatingBar()!.getAttribute('aria-label')).toBe('Selection');
-      expect(entries()).toEqual(['Filter by']);
-    });
-
-    it('ends on Escape, on a click elsewhere, on clearSelection, and when its widget goes away', () => {
-      const { rendered } = testbed.render(byStatus);
-      const select = () => contexts[0].select(statusBar('500'));
-      select();
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-      expect(testbed.widgets.selection).toBeUndefined();
-      expect(testbed.floatingBar()).toBeNull();
-      select();
-      document.body.click();
-      expect(testbed.widgets.selection).toBeUndefined();
-      select();
-      contexts[0].clearSelection();
-      expect(testbed.widgets.selection).toBeUndefined();
-      select();
-      rendered.dispose();
-      expect(testbed.widgets.selection).toBeUndefined();
-      expect(testbed.floatingBar()).toBeNull();
-    });
-
-    it('takes a selection on a view of a chart outside the page’s widgets, which ends on Escape as well', () => {
-      testbed.render(byStatus);
-      testbed.widgets.select({ ...statusBar('500'), widgetId: '3' });
-      expect(testbed.widgets.selection).toMatchObject({ widgetId: '3', value: '500' });
-      expect(entries()).toEqual(['Filter by']);
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-      expect(testbed.widgets.selection).toBeUndefined();
-    });
-
-    it('pops up candidates to choose from, in order, also a single one; choosing one selects it; none change nothing', () => {
-      testbed.render(byStatus);
-      const anchor = bar();
-      contexts[0].choose({ x: 10, y: 20 }, [statusBar('500'), { kind: 'category', fieldId: 'instance', value: 'web-1', anchor }]);
-      expect(testbed.choices()).toEqual(['status = 500', 'instance = web-1']);
-      expect(testbed.widgets.selection).toBeUndefined();
-      testbed.choose('instance = web-1');
+      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }]);
+      expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500', 'Filter instance = web-1', 'Exclude instance = web-1']);
+      expect(document.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
+      await testbed.choose('Exclude instance = web-1');
+      await settle();
       expect(testbed.choices()).toEqual([]);
-      expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '3', fieldId: 'instance', value: 'web-1', anchor });
-      expect(entries()).toEqual(['Filter by']);
-      contexts[0].choose({ x: 10, y: 20 }, [statusBar('404')]);
-      expect(testbed.choices()).toEqual(['status = 404']);
-      contexts[0].choose({ x: 10, y: 20 }, []);
-      expect(testbed.choices()).toEqual(['status = 404']);
+      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'instance', op: 'ne', value: 'web-1' }]);
+      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '404' }]);
+      expect(testbed.choices()).toEqual(['Filter status = 404', 'Exclude status = 404']);
+      contexts[0].offerFilters({ x: 10, y: 20 }, []);
+      expect(testbed.choices()).toEqual(['Filter status = 404', 'Exclude status = 404']);
+      await testbed.choose('Filter status = 404');
+      await settle();
+      expect(testbed.query.filters.chips).toEqual([
+        { kind: 'field', fieldId: 'instance', op: 'ne', value: 'web-1' },
+        { kind: 'field', fieldId: 'status', op: 'eq', value: '404' },
+      ]);
+    });
+
+    it('adds nothing when the viewer closes the quick pick', async () => {
+      testbed.render(byStatus);
+      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }]);
       (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      expect(testbed.choices()).toEqual([]);
+      await settle();
+      expect([testbed.choices(), testbed.query.filters.chips]).toEqual([[], []]);
     });
 
-    it('keeps the selection made by the click that is under way', () => {
-      testbed.render(byStatus);
-      const target = bar();
-      target.addEventListener('click', () => contexts[0].select({ kind: 'category', fieldId: 'status', value: '500', anchor: target }));
-      target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      expect(testbed.widgets.selection?.value).toBe('500');
+    it('adds the filter to the query state given, for a view of a chart outside the page’s widgets', async () => {
+      const other = new QueryHost(window);
+      testbed.widgets.offerFilters({ x: 0, y: 0 }, [{ fieldId: 'host', value: 'a' }], other);
+      await testbed.choose('Filter host = a');
+      await settle();
+      expect([other.filters.chips, testbed.query.filters.chips]).toEqual([[{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }], []]);
+      other.dispose();
     });
   });
 
@@ -394,7 +356,7 @@ describe('WidgetsHost', () => {
       const tabs = new EventEmitter<void>();
       const source = { activeQuery: new QueryHost(window), onDidChangeTabs: tabs.event };
       const other = new QueryHost(window);
-      const ui = { showContextMenu() {}, showChoices() {}, registerFloatingBar: () => ({ show() {}, hide() {}, dispose() {} }) };
+      const ui = { showContextMenu() {}, showQuickPick: async () => undefined };
       const widgets = new WidgetsHost(ui, source);
       widgets.registerWidget('timeBar', () => new Disposable(() => {}));
       let told = 0;

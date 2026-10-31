@@ -5,15 +5,11 @@ import type { Memento } from '../extension-host/extension-host';
 import { Bar } from './bar/bar';
 import { WindowLayout } from './layout/window-layout';
 import { ContextMenu } from './menus/context-menu';
-import { FloatingBars } from './menus/floating-bar';
 import { Menus } from './menus/menus';
 import { QuickInput } from './quick-input/quick-input';
 import type {
   BarPlacement,
-  Choice,
   ContextMenuOptions,
-  FloatingBar,
-  FloatingBarOptions,
   InputBoxOptions,
   Panel,
   QuickPick,
@@ -25,7 +21,6 @@ import type {
   UiApi,
 } from './ui';
 import './layout/window-layout.css';
-import './menus/floating-bar.css';
 import './quick-input/quick-input.css';
 
 /** The workbench's `UiApi`, laid out in `host`. `content`: the region the tabs' pages go into; `tabBar`: the tab bar's. */
@@ -34,7 +29,6 @@ export class UiHost implements UiApi {
   readonly #bars: Record<'title' | 'filter' | 'status', Bar>;
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
-  readonly #floatingBars: FloatingBars;
   readonly #quickInput: QuickInput;
   readonly #searchProviders = new Set<SearchProvider>();
   readonly onDidChangeMenu;
@@ -45,7 +39,6 @@ export class UiHost implements UiApi {
     this.#menus = new Menus(() => commands.getCommands());
     this.#quickInput = new QuickInput(host);
     this.#contextMenu = new ContextMenu(this.#quickInput, this.#menus, commands);
-    this.#floatingBars = new FloatingBars(host, this.#menus, commands);
     this.onDidChangeMenu = this.#menus.onDidChange;
   }
 
@@ -77,15 +70,6 @@ export class UiHost implements UiApi {
     this.#contextMenu.show(menuId, options);
   }
 
-  showChoices(entries: readonly Choice[], options: Pick<ContextMenuOptions, 'anchor' | 'title'>): void {
-    if (entries.length === 0) return;
-    this.#quickInput.pickOne(entries, options, (picked) => picked?.run());
-  }
-
-  registerFloatingBar<C extends object>(options: FloatingBarOptions<C>): FloatingBar<C> {
-    return this.#floatingBars.register(options);
-  }
-
   showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options?: QuickPickOptions): Promise<T | undefined> {
     return this.#quickInput.showQuickPick(items, options);
   }
@@ -111,7 +95,6 @@ export class UiHost implements UiApi {
   dispose(): void {
     this.#searchProviders.clear();
     this.#quickInput.dispose();
-    this.#floatingBars.dispose();
     this.#menus.dispose();
     this.#layout.dispose();
   }

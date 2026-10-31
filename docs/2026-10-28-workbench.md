@@ -160,7 +160,7 @@ functions on it (`frontend/hosts/page/tabs.ts`), tested without DOM *(proposed)*
 
 | | One per window | One per tab |
 |---|---|---|
-| commands, `ui` (regions, menus, quick input, floating bars), widget and page renderers, extensions | ✓ | |
+| commands, `ui` (regions, menus, quick input), widget and page renderers, extensions | ✓ | |
 | query state (`QueryHost`) | | ✓, from the tab's URL |
 | `page.json`, the rendered page | | ✓ |
 | the selection (`widgets.selection`) | ✓; switching tabs clears it *(proposed)* | |
@@ -376,8 +376,8 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
 
 A table's ticked rows (Tabulator's row selection checkboxes, and the one for all in the header) are the widget's
 **selected records**, part of the context model: the active widget carries them, and whoever shows them follows it. The
-in-table "N record(s) selected" panel (fixed at the bottom, full screen, close) is gone. A click on a cell still selects
-a category for the floating bar (§3.8), unchanged; the two never mix.
+in-table "N record(s) selected" panel (fixed at the bottom, full screen, close) is gone. A click on a cell still offers
+to filter by its value (§3.8, since 8c in the quick pick "Filter"); the two never mix.
 
 - **API (`widgets` host):** `ctx.selectRecords(records)` puts the widget's records (`WidgetRecord`: a row by column
   name) in place of those before; with records the widget becomes its tab's active widget (the press on the checkbox
@@ -413,8 +413,8 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `ui` | side panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices` (goes with 8c: `showQuickPick` / `showInputBox` / `createQuickPick`, §3.14 D3), quick pick, messages, search providers |
-| `widgets` | `registerWidget` (§3.6), the selection (§3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
+| `ui` | side panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
+| `widgets` | `registerWidget` (§3.6), `offerFilters` (click to filter, §3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -445,8 +445,7 @@ ctx.url(path)                              // below the widget's handler, with t
 ctx.renderChild(el, child)                 // grid, collapsible
 ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
 ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8); fieldId: the clicked column's alias
-ctx.select({kind, fieldId, value, anchor}) // the page's one selection (§3.8, step 6.7); ctx.clearSelection()
-ctx.choose(at, candidates)                 // a menu "Select" of candidates; the chosen one is selected (step 6.8)
+ctx.offerFilters(at, candidates)           // the quick pick "Filter": ⊕ / ⊖ per candidate, the pill added at once (8c)
 ```
 
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
@@ -653,8 +652,22 @@ value is what Arrow gives the cell: a `DateTime` arrives as `Uint32` seconds, a 
 on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter equals that `DateTime` and
 `'1761730000000'` that `DateTime64(3)`. The chip shows the number as it is, not the formatted time.
 
-*Step 8c (§3.14 D3, D4) replaces the floating bar below: a click on a mark shows "⊕ / ⊖ `<field> = <value>`" in a
-quick pick and adds the pill at once; `registerFloatingBar`, the selection model and `showChoices` go.*
+✅ (step 8c, §3.14 D3, D4) **A click filters in one step; the floating bar and the selection are gone** (the two
+6.7 / 6.8 parts below are history). A click on a chart mark (the mark `chart-library/filterOnClick`, until 8c
+`selectOnClick`, its candidates as in 6.8), on a category cell of a table, or on a group row of the Explore view calls
+`offerFilters(at, candidates)` (`WidgetContext`; `WidgetsApi.offerFilters(at, candidates, state)` for the Explore
+view): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
+`<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and the same with a minus icon
+("Exclude …", `ne`); typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
+press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`), the menu `widget/selection` and the
+`filters` commands `filters.filterBySelection` / `excludeSelection`, `WidgetsApi.selection` / `select` /
+`clearSelection`, `WidgetContext.select` / `choose` / `clearSelection`, the `Selection` types, `ui.showChoices`, the
+Explore view's anchor element. The table's `selecting` is `filtering`, its class `d-table__filterable`. Each click
+adds one pill; how pills on the same table and field combine is the server's (8e). The labels show `=` for both ops
+and the icon tells them apart *(proposed: D4 names both "`<field> = <value>`")*. Tests: `offerFilters` in
+`widgets.test.ts`, a click per chart type and the table cell in their tests (`widgetTestbed().choices()` /
+`candidates()` / `choose('Filter status = 500')`), the Explore view's click in `view.test.ts`. Playwright (written,
+not run): `e2e/bar-selection.spec.ts`, `e2e/chart-selection.spec.ts`, `e2e/record-details.spec.ts`.
 
 **Clicks select; a floating bar offers what to do** (as Zwiebelfisch's `visualEditor/selection` bar above a text
 selection). A chart only reports a *selection*; it does not know what can be done with it:
@@ -932,16 +945,13 @@ interface UiApi {
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
   showContextMenu(menuId: string, o: { anchor: Element | {x: number; y: number}; context?: object; args?: unknown[] }): void;
-  showChoices(entries: { label: string; run(): void }[], o: { anchor: Element | {x: number; y: number}; title: string }): void;
-                                          // a menu of the moment (a chart's candidates), drawn as a context menu;
-                                          // no entries change nothing
+                                          // the menu's entries in the quick pick at the anchor (8c)
   readonly onDidChangeMenu: Event<string>;
-  registerFloatingBar<C>(o: { id: string; title: string; order?: number;
-                              anchor: (context: C) => DOMRect | null }): FloatingBar<C>;   // entries via registerMenuItem(id, …);
-                                                                                          // show(context) / hide() / dispose()
 
-  createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere)
-  // later, with their first user: showQuickPick (a fixed list, filtered by the box), showInputBox
+  showQuickPick<T>(items: (T | QuickPickSeparator)[], o?: { title?; placeholder?; anchor? }): Promise<T | undefined>;
+                                          // typing narrows (fuzzy); a click's candidates, menus (8c)
+  showInputBox(o?: { title?; prompt?; placeholder?; value?; anchor? }): Promise<string | undefined>;   // a button's `...`
+  createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
   showInformationMessage / showWarningMessage / showErrorMessage(message: string, ...items): Promise<…>;
 }
@@ -982,6 +992,7 @@ interface WidgetsApi {
   registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
   readonly active: RenderedWidget | undefined;            // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
   readonly onDidChangeActive: Event<void>;                // another widget or tab, the widget removed
+  offerFilters(at: MenuAnchor, candidates: FilterCandidate[], state: QueryApi): void;   // the Explore view's clicks (8c)
 }
 
 interface RenderedWidget {                                // the widget itself, as window.activeTextEditor (step 8b)
@@ -999,25 +1010,27 @@ interface WidgetContext {                                 // what a renderer get
   renderChild(el: HTMLElement, child: WidgetNode): Disposable;
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
   addFilter(fieldId: string, op: FilterOp, value: string): void;
-  select(…): void; choose(at: MenuAnchor, candidates: …[]): void; clearSelection(): void;   // §3.8
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;   // {fieldId, value}[]; §3.8, 8c
   selectRecords(records: readonly WidgetRecord[]): void;  // its selected records; with some it becomes active
 }
 ```
 
 Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
-expects one. Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug), `widget/selection` (the floating bar
-on a chart selection: zoom, filter, show rows, actions), `table/row` (a row's menu),
+expects one. Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug), `table/row` (a row's menu),
 `dashboards/entry` (a menu entry: favorite), `table/cell` (a table cell's menu: its SQL filters) and `table/header` (a
 column header's menu button: auto-size). **Deviation (2026-10-31):** `table/cell` opens on a right click, as the
 cell's Tabulator menu did before it became a registered menu; Tabulator's own menus are gone. A table shows them through
 `ctx.showMenu(menuId, anchor, context)`: the widget's `WidgetMenuContext` with the cell's (`TableCellMenuContext`:
-column, value, timestamp, selecting) or the header's fields (`TableHeaderMenuContext`: column, `autoSize`,
+column, value, timestamp, `filtering`) or the header's fields (`TableHeaderMenuContext`: column, `autoSize`,
 `autoSizeAll`); Debug's result table through `ui.showContextMenu` with the cell's or header's alone. The `table`
-extension contributes the entries (commands `table.filter…`, `table.autoSizeColumn(s)`). A menu of the moment needs no
-id (reworked 2026-10-31): `ui.showChoices(entries, {anchor, title})` shows `{label, run}` entries in the same list,
-one menu at a time with the registered ones (no entries leave the open menu, a registered menu without entries closes
-it); a chart's candidates for a selection go through it
-(`WidgetContext.choose`, §3.8 step 6.8).
+extension contributes the entries (commands `table.filter…`, `table.autoSizeColumn(s)`). **Since 8c every menu is the
+quick pick** (§3.14 D3): `showContextMenu` shows the entries in it at the anchor, typing narrows them, a line between
+groups, a check mark for a `toggled` entry, the command run right after the box closed (still in the viewer's
+gesture). A menu of the moment needs no id: its owner calls `ui.showQuickPick(items, {anchor, title})` (a chart's
+click, `WidgetsApi.offerFilters`, §3.8); `showChoices` is gone. A registered menu without entries hides the open box.
+The "…" buttons say `aria-haspopup="dialog"`, the quick pick's role. The rule "never by a right click" stands, with
+the `table/cell` deviation above *(proposed: D3's "right click" read as that one existing menu, no new right-click
+menus)*.
 
 Folders as in Zwiebelfisch: `frontend/core/<name>/` (primitives), `frontend/hosts/<name>/` (contribution points),
 `frontend/extensions/<name>/` (one folder per built-in extension); `frontend/workbench/` puts hosts and extensions
@@ -1029,15 +1042,15 @@ Built-in extensions:
 |---|---|
 | `dashboards` | left panel "Dashboards" (groups, favorites, filter box) |
 | `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites, chart titles |
-| `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7); `widget/selection` "Zoom" |
+| `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7) |
 | `refresh` | title bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
 | (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
 | `theme` | light / dark toggle |
-| `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |
+| `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip; the chips a click adds come from `widgets.offerFilters` (8c) |
 | `debug` | left panel "Debug" (the active widget's query, stats, EXPLAIN, result, as views); the status bar's item (the active widget's status); `widget/context` "Debug" (§3.4.4) |
 | `details` | left panel "Details" (the active widget's selected records, a view per record); the status bar's "N records selected" (§3.4.5) |
 | `chart-link` | `widget/context` "Copy link to chart" (`/p/shop#w=3`) |
-| `row-details` | `table/row` "Details" and `widget/selection` "Show rows" → a panel (its place open since the bottom panel is gone) |
+| `row-details` | `table/row` "Details" → a panel (its place open since the bottom panel is gone; "Show rows" for a click needs a place now that the floating bar is gone, 8c) |
 | `page-actions` | Go actions from `page.json` → commands + menu items |
 | one per widget type: `time-bar`, `time-line`, `bar-vertical`, `bar-horizontal`, `heatmap`, `stats`, `table`, `markdown`, `checkbox-group`, `text-input`, `grid`, `collapsible`, `alerts`, … | `registerWidget` for its type, its CSS, its own menu items |
 
@@ -1378,7 +1391,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8 ✅ | **the batch of 2026-10-31 planned** (§3.14): D1–D15 written into this concept (§3.14, §3.8 rewritten for the signed pills) and into the Perspective concept (§4.8); docs only. ✅ 2026-10-31 | — |
 | 8a ✅ | **D1 start page** (§3.4.3): the time range, refresh and Debug's status item registered once with `ui.registerBarItem`, so they show on every page, "/" included ("No active chart" there); `hasQueries` (`hosts/page/page.ts`) and `registerBarItemWhile` (`hosts/ui/bar/bar.ts`) deleted; Details' "N records selected" stays registered and is `hidden` while none *(proposed)*; tests: the "not on the start page" cases dropped, Details' status checked by `hidden`; `e2e/start-page.spec.ts` checks the time range, refresh and status bar on "/". ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run) | "/" with the time range and the status bar |
 | 8b ✅ | **D2 active widget** (§3.4.4, §3.4.5): `widgets.active` is the widget itself (`RenderedWidget`: `status` + `onDidChangeStatus`, `records` + `onDidChangeRecords`; the impl class `WidgetInstance` is its renderer's context too), `onDidChangeActive` only on another widget or tab or its removal; `ActiveWidget` and its copies gone, the host's `statusChanged` / `recordsChanged` gone; Debug follows the active widget's status, Details its records (resubscribed on `onDidChangeActive`); Details' draw guard gone (only records or the widget redraw it); tests: `fakeWidget` in `widgets-testing.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright not run, the e2e specs see no API and stay), deviations: the type is named `RenderedWidget`, events carry no value (read `status` / `records`); with records a widget is activated before its records' event fires; a removed widget's late `selectRecords` is ignored; Debug keeps the guard for an aborted query putting back the status it asked for *(all proposed)* | Debug and Details as before |
-| 8c | **D3 + D4 quick input, click to filter:** `ui.showQuickPick` / `showInputBox` / `createQuickPick` in place; `showChoices`, the floating bar and the selection model go; chart candidates, context menus, search everywhere move to it; a mark's click offers ⊕ / ⊖ per field and adds the pill at once | click to filter in one step |
+| 8c ✅ | **D3 + D4 quick input, click to filter** (§3.8, §3.11): `ui.showQuickPick(items, {title, placeholder, anchor})` (typing narrows, fuzzy by label else description, headings only with their items) and `ui.showInputBox({title, prompt, placeholder, value, anchor})`, both and `createQuickPick` (`anchor`) at a point or below an element, else at the top in the middle (search everywhere stays there); items with an icon (`{svg, label}`) and `checked`, separators without a label as lines; the fuzzy matcher moved to `frontend/core/fuzzy`; `showContextMenu` draws every registered menu in it (`context-menu.ts` builds the items, the old menu list and its CSS gone); a filter button's `...` asked with `showInputBox` below the button instead of `prompt()`; a click on a mark, a table cell or an Explore group row: `offerFilters` (Filter / Exclude per candidate, the pill at once); `showChoices`, the floating bar, the selection model and `widget/selection` deleted; `selectOnClick` renamed `filterOnClick`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: `=` in both labels, the icon (and its accessible name) tells filter from exclude; no new right-click menus (only `table/cell` opens on one, as before); a menu's command runs synchronously as the box closes (`QuickInput.pickOne`), `showQuickPick`'s promise after it *(all proposed)* | click to filter in one step |
 | 8d | **D5 layout:** tabs in the top row (`[…][Dashica][tabs][+] … [time range][refresh]`), the title bar goes; search everywhere a rail button; side panel headers in caps with "…"; rail tooltips with name and shortcut (§3.4) | the new top row |
 | 8e | **D6 signed pills:** `<dataUrl>/pill` (422 for fields that cannot filter), `.FilterAs`, `sql.Quote`, `sql.Table`; the key (connection, table, condition, HMAC-SHA-256 with `filters.secret`, required at start); a chart applies the pills of its base table; 400 for a tampered pill; `filter.Apply`'s rules, `DESCRIBE` and its cache, bound `__f<i>`, `withFilters` removed; filterable fields in `page.json` props; generator and golden contract regenerated (§3.8) | filters as signed pills |
 | 8f | **D7 filter buttons:** pressed while active, no duplicate chip | buttons as toggles in place |

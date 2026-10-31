@@ -2,12 +2,12 @@ import * as Plot from '@observablehq/plot';
 import type { BarVerticalProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
-import { selectOnClick } from '../chart-library/select-on-click';
+import { filterOnClick } from '../chart-library/filter-on-click';
 
 /**
  * The widget type `barVertical`: a bar per category (`x`) as high as its measure (`y`), the categories sorted by it when
  * `sortReverse` is set; `fx` / `fy` split it into facets. A click on a bar offers its category, fill and facets to
- * select.
+ * filter by or exclude.
  */
 export const barVertical: Extension = {
   id: 'barVertical',
@@ -18,11 +18,11 @@ function renderBarVertical(el: HTMLElement, widget: WidgetOf<'barVertical'>, ctx
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawBarVertical(result, widget.props, options, (at, candidates) => ctx.choose(at, candidates)),
+    draw: (result, options) => drawBarVertical(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
   });
 }
 
-function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: DrawOptions, choose: WidgetContext['choose']) {
+function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
   const bars: Plot.BarYOptions = {
     x: props.x.alias,
@@ -55,7 +55,7 @@ function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: Dr
     },
     marks: [
       Plot.barY(data, { ...bars, tip: tipChannels ? { channels: tipChannels } : true }),
-      selectOnClick(Plot.barY, data, { ...bars, fields: [props.x, props.fill, props.fx, props.fy], choose }),
+      filterOnClick(Plot.barY, data, { ...bars, fields: [props.x, props.fill, props.fx, props.fy], offerFilters }),
     ],
   });
 }

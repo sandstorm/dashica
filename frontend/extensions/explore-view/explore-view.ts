@@ -12,7 +12,7 @@ import './explore-view.css';
  * longer apply until "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
  * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
  * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab. A click on a
- * group row's value of the chart's result selects it (`widget/selection`: "Filter by …"). Perspective loads on first
+ * group row's value of the chart's result offers to filter the tab by it or exclude it. Perspective loads on first
  * use (`loadPerspective`).
  */
 export const exploreView: Extension = {
@@ -35,7 +35,7 @@ export const exploreView: Extension = {
           onDidChangeHash: context.onDidChangeHash,
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
-          select: (selection) => widgets.select({ kind: 'category', widgetId: id, ...selection }),
+          offerFilters: (at, candidates) => widgets.offerFilters(at, candidates, context.query),
         });
         return {
           dispose: () => {

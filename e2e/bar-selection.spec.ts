@@ -1,6 +1,6 @@
-// Tests for the selection on bar charts (docs/2026-10-28-workbench.md §3.8, steps 6.7 and 6.8): a click on a bar
-// offers its category in a menu "Select"; choosing it selects it, the floating bar next to it
-// offers "Filter by" / "Exclude", which add a chip and end the selection; Escape and a click elsewhere end it as well.
+// Tests for click to filter on bar charts (docs/2026-10-28-workbench.md §3.8, step 8c): a click on a bar offers, in the
+// quick pick "Filter", "<field> = <value>" to filter by (a filter icon) and to exclude (a minus icon); choosing one adds
+// the chip at once; Escape and a click elsewhere close the quick pick without a chip.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance" (category `instance`), over the last 7 days: it needs HTTP 500s in that range. Another page and
@@ -15,31 +15,25 @@ async function firstBar(page: Page) {
     await page.goto(`${PAGE}?time=168h`);
     const frame = page.locator('.d-chart-frame', {has: page.getByText(CHART, {exact: true})}).first();
     await frame.scrollIntoViewIfNeeded();
-    // a chart that selects has a d-select-on-click mark; Playwright's click moves the mouse onto the bar first, so Plot points at it
-    const bar = frame.locator('svg:has(.d-select-on-click) g[aria-label="bar"] rect').first();
+    // a chart that filters on a click has a d-filter-on-click mark; Playwright's click moves the mouse onto the bar
+    // first, so Plot points at it
+    const bar = frame.locator('svg:has(.d-filter-on-click) g[aria-label="bar"] rect').first();
     await expect(bar).toBeVisible();
     return bar;
 }
 
-/** Clicks `bar` and chooses its category (`instance = …`) in the menu "Select". */
-async function select(page: Page, bar: Awaited<ReturnType<typeof firstBar>>) {
-    await bar.click();
-    // the category comes first, before a fill or facet
-    const choices = page.getByRole('menu', {name: 'Select'}).getByRole('menuitem');
-    await expect(choices.first()).toHaveText(/^\S+ = .+/);
-    await choices.first().click();
-    await expect(page.getByRole('menu', {name: 'Select'})).toHaveCount(0);
-}
+/** The quick pick a click on a chart opens. */
+const quickPick = (page: Page) => page.getByRole('dialog', {name: 'Filter'});
 
-test('a click on a bar offers its category; choosing it selects; "Filter by" in the floating bar adds it as a chip', async ({page}) => {
+test('a click on a bar offers to filter by its category or exclude it; "Filter" adds it as a chip at once', async ({page}) => {
     const bar = await firstBar(page);
-    await select(page, bar);
-    const floating = page.getByRole('toolbar', {name: 'Selection'});
-    await expect(floating).toBeVisible();
-    await expect(floating.getByRole('button')).toHaveText(['Filter by', 'Exclude']);
-
-    await floating.getByRole('button', {name: 'Filter by'}).click();
-    await expect(floating).toBeHidden();
+    await bar.click();
+    const options = quickPick(page).getByRole('option');
+    // the category comes first, before a fill or facet: filter by it, then exclude it
+    await expect(options.nth(0)).toHaveAccessibleName(/^Filter \S+ = .+/);
+    await expect(options.nth(1)).toHaveAccessibleName(/^Exclude \S+ = .+/);
+    await options.nth(0).click();
+    await expect(quickPick(page)).toHaveCount(0);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('=');
@@ -48,35 +42,26 @@ test('a click on a bar offers its category; choosing it selects; "Filter by" in 
 
 test('"Exclude" adds the category as ≠', async ({page}) => {
     const bar = await firstBar(page);
-    await select(page, bar);
-    await page.getByRole('toolbar', {name: 'Selection'}).getByRole('button', {name: 'Exclude'}).click();
+    await bar.click();
+    await quickPick(page).getByRole('option', {name: /^Exclude /}).first().click();
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('≠');
 });
 
-test('Escape and a click elsewhere end the selection; the next click on a bar offers it again', async ({page}) => {
-    const bar = await firstBar(page);
-    const floating = page.getByRole('toolbar', {name: 'Selection'});
-    await select(page, bar);
-    await expect(floating).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(floating).toBeHidden();
-
-    await select(page, bar);
-    await expect(floating).toBeVisible();
-    // the chart's title: outside the bars and the floating bar
-    await page.getByText(CHART, {exact: true}).first().click();
-    await expect(floating).toBeHidden();
-    await expect(page.getByTestId('wb-filter-bar').getByTestId('filter-chip')).toHaveCount(0);
-});
-
-test('Escape closes the menu "Select" without selecting', async ({page}) => {
+test('typing narrows the quick pick; Escape and a click elsewhere close it without a chip; the next click offers again', async ({page}) => {
     const bar = await firstBar(page);
     await bar.click();
-    const menu = page.getByRole('menu', {name: 'Select'});
-    await expect(menu).toBeVisible();
+    await expect(quickPick(page)).toBeVisible();
+    await page.keyboard.type('instance');
+    await expect(quickPick(page).getByRole('option').first()).toHaveAccessibleName(/instance = /);
     await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
-    await expect(page.getByRole('toolbar', {name: 'Selection'})).toBeHidden();
+    await expect(quickPick(page)).toHaveCount(0);
+
+    await bar.click();
+    await expect(quickPick(page)).toBeVisible();
+    // the chart's title: outside the bars and the quick pick
+    await page.getByText(CHART, {exact: true}).first().click();
+    await expect(quickPick(page)).toHaveCount(0);
+    await expect(page.getByTestId('wb-filter-bar').getByTestId('filter-chip')).toHaveCount(0);
 });

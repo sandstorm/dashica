@@ -1,6 +1,6 @@
-// Tests for the selection on the other charts and in tables (docs/2026-10-28-workbench.md §3.8, step 6.8): a click on
-// a time bar offers its series in the menu "Select", a click on a table cell selects its value, and the same floating
-// bar as on a bar chart filters by it; the cell's menu keeps only its SQL entries.
+// Tests for click to filter on the other charts and in tables (docs/2026-10-28-workbench.md §3.8, step 8c): a click on
+// a time bar offers its series in the quick pick "Filter", a click on a table cell its value, as on a bar chart;
+// choosing one adds the chip at once; the cell's menu keeps only its SQL entries.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its time bar
 // "HTTP non-2xx status by type" (fill `status_group`: 3xx / 4xx / 5xx) and its table "20 slowest requests"
@@ -21,30 +21,26 @@ async function chart(page: Page, title: string) {
     return frame;
 }
 
-test('a click on a time bar offers its series; choosing it selects; "Filter by" adds it as a chip', async ({page}) => {
+test('a click on a time bar offers its series; "Filter" adds it as a chip', async ({page}) => {
     const frame = await chart(page, TIME_BAR);
-    const bar = frame.locator('svg:has(.d-select-on-click) g[aria-label="rect"] rect').first();
+    const bar = frame.locator('svg:has(.d-filter-on-click) g[aria-label="rect"] rect').first();
     await expect(bar).toBeVisible();
     // the drag area lies above the bars and takes the click: `force` clicks there all the same; Playwright moves the
     // mouse onto the bar first, so Plot points at it
     await bar.click({force: true});
-    const choices = page.getByRole('menu', {name: 'Select'}).getByRole('menuitem');
+    const options = page.getByRole('dialog', {name: 'Filter'}).getByRole('option');
     // the fill comes first, before any facet
-    await expect(choices.first()).toHaveText(/^status_group = /);
-    const value = (await choices.first().textContent())!.replace(/^status_group = /, '');
-    await choices.first().click();
-    const floating = page.getByRole('toolbar', {name: 'Selection'});
-    await expect(floating.getByRole('button')).toHaveText(['Filter by', 'Exclude']);
-
-    await floating.getByRole('button', {name: 'Filter by'}).click();
+    await expect(options.first()).toHaveAccessibleName(/^Filter status_group = /);
+    const value = (await options.first().textContent())!.trim().replace(/^status_group = /, '');
+    await options.first().click();
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText(value);
 });
 
-test('a click on a table cell selects its value; "Exclude" adds it as ≠; its menu keeps only the SQL entries', async ({page}) => {
+test('a click on a table cell offers its value; "Exclude" adds it as ≠; its menu keeps only the SQL entries', async ({page}) => {
     const frame = await chart(page, TABLE);
-    const cell = frame.locator(`.tabulator-cell.d-table__selectable[tabulator-field="${COLUMN}"]`).first();
+    const cell = frame.locator(`.tabulator-cell.d-table__filterable[tabulator-field="${COLUMN}"]`).first();
     await expect(cell).toBeVisible();
 
     // a right click shows the menu table/cell
@@ -56,9 +52,9 @@ test('a click on a table cell selects its value; "Exclude" adds it as ≠; its m
     await expect(menu).toHaveCount(0);
 
     await cell.click();
-    const floating = page.getByRole('toolbar', {name: 'Selection'});
-    await expect(floating.getByRole('button')).toHaveText(['Filter by', 'Exclude']);
-    await floating.getByRole('button', {name: 'Exclude'}).click();
+    const options = page.getByRole('dialog', {name: 'Filter'}).getByRole('option');
+    await expect(options).toHaveCount(2);
+    await options.nth(1).click();
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('≠');

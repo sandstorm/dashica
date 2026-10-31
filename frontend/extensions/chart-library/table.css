@@ -36,8 +36,8 @@
     font-size: 0.9em;
 }
 
-/* a cell a click selects the value of */
-.d-table .tabulator-cell.d-table__selectable {
+/* a cell a click offers to filter by */
+.d-table .tabulator-cell.d-table__filterable {
     cursor: pointer;
 }
 

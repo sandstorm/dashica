@@ -3,9 +3,8 @@ import { Filter, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { FilterChip, FilterOp, QueryApi } from '../../hosts/query/query';
+import type { FilterChip, QueryApi } from '../../hosts/query/query';
 import type { UiApi } from '../../hosts/ui/ui';
-import type { Selection } from '../../hosts/widgets/widgets';
 import './filters.css';
 
 /**
@@ -13,22 +12,12 @@ import './filters.css';
  * ("host = a") or SQL ("SQL: duration > 2000"), each removed with its × and edited with a click on its text. The funnel
  * button in the title bar adds a SQL chip. The page's filter buttons are toggles: pressed while a SQL chip has their
  * condition (`status >= 500`; a `...` in it is asked for), which is then labelled with the button's title. The bar
- * shows while it has a chip or a button, else the page has no bar for nothing. On a chart's selected category, the
- * floating bar `widget/selection` offers "Filter by" and "Exclude", which add it as a structured chip and end the
- * selection.
+ * shows while it has a chip or a button, else the page has no bar for nothing. A click on a chart adds its structured
+ * chips (`WidgetsApi.offerFilters`).
  */
 export const filters: Extension = {
   id: 'filters',
-  activate({ ui, page, query, widgets, commands, subscriptions }) {
-    const addSelection = (op: FilterOp) => (selection: Selection) => {
-      query.filters.add(selection.fieldId, op, selection.value);
-      widgets.clearSelection();
-    };
-    subscriptions.push(commands.registerCommand('filters.filterBySelection', addSelection('eq')));
-    subscriptions.push(commands.registerCommand('filters.excludeSelection', addSelection('ne')));
-    const isCategory = (selection: Selection) => selection.kind === 'category';
-    subscriptions.push(ui.registerMenuItem<Selection>('widget/selection', { command: 'filters.filterBySelection', title: 'Filter by', order: 1, when: isCategory }));
-    subscriptions.push(ui.registerMenuItem<Selection>('widget/selection', { command: 'filters.excludeSelection', title: 'Exclude', order: 2, when: isCategory }));
+  activate({ ui, page, query, subscriptions }) {
     let button: Disposable | undefined;
     let bar: Disposable | undefined;
     const showBar = () => {
