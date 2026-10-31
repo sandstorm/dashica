@@ -152,15 +152,18 @@ export class WidgetsHost implements WidgetsApi {
     }
   }
 
-  /** A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. */
+  /**
+   * A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. The
+   * press is heard on its way down (capture), since a chart stops the presses on its marks (selectOnClick).
+   */
   #activateOn(el: HTMLElement, ctx: RenderedWidget): Disposable {
     const onEvent = (event: Event) => {
       if (event.target instanceof Element && event.target.closest('[data-data-url]') === el) this.activate(ctx);
     };
-    el.addEventListener('pointerdown', onEvent);
+    el.addEventListener('pointerdown', onEvent, true);
     el.addEventListener('focusin', onEvent);
     return new Disposable(() => {
-      el.removeEventListener('pointerdown', onEvent);
+      el.removeEventListener('pointerdown', onEvent, true);
       el.removeEventListener('focusin', onEvent);
     });
   }

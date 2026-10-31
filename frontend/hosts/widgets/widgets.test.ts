@@ -271,6 +271,14 @@ describe('WidgetsHost', () => {
       expect(changes).toBe(3);
     });
 
+    it('is the widget pressed in also when its chart stops the press, as a chart does on a mark it selects from', () => {
+      const { el } = testbed.render(requests);
+      const mark = el.querySelector('button')!;
+      mark.addEventListener('pointerdown', (event) => event.stopPropagation(), true);
+      press(mark);
+      expect(testbed.widgets.active?.widget).toBe(requests);
+    });
+
     it('is the innermost widget with data: a press on a chart in a grid makes the chart active', () => {
       testbed.widgets.registerWidget('grid', (el, widget, ctx) =>
         Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child))),
