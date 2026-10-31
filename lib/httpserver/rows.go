@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// ErrExploreNotEnabled is what HandleSql and HandleEditedRows answer while explore.enabled is off, before any query:
+// ErrExploreNotEnabled is what HandleSql, HandleEditedRows and ConnectionRowsHandler answer while explore.enabled is off, before any query:
 // a 404.
 var ErrExploreNotEnabled = errors.New("Explore is not enabled (explore.enabled)")
 
@@ -23,6 +24,10 @@ var ErrExploreNotEnabled = errors.New("Explore is not enabled (explore.enabled)"
 func (qh QueryHandler) HandleRows(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
 	return qh.answerArrow(queryObj, state, diagnostics, clickhouse.PlainArrowCast, w, r)
 }
+
+// ExploreRowLimit is the number of rows an edited query (`<dataUrl>/rows?exploreSql=`, `/rows?connection=`) answers at
+// most.
+const ExploreRowLimit = 100_000
 
 // HandleEditedRows answers the SQL `text` the viewer edited in the Explore view, as it is (spaces and one trailing `;`
 // trimmed), its placeholders bound to `params` (EditedParameters), on the ClickHouse connection of `queryObj` (its
@@ -34,14 +39,66 @@ func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, 
 	if !qh.ExploreEnabled {
 		return ErrExploreNotEnabled
 	}
-	text = strings.TrimSuffix(strings.TrimSpace(text), ";")
-	if strings.TrimSpace(text) == "" {
-		return &QueryStateError{"exploreSql: the edited query is empty"}
+	text, err := editedText(text)
+	if err != nil {
+		return err
 	}
 	client, err := qh.client(queryObj)
 	if err != nil {
 		return err
 	}
+	return answerEdited(client, text, params, limit, w, r)
+}
+
+// ConnectionRowsHandler answers `GET /rows?connection=<name>&exploreSql=<text>&param_<name>=…`, the query of a blank
+// Explore tab, which no chart runs (docs/2026-10-30-perspective.md §4.8): `text` on that connection of dashica_config,
+// as HandleEditedRows answers an edited query (read-only, at most ExploreRowLimit rows, the Arrow of HandleRows). 404
+// while explore.enabled is off (ErrExploreNotEnabled, before any query) and for a connection dashica_config does not
+// name; 400 for an empty text.
+type ConnectionRowsHandler struct {
+	ClickhouseClientManager *clickhouse.Manager
+	// ExploreEnabled: it answers (explore.enabled).
+	ExploreEnabled bool
+}
+
+func (h ConnectionRowsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !h.ExploreEnabled {
+		http.Error(w, ErrExploreNotEnabled.Error(), http.StatusNotFound)
+		return
+	}
+	args := r.URL.Query()
+	connection := args.Get("connection")
+	if !slices.Contains(h.ClickhouseClientManager.Connections(), connection) {
+		http.Error(w, fmt.Sprintf("no connection %q in dashica_config", connection), http.StatusNotFound)
+		return
+	}
+	text, err := editedText(args.Get("exploreSql"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	client, err := h.ClickhouseClientManager.GetClient(connection)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := answerEdited(client, text, EditedParameters(args), ExploreRowLimit, w, r); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// editedText is `text` without its spaces around and one trailing `;`; a QueryStateError when nothing is left.
+func editedText(text string) (string, error) {
+	text = strings.TrimSuffix(strings.TrimSpace(text), ";")
+	if strings.TrimSpace(text) == "" {
+		return "", &QueryStateError{"exploreSql: the edited query is empty"}
+	}
+	return text, nil
+}
+
+// answerEdited answers `text` on `client`, its placeholders bound to `params`, read-only and at most `limit` rows, in
+// plain Arrow types (HandleEditedRows).
+func answerEdited(client *clickhouse.Client, text string, params map[string]string, limit int, w http.ResponseWriter, r *http.Request) error {
 	opts := clickhouse.DefaultQueryOptions()
 	opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
 	opts.Settings["date_time_input_format"] = "best_effort"

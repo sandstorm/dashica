@@ -141,7 +141,8 @@ func New(projectFS fs.ReadFileFS) Dashica {
 }
 
 // newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range, /schema.json (the Schema view's,
-// httpserver.SchemaHandler) and the start page "/", and no dashboards yet.
+// httpserver.SchemaHandler), /rows (a blank Explore tab's query, httpserver.ConnectionRowsHandler) and the start page
+// "/", and no dashboards yet.
 func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
 	d := &DashicaImpl{
 		cfg:              cfg,
@@ -159,6 +160,10 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, ExploreEnabled: deps.ExploreEnabled}
 	if err := d.handlerCollector.Handle("/schema.json", schema); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /schema.json")
+	}
+	rows := httpserver.ConnectionRowsHandler{ClickhouseClientManager: deps.ClickhouseClientManager, ExploreEnabled: deps.ExploreEnabled}
+	if err := d.handlerCollector.Handle("/rows", rows); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /rows")
 	}
 	if err := dashboard.CollectHome(d.handlerCollector); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register the start page")

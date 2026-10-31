@@ -1,5 +1,6 @@
-// Tests for QueryHandler.HandleRows, HandleSql and HandleEditedRows without ClickHouse: a skipped chart; the LIMIT
-// around an edited query; its `param_<name>` keys (EditedParameters); the Explore handlers while Explore is off.
+// Tests for QueryHandler.HandleRows, HandleSql, HandleEditedRows and ConnectionRowsHandler without ClickHouse: a
+// skipped chart; the LIMIT around an edited query; its `param_<name>` keys (EditedParameters); the Explore handlers
+// while Explore is off; a blank Explore tab's query on a connection not in the config, and an empty one.
 package httpserver
 
 import (
@@ -8,8 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -58,5 +63,40 @@ func TestExploreHandlers_AnswerErrExploreNotEnabledBeforeAnyQuery(t *testing.T) 
 	}
 	if err := qh.HandleEditedRows(chart, "SELECT 1", nil, 10, httptest.NewRecorder(), r); !errors.Is(err, ErrExploreNotEnabled) {
 		t.Errorf("HandleEditedRows: %v", err)
+	}
+}
+
+// askConnectionRows is what a ConnectionRowsHandler on a config with the connection "default" (whose ClickHouse is not
+// asked: every case answers before) answers `target`.
+func askConnectionRows(exploreEnabled bool, target string) *httptest.ResponseRecorder {
+	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}}
+	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), ExploreEnabled: exploreEnabled}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	return rec
+}
+
+func TestConnectionRowsHandler_AnswersNotFoundWhileExploreIsOff(t *testing.T) {
+	rec := askConnectionRows(false, "/rows?connection=default&exploreSql=SELECT+1")
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "explore.enabled") {
+		t.Errorf("status %d: %s", rec.Code, rec.Body)
+	}
+}
+
+func TestConnectionRowsHandler_AnswersNotFoundForAConnectionNotInTheConfig(t *testing.T) {
+	for _, target := range []string{"/rows?connection=logs&exploreSql=SELECT+1", "/rows?exploreSql=SELECT+1"} {
+		rec := askConnectionRows(true, target)
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "dashica_config") {
+			t.Errorf("%s: status %d: %s", target, rec.Code, rec.Body)
+		}
+	}
+}
+
+func TestConnectionRowsHandler_AnswersBadRequestForAnEmptyQuery(t *testing.T) {
+	for _, target := range []string{"/rows?connection=default", "/rows?connection=default&exploreSql=+%3B+"} {
+		rec := askConnectionRows(true, target)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "empty") {
+			t.Errorf("%s: status %d: %s", target, rec.Code, rec.Body)
+		}
 	}
 }

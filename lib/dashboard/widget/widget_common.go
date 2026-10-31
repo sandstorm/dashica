@@ -234,7 +234,7 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 
 // queryHandler serves the query of `chart`: /query (the data, Arrow), /debug (the query, EXPLAIN), /rows (the
 // Explore view's rows in plain Arrow types, HandleRows: the chart's result; with `?exploreSql=<text>` the query the
-// viewer edited, its `param_<name>` values bound, HandleEditedRows, at most exploreRowLimit rows) and /sql (the
+// viewer edited, its `param_<name>` values bound, HandleEditedRows, at most httpserver.ExploreRowLimit rows) and /sql (the
 // chart's query with its parameters, HandleSql), each with the pills of the request on its table (filter.Apply; a
 // pill not signed with deps.FilterSecret is a 400, as is a query state that cannot be read); and /pill, the pill of
 // one of its fields (pillHandler). /sql and `exploreSql` answer 404 unless deps.ExploreEnabled (their handlers check
@@ -270,7 +270,7 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	mux.Handle("/debug", serve(qh.HandleDebug))
 	mux.HandleFunc("/rows", func(w http.ResponseWriter, r *http.Request) {
 		if args := r.URL.Query(); args.Has("exploreSql") {
-			httpError(w, qh.HandleEditedRows(query, args.Get("exploreSql"), httpserver.EditedParameters(args), exploreRowLimit, w, r))
+			httpError(w, qh.HandleEditedRows(query, args.Get("exploreSql"), httpserver.EditedParameters(args), httpserver.ExploreRowLimit, w, r))
 			return
 		}
 		rows(w, r)
@@ -350,9 +350,6 @@ func openPills(secret []byte, keys []string) ([]filter.Pill, error) {
 	}
 	return pills, nil
 }
-
-// exploreRowLimit is the number of rows an edited query (/rows?exploreSql=) answers at most.
-const exploreRowLimit = 100_000
 
 // httpError answers `err`: 400 for a query state that cannot be read, 404 for an Explore endpoint while Explore is
 // off, else 500; nothing for nil.

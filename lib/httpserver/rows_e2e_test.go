@@ -1,5 +1,6 @@
-// Tests for QueryHandler.HandleRows, HandleSql and HandleEditedRows against a real ClickHouse: a chart's result, its
-// SQL with its parameters giving the same rows, an edited query read-only and limited.
+// Tests for QueryHandler.HandleRows, HandleSql, HandleEditedRows and ConnectionRowsHandler against a real ClickHouse:
+// a chart's result, its SQL with its parameters giving the same rows, an edited query read-only and limited, a blank
+// Explore tab's query with its parameters on a connection.
 package httpserver
 
 import (
@@ -175,5 +176,23 @@ func TestHandleEditedRows_AnswersExactlyTheLimitWithoutAnError(t *testing.T) {
 				t.Errorf("headers %v, %d rows", rec.Header(), got)
 			}
 		})
+	}
+}
+
+func TestConnectionRowsHandler_AnswersTheQueryWithItsParametersReadOnly(t *testing.T) {
+	cfg, _ := testServer.LoadTestingConfig(t)
+	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), ExploreEnabled: true}
+	ask := func(text string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/rows?"+url.Values{"connection": {"default"}, "exploreSql": {text}, "param_v": {"dashica-blank"}}.Encode(), nil))
+		return rec
+	}
+
+	rec := ask("SELECT {v:String} AS m FROM numbers(3);")
+	if rec.Code != http.StatusOK || rec.Header().Get("X-Dashica-Rows-Limit") != "100000" || bytes.Count(rec.Body.Bytes(), []byte("dashica-blank")) != 3 {
+		t.Errorf("status %d, headers %v: %s", rec.Code, rec.Header(), rec.Body)
+	}
+	if rec := ask("SELECT 1 SETTINGS readonly = 0"); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "READONLY") {
+		t.Errorf("readonly back: status %d: %s", rec.Code, rec.Body)
 	}
 }
