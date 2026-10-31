@@ -65,7 +65,7 @@ export async function fetchRows(url: string, signal?: AbortSignal): Promise<Rows
   return {
     arrow: response.status === 204 ? undefined : await response.arrayBuffer(),
     limit: limit ? parseInt(limit) : undefined,
-    diagnostics: JSON.parse(response.headers.get('X-Dashica-Diagnostics') || '{}'),
+    diagnostics: JSON.parse(decodeURIComponent(response.headers.get('X-Dashica-Diagnostics') || '{}')),
   };
 }
 

@@ -49,7 +49,7 @@ func pillOf(t *testing.T, chart withQuery, field, op, value string) string {
 	return body.Key
 }
 
-// debugged is what a chart's /debug answers about its pills: the query and the Diagnostics.
+// debugged is what a chart's /debug answers about its pills: the query and the Diagnostics (decoded).
 type debugged struct {
 	status      int
 	diagnostics string
@@ -60,7 +60,11 @@ type debugged struct {
 func debug(t *testing.T, chart withQuery, keys ...string) debugged {
 	t.Helper()
 	rec := askPath(chart, "/debug?"+url.Values{"time": {"1h"}, "f": keys}.Encode())
-	got := debugged{status: rec.Code, diagnostics: rec.Header().Get("X-Dashica-Diagnostics")}
+	diagnostics, err := url.PathUnescape(rec.Header().Get("X-Dashica-Diagnostics"))
+	if err != nil {
+		t.Fatalf("diagnostics header: %v", err)
+	}
+	got := debugged{status: rec.Code, diagnostics: diagnostics}
 	if rec.Code != http.StatusOK {
 		return got
 	}

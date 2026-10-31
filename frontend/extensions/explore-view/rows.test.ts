@@ -54,6 +54,11 @@ describe('fetchRows', () => {
     expect({ ...answer, arrow: undefined }).toEqual({ arrow: undefined, limit: 100000, diagnostics: { ignored: ['host'] } });
   });
 
+  it('decodes the percent-encoded diagnostics', async () => {
+    vi.stubGlobal('fetch', async () => new Response('arrow', { headers: { 'X-Dashica-Diagnostics': '%7B%22ignored%22:%5B%22customer%20%E2%89%A0%20acme%22%5D%7D' } }));
+    expect(await fetchRows('/rows')).toMatchObject({ diagnostics: { ignored: ['customer ≠ acme'] } });
+  });
+
   it('reads a chart’s result without a limit, and a skipped chart without rows', async () => {
     vi.stubGlobal('fetch', async () => new Response('arrow'));
     expect(await fetchRows('/rows')).toMatchObject({ limit: undefined, diagnostics: {} });

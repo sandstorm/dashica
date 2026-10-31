@@ -104,6 +104,16 @@ describe('WidgetsHost', () => {
       expect((await ctx.runQuery()).dashicaDiagnostics).toEqual({});
     });
 
+    it('decodes the percent-encoded diagnostics and column types, so any text survives the header', async () => {
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, {
+        'X-Dashica-Diagnostics': '%7B%22ignored%22:%5B%22customer%20%E2%89%A0%20acme%22%2C%22user%20=%20J%C3%B6rg%22%5D%7D',
+        'X-Dashica-Column-Types': '%7B%22gr%C3%B6%C3%9Fe%22:%22Float64%22%7D',
+      });
+      const result = await ctx.runQuery();
+      expect(result.dashicaDiagnostics).toEqual({ ignored: ['customer ≠ acme', 'user = Jörg'] });
+      expect(result.dashicaColumnTypes).toEqual({ größe: 'Float64' });
+    });
+
     it('reads the columns’ ClickHouse types, empty without the header', async () => {
       testbed.serve('/p/shop/api/1/query', { timestamp: [3] }, { 'X-Dashica-Column-Types': '{"timestamp":"DateTime"}' });
       expect((await ctx.runQuery()).dashicaColumnTypes).toEqual({ timestamp: 'DateTime' });

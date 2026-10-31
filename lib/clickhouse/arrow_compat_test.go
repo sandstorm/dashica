@@ -108,9 +108,9 @@ func TestPlainArrowCast(t *testing.T) {
 	}
 }
 
-func TestColumnTypesHeader_IsEachColumnsTypeByNameInASCII(t *testing.T) {
+func TestColumnTypesHeader_IsEachColumnsTypeByNamePercentEncoded(t *testing.T) {
 	got := columnTypesHeader([]describeRow{{"timestamp", "DateTime"}, {"größe", "Nullable(Float64)"}})
-	if want := `{"gr\u00f6\u00dfe":"Nullable(Float64)","timestamp":"DateTime"}`; got != want {
+	if want := `%7B%22gr%C3%B6%C3%9Fe%22:%22Nullable%28Float64%29%22%2C%22timestamp%22:%22DateTime%22%7D`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
 	if got := columnTypesHeader(nil); got != "" {

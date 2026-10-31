@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/sandstorm/dashica/lib/util"
 )
 
 // This file makes arbitrary queries safe to serialize as Apache Arrow — the
@@ -79,9 +78,10 @@ func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts Q
 	return wrapped, cols, nil
 }
 
-// columnTypesHeader is X-Dashica-Column-Types for `columns`: each column's ClickHouse type by its name, as JSON in
-// ASCII (`{"timestamp":"DateTime","host":"LowCardinality(String)"}`), the types the query's expressions have before
-// the Arrow casts (a DateTime travels as UInt32 seconds), by which a click on a chart offers the ops its type allows
+// columnTypesHeader is X-Dashica-Column-Types for `columns`: each column's ClickHouse type by its name, as JSON,
+// percent-encoded (`{"timestamp":"DateTime","host":"LowCardinality(String)"}`, as the browser's decodeURIComponent
+// reads it; a column's name may be any text), the types the query's expressions have before the Arrow casts (a
+// DateTime travels as UInt32 seconds), by which a click on a chart offers the ops its type allows
 // (docs/2026-10-28-workbench.md §3.15 D25); "" without columns.
 func columnTypesHeader(columns []describeRow) string {
 	if len(columns) == 0 {
@@ -92,7 +92,7 @@ func columnTypesHeader(columns []describeRow) string {
 		types[column.Name] = column.Type
 	}
 	b, _ := json.Marshal(types) // strings only; cannot fail
-	return util.ASCIIJSON(string(b))
+	return url.PathEscape(string(b))
 }
 
 // castArrowUnsafe casts what Arrow cannot carry (arrowUnsafeType) to String; the default QueryOptions.Cast.

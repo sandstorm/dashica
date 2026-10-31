@@ -29,7 +29,7 @@ func TestHandleRows_ASkippedChartAnswers204WithoutClickHouse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HandleRows: %v", err)
 	}
-	if rec.Code != http.StatusNoContent || rec.Header().Get("X-Dashica-Diagnostics") != `{"skipped":"pick a host first"}` {
+	if rec.Code != http.StatusNoContent || rec.Header().Get("X-Dashica-Diagnostics") != `%7B%22skipped%22:%22pick%20a%20host%20first%22%7D` {
 		t.Errorf("status %d, headers %v", rec.Code, rec.Header())
 	}
 }

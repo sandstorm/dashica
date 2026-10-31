@@ -90,20 +90,26 @@ func TestWriteDiagnostics_OmitsTheHeaderForNothingToSay(t *testing.T) {
 		t.Errorf("header set: %v", rec.Header())
 	}
 	WriteDiagnostics(rec, filter.Diagnostics{Ignored: []string{"host", "status"}})
-	if got := rec.Header().Get("X-Dashica-Diagnostics"); got != `{"ignored":["host","status"]}` {
+	if got := rec.Header().Get("X-Dashica-Diagnostics"); got != `%7B%22ignored%22:%5B%22host%22%2C%22status%22%5D%7D` {
 		t.Errorf("header %q", got)
 	}
 }
 
-func TestWriteDiagnostics_EscapesNonASCII(t *testing.T) {
+func TestWriteDiagnostics_PercentEncodesNonASCII(t *testing.T) {
 	rec := httptest.NewRecorder()
 	WriteDiagnostics(rec, filter.Diagnostics{Ignored: []string{"customer ≠ acme", "user = Jörg 🦊"}})
 	got := rec.Header().Get("X-Dashica-Diagnostics")
-	if got != `{"ignored":["customer \u2260 acme","user = J\u00f6rg \ud83e\udd8a"]}` {
-		t.Errorf("header %q", got)
+	for _, r := range got {
+		if r > 0x7e {
+			t.Fatalf("header %q has a non-ASCII rune %q", got, r)
+		}
+	}
+	text, err := url.PathUnescape(got)
+	if err != nil {
+		t.Fatalf("header %q: %v", got, err)
 	}
 	var back filter.Diagnostics
-	if err := json.Unmarshal([]byte(got), &back); err != nil || back.Ignored[0] != "customer ≠ acme" || back.Ignored[1] != "user = Jörg 🦊" {
+	if err := json.Unmarshal([]byte(text), &back); err != nil || back.Ignored[0] != "customer ≠ acme" || back.Ignored[1] != "user = Jörg 🦊" {
 		t.Errorf("round trip %v %v", back, err)
 	}
 }

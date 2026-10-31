@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
-	"github.com/sandstorm/dashica/lib/util"
 )
 
 // QueryState is the page's query state as every data handler reads it, from the keys the page keeps in its own URL
@@ -79,12 +79,13 @@ func ParseQueryState(r *http.Request) (QueryState, error) {
 }
 
 // WriteDiagnostics tells the client what the chart did with the request (X-Dashica-Diagnostics:
-// {"ignored":["customer = acme"]}); no header when it has nothing to say. The JSON is pure ASCII: browsers read
-// header bytes as Latin-1, so the "≠" of an Exclude pill or an umlaut in a value travels as a \u escape.
+// {"ignored":["customer = acme"]} percent-encoded, as the browser's decodeURIComponent reads it); no header when it
+// has nothing to say. Header values are bytes the browser reads as Latin-1, so the "≠" of an Exclude pill or an umlaut
+// in a value travels percent-encoded.
 func WriteDiagnostics(w http.ResponseWriter, d filter.Diagnostics) {
 	if len(d.Ignored) == 0 && d.Skipped == "" {
 		return
 	}
 	b, _ := json.Marshal(d) // strings only; cannot fail
-	w.Header().Set("X-Dashica-Diagnostics", util.ASCIIJSON(string(b)))
+	w.Header().Set("X-Dashica-Diagnostics", url.PathEscape(string(b)))
 }

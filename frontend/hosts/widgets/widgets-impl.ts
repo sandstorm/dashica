@@ -202,8 +202,9 @@ function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<WidgetNod
 }
 
 /**
- * The Arrow table at `url`, with what the server said about it in the headers (resolved time range, bucket size, …);
- * an empty table for a chart that did not run (204, its Diagnostics say why).
+ * The Arrow table at `url`, with what the server said about it in the headers (resolved time range, bucket size, …;
+ * the Diagnostics and the column types percent-encoded, as they carry any text); an empty table for a chart that did
+ * not run (204, its Diagnostics say why).
  */
 async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<QueryResult> {
   const response = await fetch(url, { signal });
@@ -214,7 +215,7 @@ async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<Quer
   if (bucketSize != null) result.dashicaBucketSize = parseInt(bucketSize);
   result.clickhouseSummary = JSON.parse(response.headers.get('X-Clickhouse-Summary') || 'null');
   result.dashicaAlertIf = JSON.parse(response.headers.get('X-Dashica-Alert-If') || 'null');
-  result.dashicaDiagnostics = JSON.parse(response.headers.get('X-Dashica-Diagnostics') || '{}');
-  result.dashicaColumnTypes = JSON.parse(response.headers.get('X-Dashica-Column-Types') || '{}');
+  result.dashicaDiagnostics = JSON.parse(decodeURIComponent(response.headers.get('X-Dashica-Diagnostics') || '{}'));
+  result.dashicaColumnTypes = JSON.parse(decodeURIComponent(response.headers.get('X-Dashica-Column-Types') || '{}'));
   return result;
 }
