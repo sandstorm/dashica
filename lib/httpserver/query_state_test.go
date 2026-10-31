@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -91,5 +92,18 @@ func TestWriteDiagnostics_OmitsTheHeaderForNothingToSay(t *testing.T) {
 	WriteDiagnostics(rec, filter.Diagnostics{Ignored: []string{"host", "status"}})
 	if got := rec.Header().Get("X-Dashica-Diagnostics"); got != `{"ignored":["host","status"]}` {
 		t.Errorf("header %q", got)
+	}
+}
+
+func TestWriteDiagnostics_EscapesNonASCII(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteDiagnostics(rec, filter.Diagnostics{Ignored: []string{"customer ≠ acme", "user = Jörg 🦊"}})
+	got := rec.Header().Get("X-Dashica-Diagnostics")
+	if got != `{"ignored":["customer \u2260 acme","user = J\u00f6rg \ud83e\udd8a"]}` {
+		t.Errorf("header %q", got)
+	}
+	var back filter.Diagnostics
+	if err := json.Unmarshal([]byte(got), &back); err != nil || back.Ignored[0] != "customer ≠ acme" || back.Ignored[1] != "user = Jörg 🦊" {
+		t.Errorf("round trip %v %v", back, err)
 	}
 }

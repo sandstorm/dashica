@@ -658,9 +658,10 @@ its base table (`DESCRIBE TABLE`, cached), a SQL file its own output columns; a 
 - more fields later, as charts need to say more.
 
 The handler sends it as one response header, `X-Dashica-Diagnostics: {"ignored":["host"]}` (JSON; no header when it
-is empty), beside `X-Dashica-Resolved-Time-Range`. A skipped chart answers without running ClickHouse. `ChartFrame`
-shows the Diagnostics: no badge when they are empty, "ignores `host`", "skipped: …" in place of the chart. The chart
-still renders without the filters it ignores. A runtime `UNKNOWN_IDENTIFIER` (ClickHouse code 47, e.g. from the free
+is empty; non-ASCII as `\u` escapes, since browsers read header bytes as Latin-1: `"customer \u2260 acme"`), beside
+`X-Dashica-Resolved-Time-Range`. A skipped chart answers without running ClickHouse. `ChartFrame` shows the Diagnostics: no
+badge when they are empty, "ignores `host`", "skipped: …" in place of the chart. The chart still renders without the
+filters it ignores. A runtime `UNKNOWN_IDENTIFIER` (ClickHouse code 47, e.g. from the free
 SQL chip) fails that chart only, with the column named. No query parsing.
 
 ✅ **Done in 6.3 / 6.4 (history, replaced by step 8e), with these deviations from the first sketch (2026-10-30):**
