@@ -1,8 +1,9 @@
 import * as Plot from '@observablehq/plot';
 import type { BarVerticalProps } from '../../generated/zz_generated.dashica';
+import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
-import { filterOnClick } from '../chart-library/filter-on-click';
+import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
 
 /**
  * The widget type `barVertical`: a bar per category (`x`) as high as its measure (`y`), the categories sorted by it when
@@ -11,18 +12,18 @@ import { filterOnClick } from '../chart-library/filter-on-click';
  */
 export const barVertical: Extension = {
   id: 'barVertical',
-  activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('barVertical', renderBarVertical)),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('barVertical', (el, widget, ctx) => renderBarVertical(el, widget, ctx, commands))),
 };
 
-function renderBarVertical(el: HTMLElement, widget: WidgetOf<'barVertical'>, ctx: WidgetContext): ChartFrame {
+function renderBarVertical(el: HTMLElement, widget: WidgetOf<'barVertical'>, ctx: WidgetContext, commands: Commands): ChartFrame {
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawBarVertical(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
+    draw: (result, options) => drawBarVertical(result, widget.props, options, offerFiltersOf(commands, widget)),
   });
 }
 
-function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
+function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: DrawOptions, offerFilters: OfferFilters) {
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
   const bars: Plot.BarYOptions = {
     x: props.x.alias,

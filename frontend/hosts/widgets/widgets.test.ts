@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu, filters), the
-// filters a click offers, the active widget, the chart frame.
+// Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu), the active
+// widget, the chart frame.
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
@@ -141,79 +141,6 @@ describe('WidgetsHost', () => {
     });
   });
 
-  describe('the filters a click offers', () => {
-    const contexts: WidgetContext[] = [];
-
-    beforeEach(() => {
-      contexts.length = 0;
-      testbed.widgets.registerWidget('barVertical', (_el, _widget, given) => {
-        contexts.push(given);
-        return new Disposable(() => {});
-      });
-    });
-
-    const byStatus: WidgetNode = {
-      type: 'barVertical',
-      props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } },
-      dataUrl: '/p/shop/api/3',
-      filterable: ['status', 'instance'],
-    };
-
-    it('offers to filter by and to exclude each candidate in order, also a single one; choosing one adds its pill at once; none offer nothing', async () => {
-      testbed.render(byStatus);
-      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }]);
-      expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500', 'Filter instance = web-1', 'Exclude instance = web-1']);
-      expect(document.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
-      await testbed.choose('Exclude instance = web-1');
-      await settle();
-      expect(testbed.choices()).toEqual([]);
-      expect(testbed.query.filters.chips).toEqual([testbed.pill('instance', 'ne', 'web-1')]);
-      expect(testbed.requests.at(-1)?.pathname).toBe('/p/shop/api/3/pill');
-      expect(Object.fromEntries(testbed.requests.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
-      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '404' }]);
-      expect(testbed.choices()).toEqual(['Filter status = 404', 'Exclude status = 404']);
-      contexts[0].offerFilters({ x: 10, y: 20 }, []);
-      expect(testbed.choices()).toEqual(['Filter status = 404', 'Exclude status = 404']);
-      await testbed.choose('Filter status = 404');
-      await settle();
-      expect(testbed.query.filters.chips).toEqual([testbed.pill('instance', 'ne', 'web-1'), testbed.pill('status', 'eq', '404')]);
-    });
-
-    it('offers only the fields the widget can filter by', () => {
-      testbed.render({ ...byStatus, filterable: ['status'] } as WidgetNode);
-      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'cnt', value: '3' }]);
-      expect(testbed.candidates()).toEqual(['status = 500']);
-    });
-
-    it('adds no pill when its widget’s /pill fails', async () => {
-      const failing = vi.spyOn(console, 'error').mockImplementation(() => {});
-      testbed.serveText('/p/shop/api/3/pill', '"status" cannot filter this chart\'s table', 422);
-      testbed.render(byStatus);
-      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }]);
-      await testbed.choose('Filter status = 500');
-      await settle();
-      expect(testbed.query.filters.chips).toEqual([]);
-      expect(failing).toHaveBeenCalled();
-    });
-
-    it('adds nothing when the viewer closes the quick pick', async () => {
-      testbed.render(byStatus);
-      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }]);
-      (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      await settle();
-      expect([testbed.choices(), testbed.query.filters.chips]).toEqual([[], []]);
-    });
-
-    it('adds the filter to the query state given, for a view of a chart outside the page’s widgets', async () => {
-      const other = new QueryHost(window);
-      testbed.widgets.offerFilters({ x: 0, y: 0 }, [{ fieldId: 'host', value: 'a' }], other, { dataUrl: '/p/shop/api/3', filterable: ['host'] });
-      await testbed.choose('Filter host = a');
-      await settle();
-      expect([other.filters.chips, testbed.query.filters.chips]).toEqual([[testbed.pill('host', 'eq', 'a')], []]);
-      other.dispose();
-    });
-  });
-
   describe('the active widget', () => {
     const errors: WidgetNode = { ...requests, props: { ...requests.props, title: 'Errors' }, dataUrl: '/p/shop/api/2' } as WidgetNode;
     let contexts: WidgetContext[];
@@ -343,7 +270,7 @@ describe('WidgetsHost', () => {
       const tabs = new EventEmitter<void>();
       const source = { activeQuery: new QueryHost(window), onDidChangeTabs: tabs.event };
       const other = new QueryHost(window);
-      const ui = { showContextMenu() {}, showQuickPick: async () => undefined };
+      const ui = { showContextMenu() {} };
       const widgets = new WidgetsHost(ui, source);
       widgets.registerWidget('timeBar', () => new Disposable(() => {}));
       let told = 0;

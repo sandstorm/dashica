@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
-import { OP_ICONS } from '../../hosts/widgets/widgets';
 import { addFilter, fetchValues, fieldSource, filterableTables, pickValue } from './add-filter';
+import { OP_ICONS } from './offer';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default') =>
   ({ type: 'barVertical', props: {}, dataUrl, filterable, table, connection }) as unknown as WidgetNode;

@@ -8,17 +8,16 @@ import { CommandsHost } from '../commands/commands';
 import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
 import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost } from '../query/query';
-import { UiHost, type ContextMenuOptions } from '../ui/ui';
-import { WidgetsHost, type RenderedWidget, type WidgetStatus } from './widgets';
+import { UiHost, type ContextMenuOptions, type MenuAnchor } from '../ui/ui';
+import { WidgetsHost, type FilterCandidate, type PillSource, type RenderedWidget, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
  * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
- * shown, `choices()` / `candidates()` / `choose` what `ctx.offerFilters` offers (in its quick pick "Filter"); every
- * `<dataUrl>/pill` answers a pill whose key names its field, op and value (`pill` gives the chip it adds).
- * `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
+ * shown, `offers` the runs of `filters.offer` (a click's point, its candidates, the widget's pills), which the
+ * testbed registers in place of the `filters` extension. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
  * `RenderedWidget` whose status the test sets. `sqlEnabled` is `page.workbench`'s (default on).
  */
 export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
@@ -37,15 +36,9 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
   const workbench = document.body.appendChild(document.createElement('div'));
   const commands = new CommandsHost(workbench);
   const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
-  const widgets = new WidgetsHost({
-    showContextMenu: (menuId, options) => menus.push({ menuId, options }),
-    showQuickPick: (items, options) => ui.showQuickPick(items, options),
-  }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
-  const filterOptions = () =>
-    [...workbench.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')].map((el) => ({
-      el,
-      label: `${el.querySelector('[role=img]')?.getAttribute('aria-label') ?? ''} ${el.textContent?.trim()}`.trim(),
-    }));
+  const widgets = new WidgetsHost({ showContextMenu: (menuId, options) => menus.push({ menuId, options }) }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
+  const offers: { at: MenuAnchor; candidates: readonly FilterCandidate[]; source: PillSource }[] = [];
+  const offering = commands.registerCommand('filters.offer', (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) => void offers.push({ at, candidates, source }));
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -55,10 +48,6 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
     const parsed = new URL(url, location.origin);
     requests.push(parsed);
     const answer = answers.get(parsed.pathname);
-    if (!answer && parsed.pathname.endsWith('/pill')) {
-      const [field, op, value] = ['field', 'op', 'value'].map((key) => parsed.searchParams.get(key) ?? '');
-      return Response.json(fakePill(field, op, value));
-    }
     return answer ? answer() : new Response('not found', { status: 404 });
   });
   vi.stubGlobal(
@@ -90,20 +79,8 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
     ui,
     commands,
     menus,
-    /** What `ctx.offerFilters` offers, as its icon and label read ("Filter status = 500", "Exclude status = 500"); `[]` while it offers none. */
-    choices: () => filterOptions().map(({ label }) => label),
-    /** The candidates `ctx.offerFilters` offers, each once ("status = 500"; each comes as "Filter …" and "Exclude …"). */
-    candidates: () => [...new Set(filterOptions().map(({ el }) => el.textContent?.trim()))],
-    /** Chooses what `ctx.offerFilters` offers as `label` ("Exclude status = 500"), as a click does; resolves once its filter is added. */
-    async choose(label: string) {
-      const options = filterOptions();
-      const option = options.find((candidate) => candidate.label === label);
-      if (!option) throw new Error(`no choice ${label} among ${options.map((candidate) => candidate.label).join(', ')}`);
-      option.el.click();
-      await settle();
-    },
-    /** The chip a choice of `field` `op` `value` adds: the pill `<dataUrl>/pill` answers here. */
-    pill: (field: string, op: 'eq' | 'ne', value: string) => ({ kind: 'pill' as const, ...fakePill(field, op, value) }),
+    /** The runs of `filters.offer`, in order: what each click offered (`{ at, candidates, source }`). */
+    offers,
     /** The page shown, for the extensions that read it. */
     page,
     /** The views popped out into a tab (`page.popOut`). */
@@ -140,6 +117,7 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
       for (const callback of resizes) callback([{ contentRect: { width } }]);
     },
     dispose() {
+      offering.dispose();
       widgets.dispose();
       query.dispose();
       ui.dispose();
@@ -150,11 +128,6 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
       history.replaceState(null, '', '/');
     },
   };
-}
-
-/** The pill the testbed's `/pill` answers: a key that is no signed one, and the label the server writes. */
-function fakePill(field: string, op: string, value: string): { key: string; label: string } {
-  return { key: `test-pill:${field}:${op}:${value}`, label: `${field} ${op === 'ne' ? '≠' : '='} ${value}` };
 }
 
 /** Lets the pending fetches, Arrow decoding and draws finish. */

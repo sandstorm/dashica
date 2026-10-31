@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 // Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell of a
-// category column offering to filter by its value or exclude it, a cell's menu (`table/cell`) adding a condition to
-// the page's SQL filter (none while SQL filters are off), a column header's (`table/header`) sizing the columns.
+// category column running filters.offer with its value and the table's pills, a cell's menu (`table/cell`) adding a
+// condition to the page's SQL filter (none while SQL filters are off), a column header's (`table/header`) sizing the
+// columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { filters } from '../filters/filters';
 import { table } from './table';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.activate(table, filters);
+  testbed.activate(table);
   // Tabulator draws only the rows that fit its height, and jsdom lays out nothing; CSS: the search highlight
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(500);
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(20);
@@ -92,7 +92,7 @@ describe('table', () => {
     expect(given.slice(3)).toEqual([{ widget, records: [{ path: '/api', status: 200 }] }, { widget, records: [] }]);
   });
 
-  it('offers the value of a clicked cell by its column’s name; "Exclude" adds it as ≠', async () => {
+  it('offers the value of a clicked cell by its column’s name, below the cell, with the table’s pills', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] });
     await inView();
@@ -100,10 +100,7 @@ describe('table', () => {
     const cell = cellAt(el, 'status', 1);
     expect(cell.classList.contains('d-table__filterable')).toBe(true);
     cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
-    await testbed.choose('Exclude status = 500');
-
-    expect(testbed.query.filters.chips).toEqual([testbed.pill('status', 'ne', '500')]);
+    expect(testbed.offers).toEqual([{ at: cell, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
   });
 
   it('offers nothing from a NULL cell', async () => {
@@ -112,7 +109,7 @@ describe('table', () => {
     await inView();
 
     cellAt(el, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.choices()).toEqual([]);
+    expect(testbed.offers).toEqual([]);
   });
 
   it('offers only in its category columns: a measure, or a table without categories, offers nothing', async () => {
@@ -123,7 +120,7 @@ describe('table', () => {
     const cnt = cellAt(el, 'cnt', 0);
     expect(cnt.classList.contains('d-table__filterable')).toBe(false);
     cnt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.choices()).toEqual([]);
+    expect(testbed.offers).toEqual([]);
     expect(cellAt(el, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
   });
 
@@ -135,7 +132,7 @@ describe('table', () => {
     const tags = cellAt(el, 'tags', 0);
     expect(tags.classList.contains('d-table__filterable')).toBe(false);
     tags.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.choices()).toEqual([]);
+    expect(testbed.offers).toEqual([]);
   });
 
   it('keeps only the SQL entries no filter op says in a cell’s menu', async () => {
@@ -197,7 +194,7 @@ describe('table', () => {
   it('has no SQL entries in a cell’s menu while SQL filters are off', async () => {
     testbed.dispose();
     testbed = widgetTestbed({ sqlEnabled: false });
-    testbed.activate(table, filters);
+    testbed.activate(table);
     vi.stubGlobal('CSS', {});
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });
     const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });

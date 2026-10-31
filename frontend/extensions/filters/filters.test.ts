@@ -4,7 +4,8 @@
 // button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
 // place, "Add filter" while a chart filters a table; a field's pill edited in place, its operator switched and its
 // value asked anew, each made again by a chart of the page, one no chart makes only removed; with SQL filters off
-// (filters.sqlEnabled), no funnel and a SQL chip only removed, the buttons and the pills as before.
+// (filters.sqlEnabled), no funnel and a SQL chip only removed, the buttons and the pills as before; a chart click's
+// `filters.offer` adding the pill chosen to the tab shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
@@ -21,8 +22,11 @@ let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
 let asked: { title?: string; prompt?: string; anchor?: unknown }[];
-/** The quick picks shown (all cancelled): their labels and anchor. */
+/** The quick picks shown (all cancelled, unless `picked` names the label to choose): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
+let picked: string | undefined;
+/** The commands the extension registered, by id. */
+let commands: Map<string, (...args: any[]) => unknown>;
 
 /**
  * A pill's key as the server signs it (`<payload>.<mac>`, the payload base64url JSON) with `label` and `payload`; its
@@ -77,10 +81,14 @@ beforeEach(() => {
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: { title?: string; prompt?: string; anchor?: unknown }) => (asked.push(options), answer),
-    showQuickPick: async (items: { label: string }[], options: { anchor?: unknown }) => (picks.push({ labels: items.map((i) => i.label), anchor: options.anchor }), undefined),
+    showQuickPick: async (items: { label: string }[], options: { anchor?: unknown }) => (
+      picks.push({ labels: items.map((i) => i.label), anchor: options.anchor }), items.find((i) => i.label === picked)
+    ),
   };
   asked = [];
   picks = [];
+  picked = undefined;
+  commands = new Map();
   fetched = [];
   vi.stubGlobal('fetch', async (url: string) => {
     fetched.push(url);
@@ -91,7 +99,8 @@ beforeEach(() => {
 /** Activates the extension, the server taking SQL chips or not (filters.sqlEnabled), and shows the page Shop. */
 function activate(sqlEnabled: boolean): void {
   page.workbench.sqlEnabled = sqlEnabled;
-  filters.activate({ query, page, ui, subscriptions: [] } as unknown as ExtensionContext);
+  const registry = { registerCommand: (id: string, handler: (...args: any[]) => unknown) => (commands.set(id, handler), { dispose: () => commands.delete(id) }) };
+  filters.activate({ query, page, ui, commands: registry, subscriptions: [] } as unknown as ExtensionContext);
   show(shop);
 }
 
@@ -472,5 +481,18 @@ describe('filters with SQL filters off', () => {
     query.filters.add(pill('host = a'));
     expect(chips().map(chipText)).toEqual(['host = a']);
     expect([...bar.querySelectorAll('.d-filter-bar__chips button')].some((b) => b.textContent === 'Add filter')).toBe(true);
+  });
+});
+
+describe('filters.offer', () => {
+  beforeEach(() => activate(true));
+
+  it('offers a click’s candidates at the click and adds the pill chosen, made by the widget’s /pill, to the tab shown', async () => {
+    picked = 'host = a';
+    await commands.get('filters.offer')!({ x: 10, y: 20 }, [{ fieldId: 'host', value: 'a' }], { dataUrl: '/p/shop/api/1', filterable: ['host'] });
+
+    expect(picks).toEqual([{ labels: ['host = a', 'host = a'], anchor: { x: 10, y: 20 } }]);
+    expect(new URL(fetched.at(-1)!, 'http://x').pathname).toBe('/p/shop/api/1/pill');
+    expect(query.filters.chips).toHaveLength(1);
   });
 });

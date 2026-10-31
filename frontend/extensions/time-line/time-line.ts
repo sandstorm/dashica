@@ -1,9 +1,10 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeLineProps } from '../../generated/zz_generated.dashica';
+import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from '../chart-library/schema';
-import { filterOnClick } from '../chart-library/filter-on-click';
+import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
@@ -13,18 +14,18 @@ import { timeBrush } from '../chart-library/time-brush';
  */
 export const timeLine: Extension = {
   id: 'timeLine',
-  activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('timeLine', renderTimeLine)),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeLine', (el, widget, ctx) => renderTimeLine(el, widget, ctx, commands))),
 };
 
-function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: WidgetContext): ChartFrame {
+function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: WidgetContext, commands: Commands): ChartFrame {
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeLine(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
+    draw: (result, options) => drawTimeLine(result, widget.props, options, offerFiltersOf(commands, widget)),
   });
 }
 
-function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
+function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, offerFilters: OfferFilters) {
   const schema = new SchemaAnalyzer(data);
   if (!(data.dashicaBucketSize ?? props.x.xBucketSizeMs)) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');

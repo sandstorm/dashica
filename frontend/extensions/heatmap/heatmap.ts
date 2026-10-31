@@ -1,9 +1,10 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeHeatmapOrdinalProps, TimeHeatmapProps } from '../../generated/zz_generated.dashica';
+import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from '../chart-library/schema';
-import { filterOnClick } from '../chart-library/filter-on-click';
+import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
@@ -13,9 +14,9 @@ import { timeBrush } from '../chart-library/time-brush';
  */
 export const heatmap: Extension = {
   id: 'heatmap',
-  activate({ widgets, subscriptions }) {
+  activate({ widgets, commands, subscriptions }) {
     subscriptions.push(widgets.registerWidget('timeHeatmap', renderTimeHeatmap));
-    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', renderTimeHeatmapOrdinal));
+    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', (el, widget, ctx) => renderTimeHeatmapOrdinal(el, widget, ctx, commands)));
   },
 };
 
@@ -29,11 +30,11 @@ function renderTimeHeatmap(el: HTMLElement, widget: WidgetOf<'timeHeatmap'>, ctx
   });
 }
 
-function renderTimeHeatmapOrdinal(el: HTMLElement, widget: WidgetOf<'timeHeatmapOrdinal'>, ctx: WidgetContext): ChartFrame {
+function renderTimeHeatmapOrdinal(el: HTMLElement, widget: WidgetOf<'timeHeatmapOrdinal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
+    draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, offerFiltersOf(commands, widget)),
   });
 }
 
@@ -85,7 +86,7 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
 }
 
 /** `color` and `colorScheme` are not used: a bug the port keeps (docs/2026-10-28-workbench.md §5). */
-function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
+function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, offerFilters: OfferFilters) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
   const xBucketSize = props.x.xBucketSizeMs;

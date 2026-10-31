@@ -4,9 +4,10 @@ import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { pillButton, pillField, type FilterChip, type FilterOp, type Pill, type PillField, type PillFilter, type QueryApi, type SqlFilter } from '../../hosts/query/query';
-import type { UiApi } from '../../hosts/ui/ui';
-import { fetchPill, type PillSource } from '../../hosts/widgets/widgets';
+import type { MenuAnchor, UiApi } from '../../hosts/ui/ui';
+import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
 import { addFilter, fetchValues, fieldSource, filterableTables, pickValue, type FilterableTable } from './add-filter';
+import { fetchPill, offerFilters } from './offer';
 import './filters.css';
 
 /**
@@ -22,12 +23,19 @@ import './filters.css';
  * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
  * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on one of the
  * tables the page's charts filter (`addFilter`), while there is one. The bar shows while it has a chip, a button or
- * "Add filter", else the page has no bar for nothing. A click on a chart adds its pills (`WidgetsApi.offerFilters`).
+ * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
+ * runs the command `filters.offer` (`(at, candidates, { dataUrl, filterable })`): its quick pick adds the pill chosen to
+ * the tab shown (`offerFilters`).
  */
 export const filters: Extension = {
   id: 'filters',
-  activate({ ui, page, query, subscriptions }) {
+  activate({ ui, page, query, commands, subscriptions }) {
     const { sqlEnabled } = page.workbench;
+    subscriptions.push(
+      commands.registerCommand('filters.offer', (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
+        offerFilters(ui, query, at, candidates, source),
+      ),
+    );
     let button: Disposable | undefined;
     let bar: Disposable | undefined;
     const showBar = () => {

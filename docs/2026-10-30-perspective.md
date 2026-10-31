@@ -226,7 +226,7 @@ handler) is not planned.
   settings panel open (§4.8 D13).
 - **Filters from the view:** `perspective-click` on a group row gives `[[column, '==', value], …]`; the deepest such
   value on a column that is no date or time is offered in the quick pick "Filter" at the click (since workbench step
-  8c: `widgets.offerFilters`, "Filter" / "Exclude"), which adds a page filter chip at once (all rows re-fetched); on
+  8c, "Filter" / "Exclude"; since step 9f the `filters` extension's command `filters.offer`), which adds a page filter chip at once (all rows re-fetched); on
   the chart's result only, an edited query's rows offer nothing (§4.7). Perspective's own filters stay local.
 - **State:** `viewer.save()` per chart and mode in the extension's `globalState` (localStorage), keys `view:<dataUrl>`
   and `view:<dataUrl>:edited` (was `:ungrouped`), kept once the viewer was used, without `settings` (the panel opens

@@ -8,12 +8,13 @@ import type { MenuAnchor } from '../ui/ui';
 /**
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
- * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu, the filters a
- * click offers (`offerFilters`). Charts put themselves into one `ChartFrame` (title, spinner, error, menu button).
+ * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu. Charts put
+ * themselves into one `ChartFrame` (title, spinner, error, menu button).
  * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
  * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
  * and the widget itself tells its status with its own event: Debug follows it. What only one widget type has (a
  * table's ticked rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
+ * So is what a click offers to filter by: a chart runs `filters.offer` with its candidates and its `PillSource`.
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -24,14 +25,6 @@ export interface WidgetsApi {
    * (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
    */
   render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable;
-  /**
-   * Offers, in a quick pick "Filter" at `at`, to filter by each of `candidates` ("status = 500" with a filter icon) or
-   * to exclude it (the same with a minus icon), in order, those of them whose field `widget` names `filterable`;
-   * choosing one asks `widget`'s `/pill` for its pill and adds it to `state`'s filters (a failed answer adds none, it
-   * goes to the console). Nothing without such candidates. For a view of a chart outside the page's widgets (the
-   * Explore view), as `offerFilters` of a widget's context.
-   */
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi, widget: PillSource): void;
   /**
    * The active tab's active widget, the same object as long as it is rendered; `undefined` while the viewer has not
    * pressed or focused in a widget with data of that tab, or after it was removed.
@@ -61,7 +54,10 @@ export type WidgetStatus =
   | { readonly kind: 'done'; readonly rows: number; readonly ms: number; readonly diagnostics: Diagnostics }
   | { readonly kind: 'error'; readonly message: string; readonly ms: number };
 
-/** The widget whose `<dataUrl>/pill` makes the pills a click offers, and the aliases of its fields that make one. */
+/**
+ * The widget whose `<dataUrl>/pill` makes the pills a click offers, and the aliases of its fields that make one
+ * (`page.json`'s `filterable`): the last argument of `filters.offer`.
+ */
 export interface PillSource {
   readonly dataUrl: string;
   readonly filterable?: readonly string[];
@@ -100,11 +96,6 @@ export interface WidgetContext {
    * cell's column and value). The chart frame's "More" shows `widget/context`, a table's cell `table/cell`.
    */
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
-  /**
-   * Offers to filter by or exclude each of `candidates` at `at` (a click's point, a cell), as `WidgetsApi.offerFilters`
-   * with the widget's query state and the widget's own pills: choosing one adds the pill at once.
-   */
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
 }
 
 /** What the menu `widget/context` is shown for, also its commands' argument: the widget and what it queried last. */
@@ -138,5 +129,5 @@ export interface Diagnostics {
   readonly skipped?: string;
 }
 
-export { OP_ICONS, WidgetsHost, fetchPill, showWidgetError, widgetTitle } from './widgets-impl';
+export { WidgetsHost, showWidgetError, widgetTitle } from './widgets-impl';
 export { ChartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';

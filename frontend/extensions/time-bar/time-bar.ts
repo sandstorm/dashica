@@ -1,5 +1,7 @@
+import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import { offerFiltersOf } from '../chart-library/filter-on-click';
 import { drawTimeBars } from '../chart-library/time-bars';
 
 /**
@@ -8,13 +10,13 @@ import { drawTimeBars } from '../chart-library/time-bars';
  */
 export const timeBar: Extension = {
   id: 'timeBar',
-  activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('timeBar', renderTimeBar)),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeBar', (el, widget, ctx) => renderTimeBar(el, widget, ctx, commands))),
 };
 
-function renderTimeBar(el: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: WidgetContext): ChartFrame {
+function renderTimeBar(el: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: WidgetContext, commands: Commands): ChartFrame {
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeBars(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
+    draw: (result, options) => drawTimeBars(result, widget.props, options, offerFiltersOf(commands, widget)),
   });
 }

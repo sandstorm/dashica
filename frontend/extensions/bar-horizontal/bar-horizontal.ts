@@ -1,8 +1,9 @@
 import * as Plot from '@observablehq/plot';
 import type { BarHorizontalProps } from '../../generated/zz_generated.dashica';
+import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
-import { filterOnClick } from '../chart-library/filter-on-click';
+import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
 
 /**
  * The widget type `barHorizontal`: a bar per category (`y`), from left to right as long as its measure (`x`). A click
@@ -10,18 +11,18 @@ import { filterOnClick } from '../chart-library/filter-on-click';
  */
 export const barHorizontal: Extension = {
   id: 'barHorizontal',
-  activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('barHorizontal', renderBarHorizontal)),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('barHorizontal', (el, widget, ctx) => renderBarHorizontal(el, widget, ctx, commands))),
 };
 
-function renderBarHorizontal(el: HTMLElement, widget: WidgetOf<'barHorizontal'>, ctx: WidgetContext): ChartFrame {
+function renderBarHorizontal(el: HTMLElement, widget: WidgetOf<'barHorizontal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawBarHorizontal(result, widget.props, options, (at, candidates) => ctx.offerFilters(at, candidates)),
+    draw: (result, options) => drawBarHorizontal(result, widget.props, options, offerFiltersOf(commands, widget)),
   });
 }
 
-function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options: DrawOptions, offerFilters: WidgetContext['offerFilters']) {
+function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options: DrawOptions, offerFilters: OfferFilters) {
   const bars: Plot.BarXOptions = { x: props.x.alias, y: props.y.alias, fill: props.fill?.alias ?? '#A8C1D1' };
   return Plot.plot({
     height: props.height,

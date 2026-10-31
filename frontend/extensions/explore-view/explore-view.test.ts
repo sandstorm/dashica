@@ -65,7 +65,6 @@ function activate(explore: boolean): void {
       navigate: async (url: string, options?: { newTab?: boolean }) => void navigated.push({ url, ...options }),
       registerPageRenderer: (kind: string, renderer: PageRenderer) => (renderers.set(kind, renderer), new Disposable(() => renderers.delete(kind))),
     },
-    widgets: { offerFilters() {} },
     ui: {
       showQuickPick: async <T extends { label: string }>(items: readonly T[]) => (picks.push(items), items[0]),
       registerMenuItem: (menuId: string, item: { title?: string; when?: (context: WidgetMenuContext) => boolean }) => {

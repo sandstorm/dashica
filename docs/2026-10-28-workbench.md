@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -451,7 +451,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
-| `widgets` | `registerWidget` (§3.6), `offerFilters` (click to filter, §3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
+| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4); a click to filter is the `filters` extension's command `filters.offer` (§3.8, 9f) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -481,8 +481,7 @@ ctx.state.onDidRequestRefresh              // time, filter, param or refresh cha
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
 ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
-ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8); fieldId: the clicked column's alias
-ctx.offerFilters(at, candidates)           // the quick pick "Filter": ⊕ / ⊖ per candidate, the pill added at once (8c)
+// click to filter: commands.executeCommand('filters.offer', at, candidates, { dataUrl, filterable }) (§3.8, 9f)
 ```
 
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
@@ -609,16 +608,17 @@ the server made:
   pill, each group one Where (`eq` OR-ed, `ne` AND-ed); the others named by label in Diagnostics. A query that skips
   filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
   answers the first one that does not open with 400, also for the charts it does not apply to).
-- **The client** (8e): a pick in `offerFilters` asks the widget's `/pill` (`WidgetsApi.offerFilters(at, candidates,
-  state, widget)`, the Explore view passes its chart) and adds `{key, label}` (`FiltersModel.add(pill)`); a failed
-  answer adds nothing and goes to the console. A pill chip shows its label and ×; it is not edited (its condition is
+- **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
+  (`FiltersModel.add(pill)`); a failed answer adds nothing and goes to the console. Since 9f (§3.15 D20) the quick
+  pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
+  a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
 - **The Explore preview** (`lib/explore`) still drops `f`: its widget comes from the request.
 - **Tests:** `sql` (Quote, Condition, FilterAs, TableOf), `filter` (TableOf, New, Sign / Open and every refused
   key, Apply's grouping and two bases on one table), `widget` (`/pill`, its 422 and 400, pills applied and ignored,
   a SQL file with `sql.Table`, a tampered pill 400, `filterableFields`), `config` (the secret's length); vitest for the
-  chip model, the filter bar, `offerFilters` asking `/pill` (`widgetTestbed` answers every `/pill`, `pill(…)` gives
-  its chip). Playwright (written, not run): `e2e/filter-chips.spec.ts` signs its pills through a chart's `/pill`, an
+  chip model, the filter bar, `offerFilters` asking `/pill` (since 9f in `extensions/filters/offer.test.ts`; the
+  renderers' tests check the runs of `filters.offer`, `widgetTestbed().offers`). Playwright (written, not run): `e2e/filter-chips.spec.ts` signs its pills through a chart's `/pill`, an
   unsigned `f` fails the charts with 400.
 
 ✅ **Built in 8m (2026-10-31): "Add filter"**, a pill without a click on a chart (§3.14 D15, as Grafana's ad hoc
@@ -754,8 +754,10 @@ on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter
 ✅ (step 8c, §3.14 D3, D4) **A click filters in one step; the floating bar and the selection are gone** (the two
 6.7 / 6.8 parts below are history). A click on a chart mark (the mark `chart-library/filterOnClick`, until 8c
 `selectOnClick`, its candidates as in 6.8), on a category cell of a table, or on a group row of the Explore view calls
-`offerFilters(at, candidates)` (`WidgetContext`; `WidgetsApi.offerFilters(at, candidates, state)` for the Explore
-view): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
+`offerFilters(at, candidates)` (until 9f `WidgetContext` / `WidgetsApi`; since 9f, §3.15 D20, the command
+`filters.offer(at, candidates, { dataUrl, filterable })` that the click runs itself, `chart-library/offerFiltersOf`;
+the `filters` extension registers it, owns the quick pick, `OP_ICONS`, `fetchPill`, and adds to the tab shown;
+without it a click offers nothing): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
 `<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and the same with a minus icon
 ("Exclude …", `ne`); typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
 press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`), the menu `widget/selection` and the
@@ -764,8 +766,9 @@ press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`)
 Explore view's anchor element. The table's `selecting` is `filtering`, its class `d-table__filterable`. Each click
 adds one pill; how pills on the same table and field combine is the server's (8e). The labels show `=` for both ops
 and the icon tells them apart *(proposed: D4 names both "`<field> = <value>`")*. Tests: `offerFilters` in
-`widgets.test.ts`, a click per chart type and the table cell in their tests (`widgetTestbed().choices()` /
-`candidates()` / `choose('Filter status = 500')`), the Explore view's click in `view.test.ts`. Playwright (written,
+`extensions/filters/offer.test.ts` (until 9f `widgets.test.ts`), a click per chart type and the table cell in their
+tests (since 9f the runs of `filters.offer`, `widgetTestbed().offers`; before `choices()` / `candidates()` /
+`choose(…)`), the Explore view's click in `view.test.ts`. Playwright (written,
 not run): `e2e/bar-selection.spec.ts`, `e2e/chart-selection.spec.ts`, `e2e/record-details.spec.ts`.
 
 **Clicks select; a floating bar offers what to do** (as Zwiebelfisch's `visualEditor/selection` bar above a text
@@ -1096,8 +1099,7 @@ interface WidgetsApi {
   registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
   readonly active: RenderedWidget | undefined;            // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
   readonly onDidChangeActive: Event<void>;                // another widget or tab, the widget removed
-  offerFilters(at: MenuAnchor, candidates: FilterCandidate[], state: QueryApi): void;   // the Explore view's clicks (8c)
-}
+}                                                         // a click to filter runs `filters.offer` (§3.8, 9f)
 
 interface RenderedWidget {                                // the widget itself, as window.activeTextEditor (step 8b)
   readonly widget: WidgetNode; url(path: string): string; readonly lastResult: QueryResult | undefined;
@@ -1111,9 +1113,11 @@ interface WidgetContext {                                 // what a renderer get
   url(path: string): string;
   renderChild(el: HTMLElement, child: WidgetNode): Disposable;
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
-  addFilter(fieldId: string, op: FilterOp, value: string): void;
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;   // {fieldId, value}[]; §3.8, 8c
 }
+
+// filters — a click's candidates (§3.8, 9f): the renderer runs the filters extension's command
+commands.executeCommand('filters.offer', at: MenuAnchor, candidates: FilterCandidate[], source: PillSource);
+// FilterCandidate {fieldId, value}; PillSource {dataUrl, filterable}: whose /pill makes the pill
 ```
 
 Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
@@ -1130,7 +1134,7 @@ groups, a check mark for a `toggled` entry, an entry that is not `enabled` greye
 nothing) with its `tooltip` on hover (since 8g, `MenuItem.enabled` / `tooltip`, `QuickPickItem.disabled` / `tooltip`),
 the command run right after the box closed (still in the viewer's
 gesture). A menu of the moment needs no id: its owner calls `ui.showQuickPick(items, {anchor, title})` (a chart's
-click, `WidgetsApi.offerFilters`, §3.8); `showChoices` is gone. A registered menu without entries hides the open box.
+click: the `filters` extension's `filters.offer`, §3.8); `showChoices` is gone. A registered menu without entries hides the open box.
 The "…" buttons say `aria-haspopup="dialog"`, the quick pick's role. The rule "never by a right click" stands, with
 the `table/cell` deviation above *(proposed: D3's "right click" read as that one existing menu, no new right-click
 menus)*.
@@ -1149,7 +1153,7 @@ Built-in extensions:
 | `refresh` | top bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
 | (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
 | `theme` | light / dark toggle |
-| `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip; the chips a click adds come from `widgets.offerFilters` (8c) |
+| `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip, "Add filter"; the command `filters.offer` (a click's quick pick "Filter", its `/pill`, the pill added to the tab shown; 8c, 9f) |
 | `debug` | left panel "Debug" (the active widget's query, stats, EXPLAIN, result, as views); the status bar's item (the active widget's status); `widget/context` "Debug" (§3.4.4) |
 | `details` | left panel "Details" (the records `details.showRecords` gave it: a table's ticked rows, a view per record); the status bar's "N records selected" (§3.4.5) |
 | `schema` | left panel "Schema", only with Explore (connection › database › table from `/schema.json`, the page's connections first); `panel/schema` "Refresh" (Perspective §4.8, 8h) |
@@ -1392,9 +1396,9 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9e)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9f)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1421,6 +1425,14 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18;
   rows in its renderer and runs `details.showRecords` with them and the widget on each change (and when a new answer
   or its removal clears them); Details keeps what it was given, shows it, counts it in the status bar and pops it out
   (D14). Neither extension imports the other (§3.4.5).
+- **D20 The click's filter UI by command (9f, decided after 9e):** the quick pick "Filter" leaves the `widgets` host
+  for the `filters` extension, the VS Code way. Each place that offers filters on a click (the Plot charts'
+  `filterOnClick`, the table's cell click, the Explore view's group rows) runs `commands.executeCommand('filters.offer',
+  at, candidates, { dataUrl, filterable })` itself; `filterOnClick` only finds the candidates under the pointer. The
+  `filters` extension registers `filters.offer` and owns the picks, `OP_ICONS`, `fetchPill` and the `/pill` call; it
+  adds the pill to the active tab's query state (a click happens in the tab shown). `WidgetsApi.offerFilters`,
+  `WidgetContext.offerFilters` go; `PillSource` / `FilterCandidate` stay as the types of what a widget offers. Without
+  the `filters` extension a click does nothing.
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1633,6 +1645,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9c ✅ | **D18 pills editable** (§3.15): the shown value in the signed key (`Pill.Value`, the alias was in `Field` already); client: `pillField(key)`, `fieldSource(tables, field)`; a field's pill as field, operator and value, the operator switching `=` / `≠` and the value asked in "Add filter"'s quick pick (`pickValue`, the chart's `/values`), each made again through that chart's `/pill` and `replace`d at its index; a pill no chart of the page makes only removed, its tooltip saying why. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: `Value` serves pills and buttons alike; an empty value shows "(empty)"; the value's quick pick starts empty, not with the value; an edit that came back while another chip took the place is dropped; a refused edit is only logged *(all proposed)* | pills edited as in Grafana |
 | 9c fix ✅ | **Review fixes of 9a–9c:** `Pill.Value` always in a field pill's key (no `omitempty`) and `pillField` `undefined` for a key without it, so a pill signed before 9c is only removable instead of being made again as `<field> != ''`; `filters.replace` removes the chip at its index when the new chip is there already, so an in-place edit (operator, value, a `...` button's value) never puts the same `f` twice into the URL; the filter bar's row in §2 and the 9a block say which chips are editable and that 9b made the buttons work with SQL chips off. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: a button's key now carries `"value": ""` too (golden contract regenerated); an old pill's tooltip is its label, without a reason *(all proposed)* | the review's findings fixed |
 | 9e ✅ | **D19 records by command** (§3.4.5, §3.15): `records`, `onDidChangeRecords` (`RenderedWidget`) and `selectRecords` (`WidgetContext`) removed from the `widgets` host, and with them the activation by records; the table's renderer keeps its ticked rows and runs `details.showRecords` with `{ widget, records }` on each change, and with none when a new answer or its removal clears ticked rows; `drawTable`'s `selectRecords` is its own callback type; Details keeps what the command gave it (no `widgets` any more), counts it, pops it out; `fakeWidget` without records; tests: table (the command's calls, the press making it active), Details (by command, another table's clear leaves the records); `e2e/record-details.spec.ts`: Details keeps the records when another chart becomes active. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the command's argument is `{ widget: WidgetNode, records }`, the `WidgetNode` the records' identity; a clear from another widget than the shown one leaves Details as it is; another active widget or tab leaves Details as it is; without `details` the command's failure goes to the console *(all proposed)* | a table's ticked rows in Details as before; they stay when another chart becomes active |
+| 9f ✅ | **D20 filter UI is the filters extension's; charts run filters.offer** (§3.8, §3.15): `WidgetsApi.offerFilters`, `WidgetContext.offerFilters`, `filterPicks`, `OP_ICONS`, `fetchPill` and the host's `showQuickPick` leave the `widgets` host; `extensions/filters/offer.ts` (`offerFilters(ui, query, at, candidates, source)`, `OP_ICONS`, `fetchPill`), registered as `filters.offer` on the extension's `ui` and `query` (the tab shown); `chart-library/filter-on-click.ts`: `OfferFilters` (the callback `filterOnClick` and `drawTable` are given) and `offerFiltersOf(commands, { dataUrl, filterable })`, which the renderers of `timeBar`, `timeLine`, `barVertical`, `barHorizontal`, `timeHeatmapOrdinal`, `table` and the Explore view use (they get `commands` from their extension's context); `widgetTestbed` registers a recording `filters.offer` (`offers`) in place of the extension, `choices` / `candidates` / `choose` / `pill` and its `/pill` answer gone; the host's tests moved to `extensions/filters/offer.test.ts`, the renderers' tests check the command's arguments, `filters.test.ts` the registered command. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: one helper `offerFiltersOf` names the command for all seven places instead of seven `executeCommand` calls; the candidates are filtered by `filterable` in the extension, as before in the host; without `filters` the unknown command goes to the console, as `details.showRecords` does; `filters.offer` resolves when the pick is done *(all proposed)* | the click's quick pick as before, owned by `filters` |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

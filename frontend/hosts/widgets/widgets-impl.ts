@@ -1,12 +1,11 @@
 // See WidgetsApi in widgets.ts.
 import * as Arrow from 'apache-arrow';
-import { Filter, Minus, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
-import type { ActiveQuerySource, FilterOp, Pill, QueryApi } from '../query/query';
-import type { MenuAnchor, QuickPickIcon, QuickPickItem, UiApi } from '../ui/ui';
-import type { FilterCandidate, PillSource, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type { ActiveQuerySource, QueryApi } from '../query/query';
+import type { MenuAnchor, UiApi } from '../ui/ui';
+import type { QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
@@ -26,7 +25,7 @@ export class WidgetsHost implements WidgetsApi {
   readonly #onDidChangeTabs: Disposable;
 
   constructor(
-    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showQuickPick'>,
+    private readonly ui: Pick<UiApi, 'showContextMenu'>,
     private readonly tabs: ActiveQuerySource,
   ) {
     this.#onDidChangeTabs = tabs.onDidChangeTabs(() => this.#tell());
@@ -67,19 +66,6 @@ export class WidgetsHost implements WidgetsApi {
     this.#onDidChangeTabs.dispose();
     this.#onDidChangeActive.dispose();
     this.#active.clear();
-  }
-
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi, widget: PillSource): void {
-    const items = filterPicks(candidates.filter(({ fieldId }) => widget.filterable?.includes(fieldId)));
-    if (items.length === 0) return;
-    void this.ui.showQuickPick(items, { anchor: at, title: 'Filter' }).then(async (picked) => {
-      if (!picked) return;
-      try {
-        state.filters.add(await fetchPill(widget.dataUrl, picked));
-      } catch (error) {
-        console.error(`Filter ${picked.fieldId} failed:`, error);
-      }
-    });
   }
 
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
@@ -200,50 +186,10 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     this.ui.showContextMenu(menuId, { anchor, title: this.widget.type, context: shown, args: [shown] });
   }
 
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void {
-    if ('dataUrl' in this.widget) this.host.offerFilters(at, candidates, this.state, this.widget);
-  }
-
   /** It is removed: its event ends. */
   dispose(): void {
     this.#onDidChangeStatus.dispose();
   }
-}
-
-/** What `offerFilters` offers for a candidate: to filter by it (`eq`) or to exclude it (`ne`). */
-interface FilterPick extends QuickPickItem, FilterCandidate {
-  readonly op: FilterOp;
-}
-
-/**
- * The quick pick icon of each op, shared by a chart click (`filterPicks`) and "Add filter": a filter icon to filter by
- * (`eq`), a minus to exclude (`ne`).
- */
-export const OP_ICONS: Readonly<Record<FilterOp, QuickPickIcon>> = {
-  eq: { svg: createElement(Filter).outerHTML, label: 'Filter' },
-  ne: { svg: createElement(Minus).outerHTML, label: 'Exclude' },
-};
-
-/** For each candidate in order, "<field> = <value>" to filter by it (a filter icon), then to exclude it (a minus icon). */
-function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
-  return candidates.flatMap(({ fieldId, value }) => {
-    const label = `${fieldId} = ${value}`;
-    return [
-      { label, icon: OP_ICONS.eq, fieldId, value, op: 'eq' as const },
-      { label, icon: OP_ICONS.ne, fieldId, value, op: 'ne' as const },
-    ];
-  });
-}
-
-/**
- * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, the filter bar's "add filter"); rejects
- * with the server's message (a field that cannot filter: 422).
- */
-export async function fetchPill(dataUrl: string, { fieldId, op, value }: FilterCandidate & { readonly op: FilterOp }): Promise<Pill> {
-  const response = await fetch(`${dataUrl}/pill?${new URLSearchParams({ field: fieldId, op, value })}`);
-  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { key, label } = (await response.json()) as Pill;
-  return { key, label };
 }
 
 /** A widget's title (`props.title`), else its type (`timeBar`). */

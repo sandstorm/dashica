@@ -1,6 +1,7 @@
 import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { ChartFrame, type QueryResult, type WidgetContext, type WidgetOf, type WidgetRecord } from '../../hosts/widgets/widgets';
+import { offerFiltersOf } from '../chart-library/filter-on-click';
 import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } from '../chart-library/table';
 
 /**
@@ -8,7 +9,7 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
  * be pinned. Its ticked rows are its own: each change of them runs the command `details.showRecords` with the table
  * and its ticked rows (`{ widget, records }`, Details shows them), as does each answer and the table's removal when
  * they clear rows that were ticked. The press on a checkbox makes the table active, as any press in a widget does.
- * A click on a cell offers to filter by its value or exclude it (by its column's name).
+ * A click on a cell offers to filter by its value or exclude it (by its column's name; the command `filters.offer`).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter, only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`); a column header's
  * (`table/header`) size the columns.
@@ -51,7 +52,7 @@ function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetCont
       // the table of a new answer has no row ticked
       tick([]);
       const table = drawTable(result, widget.props, {
-        offerFilters: (at, candidates) => ctx.offerFilters(at, candidates),
+        offerFilters: offerFiltersOf(commands, widget),
         filterable: widget.filterable,
         selectRecords: tick,
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),

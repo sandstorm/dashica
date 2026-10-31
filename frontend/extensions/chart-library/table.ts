@@ -5,7 +5,8 @@ import type { CellComponent, ColumnComponent, ColumnDefinition, RowComponent } f
 import { Braces, Copy, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
 import type { MenuAnchor } from '../../hosts/ui/ui';
-import type { QueryResult, WidgetContext, WidgetRecord } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetRecord } from '../../hosts/widgets/widgets';
+import type { OfferFilters } from './filter-on-click';
 import './table.css';
 
 const canvas = document.createElement('canvas');
@@ -470,7 +471,7 @@ export function drawTable(
     filterable = [],
     selectRecords,
     showMenu,
-  }: { offerFilters?: WidgetContext['offerFilters']; filterable?: readonly string[]; selectRecords?: (records: readonly WidgetRecord[]) => void; showMenu?: ShowTableMenu } = {},
+  }: { offerFilters?: OfferFilters; filterable?: readonly string[]; selectRecords?: (records: readonly WidgetRecord[]) => void; showMenu?: ShowTableMenu } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator

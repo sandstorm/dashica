@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // Tests for time-line.ts: a line drawn from the widget’s data, in its stroke color or one per strokeField value; a
-// click on a line offering its zField and strokeField, also through the drag area above it.
+// click on a line running filters.offer with its zField and strokeField and the chart's pills, also through the
+// drag area above it.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { clickMark } from '../chart-library/plot-testing';
@@ -53,7 +54,7 @@ describe('timeLine', () => {
     const rows = { time: [T0, T0 + QUARTER, T0, T0 + QUARTER], cnt: [3, 5, 1, 2], host: ['a', 'a', 'b', 'b'], session: ['s1', 's1', 's2', 's2'] };
     const lines = (el: HTMLElement) => [...el.querySelectorAll<SVGPathElement>('[aria-label="line"] path')];
 
-    it('on a line offers its zField, then its strokeField; choosing one filters by it', async () => {
+    it('on a line offers its zField, then its strokeField, with the chart’s pills', async () => {
       testbed.serve('/p/shop/api/1/query', rows);
       testbed.serve('/p/shop/api/2/query', rows);
       const strokeField = { kind: 'expr' as const, alias: 'host' };
@@ -62,13 +63,11 @@ describe('timeLine', () => {
       const strokeOnly = testbed.render({ type: 'timeLine', props: { x, y, strokeField }, dataUrl: '/p/shop/api/2', filterable }).el;
       await inView();
       await clickMark(lines(both)[1]);
-      expect(testbed.candidates()).toEqual(['session = s2', 'host = b']);
-      await testbed.choose('Filter session = s2');
-      expect(testbed.query.filters.chips).toContainEqual(testbed.pill('session', 'eq', 's2'));
       await clickMark(lines(strokeOnly)[1]);
-      expect(testbed.candidates()).toEqual(['host = b']);
-      await testbed.choose('Filter host = b');
-      expect(testbed.query.filters.chips).toContainEqual(testbed.pill('host', 'eq', 'b'));
+      expect(testbed.offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+        { candidates: [{ fieldId: 'session', value: 's2' }, { fieldId: 'host', value: 'b' }], source: { dataUrl: '/p/shop/api/1', filterable } },
+        { candidates: [{ fieldId: 'host', value: 'b' }], source: { dataUrl: '/p/shop/api/2', filterable } },
+      ]);
     });
 
     it('on the drag area offers the line Plot points at below it', async () => {
@@ -77,9 +76,7 @@ describe('timeLine', () => {
       await inView();
       const overlay = el.querySelector('svg .overlay')!;
       await clickMark(lines(el)[0], overlay);
-      expect(testbed.candidates()).toEqual(['host = a']);
-      await testbed.choose('Filter host = a');
-      expect(testbed.query.filters.chips).toContainEqual(testbed.pill('host', 'eq', 'a'));
+      expect(testbed.offers.map(({ candidates }) => candidates)).toEqual([[{ fieldId: 'host', value: 'a' }]]);
     });
   });
 });

@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 // Tests for bar-vertical.ts: bars drawn from the widget’s data, sorted by their measure when asked, a click on a bar
-// offering to filter by its categories or exclude them, choosing one adding the filter.
+// running filters.offer with its categories and the chart's pills.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { clickMark, pointAt } from '../chart-library/plot-testing';
-import { filters } from '../filters/filters';
 import { barVertical } from './bar-vertical';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -13,7 +12,7 @@ const filterable = ['status', 'host', 'region'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.activate(barVertical, filters);
+  testbed.activate(barVertical);
 });
 
 afterEach(() => testbed.dispose());
@@ -24,8 +23,8 @@ const inView = async () => {
   await settle();
 };
 const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
-// closes the menu shown, as a user does
-const escape = () => (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+/** The candidates the last click offered, as "status = 500". */
+const offered = () => testbed.offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
 
 describe('barVertical', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -49,17 +48,14 @@ describe('barVertical', () => {
     const byStatus = (more: object = {}) =>
       ({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable, ...more }) as const;
 
-    it('offers to filter by or exclude its category, also as the only candidate; choosing "Filter" adds the filter at once', async () => {
+    it('runs filters.offer at the click with its category, also as the only candidate, and the chart’s pills', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
       const { el } = testbed.render(byStatus());
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
-      expect(testbed.query.filters.chips).toEqual([]);
-      await testbed.choose('Filter status = 500');
-      expect(testbed.choices()).toEqual([]);
-      expect(testbed.query.filters.chips).toEqual([testbed.pill('status', 'eq', '500')]);
-      expect(testbed.requests.at(-1)!.searchParams.getAll('f')).toEqual([testbed.pill('status', 'eq', '500').key]);
+      expect(testbed.offers).toEqual([
+        { at: { x: expect.any(Number), y: expect.any(Number) }, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable } },
+      ]);
     });
 
     it('offers each category of its row in the order of x, fill, fx, fy', async () => {
@@ -68,9 +64,7 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus({ props }));
       await inView();
       await clickMark(bars(el).at(-1)!);
-      expect(testbed.candidates()).toEqual(['status = 500', 'host = b', 'region = us']);
-      await testbed.choose('Filter host = b');
-      expect(testbed.query.filters.chips).toEqual([testbed.pill('host', 'eq', 'b')]);
+      expect(offered()).toEqual(['status = 500', 'host = b', 'region = us']);
     });
 
     it('offers again on the next click, on the same bar and on another: Plot does not pin its tip', async () => {
@@ -78,13 +72,11 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus());
       await inView();
       await clickMark(bars(el)[1]);
-      escape();
       await clickMark(bars(el)[1]);
-      expect(testbed.candidates()).toEqual(['status = 500']);
+      expect(offered()).toEqual(['status = 500']);
       await clickMark(bars(el)[0]);
-      expect(testbed.candidates()).toEqual(['status = 200']);
-      await testbed.choose('Exclude status = 200');
-      expect(testbed.query.filters.chips).toEqual([testbed.pill('status', 'ne', '200')]);
+      expect(offered()).toEqual(['status = 200']);
+      expect(testbed.offers).toHaveLength(3);
     });
 
     it('stops a mouse’s pointerdown on a bar, on which Plot would pin its tip, and lets a touch or pen pass', async () => {
@@ -113,12 +105,11 @@ describe('barVertical', () => {
       const { el } = testbed.render(byBucket({ props: { ...byBucket().props, fill } }));
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.candidates()).toEqual(['host = b']);
-      escape();
+      expect(offered()).toEqual(['host = b']);
       const { el: without } = testbed.render(byBucket());
       await inView();
       await clickMark(bars(without)[1]);
-      expect(testbed.choices()).toEqual([]);
+      expect(testbed.offers).toHaveLength(1);
     });
 
     it('looks clickable while Plot points at a bar, and never without a category', async () => {
@@ -139,12 +130,11 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus({ props: { ...byStatus().props, fill: { kind: 'expr', alias: 'host' } } }));
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.candidates()).toEqual(['host = b']);
-      escape();
+      expect(offered()).toEqual(['host = b']);
       const { el: measured } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } } });
       await inView();
       if (bars(measured)[0]) await clickMark(bars(measured)[0]);
-      expect(testbed.choices()).toEqual([]);
+      expect(testbed.offers).toHaveLength(1);
     });
 
     it('offers the facet of a bar whose x is a time bucket', async () => {
@@ -152,7 +142,7 @@ describe('barVertical', () => {
       const { el } = testbed.render(byBucket({ props: { ...byBucket().props, fx: { kind: 'expr', alias: 'region' } } }));
       await inView();
       await clickMark(bars(el).at(-1)!);
-      expect(testbed.candidates()).toEqual(['region = us']);
+      expect(offered()).toEqual(['region = us']);
     });
   });
 });

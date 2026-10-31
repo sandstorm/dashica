@@ -3,6 +3,7 @@ import type { MenuItem } from '../../hosts/commands/commands';
 import type { UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
+import { offerFiltersOf } from '../chart-library/filter-on-click';
 import { editedQueryKeys, fetchSql, sqlRequest, type EditedQuery } from './rows';
 import { chartTitle, renderExploreView, type ChartWithRows, type Perspective } from './view';
 import './explore-view.css';
@@ -16,15 +17,15 @@ import './explore-view.css';
  * "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
  * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
  * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab, "Reset" asks
- * first (`confirmReset`). A click on a
- * group row's value of the chart's result offers to filter the tab by it or exclude it. The global menu's "Explore"
- * opens a blank Explore in a new tab (`#explore=&connection=<name>`): a connection picker and an empty editor, run on
- * that connection (`/rows?connection=…`); its "Start from chart…" opens one with the SQL and parameters of a chart of
- * the shown page, run at once. Perspective loads on first use (`loadPerspective`).
+ * first (`confirmReset`). A click on a group row's value of the chart's result offers to filter the tab by it or
+ * exclude it (the command `filters.offer`). The global menu's "Explore" opens a blank Explore in a new tab
+ * (`#explore=&connection=<name>`): a connection picker and an empty editor, run on that connection
+ * (`/rows?connection=…`); its "Start from chart…" opens one with the SQL and parameters of a chart of the shown page,
+ * run at once. Perspective loads on first use (`loadPerspective`).
  */
 export const exploreView: Extension = {
   id: 'exploreView',
-  activate({ ui, page, query, widgets, commands, globalState, subscriptions }) {
+  activate({ ui, page, query, commands, globalState, subscriptions }) {
     if (!page.workbench.explore) {
       subscriptions.push(ui.registerMenuItem('workbench/global', EXPLORE_NOT_ENABLED));
       return;
@@ -47,7 +48,7 @@ export const exploreView: Extension = {
           onDidChangeHash: context.onDidChangeHash,
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
-          offerFilters: (at, candidates) => widget && widgets.offerFilters(at, candidates, context.query, widget as ChartWithRows),
+          offerFilters: (at, candidates) => widget && offerFiltersOf(commands, widget as ChartWithRows)(at, candidates),
           confirmReset: (at) => confirmReset(ui, at),
         });
         return {

@@ -1,8 +1,8 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeBarProps } from '../../generated/zz_generated.dashica';
-import type { DrawOptions, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
+import type { DrawOptions, QueryResult } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from './schema';
-import { filterOnClick } from './filter-on-click';
+import { filterOnClick, type OfferFilters } from './filter-on-click';
 import { timeBrush } from './time-brush';
 
 /**
@@ -13,7 +13,7 @@ import { timeBrush } from './time-brush';
  * The bucket size is the x field's, or the server's for an `AutoBucket` axis: the y axis then shows per second, since
  * a bucket size the server picks says nothing about the bars' height ("logs per 15 minutes or per 5?").
  */
-export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions, offerFilters?: WidgetContext['offerFilters']) {
+export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions, offerFilters?: OfferFilters) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
   const xBucketSize = data.dashicaBucketSize ?? props.x.xBucketSizeMs;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for heatmap.ts: both heatmaps’ cells drawn from the widget’s data; a time heatmap needs its y bucket size; a
-// click on an ordinal heatmap's cell offering its row.
+// click on an ordinal heatmap's cell running filters.offer with its row and the chart's pills.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { clickMark } from '../chart-library/plot-testing';
@@ -56,15 +56,15 @@ describe('heatmap', () => {
     expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
-  it('offers the row of a clicked cell of an ordinal heatmap, never its measure; choosing it filters by it', async () => {
+  it('offers the row of a clicked cell of an ordinal heatmap, never its measure, with the chart’s pills', async () => {
     testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], status: ['200', '500'], cnt: [3, 5] });
     const props = { x, y: { kind: 'enum', alias: 'status' }, fill: { kind: 'count', alias: 'cnt' } } as const;
     const { el } = testbed.render({ type: 'timeHeatmapOrdinal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     await clickMark(el.querySelectorAll('g[aria-label="bar"] rect')[1]);
-    expect(testbed.candidates()).toEqual(['status = 500']);
-    await testbed.choose('Filter status = 500');
-    expect(testbed.query.filters.chips).toContainEqual(testbed.pill('status', 'eq', '500'));
+    expect(testbed.offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+      { candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable } },
+    ]);
   });
 
   it('has no filter mark on a time heatmap, and a click offers nothing', async () => {
@@ -73,6 +73,6 @@ describe('heatmap', () => {
     await inView();
     expect(el.querySelector('.d-filter-on-click')).toBeNull();
     await clickMark(el.querySelectorAll('g[aria-label="rect"] rect')[1]);
-    expect(testbed.choices()).toEqual([]);
+    expect(testbed.offers).toEqual([]);
   });
 });

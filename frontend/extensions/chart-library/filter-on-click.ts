@@ -1,6 +1,8 @@
 import * as Plot from '@observablehq/plot';
 import type { SqlFieldProps } from '../../generated/zz_generated.dashica';
-import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
+import type { Commands } from '../../hosts/commands/commands';
+import type { MenuAnchor } from '../../hosts/ui/ui';
+import type { FilterCandidate, PillSource, QueryResult } from '../../hosts/widgets/widgets';
 import './filter-on-click.css';
 
 /**
@@ -72,7 +74,24 @@ export function filterOnClick<O extends Plot.MarkOptions>(
 export interface FilterOnClickOptions {
   /** The fields whose categories a click offers, each a channel's field as the chart maps it, in order. */
   readonly fields: readonly (SqlFieldProps | undefined)[];
-  readonly offerFilters: WidgetContext['offerFilters'];
+  readonly offerFilters: OfferFilters;
+}
+
+/** Offers to filter by or exclude each of `candidates` at `at` (a click's point, a cell). */
+export type OfferFilters = (at: MenuAnchor, candidates: readonly FilterCandidate[]) => void;
+
+/** The command a click runs with its point, its candidates and the widget's pills (the `filters` extension's). */
+const OFFER = 'filters.offer';
+
+/**
+ * How a click on `widget`'s marks, cells or rows offers its candidates: it runs the command `filters.offer` with them
+ * and the widget's `dataUrl` and `filterable` (whose `/pill` makes the pill, which fields make one). The `filters`
+ * extension shows the quick pick; without it a click offers nothing (the unknown command goes to the console).
+ */
+export function offerFiltersOf(commands: Pick<Commands, 'executeCommand'>, { dataUrl, filterable }: PillSource): OfferFilters {
+  return (at, candidates) => {
+    commands.executeCommand(OFFER, at, candidates, { dataUrl, filterable }).catch((error: unknown) => console.error(`Command ${OFFER} failed:`, error));
+  };
 }
 
 /** Whether `field` holds categories: not a measure (`count`), not a time bucket (`autoBucket`, a bucket size). */
