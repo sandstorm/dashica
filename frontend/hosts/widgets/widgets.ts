@@ -9,11 +9,11 @@ import type { MenuAnchor } from '../ui/ui';
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
  * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu, the filters a
- * click offers (`offerFilters`), its selected records (`selectRecords`: a table's ticked rows).
- * Charts put themselves into one `ChartFrame` (title, spinner, error, menu button). Each tab has an active widget: the
- * widget with data the viewer last pressed or focused in (its menu button, a mark, a table cell) or ticked records on,
- * outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one, and the widget itself
- * tells its status and its records, each with its own event: Debug follows its status, Details its records.
+ * click offers (`offerFilters`). Charts put themselves into one `ChartFrame` (title, spinner, error, menu button).
+ * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
+ * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
+ * and the widget itself tells its status with its own event: Debug follows it. What only one widget type has (a
+ * table's ticked rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -42,17 +42,13 @@ export interface WidgetsApi {
 }
 
 /**
- * A widget with data as it is rendered (`WidgetsApi.active`): what its menu is shown for, its query's status and its
- * selected records, each with the event that tells their change. Its events end when it is removed.
+ * A widget with data as it is rendered (`WidgetsApi.active`): what its menu is shown for, and its query's status with
+ * the event that tells its change. Its event ends when it is removed.
  */
 export interface RenderedWidget extends WidgetMenuContext {
   readonly status: WidgetStatus;
   /** Fires when its query started, answered or failed. */
   readonly onDidChangeStatus: Event<void>;
-  /** The records the viewer selected on it (a table's ticked rows, in the order ticked); empty while none. */
-  readonly records: readonly WidgetRecord[];
-  /** Fires when its selected records changed. */
-  readonly onDidChangeRecords: Event<void>;
 }
 
 /** One record of a widget's result, by column name (`{ path: '/api', status: 500 }`). */
@@ -109,11 +105,6 @@ export interface WidgetContext {
    * with the widget's query state and the widget's own pills: choosing one adds the pill at once.
    */
   offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
-  /**
-   * Makes `records` the widget's selected records (`RenderedWidget.records`), in place of those before; with records,
-   * the widget becomes its tab's active widget.
-   */
-  selectRecords(records: readonly WidgetRecord[]): void;
 }
 
 /** What the menu `widget/context` is shown for, also its commands' argument: the widget and what it queried last. */

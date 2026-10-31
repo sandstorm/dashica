@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -114,7 +114,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 │🔍│ DASHBOARDS   … │ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐inspector▌│   filter bar (above the content)
 │▦ │ favorites …     │ content (scrolls)                             │▐         ▌│   rail · panel · content · right
 │🐞│                 │                                               │▐         ▌│
-└─ Requests · 1,234 rows · 87 ms · ignores host · 2 records selected ┘   status bar: the active widget, its records
+└─ Requests · 1,234 rows · 87 ms · ignores host · 2 records selected ┘   status bar: the active widget, Details' records
 ```
 
 | Region | Holds |
@@ -122,7 +122,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
 | Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
-| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
+| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the ticked rows a table gave it by command, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
 
@@ -351,8 +351,8 @@ cell. A quiet accent outline marks it (`d-widget--active`). Each tab has its own
 Escape keeps it; removing the widget (its page rendered anew, its tab closed) ends it.
 
 - **API (`widgets` host; step 8b, §3.14 D2):** as VS Code's `window.activeTextEditor`, `widgets.active: RenderedWidget
-  | undefined` refers to the widget itself (`{widget, url(path), lastResult, status, onDidChangeStatus, records,
-  onDidChangeRecords}`, the same object as long as it is rendered; its events end when it is removed), and
+  | undefined` refers to the widget itself (`{widget, url(path), lastResult, status, onDidChangeStatus}`, the same
+  object as long as it is rendered; its event ends when it is removed; records left it in 9e, §3.4.5), and
   `widgets.onDidChangeActive` fires only when another widget or tab becomes active or the widget is removed. The
   widget's `onDidChangeStatus` fires when its query started, answered or failed. `WidgetStatus` = `idle` | `loading` | `done {rows, ms, diagnostics}` | `error {message,
   ms}`, set by `ctx.query()` itself, so every widget with data has one; `ms` is the time until the answer in the
@@ -369,7 +369,7 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   last result as a table); their collapsed state in the extension's `globalState` *(proposed)*. It asks
   `<dataUrl>/debug` only while it is shown: when shown, when another widget becomes active, and when the active
   widget's query answered or failed (a query state change queries the chart again). It listens to the active widget's
-  `onDidChangeStatus` only, so a change of its records asks nothing; while that query runs it keeps what it shows, and
+  `onDidChangeStatus` only; while that query runs it keeps what it shows, and
   an aborted query putting back the status it asked for asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
   panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
 - **Status bar:** one item of the `debug` extension, there on every page: the active widget's "1,234
@@ -380,29 +380,34 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
 - **The bottom panel is removed** (`BottomPanel`, `registerBottomPanel`, its CSS and stored layout key): Debug was its
   only user.
 
-#### 3.4.5 Selected records and the Details panel (step 7f, decided 2026-10-31)
+#### 3.4.5 Selected records and the Details panel (step 7f, decided 2026-10-31; by command since 9e, D19)
 
-A table's ticked rows (Tabulator's row selection checkboxes, and the one for all in the header) are the widget's
-**selected records**, part of the context model: the active widget carries them, and whoever shows them follows it. The
-in-table "N record(s) selected" panel (fixed at the bottom, full screen, close) is gone. A click on a cell still offers
-to filter by its value (§3.8, since 8c in the quick pick "Filter"); the two never mix.
+A table's ticked rows (Tabulator's row selection checkboxes, and the one for all in the header) are its **selected
+records**. Since 9e (D19, §3.15) they are the table's own: records leave the generic widget, and the table tells
+Details of them by command, as VS Code's extensions do. The in-table "N record(s) selected" panel (fixed at the
+bottom, full screen, close) is gone. A click on a cell still offers to filter by its value (§3.8, since 8c in the
+quick pick "Filter"); the two never mix.
 
-- **API (`widgets` host):** `ctx.selectRecords(records)` puts the widget's records (`WidgetRecord`: a row by column
-  name) in place of those before; with records the widget becomes its tab's active widget (the press on the checkbox
-  made it so already; ticking by keyboard does too). `RenderedWidget.records` (in the order ticked *(proposed)*, empty
-  while none), told by the widget's own `onDidChangeRecords` (step 8b, D2; as VS Code's
-  `onDidChangeTextEditorSelection`). A widget that becomes active by its records is made active before its records'
-  event fires, so whoever follows the active widget hears them *(proposed)*. No `widgets.records`.
+- **API:** none in the `widgets` host: `RenderedWidget` and `WidgetContext` keep what every widget with data has
+  (`status`, `onDidChangeStatus`, …); `records`, `onDidChangeRecords` and `selectRecords` are gone (step 9e). The press
+  on a checkbox makes the table active, as any press in a widget does (§3.4.4); ticking by keyboard focuses in it.
 - **The table:** `drawTable(…, { selectRecords })` draws the checkbox column only with it (so Debug's result table has
-  none *(proposed)*), its `rowSelectionChanged` calls it. Each draw starts with no row ticked, so the table's renderer
-  clears the records before each draw: a new answer, and also another width or color scheme, drops them *(proposed)*.
-- **Details is a left side panel** (rail button "Details", a list-checks icon, after "Debug"): the active widget's
+  none *(proposed)*), its `rowSelectionChanged` calls it with the ticked rows (in the order ticked *(proposed)*). The
+  table's renderer keeps them as local state and runs the command `details.showRecords` with `{ widget, records }`
+  (`widget`: its `WidgetNode`, what Details needs for its title and as the records' identity) on each change of them,
+  and with no records when a new answer clears them (each draw starts with none: a new answer, also another width or
+  color scheme *(proposed)*) or the table is removed, both only when rows were ticked. Without the `details`
+  extension the command fails, which goes to the console *(proposed)*.
+- **Details is a left side panel** (rail button "Details", a list-checks icon, after "Debug"): it keeps what
+  `details.showRecords` gave it last (local state of the extension) and no longer reads `widgets.active`: the widget's
   title, then a view (§3.4.2) per record ("Record 1", …), its fields one below the other as `renderRecordDetails` had
   them (a JSON value pretty-printed, a value of several lines as it is, others as text; built with `htl`, so escaped);
   each view starts open and its collapsed state is not kept: stored by the record's place, closing "Record 1" of one
-  table closed "Record 1" of every other table and of the next selection *(proposed)*. Drawn only while
-  shown, anew when the active widget or its records change (not on its status). Without records: "Tick rows of a table
-  to see them here." The table's search term is no longer highlighted in the details *(proposed)*.
+  table closed "Record 1" of every other table and of the next selection *(proposed)*. Drawn only while shown, anew on
+  each call. A call without records clears them only when they are that widget's: another table's cleared ticks (its
+  next answer) leave them *(proposed)*. Another active widget or tab leaves them too: they are the table's, not the
+  active widget's *(proposed)*. Without records: "Tick rows of a table to see them here." The table's search term is
+  no longer highlighted in the details *(proposed)*.
 - **Status bar:** a second item, of the `details` extension: "2 records selected", hidden while none (step 8a: it
   stays registered); a click opens Details *(proposed)*.
 
@@ -422,8 +427,8 @@ widget. It is kept in memory only.
 - **Debug:** "Pop out" in `panel/debug` (greyed without an active widget): a tab "Debug: <title>" with the same views,
   following that widget's status as the panel does (`followDebug`, shared by both), so it asks `/debug` again when the
   widget's query answered *(proposed)*.
-- **Details:** "Pop out" in `panel/details` (greyed while no records are selected): a tab "Details: <title>" with the
-  records selected then side by side (`drawComparison`: a row per field, a column per record, a row whose values
+- **Details:** "Pop out" in `panel/details` (greyed while Details has no records): a tab "Details: <title>" with the
+  records kept then side by side (`drawComparison`: a row per field, a column per record, a row whose values
   differ tinted, a missing field empty). It keeps those records: the table clears its ticks on each answer, so
   following them would empty the tab on the next refresh *(proposed)*.
 - **Speedscope:** "Open Speedscope" opens a tab "Speedscope" with the viewer in an `<iframe>`, on the profile of the
@@ -1097,9 +1102,7 @@ interface WidgetsApi {
 interface RenderedWidget {                                // the widget itself, as window.activeTextEditor (step 8b)
   readonly widget: WidgetNode; url(path: string): string; readonly lastResult: QueryResult | undefined;
   readonly status: WidgetStatus;                          // idle | loading | done {rows, ms, diagnostics} | error {message, ms}
-  readonly onDidChangeStatus: Event<void>;
-  readonly records: readonly WidgetRecord[];              // a table's ticked rows (§3.4.5)
-  readonly onDidChangeRecords: Event<void>;
+  readonly onDidChangeStatus: Event<void>;                // records are the table's own: details.showRecords (§3.4.5, 9e)
 }
 
 interface WidgetContext {                                 // what a renderer gets; excerpt
@@ -1110,7 +1113,6 @@ interface WidgetContext {                                 // what a renderer get
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
   addFilter(fieldId: string, op: FilterOp, value: string): void;
   offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;   // {fieldId, value}[]; §3.8, 8c
-  selectRecords(records: readonly WidgetRecord[]): void;  // its selected records; with some it becomes active
 }
 ```
 
@@ -1149,7 +1151,7 @@ Built-in extensions:
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip; the chips a click adds come from `widgets.offerFilters` (8c) |
 | `debug` | left panel "Debug" (the active widget's query, stats, EXPLAIN, result, as views); the status bar's item (the active widget's status); `widget/context` "Debug" (§3.4.4) |
-| `details` | left panel "Details" (the active widget's selected records, a view per record); the status bar's "N records selected" (§3.4.5) |
+| `details` | left panel "Details" (the records `details.showRecords` gave it: a table's ticked rows, a view per record); the status bar's "N records selected" (§3.4.5) |
 | `schema` | left panel "Schema", only with Explore (connection › database › table from `/schema.json`, the page's connections first); `panel/schema` "Refresh" (Perspective §4.8, 8h) |
 | `chart-link` | `widget/context` "Copy link to chart" (`/p/shop#w=3`) |
 | `row-details` | `table/row` "Details" → a panel (its place open since the bottom panel is gone; "Show rows" for a click needs a place now that the floating bar is gone, 8c) |
@@ -1343,7 +1345,8 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   `window.activeTextEditor`); `onDidChangeActive` fires only when another widget or tab becomes active. The widget
   object carries its status and its records, each with its own change event (as `editor.selections` /
   `onDidChangeTextEditorSelection`). `ActiveWidget`'s flattened copy of status and records and the one event for
-  everything go. Debug listens to the active widget's status, Details to its records (§3.4.4, §3.4.5).
+  everything go. Debug listens to the active widget's status, Details to its records (§3.4.4, §3.4.5). Since 9e (D19,
+  §3.15) the records are the table's own and Details hears of them by command.
 - **D3 Quick input as VS Code (8c):** `ui.showQuickPick` / `ui.showInputBox` / `ui.createQuickPick`, drawn in place
   (anchored at the click or element; centred for search everywhere), typing narrows. `showChoices` goes; every popup
   moves to it: a chart click's candidates, the registered context menus (right click, the "…" menu buttons), search
@@ -1389,9 +1392,9 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9d)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9e)
 
-The maintainer decided D16–D18 after D1–D15 were built; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1412,6 +1415,12 @@ The maintainer decided D16–D18 after D1–D15 were built; D12 (§3.14) is buil
   pills stay separate chips, each editable. A pill no widget of the page can make again can only be removed; its
   tooltip says why.
 - **D12 SQL editor (9d):** as §3.14 says.
+- **D19 Records by command (9e, decided after 9c):** records are the table's own; Details hears of them by command,
+  the VS Code way. `RenderedWidget` / `WidgetContext` keep only what every widget with data has; `records`,
+  `onDidChangeRecords`, `selectRecords` and "selecting records makes a widget active" go. The table keeps its ticked
+  rows in its renderer and runs `details.showRecords` with them and the widget on each change (and when a new answer
+  or its removal clears them); Details keeps what it was given, shows it, counts it in the status bar and pops it out
+  (D14). Neither extension imports the other (§3.4.5).
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1623,6 +1632,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9b ✅ | **D17 filter buttons signed** (§3.15): `filter.NewButton` (a pill without table: the `queryPart`, a `...` as `sql.Quote(value)`, `Button` and `Value` signed), `Apply` puts it into every query that takes filters; `page.json`'s buttons with `key` (signed at registration) or `url` (`<page>/button?i=<index>`, `dashboard.buttonHandler`: `{key, label}`); Speedscope applies the pills; client: `pillButton`, `buttonOf(chip, buttons)` by `queryPart`, a pressed `...` button's values beside it, each asking a new value in its chip's place; `literalOf` gone; outer dashboards' `'...'` as `...` / `concat(..., '%')`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new `>=` check among them, blocked in the sandbox; Playwright written, not run), deviations: one key format and `f` for pills and buttons, the button found by its `queryPart`; `queryPart` stays in `page.json`; a page with buttons needs the secret to register; a query that skips filters names a button as ignored; Speedscope also applies the pills on its table; a pressed `...` button's values as buttons beside its title; a refused value is only logged *(all proposed)* | buttons with SQL chips off |
 | 9c ✅ | **D18 pills editable** (§3.15): the shown value in the signed key (`Pill.Value`, the alias was in `Field` already); client: `pillField(key)`, `fieldSource(tables, field)`; a field's pill as field, operator and value, the operator switching `=` / `≠` and the value asked in "Add filter"'s quick pick (`pickValue`, the chart's `/values`), each made again through that chart's `/pill` and `replace`d at its index; a pill no chart of the page makes only removed, its tooltip saying why. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: `Value` serves pills and buttons alike; an empty value shows "(empty)"; the value's quick pick starts empty, not with the value; an edit that came back while another chip took the place is dropped; a refused edit is only logged *(all proposed)* | pills edited as in Grafana |
 | 9c fix ✅ | **Review fixes of 9a–9c:** `Pill.Value` always in a field pill's key (no `omitempty`) and `pillField` `undefined` for a key without it, so a pill signed before 9c is only removable instead of being made again as `<field> != ''`; `filters.replace` removes the chip at its index when the new chip is there already, so an in-place edit (operator, value, a `...` button's value) never puts the same `f` twice into the URL; the filter bar's row in §2 and the 9a block say which chips are editable and that 9b made the buttons work with SQL chips off. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: a button's key now carries `"value": ""` too (golden contract regenerated); an old pill's tooltip is its label, without a reason *(all proposed)* | the review's findings fixed |
+| 9e ✅ | **D19 records by command** (§3.4.5, §3.15): `records`, `onDidChangeRecords` (`RenderedWidget`) and `selectRecords` (`WidgetContext`) removed from the `widgets` host, and with them the activation by records; the table's renderer keeps its ticked rows and runs `details.showRecords` with `{ widget, records }` on each change, and with none when a new answer or its removal clears ticked rows; `drawTable`'s `selectRecords` is its own callback type; Details keeps what the command gave it (no `widgets` any more), counts it, pops it out; `fakeWidget` without records; tests: table (the command's calls, the press making it active), Details (by command, another table's clear leaves the records); `e2e/record-details.spec.ts`: Details keeps the records when another chart becomes active. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the command's argument is `{ widget: WidgetNode, records }`, the `WidgetNode` the records' identity; a clear from another widget than the shown one leaves Details as it is; another active widget or tab leaves Details as it is; without `details` the command's failure goes to the console *(all proposed)* | a table's ticked rows in Details as before; they stay when another chart becomes active |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

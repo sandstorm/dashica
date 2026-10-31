@@ -12,9 +12,9 @@ import './debug.css';
  * The left side panel "Debug" and the status bar's item, both about the active widget (`widgets.active`). The panel
  * shows, as views, what the widget queried: the SQL as sent, its stats, ClickHouse's EXPLAIN (plan, pipeline as a
  * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
- * a table. It follows the active widget's status (`onDidChangeStatus`), not its records, and asks `/debug` only while
- * it is shown: on showing, on another active widget, and when that widget's query answered or failed. Which widget it
- * is tells its outline, not the panel. "Pop out" (the panel's menu `panel/debug`) shows the same for the active widget
+ * a table. It follows the active widget's status (`onDidChangeStatus`) and asks `/debug` only while it is shown: on
+ * showing, on another active widget, and when that widget's query answered or failed. Which widget it is tells its
+ * outline, not the panel. "Pop out" (the panel's menu `panel/debug`) shows the same for the active widget
  * in a tab of its own, which keeps following that widget's status, not the active widget. The status bar
  * says the widget's rows, query time, its error or the filters it ignores ("No active chart" on the start page); a
  * click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.

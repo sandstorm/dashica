@@ -1,10 +1,13 @@
+import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { ChartFrame, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import { ChartFrame, type QueryResult, type WidgetContext, type WidgetOf, type WidgetRecord } from '../../hosts/widgets/widgets';
 import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } from '../chart-library/table';
 
 /**
  * The widget type `table`: the result rows (Tabulator) with a search box, filters per column, sticky tooltips that can
- * be pinned. The ticked rows are the widget's selected records (Details shows them); each answer starts with none.
+ * be pinned. Its ticked rows are its own: each change of them runs the command `details.showRecords` with the table
+ * and its ticked rows (`{ widget, records }`, Details shows them), as does each answer and the table's removal when
+ * they clear rows that were ticked. The press on a checkbox makes the table active, as any press in a widget does.
  * A click on a cell offers to filter by its value or exclude it (by its column's name).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter, only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`); a column header's
@@ -13,7 +16,7 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
 export const table: Extension = {
   id: 'table',
   activate: ({ widgets, commands, ui, query, page, subscriptions }) => {
-    subscriptions.push(widgets.registerWidget('table', renderTable));
+    subscriptions.push(widgets.registerWidget('table', (el, widget, ctx) => renderTable(el, widget, ctx, commands)));
     for (const [order, filter] of page.workbench.sqlEnabled ? CELL_FILTERS.entries() : []) {
       subscriptions.push(commands.registerCommand(filter.command, (cell: TableCellMenuContext) => query.filters.add(filter.condition(cell))));
       subscriptions.push(ui.registerMenuItem<TableCellMenuContext>('table/cell', { command: filter.command, title: filter.title, when: filter.when, order }));
@@ -27,26 +30,42 @@ export const table: Extension = {
   },
 };
 
-function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext): ChartFrame {
+/** The command a table runs with `{ widget, records }` on each change of its ticked rows (the `details` extension's). */
+const SHOW_RECORDS = 'details.showRecords';
+
+function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext, commands: Commands): { dispose(): void } {
+  /** The ticked rows, in the order ticked. */
+  let ticked: readonly WidgetRecord[] = [];
+  const tick = (records: readonly WidgetRecord[]) => {
+    if (records.length === 0 && ticked.length === 0) return;
+    ticked = records;
+    commands.executeCommand(SHOW_RECORDS, { widget, records }).catch((error: unknown) => console.error(`Command ${SHOW_RECORDS} failed:`, error));
+  };
   // Tabulator fits a new width itself, and its colors are the page's: one table per answer, its ticks kept on a resize
   let drawn: { result: QueryResult; table: HTMLElement } | undefined;
-  return new ChartFrame(el, ctx, {
+  const frame = new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result) => {
       if (drawn?.result === result) return drawn.table;
       // the table of a new answer has no row ticked
-      ctx.selectRecords([]);
+      tick([]);
       const table = drawTable(result, widget.props, {
         offerFilters: (at, candidates) => ctx.offerFilters(at, candidates),
         filterable: widget.filterable,
-        selectRecords: (records) => ctx.selectRecords(records),
+        selectRecords: tick,
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
       });
       drawn = { result, table };
       return table;
     },
   });
+  return {
+    dispose: () => {
+      frame.dispose();
+      tick([]);
+    },
+  };
 }
 
 // A time window of `ms` around a timestamp cell, in seconds

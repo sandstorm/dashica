@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for table.ts: the rows drawn into a table, ticked rows as the widget's selected records, a click on a cell of a
+// Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell of a
 // category column offering to filter by its value or exclude it, a cell's menu (`table/cell`) adding a condition to
 // the page's SQL filter (none while SQL filters are off), a column header's (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
@@ -53,30 +53,43 @@ describe('table', () => {
     expect(el.querySelectorAll('.tabulator-cell[tabulator-field="path"]')).toHaveLength(2);
   });
 
-  it('makes the ticked rows its selected records, which makes it active; a resize keeps them, a new answer starts with none', async () => {
+  it('gives its ticked rows to details.showRecords on each change; the press makes it active; a resize keeps them, a new answer and its removal clear them', async () => {
+    const given: { widget: unknown; records: unknown }[] = [];
+    testbed.commands.registerCommand('details.showRecords', (shown) => given.push(shown));
+    const widget = { type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' } as const;
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { el, rendered } = testbed.render(widget);
     await inView();
+    // a first answer, nothing ticked: nothing to tell
+    expect(given).toEqual([]);
     expect(testbed.widgets.active).toBeUndefined();
 
-    const tick = (row: number) => el.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row].click();
+    const tick = (row: number) => {
+      const box = el.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row];
+      box.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      box.click();
+    };
     tick(1);
-    expect(testbed.widgets.active?.widget.type).toBe('table');
-    expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }]);
+    expect(testbed.widgets.active?.widget).toBe(widget);
+    expect(given).toEqual([{ widget, records: [{ path: '/login', status: 500 }] }]);
     tick(0);
-    expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }, { path: '/api', status: 200 }]);
+    expect(given.at(-1)).toEqual({ widget, records: [{ path: '/login', status: 500 }, { path: '/api', status: 200 }] });
     expect(el.querySelector('.d-record-panel')).toBeNull();
 
     const drawn = el.querySelector('.tabulator');
     testbed.resize(480);
     await settle();
     expect(el.querySelector('.tabulator')).toBe(drawn);
-    expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }, { path: '/api', status: 200 }]);
+    expect(given).toHaveLength(2);
     expect(el.querySelectorAll('.tabulator-row input[type=checkbox]:checked')).toHaveLength(2);
 
     testbed.query.refresh();
     await settle();
-    expect(testbed.widgets.active?.records).toEqual([]);
+    expect(given.at(-1)).toEqual({ widget, records: [] });
+    expect(given).toHaveLength(3);
+    tick(0);
+    rendered.dispose();
+    expect(given.slice(3)).toEqual([{ widget, records: [{ path: '/api', status: 200 }] }, { widget, records: [] }]);
   });
 
   it('offers the value of a clicked cell by its column’s name; "Exclude" adds it as ≠', async () => {

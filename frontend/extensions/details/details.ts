@@ -1,52 +1,50 @@
 import { html } from 'htl';
 import { ListChecks, SquareArrowOutUpRight, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
+import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { createView } from '../../hosts/ui/ui';
-import { widgetTitle, type RenderedWidget, type WidgetRecord } from '../../hosts/widgets/widgets';
+import { widgetTitle, type WidgetRecord } from '../../hosts/widgets/widgets';
 import { tryPrettyJson } from '../chart-library/table';
 import './details.css';
 
 /**
- * The left side panel "Details" and the status bar's item, both about the active widget's selected records
- * (`widgets.active.records`: a table's ticked rows). The panel shows the widget's title, then a view per record, its
- * fields one below the other (a JSON value pretty-printed, a value of several lines as it is), drawn anew when the
- * active widget or its records change (`onDidChangeRecords`), not on its status; each view starts open, its collapsed
- * state not kept (a place in one selection says nothing about another's). "Pop out" (the panel's menu `panel/details`)
- * opens a tab comparing the records selected then side by side, a column per record; the tab keeps them, also when the
- * table's next answer clears its ticks. The status bar says "3 records selected" while there are some (else the item
- * is hidden); a click on it opens the panel.
+ * The left side panel "Details" and the status bar's item, both about the records a widget gave last by the command
+ * `details.showRecords` (`{ widget, records }`: a table runs it on each change of its ticked rows), kept here; a call
+ * without records clears them when they are that widget's (another table's cleared ticks leave them). The panel shows
+ * the widget's title, then a view per record, its fields one below the other (a JSON value pretty-printed, a value of
+ * several lines as it is), drawn anew on each call; each view starts open, its collapsed state not kept (a place in
+ * one selection says nothing about another's). "Pop out" (the panel's menu `panel/details`) opens a tab comparing the
+ * records kept then side by side, a column per record; the tab keeps them, also when the table's next answer clears
+ * its ticks. The status bar says "3 records selected" while there are some (else the item is hidden); a click on it
+ * opens the panel.
  */
 export const details: Extension = {
   id: 'details',
-  activate({ ui, widgets, page, commands, subscriptions }) {
+  activate({ ui, page, commands, subscriptions }) {
     const panel = ui.registerSidePanel('details', { label: 'Details', icon: createElement(ListChecks).outerHTML, order: 20 });
     const status: HTMLButtonElement = html`<button type="button" class="d-details-status" data-testid="details-status" title="Show Details" onclick=${() => panel.show()}></button>`;
     subscriptions.push(panel, ui.registerBarItem('status', status, { alignment: 'left' }));
 
+    /** The records shown, with the widget that gave them; `undefined` while none. */
+    let shown: ShownRecords | undefined;
     const update = () => {
-      const active = widgets.active;
-      const records = active?.records ?? [];
-      status.textContent = recordsSelected(records.length);
-      status.hidden = records.length === 0;
-      if (panel.visible) panel.body.replaceChildren(drawDetails(active));
+      status.textContent = recordsSelected(shown?.records.length ?? 0);
+      status.hidden = !shown;
+      if (panel.visible) panel.body.replaceChildren(drawDetails(shown));
     };
-    /** The active widget's records, listened to. */
-    let following: Disposable | undefined;
-    const follow = () => {
-      following?.dispose();
-      following = widgets.active?.onDidChangeRecords(update);
-      update();
-    };
-    follow();
-    subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(update), { dispose: () => following?.dispose() });
-
+    update();
     subscriptions.push(
+      panel.onDidChangeVisibility(update),
+      commands.registerCommand('details.showRecords', (given: ShownRecords) => {
+        if (given.records.length === 0 && shown && shown.widget !== given.widget) return;
+        shown = given.records.length > 0 ? given : undefined;
+        update();
+      }),
       commands.registerCommand('details.popOut', () => {
-        const active = widgets.active;
-        if (!active || active.records.length === 0) return;
-        const title = widgetTitle(active.widget);
-        const records = active.records;
+        if (!shown) return;
+        const title = widgetTitle(shown.widget);
+        const { records } = shown;
         return page.popOut({
           title: `Details: ${title}`,
           // the tab's element is emptied when it closes
@@ -57,24 +55,30 @@ export const details: Extension = {
         command: 'details.popOut',
         title: 'Pop out',
         icon: createElement(SquareArrowOutUpRight).outerHTML,
-        enabled: () => (widgets.active?.records.length ?? 0) > 0,
+        enabled: () => shown !== undefined,
         tooltip: 'The selected records side by side in a tab of their own',
       }),
     );
   },
 };
 
+/** The argument of `details.showRecords`: the widget the records are of, and its records (empty: it has none now). */
+interface ShownRecords {
+  readonly widget: WidgetNode;
+  readonly records: readonly WidgetRecord[];
+}
+
 /** "1 record selected", "3 records selected". */
 export function recordsSelected(count: number): string {
   return `${count.toLocaleString('en')} ${count === 1 ? 'record' : 'records'} selected`;
 }
 
-/** The panel's content for `active`: its title and a view per record, each open, else a hint. */
-function drawDetails(active: RenderedWidget | undefined): HTMLElement {
-  if (!active || active.records.length === 0) return html`<div class="d-details__hint">Tick rows of a table to see them here.</div>`;
+/** The panel's content for `shown`: its widget's title and a view per record, each open, else a hint. */
+function drawDetails(shown: ShownRecords | undefined): HTMLElement {
+  if (!shown) return html`<div class="d-details__hint">Tick rows of a table to see them here.</div>`;
   return html`<div class="d-details">
-    <h2 class="d-details__title">${widgetTitle(active.widget)}</h2>
-    ${active.records.map((record, i) => createView({ id: `record.${i}`, title: `Record ${i + 1}`, body: drawRecord(record) }))}
+    <h2 class="d-details__title">${widgetTitle(shown.widget)}</h2>
+    ${shown.records.map((record, i) => createView({ id: `record.${i}`, title: `Record ${i + 1}`, body: drawRecord(record) }))}
   </div>`;
 }
 

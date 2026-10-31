@@ -6,7 +6,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { ActiveQuerySource, FilterOp, Pill, QueryApi } from '../query/query';
 import type { MenuAnchor, QuickPickIcon, QuickPickItem, UiApi } from '../ui/ui';
-import type { FilterCandidate, PillSource, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type { FilterCandidate, PillSource, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
@@ -142,11 +142,6 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   #status: WidgetStatus = { kind: 'idle' };
   readonly #onDidChangeStatus = new EventEmitter<void>();
   readonly onDidChangeStatus = this.#onDidChangeStatus.event;
-  #records: readonly WidgetRecord[] = [];
-  readonly #onDidChangeRecords = new EventEmitter<void>();
-  readonly onDidChangeRecords = this.#onDidChangeRecords.event;
-  /** Removed: a late `selectRecords` neither makes it active nor tells anything. */
-  #removed = false;
   /** The calls of `query` so far: only the latest one sets the status. */
   #queries = 0;
   /** The status of the last query that answered or failed, put back when the latest one is aborted. */
@@ -163,10 +158,6 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
 
   get status(): WidgetStatus {
     return this.#status;
-  }
-
-  get records(): readonly WidgetRecord[] {
-    return this.#records;
   }
 
   url(path: string): string {
@@ -213,19 +204,9 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     if ('dataUrl' in this.widget) this.host.offerFilters(at, candidates, this.state, this.widget);
   }
 
-  /** With records it becomes its tab's active widget first, so the records' change is told to whoever follows it. */
-  selectRecords(records: readonly WidgetRecord[]): void {
-    if (this.#removed || (records.length === 0 && this.#records.length === 0)) return;
-    this.#records = records;
-    if (records.length > 0) this.host.activate(this);
-    this.#onDidChangeRecords.fire();
-  }
-
-  /** It is removed: its events end. */
+  /** It is removed: its event ends. */
   dispose(): void {
-    this.#removed = true;
     this.#onDidChangeStatus.dispose();
-    this.#onDidChangeRecords.dispose();
   }
 }
 

@@ -1,21 +1,19 @@
 // @vitest-environment jsdom
-// Tests for details.ts: the panel following the active widget's selected records, a view per record, the status bar;
-// popped out: the records selected then side by side in a tab.
+// Tests for details.ts: the panel showing the records a widget gave by `details.showRecords`, a view per record, the
+// status bar; popped out: the records shown then side by side in a tab.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
+import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { PoppedView } from '../../hosts/page/page';
 import type { WidgetRecord } from '../../hosts/widgets/widgets';
-import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
 import { details, drawComparison, drawRecord, recordsSelected } from './details';
 
 let body: HTMLElement;
 let status: HTMLElement;
 let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
-let activeChanged: EventEmitter<void>;
-let active: FakeWidget | undefined;
-let commands: Record<string, () => unknown>;
+let commands: Record<string, (...args: any[]) => unknown>;
 let popOutEnabled: () => boolean;
 let popped: PoppedView[];
 
@@ -23,8 +21,6 @@ beforeEach(() => {
   body = document.body.appendChild(document.createElement('div'));
   panel = { visible: false, shown: 0 };
   visibility = new EventEmitter<void>();
-  activeChanged = new EventEmitter<void>();
-  active = undefined;
   commands = {};
   popped = [];
   const context = {
@@ -47,24 +43,16 @@ beforeEach(() => {
     },
     page: { popOut: async (view: PoppedView) => void popped.push(view) },
     commands: { registerCommand: (id: string, run: () => unknown) => (commands[id] = run) },
-    widgets: {
-      get active() {
-        return active;
-      },
-      onDidChangeActive: activeChanged.event,
-    },
   };
   details.activate(context as unknown as ExtensionContext);
 });
 
 afterEach(() => document.body.replaceChildren());
 
-/** A table titled `title`, active with `records` selected. */
-function table(records: readonly WidgetRecord[], title = 'Latest requests'): void {
-  active = fakeWidget({ type: 'table', props: { title, height: 500 }, dataUrl: '/p/shop/api/1' } as FakeWidget['widget']);
-  activeChanged.fire();
-  active.setRecords(records);
-}
+/** A table titled `title`. */
+const tableNode = (title = 'Latest requests', dataUrl = '/p/shop/api/1') => ({ type: 'table', props: { title, height: 500 }, dataUrl }) as WidgetNode;
+/** `widget` gives `records`, as a table does on each change of its ticks. */
+const show = (widget: WidgetNode, records: readonly WidgetRecord[]) => commands['details.showRecords']({ widget, records });
 
 const showPanel = () => {
   panel.visible = true;
@@ -73,72 +61,73 @@ const showPanel = () => {
 const titles = () => [...body.querySelectorAll('.d-view__title')].map((title) => title.textContent);
 
 describe('details', () => {
-  it('says in the status bar how many records are selected, hidden while there are none; a click opens the panel', () => {
+  it('says in the status bar how many records are shown, hidden while there are none; a click opens the panel', () => {
     expect(status.hidden).toBe(true);
-    table([{ path: '/api' }, { path: '/login' }]);
+    const table = tableNode();
+    show(table, [{ path: '/api' }, { path: '/login' }]);
     expect(status.hidden).toBe(false);
     expect(status.textContent).toBe('2 records selected');
     status.click();
     expect(panel.shown).toBe(1);
-    active!.setRecords([]);
+    show(table, []);
     expect(status.hidden).toBe(true);
     expect(recordsSelected(1)).toBe('1 record selected');
     expect(recordsSelected(1200)).toBe('1,200 records selected');
   });
 
-  it('shows the active widget’s title and a view per record, and follows the records and the widget', () => {
+  it('shows the giving widget’s title and a view per record, anew on each call', () => {
     showPanel();
     expect(body.textContent).toContain('Tick rows of a table to see them here.');
-    table([{ path: '/api', status: 200 }]);
+    const table = tableNode();
+    show(table, [{ path: '/api', status: 200 }]);
     expect(body.querySelector('.d-details__title')!.textContent).toBe('Latest requests');
     expect(titles()).toEqual(['Record 1']);
     expect([...body.querySelectorAll('.d-details__key')].map((key) => key.textContent)).toEqual(['path', 'status']);
 
-    active!.setRecords([{ path: '/api' }, { path: '/login' }]);
+    show(table, [{ path: '/api' }, { path: '/login' }]);
     expect(titles()).toEqual(['Record 1', 'Record 2']);
-    // its query running again: drawn as it is
-    const drawn = body.firstElementChild;
-    active!.setStatus({ kind: 'loading' });
-    expect(body.firstElementChild).toBe(drawn);
 
-    table([{ host: 'web-1' }], 'Hosts');
+    const hosts = tableNode('Hosts', '/p/shop/api/2');
+    show(hosts, [{ host: 'web-1' }]);
     expect(body.querySelector('.d-details__title')!.textContent).toBe('Hosts');
-    // the table before is no longer followed
-    const before = active!;
-    active = undefined;
-    activeChanged.fire();
+    // the first table's ticks cleared (its next answer): the second one's are kept
+    show(table, []);
+    expect(body.querySelector('.d-details__title')!.textContent).toBe('Hosts');
+    expect(status.textContent).toBe('1 record selected');
+    show(hosts, []);
     expect(body.textContent).toContain('Tick rows of a table to see them here.');
-    before.setRecords([{ host: 'web-2' }]);
-    expect(body.textContent).toContain('Tick rows of a table to see them here.');
+    expect(status.hidden).toBe(true);
   });
 
   it('opens every record view anew: a view closed on one selection leaves the next one open', () => {
     showPanel();
-    table([{ path: '/api' }]);
+    show(tableNode(), [{ path: '/api' }]);
     body.querySelector<HTMLButtonElement>('.d-view__toggle')!.click();
     expect(body.querySelector<HTMLElement>('.d-view__body')!.hidden).toBe(true);
-    table([{ host: 'web-1' }], 'Hosts');
+    show(tableNode('Hosts', '/p/shop/api/2'), [{ host: 'web-1' }]);
     expect(body.querySelector<HTMLElement>('.d-view__body')!.hidden).toBe(false);
   });
 
-  it('draws nothing while hidden, and what is selected once shown', () => {
-    table([{ path: '/api' }]);
+  it('draws nothing while hidden, and what is shown once the panel is', () => {
+    show(tableNode(), [{ path: '/api' }]);
     expect(body.childElementCount).toBe(0);
     showPanel();
     expect(titles()).toEqual(['Record 1']);
   });
 
-  it('pops the records selected out into a tab, side by side, kept when the table clears its ticks', () => {
+  it('pops the records shown out into a tab, side by side, kept when the table clears its ticks', () => {
     expect(popOutEnabled()).toBe(false);
     commands['details.popOut']();
     expect(popped).toEqual([]);
-    table([{ path: '/api', status: 200 }, { path: '/api', status: 500 }]);
+    const table = tableNode();
+    show(table, [{ path: '/api', status: 200 }, { path: '/api', status: 500 }]);
     expect(popOutEnabled()).toBe(true);
     commands['details.popOut']();
     expect(popped.map((view) => view.title)).toEqual(['Details: Latest requests']);
     const tab = document.createElement('div');
     popped[0].render(tab);
-    active!.setRecords([]);
+    show(table, []);
+    expect(popOutEnabled()).toBe(false);
     expect([...tab.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Field', 'Record 1', 'Record 2']);
     expect([...tab.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((cell) => cell.textContent))).toEqual([
       ['path', '/api', '/api'],

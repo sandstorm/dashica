@@ -470,7 +470,7 @@ export function drawTable(
     filterable = [],
     selectRecords,
     showMenu,
-  }: { offerFilters?: WidgetContext['offerFilters']; filterable?: readonly string[]; selectRecords?: WidgetContext['selectRecords']; showMenu?: ShowTableMenu } = {},
+  }: { offerFilters?: WidgetContext['offerFilters']; filterable?: readonly string[]; selectRecords?: (records: readonly WidgetRecord[]) => void; showMenu?: ShowTableMenu } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator

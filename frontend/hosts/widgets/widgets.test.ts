@@ -339,39 +339,6 @@ describe('WidgetsHost', () => {
       expect(testbed.widgets.active?.status).not.toBe(answered);
     });
 
-    it('holds the records selected on it, told by their own event; selecting records makes a widget active, none leave it so', () => {
-      const first = testbed.render(requests);
-      const second = testbed.render(errors);
-      press(first.el);
-      expect(testbed.widgets.active?.records).toEqual([]);
-      expect(changes).toBe(1);
-      let told: unknown[] = [];
-      // the second one becomes active before its records are told, so who follows the active widget hears them
-      testbed.widgets.onDidChangeActive(() => {
-        told.push('active');
-        testbed.widgets.active?.onDidChangeRecords(() => told.push(testbed.widgets.active?.records));
-      });
-      contexts[1].selectRecords([{ status: 500 }, { status: 502 }]);
-      expect(testbed.widgets.active?.widget).toBe(errors);
-      expect(told).toEqual(['active', [{ status: 500 }, { status: 502 }]]);
-      expect(changes).toBe(2);
-      told = [];
-      contexts[1].selectRecords([{ status: 502 }]);
-      expect(told).toEqual([[{ status: 502 }]]);
-      expect(changes).toBe(2);
-      // the first one's records: none yet, and none tell nothing
-      contexts[0].selectRecords([]);
-      contexts[1].selectRecords([]);
-      expect(testbed.widgets.active?.widget).toBe(errors);
-      expect(told).toEqual([[{ status: 502 }], []]);
-      expect(changes).toBe(2);
-      // removed: its events end
-      second.rendered.dispose();
-      told = [];
-      contexts[1].selectRecords([{ status: 500 }]);
-      expect(told).toEqual([]);
-    });
-
     it('is kept per tab: switching tabs shows that tab’s active widget', () => {
       const tabs = new EventEmitter<void>();
       const source = { activeQuery: new QueryHost(window), onDidChangeTabs: tabs.event };

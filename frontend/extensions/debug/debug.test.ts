@@ -185,22 +185,18 @@ describe('debug', () => {
     expect(requested).toHaveLength(3);
   });
 
-  it('asks nothing again when only the shown widget’s records change, or an aborted query puts back its status', async () => {
+  it('asks nothing again when an aborted query puts back its status', async () => {
     activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
     showPanel();
     await settle();
     expect(requested).toHaveLength(1);
     const drawn = body.querySelector('.d-debug');
-    active!.setRecords([{ status: 500 }]);
-    active!.setRecords([{ status: 500 }, { status: 502 }]);
-    await settle();
-    expect(requested).toHaveLength(1);
-    expect(body.querySelector('.d-debug')).toBe(drawn);
     const answered = active!.status;
     active!.setStatus({ kind: 'loading' });
     active!.setStatus(answered);
     await settle();
     expect(requested).toHaveLength(1);
+    expect(body.querySelector('.d-debug')).toBe(drawn);
   });
 
   it('shows the server’s error in the panel', async () => {

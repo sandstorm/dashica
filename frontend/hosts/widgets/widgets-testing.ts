@@ -9,7 +9,7 @@ import type { Extension, ExtensionContext, Memento } from '../extension-host/ext
 import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost } from '../query/query';
 import { UiHost, type ContextMenuOptions } from '../ui/ui';
-import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus } from './widgets';
+import { WidgetsHost, type RenderedWidget, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
@@ -19,7 +19,7 @@ import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus 
  * shown, `choices()` / `candidates()` / `choose` what `ctx.offerFilters` offers (in its quick pick "Filter"); every
  * `<dataUrl>/pill` answers a pill whose key names its field, op and value (`pill` gives the chip it adds).
  * `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
- * `RenderedWidget` whose status and records the test sets. `sqlEnabled` is `page.workbench`'s (default on).
+ * `RenderedWidget` whose status the test sets. `sqlEnabled` is `page.workbench`'s (default on).
  */
 export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
   history.replaceState(null, '', '/p/shop');
@@ -162,17 +162,14 @@ export async function settle(): Promise<void> {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** A `RenderedWidget` whose status and records the test sets (`setStatus`, `setRecords`), each telling its change. */
+/** A `RenderedWidget` whose status the test sets (`setStatus`), telling its change. */
 export interface FakeWidget extends RenderedWidget {
   setStatus(status: WidgetStatus): void;
-  setRecords(records: readonly WidgetRecord[]): void;
 }
 
-/** `widget` as rendered, with `url` and `status` (default: answered, 2 rows) and no records yet. */
+/** `widget` as rendered, with `url` and `status` (default: answered, 2 rows). */
 export function fakeWidget(widget: WidgetNode, { url = (path: string) => path, status = { kind: 'done', rows: 2, ms: 5, diagnostics: {} } }: { url?: (path: string) => string; status?: WidgetStatus } = {}): FakeWidget {
   const statusChanged = new EventEmitter<void>();
-  const recordsChanged = new EventEmitter<void>();
-  let records: readonly WidgetRecord[] = [];
   return {
     widget,
     url,
@@ -181,17 +178,9 @@ export function fakeWidget(widget: WidgetNode, { url = (path: string) => path, s
       return status;
     },
     onDidChangeStatus: statusChanged.event,
-    get records() {
-      return records;
-    },
-    onDidChangeRecords: recordsChanged.event,
     setStatus(changed) {
       status = changed;
       statusChanged.fire();
-    },
-    setRecords(selected) {
-      records = selected;
-      recordsChanged.fire();
     },
   };
 }
