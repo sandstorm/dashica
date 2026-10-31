@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14). Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15). Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -501,9 +501,9 @@ client owns the UI, the server only binds.
 
 ✅ (step 6.1) **The request carries the page URL's own keys:** `time`, `range`, `sql`, `wp` (no JSON parameters
 `filters` / `params`). `requestParams()` sends `time` also when it is the page's default, since the server does not
-know the page's default. `httpserver.ParseQueryState(r)` reads them once per request; a missing `time`, a `time` that
-is neither a Go duration nor `custom`, or a `wp` that is not a JSON object of strings fails the request with that
-reason (chart error, 400 from `/time-range` and the alert widgets). A chart with `FromFileWithoutFilters` /
+know the page's default. `httpserver.ParseQueryState(r, sqlEnabled)` reads them once per request; a missing `time`, a
+`time` that is neither a Go duration nor `custom`, a `wp` that is not a JSON object of strings, or a `sql` while
+`filters.sqlEnabled` is off (§3.15, step 9a) fails the request with that reason (chart error, 400 from `/time-range` and the alert widgets). A chart with `FromFileWithoutFilters` /
 `SkipFilters()` still needs `time` in its request, but its query ignores it.
 
 ✅ (2026-10-30, with the time picker) **The time range is resolved once per request, in Go:**
@@ -580,7 +580,7 @@ the server made:
 - **Pills on the same table and field combine:** the `eq` ones OR-ed, the `ne` ones AND-ed; a pill holds one value.
   *(proposed)* the key also carries the field's alias, signed, so the server knows which pills share a field (built so
   in 8e).
-- **SQL chips** (`?sql=`) stay as they are (a feature flag later).
+- **SQL chips** (`?sql=`) stay as they are, behind their own flag `filters.sqlEnabled` (§3.15 D16, step 9a).
 - **What goes:** `filter.Apply`'s rule of the chart's own fields by alias, the base-table columns from `DESCRIBE
   TABLE` (`Client.Columns`, `Manager.Columns`, `filter.Columns`, the cache and its `singleflight`), the values bound
   as `{__f<i>:String}`, the unused `withFilters` interface, the `.Filterable` ideas. `Diagnostics` stays.
@@ -954,11 +954,11 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
   removes every chip that matches it, pressing it otherwise adds its chip (asking for `...` with `showInputBox`). So a
   link with `?sql=status NOT BETWEEN 200 AND 399` opens with "Errors only" pressed and no chip. A button's filter is
   not edited in the bar (release and press it again); on a page without that button it is a plain SQL chip
-  *(proposed)*. The SQL chips stay unsigned (D6, a feature flag comes later): a `?sql=`
+  *(proposed)*. The SQL chips stay unsigned (D6): with `filters.sqlEnabled` on (§3.15 D16), a `?sql=`
   link, or a `...` written outside quotes (`duration_ms >= ...`), still runs the viewer's own SQL in every chart's
-  WHERE, also while Explore is off.
+  WHERE, also while Explore is off; off, a button's chip is a 400 until the buttons are signed (D17, step 9b).
 - **The table cell menu** ("Filter: Contains this value", the timestamp entries) adds a SQL chip through `add(condition)`
-  as before; each entry is now a chip of its own, removable alone.
+  as before; each entry is now a chip of its own, removable alone. Only with `filters.sqlEnabled` (§3.15 D16).
 - **The Explore view's tab** shows the same chips; how they apply to an edited query is the Perspective concept's
   (`docs/2026-10-30-perspective.md`, "Editable SQL").
 - **Tests:** `query.test.ts` (two `sql` and `f` interleaved keep their order through `parseSearch` / `formatSearch`, a
@@ -1390,6 +1390,53 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9d)
+
+The maintainer decided D16–D18 after D1–D15 were built; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+…) builds its part and rewrites the sections it changes.
+
+- **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
+  separate from `explore.enabled`. Off, every handler that reads the query state answers a `sql` with 400 before any
+  query, and the filter bar offers no way to type SQL. On, the SQL chips work as before (§3.8).
+- **D17 Filter buttons signed (9b):** a dashboard filter button becomes a signed chip (the HMAC and secret of the
+  pills), so it works with D16 off. A button without `...`: `page.json` carries its condition already signed, and
+  pressing it puts that key into the URL. A button with `...`: the typed value goes to the page's own server side
+  (`<page>/button?i=<index>&value=…`), which writes it into the button's SQL as a quoted literal (`sql.Quote`) and
+  returns the signed key; the browser never sends SQL. A button's chip applies to every query that takes filters (as
+  the SQL chips do; a button has no table). A pressed button shows in place (D7); a click on a pressed `...` button's
+  value asks a new one (`showInputBox`) and replaces its chip in place. Values are always quoted strings
+  (`duration_ms >= '500'`); **to check:** how ClickHouse compares such a string with a number column.
+- **D18 Pills editable (9c, as Grafana's ad hoc filter chips):** the signed key also carries the field's alias and the
+  shown value. A click on the operator switches `=` / `≠`; a click on the value opens the quick pick of "Add filter"
+  (lazy `/values`, the typed text offered). Each edit asks `/pill` again on a widget of the shown page with the pill's
+  table and that field (`page.json`: `table` + `filterable`) and replaces the chip in place (same position). Combined
+  pills stay separate chips, each editable. A pill no widget of the page can make again can only be removed; its
+  tooltip says why.
+- **D12 SQL editor (9d):** as §3.14 says.
+
+✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
+
+- **The flag** is `config.FiltersConfig.SqlEnabled` (`filters.sqlEnabled` in `dashica_config`, or
+  `FILTERS__SQLENABLED=true`: the env provider lowercases the key, and the decoding matches it regardless of case).
+  *(proposed)* Not both: the file's camel-case key and the environment's lowercase one are two keys to `koanf`, and
+  the file's wins; the checked-in `*-production.yaml` therefore only name it in a comment. The local configs of
+  `mise run generate-config` turn it on, so the e2e specs with SQL chips keep running. `rendering.Dependencies.SqlEnabled`
+  carries it to the handlers, `workbench.json`'s `sqlEnabled` to the client.
+- **Checked where the query state is read:** `httpserver.ParseQueryState(r, sqlEnabled)` answers a non-empty `sql`
+  with `ErrSqlNotEnabled` (a `QueryStateError`, so 400: "SQL filters are not enabled (filters.sqlEnabled)") while it
+  is off; an empty `sql` is no chip. So a chart's `/query`, `/debug`, `/rows`, `/sql` and `/values`, Speedscope, the
+  alert widgets and `/time-range` (now `httpserver.TimeRangeHandler{SqlEnabled}`) all refuse it before any query, also
+  those that never apply a SQL chip *(proposed: one rule for every reader of the query state)*. Speedscope's handler
+  answers a query state it cannot read with 400 (`httpError`), not 500.
+- **The client:** without `sqlEnabled` the filter bar has no funnel, a SQL chip of a link is not edited (only ×; its
+  tooltip says "SQL filters are not enabled (filters.sqlEnabled)"), and the table's cell menu has no SQL entries
+  ("Filter: Contains this value", the time windows). The filter buttons still add SQL chips until D17 (9b), so
+  while the flag is off a pressed button fails the charts with 400 *(proposed: for one step)*.
+- **Tests:** Go `config` (the flag from the file and from the environment), `httpserver` (`ParseQueryState` off and
+  on, an empty `sql`; `/time-range` off and on), `widget` (every data endpoint of a chart 400 off, past the check on),
+  `dashica` (`workbench.json` says it); vitest: the filter bar off (no funnel, a SQL chip not edited, pills and "Add
+  filter" stay), the table's cell menu off.
+
 ## 4. Alternatives considered
 
 | Alternative | Why rejected |
@@ -1499,11 +1546,15 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8g ✅ | **D8 + D9 Explore off, Explore SQL** (Perspective §4.5, §4.7, §4.8): `workbench.json` says `explore`; without it the `explore-view` extension registers only "Explore" in `workbench/global`, greyed, hovered "Explore is not enabled (explore.enabled)" (`EXPLORE_NOT_ENABLED`; `MenuItem.enabled` / `tooltip`, shown by the quick pick as `aria-disabled` and `title`), so no chart menu entry and no page kind `explore` (`#explore=3` renders the dashboard); `HandleSql` and `HandleEditedRows` check `QueryHandler.ExploreEnabled` themselves and return `httpserver.ErrExploreNotEnabled` (404) before any query, the `editable` wrapper and `X-Dashica-Sql` gone (the view always offers its editor); `xsql` → `exploreSql`; `/sql` answers `httpserver.ChartSql` `{sql, parameters}` (generated into the TS contract), the SQL with its placeholders, the values listed beside the editor (`<dl>`), Run puts both into the hash (`exploreSql`, `param_<name>`) and `/rows` binds them (`EditedParameters`); `inline_parameters.go` and its test removed; `e2e/explore-view.spec.ts` skips all its tests while `workbench.json` says Explore is off, `e2e/top-bar.spec.ts` checks the greyed entry. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound `rows_e2e_test.go` rewritten, blocked in the sandbox; Playwright written, not run), deviations: the parameters travel as `param_<name>` keys, ClickHouse's HTTP names, in the hash and the rows request; the greyed entry's command `exploreView.open` is registered by 8i; `{{DASHICA_FILTERS}}` stays filled in *(all proposed)* | Explore with placeholders |
 | 8h ✅ | **D11 schema view** (Perspective §4.8): Go `clickhouse.Schema` (`Client.Schema(ctx, refresh)`: `system.tables`, `system.columns`, `system.data_skipping_indices` once per connection, kept on its client, `assembleSchema`, the TTL cut from `engine_full`, `tableTtl`), `Manager.Connections`, `httpserver.SchemaHandler` at `/schema.json?connection=<name>[&refresh=1]` (404 while Explore is off, checked in the handler, and for a connection not in dashica_config; replaces the unused `schemaHandler`), `workbench.json`'s `connections`, the node's `connection` in `page.json` (`sql.ConnectionOf`, also used by `filter.TableOf` and the query handler); `Schema` and the node's field generated into the TS contract; the `schema` extension: the left side panel "Schema" (native `<details>`: connection › database › table, the page's connections under "On this page", the others under "Other connections"; a connection asked when opened first; a table: columns with type, default, comment, then engine, ORDER BY, PARTITION BY, primary key, TTL, comment, skip indices), "Refresh" in `panel/schema` (`schema.refresh`: the connections opened, `refresh=1`); `e2e/schema-view.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; `testSchema` in `clickhouse_e2e_test.go` blocked in the sandbox; Playwright written, not run), deviations: the Schema view is part of Explore, so it and `/schema.json` exist only with `explore.enabled`; every database the connection's user sees is listed, `system` included (no filter); the cache lives on the connection's `clickhouse.Client`, for the server's lifetime, until a refresh; the table opens in place in the tree, not in a tab; the client keeps nothing (D12 asks `/schema.json` again, served from the cache) *(all proposed)* | the schema of every connection |
 | 8i ✅ | **D10 global "…" menu** (Perspective §4.8): `httpserver.ConnectionRowsHandler` at `/rows?connection=<name>&exploreSql=…&param_…` (404 while Explore is off, checked in the handler, and for a connection not in dashica_config; 400 for an empty text; read-only, `httpserver.ExploreRowLimit`, plain Arrow casts, shared with `HandleEditedRows` by `answerEdited`); the `explore-view` extension registers `exploreView.open` ("Explore" in `workbench/global`: a new tab `#explore=&connection=<name>`) and `exploreView.startFromChart` ("Start from chart…": the quick pick of the shown page's charts with rows, `chartsOf`, their `/sql` into a blank tab's hash); the view without a chart (`widget` `undefined`): a connection picker in its bar (`pickedConnection`, `withConnection`), an empty editor, rows from `/rows?connection=` (`connectionRowsRequest`), a datagrid (`initialView` without a widget); `e2e/explore-view.spec.ts` (two tests, skipped while Explore is off). ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound test in `rows_e2e_test.go` blocked in the sandbox; Playwright written, not run), deviations: the blank tab is the page kind `explore` with an empty id on the URL of the tab it came from; "Explore" takes the connection of the shown page's first chart, else the first one; "Start from chart…" runs the chart's SQL at once (it goes into the hash as a Run does); one viewer config for all blank tabs *(all proposed)* | Explore without a chart |
-| 8j | **D12 SQL editor:** CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
+| 8j | **D12 SQL editor:** CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8); moved to 9d (§3.15) | highlighting and completion |
 | 8k ✅ | **D13 Explore:** settings panel open from the start; "Reset" asks first (Perspective §4.8): `PerspectiveViewer.toggleConfig(true)` on each new viewer after its config; `persistable` leaves out `settings`; "Reset" asks `confirmReset` (`ui.showQuickPick` below the button: "Reset" / "Cancel"); `e2e/explore-view.spec.ts` checks the panel and Cancel / Reset. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the kept config never reopens or closes the panel; Escape or a press elsewhere is Cancel; Reset leaves the panel as it is *(all proposed)* | the viewer's settings at hand, Reset not by accident |
 | 8l ✅ | **D14 view pop-out** (§3.4.6): `PageApi.popOut({title, render})` (a new tab `<page>#view=<tab id>`, the page kind `view` rendered by the host while its view is in memory, the page shown taken without fetching `page.json` again, the view forgotten when its tab closes); `storedTabs(list, kept)` leaves the popped tabs out (active: the one of the others shown last); Debug's "Pop out" (`panel/debug`, `debug.popOut`: "Debug: <title>", `followDebug` shared with the panel); Details' "Pop out" (`panel/details`, `details.popOut`: "Details: <title>", `drawComparison`); "Open Speedscope" pops out the viewer in an `<iframe>`; the widget testbed's `page.popOut` records the views (`popped`); `e2e/pop-out.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the popped tab's time range and filters change nothing it shows; Debug's tab follows its widget's status, Details' keeps the records of the pop (the table clears them on each answer); a `#view=` link or a reload shows the page; Speedscope stays a link for a modifier click *(all proposed)* | views as tabs |
 | 8m ✅ | **D15 ad hoc pills** (§3.8): Go `sql.Values` (a builder query's base: its From and Where, `SELECT toString(<definition>) AS __value … GROUP BY __value ORDER BY __value LIMIT 100`, `positionCaseInsensitive(…, {__search:String}) > 0`; a SQL file's or string's result in a subquery), `httpserver.HandleValues` (JSON array of strings, `ValuesLimit` 100), `<dataUrl>/values?field=…&search=…` (`valuesHandler`: 422 as `/pill`, 400 for an unsigned pill, the time range, SQL chips and the other pills applied); the node's `table` in `page.json` (generator, golden contract); client: `filterableTables` (per table each field once, with the first chart naming it), `addFilter` (table, skipped when there is one; field; `=` / `≠`; value) and `pickValue` (`createQuickPick`, asked again 200 ms after the typing rests, the earlier request aborted), `fetchValues`, `fetchPill` exported from the `widgets` host; "Add filter" after the chips in the filter bar; `e2e/add-filter.spec.ts`. ✅ 2026-10-31 (Go vet and tests green but the ClickHouse-bound ones (sandbox; `TestHandleValues_TheValuesOfAFieldThatContainTheSearch` written, not run); vitest, typecheck, top comments green; Playwright written, not run), deviations: the pills on the asked field (its table) are left out of `/values`, so a value beside one filtered by is still offered; a SQL file's values come from its result (its own LIMIT included), since its field is a column of the result; the typed text is offered first as a value of its own ("as typed"); "Add filter" makes the filter bar show on every page with `filterBar` whose charts filter a table; the table step is skipped for one table *(all proposed)* | filters without a click on a chart |
 | 8n ✅ | **Review fixes of the batch:** `X-Dashica-Diagnostics` in ASCII (`asciiJSON`: non-ASCII as `\u` escapes, so "≠" and umlauts in pill labels survive the browser's Latin-1 reading of headers); the `page.json` test with a ClickHouse manager (nil since 8m, it panicked); a filter button's `...` value written in as a string literal's text (`literalOf`: `\` and `'` escaped, as `sql.Quote`; `buttonOf` undoes it; a replacer function, so `$'` stays text); `golang.org/x/sync` indirect in `go.mod`; one `OP_ICONS` (`widgets` host) for a chart click and "Add filter". ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: CI's `go test` of `dashica-src` runs `./...` (outer repo's `ci/test.gitlab-ci.yml`, edited, not committed here), so `lib/clickhouse`, `lib/alerting`, `lib/dashboard`, `filter`, `widget` and `explore` run there too; `go.mod` keeps its other entries `go mod tidy` would change (certmagic, rigging, goldmark …); the SQL chips stay unsigned (D6): a `?sql=` link or a `...` outside quotes still runs a viewer's own SQL *(all proposed)* | the review's findings fixed |
+| 9a ✅ | **D16 SQL chips behind `filters.sqlEnabled`** (§3.15): `config.FiltersConfig.SqlEnabled` (default false, `FILTERS__SQLENABLED`), `rendering.Dependencies.SqlEnabled`, `workbench.json`'s `sqlEnabled`; `httpserver.ParseQueryState(r, sqlEnabled)` answers a `sql` with `ErrSqlNotEnabled` (400) while it is off, so every reader of the query state refuses it before any query (`TimeRangeHandler` a struct with `SqlEnabled`); the filter bar without funnel and SQL chip editing, the table's cell menu without its SQL entries while it is off. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: also the handlers that never apply a SQL chip (alerts, `/time-range`) refuse one; Speedscope answers an unreadable query state with 400; set the flag in the file or the environment, not both (the file's key wins); the filter buttons fail with 400 while it is off until 9b; the local configs turn it on *(all proposed)* | SQL chips only where configured |
+| 9b | **D17 filter buttons signed** (§3.15): a button's condition signed in `page.json`, a `...` value made into a signed key by `<page>/button`; a pressed `...` button asks a new value and replaces its chip in place | buttons with SQL chips off |
+| 9c | **D18 pills editable** (§3.15): alias and shown value in the signed key; `=` / `≠` and the value edited through `/pill` of a widget with the pill's table and field, in place | pills edited as in Grafana |
+| 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

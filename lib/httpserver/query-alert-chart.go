@@ -17,6 +17,8 @@ type queryAlertChartHandler struct {
 	clickhouseClientManager *clickhouse.Manager
 	logger                  zerolog.Logger
 	alertManager            *alerting2.AlertManager
+	// sqlEnabled is filters.sqlEnabled (ParseQueryState)
+	sqlEnabled bool
 }
 
 func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
@@ -42,7 +44,7 @@ func (qh queryAlertChartHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	opts.Parameters = alertDefinition.Params
 
 	query := alertDefinition.Query
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, qh.sqlEnabled)
 	if err != nil {
 		return err
 	}

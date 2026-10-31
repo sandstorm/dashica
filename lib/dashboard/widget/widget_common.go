@@ -256,7 +256,7 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	query := chart.Query()
 	serve := func(handle func(sql.SqlQueryable, httpserver.QueryState, filter.Diagnostics, http.ResponseWriter, *http.Request) error) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			state, err := httpserver.ParseQueryState(r)
+			state, err := httpserver.ParseQueryState(r, deps.SqlEnabled)
 			if err != nil {
 				httpError(w, err)
 				return
@@ -302,7 +302,7 @@ func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 			http.Error(w, fmt.Sprintf("%q cannot filter this chart's table", alias), http.StatusUnprocessableEntity)
 			return
 		}
-		state, err := httpserver.ParseQueryState(r)
+		state, err := httpserver.ParseQueryState(r, deps.SqlEnabled)
 		if err != nil {
 			httpError(w, err)
 			return

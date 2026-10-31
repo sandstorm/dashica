@@ -20,11 +20,12 @@ import (
 	"github.com/sandstorm/dashica/lib/httpserver"
 )
 
-// ask asks the handler of `chart` for `target` (`/rows?time=1h`), Explore enabled or not, with the SQL file
-// by_status.sql, on a ClickHouse that is unreachable (a query that gets past the handler's own checks fails with a 500).
+// ask asks the handler of `chart` for `target` (`/rows?time=1h`), Explore enabled or not, SQL chips enabled, with the
+// SQL file by_status.sql, on a ClickHouse that is unreachable (a query that gets past the handler's own checks fails
+// with a 500).
 func ask(chart withQuery, explore bool, target string) *httptest.ResponseRecorder {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), ExploreEnabled: explore, FilterSecret: testSecret,
+	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), ExploreEnabled: explore, FilterSecret: testSecret, SqlEnabled: true,
 		FileSystem: fstest.MapFS{"by_status.sql": {Data: []byte("SELECT status, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY status")}}}
 	rec := httptest.NewRecorder()
 	queryHandler(deps, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))

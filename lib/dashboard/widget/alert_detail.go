@@ -59,7 +59,7 @@ func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
 		opts.Parameters = alertDef.Params
 
 		query := alertDef.Query
-		state, err := httpserver.ParseQueryState(r)
+		state, err := httpserver.ParseQueryState(r, deps.SqlEnabled)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

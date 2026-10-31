@@ -7,13 +7,14 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
  * be pinned. The ticked rows are the widget's selected records (Details shows them); each answer starts with none.
  * A click on a cell offers to filter by its value or exclude it (by its column's name).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
- * page's SQL filter, a column header's (`table/header`) size the columns.
+ * page's SQL filter, only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`); a column header's
+ * (`table/header`) size the columns.
  */
 export const table: Extension = {
   id: 'table',
-  activate: ({ widgets, commands, ui, query, subscriptions }) => {
+  activate: ({ widgets, commands, ui, query, page, subscriptions }) => {
     subscriptions.push(widgets.registerWidget('table', renderTable));
-    for (const [order, filter] of CELL_FILTERS.entries()) {
+    for (const [order, filter] of page.workbench.sqlEnabled ? CELL_FILTERS.entries() : []) {
       subscriptions.push(commands.registerCommand(filter.command, (cell: TableCellMenuContext) => query.filters.add(filter.condition(cell))));
       subscriptions.push(ui.registerMenuItem<TableCellMenuContext>('table/cell', { command: filter.command, title: filter.title, when: filter.when, order }));
     }

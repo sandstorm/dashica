@@ -16,6 +16,8 @@ type queryAlertsHandler struct {
 	alertManager            *alerting2.AlertManager
 	alertResultStore        *alerting2.AlertResultStore
 	devMode                 bool
+	// sqlEnabled is filters.sqlEnabled (ParseQueryState)
+	sqlEnabled bool
 }
 
 const QUERY_ALERTS_QUERY = `
@@ -58,7 +60,7 @@ func (qa queryAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) e
 	opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
 	opts.Settings["date_time_input_format"] = "best_effort"          // support ISO 8601 dates (which is used in date picker by browser)
 
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, qa.sqlEnabled)
 	if err != nil {
 		return err
 	}

@@ -63,7 +63,7 @@ func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 			"alert_group_pattern": pattern,
 		}
 
-		state, err := httpserver.ParseQueryState(r)
+		state, err := httpserver.ParseQueryState(r, deps.SqlEnabled)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

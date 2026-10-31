@@ -77,6 +77,9 @@ type Dependencies struct {
 	ExploreEnabled bool
 	// FilterSecret signs and checks the page's pills (config.FiltersConfig, filter.Sign).
 	FilterSecret []byte
+	// SqlEnabled: the handlers take the page's SQL chips (filters.sqlEnabled); else a `sql` is a 400
+	// (httpserver.ParseQueryState).
+	SqlEnabled bool
 }
 
 // MenuGroup is a group of the dashboards menu ("Shop"), as RegisterDashboardGroup starts it.

@@ -27,7 +27,7 @@ func queryStatusRows(t *testing.T, op, value string) (*httptest.ResponseRecorder
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
 	r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, true)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
 	for search, want := range map[string]string{"": `["200","500"]`, "50": `["500"]`, "x": `[]`} {
 		r := httptest.NewRequest(http.MethodGet, "/values?time=1h", nil)
-		state, err := ParseQueryState(r)
+		state, err := ParseQueryState(r, true)
 		if err != nil {
 			t.Fatalf("ParseQueryState: %v", err)
 		}

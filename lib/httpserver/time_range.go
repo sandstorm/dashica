@@ -109,8 +109,13 @@ func WriteResolvedTimeRange(w http.ResponseWriter, timeRange *querying.TimeRange
 // TimeRangeHandler serves the window of the request's query state (ParseQueryState, as every data handler reads it)
 // at now, as `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be read. The time picker asks it before it applies
 // a range, and for the window it shifts or zooms out.
-func TimeRangeHandler(w http.ResponseWriter, r *http.Request) {
-	state, err := ParseQueryState(r)
+type TimeRangeHandler struct {
+	// SqlEnabled is filters.sqlEnabled: without it a `sql` is a 400 here too (ParseQueryState).
+	SqlEnabled bool
+}
+
+func (h TimeRangeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	state, err := ParseQueryState(r, h.SqlEnabled)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

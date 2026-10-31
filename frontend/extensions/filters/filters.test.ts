@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
 // edited, removed), the buttons as toggles in place (buttonOf), without a chip of their own, a button's value asked
-// for in an input box and shown on it, "Add filter" while a chart filters a table.
+// for in an input box and shown on it, "Add filter" while a chart filters a table; with SQL filters off
+// (filters.sqlEnabled), no funnel and a SQL chip only removed.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { PageJson } from '../../generated/zz_generated.dashica';
+import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { buttonOf, filters } from './filters';
@@ -12,7 +13,8 @@ import { buttonOf, filters } from './filters';
 let query: QueryHost;
 let topBar: HTMLElement;
 let bar: HTMLElement;
-let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event'] };
+let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event']; workbench: WorkbenchJson };
+let ui: object;
 let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
@@ -54,8 +56,8 @@ beforeEach(() => {
   topBar = document.body.appendChild(document.createElement('div'));
   bar = document.body.appendChild(document.createElement('div'));
   pageChanged = new EventEmitter<PageJson | undefined>();
-  page = { current: undefined, onDidChangePage: pageChanged.event };
-  const ui = {
+  page = { current: undefined, onDidChangePage: pageChanged.event, workbench: { menu: [], explore: false, sqlEnabled: true, connections: [] } };
+  ui = {
     registerBarItem: (name: string, el: HTMLElement) => {
       (name === 'top' ? topBar : bar).appendChild(el);
       return { dispose: () => el.remove() };
@@ -65,9 +67,14 @@ beforeEach(() => {
   };
   asked = [];
   picks = [];
+});
+
+/** Activates the extension, the server taking SQL chips or not (filters.sqlEnabled), and shows the page Shop. */
+function activate(sqlEnabled: boolean): void {
+  page.workbench.sqlEnabled = sqlEnabled;
   filters.activate({ query, page, ui, subscriptions: [] } as unknown as ExtensionContext);
   show(shop);
-});
+}
 
 afterEach(() => {
   query.dispose();
@@ -112,6 +119,8 @@ describe('buttonOf', () => {
 });
 
 describe('filters', () => {
+  beforeEach(() => activate(true));
+
   it('adds a filter button’s condition as a SQL filter and shows the button pressed, with no chip for it', () => {
     expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
     button('Errors').click();
@@ -295,5 +304,31 @@ describe('filters', () => {
     show(undefined);
     expect(bar.children.length).toBe(0);
     expect(topBar.children.length).toBe(0);
+  });
+});
+
+describe('filters with SQL filters off', () => {
+  beforeEach(() => activate(false));
+
+  it('has no funnel: the bar offers no way to type SQL', () => {
+    expect(funnel()).toBeNull();
+    expect(topBar.children.length).toBe(0);
+  });
+
+  it('shows a link’s SQL chip, not edited, saying why; its × removes it', () => {
+    query.load({ search: '?sql=status+%3E%3D+400' });
+    chips()[0].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
+    expect(editor()).toBeNull();
+    expect(chips()[0].title).toBe('status >= 400\nSQL filters are not enabled (filters.sqlEnabled)');
+    chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove status >= 400"]')!.click();
+    expect(query.filters.chips).toEqual([]);
+  });
+
+  it('still shows the pills and "Add filter"', () => {
+    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+    show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
+    query.filters.add(pill('host = a'));
+    expect(chips().map(chipText)).toEqual(['host = a']);
+    expect([...bar.querySelectorAll('.d-filter-bar__chips button')].some((b) => b.textContent === 'Add filter')).toBe(true);
   });
 });

@@ -33,3 +33,7 @@ alerting:
 # it. At least 32 characters, never checked in: generate one with `openssl rand -hex 32`, or set FILTERS__SECRET.
 filters:
   secret: ""
+  # The page's SQL chips (`?sql=`, docs/2026-10-28-workbench.md §3.15): the viewer's own SQL in every chart's WHERE,
+  # typed in the filter bar. Off by default: a `sql` is then a 400. Or FILTERS__SQLENABLED=true (not both: a key here
+  # wins over the environment's).
+  sqlEnabled: false

@@ -48,9 +48,7 @@ func (s *SpeedscopeLink) Handler(deps rendering.Dependencies) http.Handler {
 	query := s.sql
 	mux := http.NewServeMux()
 	mux.HandleFunc("/speedscope-query", func(w http.ResponseWriter, r *http.Request) {
-		if err := serveSpeedscope(query, deps, w, r); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		httpError(w, serveSpeedscope(query, deps, w, r))
 	})
 	mux.Handle("/viewer/", http.StripPrefix("/viewer", http.FileServerFS(speedscopeViewer)))
 	return mux
@@ -71,7 +69,7 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 	opts.Settings["format_custom_field_delimiter"] = " "
 	opts.Settings["date_time_input_format"] = "best_effort"
 
-	state, err := httpserver.ParseQueryState(r)
+	state, err := httpserver.ParseQueryState(r, deps.SqlEnabled)
 	if err != nil {
 		return err
 	}

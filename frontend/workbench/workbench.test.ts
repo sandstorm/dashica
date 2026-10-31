@@ -34,7 +34,7 @@ beforeEach(async () => {
   );
   host = document.body.appendChild(document.createElement('div'));
   const grab = { id: 'test', activate: (context: { ui: UiApi }) => void (ui = context.ui) };
-  workbench = createWorkbench(host, { extensions: [dashboardPage, timeRange, refresh, grab], workbench: { menu: [], explore: false, connections: [] } });
+  workbench = createWorkbench(host, { extensions: [dashboardPage, timeRange, refresh, grab], workbench: { menu: [], explore: false, sqlEnabled: false, connections: [] } });
   await settle();
 });
 

@@ -19,17 +19,18 @@ import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus 
  * shown, `choices()` / `candidates()` / `choose` what `ctx.offerFilters` offers (in its quick pick "Filter"); every
  * `<dataUrl>/pill` answers a pill whose key names its field, op and value (`pill` gives the chip it adds).
  * `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
- * `RenderedWidget` whose status and records the test sets.
+ * `RenderedWidget` whose status and records the test sets. `sqlEnabled` is `page.workbench`'s (default on).
  */
-export function widgetTestbed() {
+export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
   history.replaceState(null, '', '/p/shop');
   const query = new QueryHost(window);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
   const pageChanged = new EventEmitter<PageJson | undefined>();
   /** The views extensions popped out (`page.popOut`), in order. */
   const popped: PoppedView[] = [];
-  const page: { current: PageJson | undefined } & Pick<PageApi, 'onDidChangePage' | 'popOut'> = {
+  const page: { current: PageJson | undefined } & Pick<PageApi, 'onDidChangePage' | 'popOut' | 'workbench'> = {
     current: undefined,
+    workbench: { menu: [], explore: false, sqlEnabled, connections: [] },
     onDidChangePage: pageChanged.event,
     popOut: async (view) => void popped.push(view),
   };

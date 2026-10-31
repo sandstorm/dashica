@@ -135,6 +135,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertManager:            alertManager,
 		ExploreEnabled:          cfg.Explore.Enabled,
 		FilterSecret:            []byte(cfg.Filters.Secret),
+		SqlEnabled:              cfg.Filters.SqlEnabled,
 	}
 
 	return newDashicaImpl(cfg, logger, mux, deps)
@@ -154,7 +155,7 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 	if err := d.handlerCollector.Handle("/workbench.json", http.HandlerFunc(d.serveWorkbenchJson)); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /workbench.json")
 	}
-	if err := d.handlerCollector.Handle("/time-range", http.HandlerFunc(httpserver.TimeRangeHandler)); err != nil {
+	if err := d.handlerCollector.Handle("/time-range", httpserver.TimeRangeHandler{SqlEnabled: deps.SqlEnabled}); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /time-range")
 	}
 	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, ExploreEnabled: deps.ExploreEnabled}
@@ -177,6 +178,9 @@ type WorkbenchJson struct {
 	Menu []rendering.MenuGroup `json:"menu"`
 	// Explore: the Explore view is on (explore.enabled); else the client leaves it out, and its endpoints answer 404.
 	Explore bool `json:"explore"`
+	// SqlEnabled: the filter bar lets the viewer type SQL chips (filters.sqlEnabled); else it offers none, and every
+	// handler answers a `sql` with 400.
+	SqlEnabled bool `json:"sqlEnabled"`
 	// Connections are the names of the ClickHouse connections of dashica_config, sorted: the Schema view's tree.
 	Connections []string `json:"connections"`
 }
@@ -192,7 +196,7 @@ func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request)
 		connections = []string{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.ExploreEnabled, Connections: connections}); err != nil {
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.ExploreEnabled, SqlEnabled: d.deps.SqlEnabled, Connections: connections}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

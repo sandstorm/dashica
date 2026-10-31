@@ -159,6 +159,24 @@ func TestQueryHandler_ATamperedPillIsABadRequest(t *testing.T) {
 	}
 }
 
+func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
+	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
+	chip := "&sql=" + url.QueryEscape("status >= 500")
+	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status"} {
+		if rec := askPath(bar, path+chip); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
+			t.Errorf("off, %s: %d %s", path, rec.Code, rec.Body)
+		}
+		// on, the same request passes: the ClickHouse of testDeps is unreachable
+		deps := testDeps()
+		deps.SqlEnabled = true
+		rec := httptest.NewRecorder()
+		queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
+		if rec.Code == http.StatusBadRequest {
+			t.Errorf("on, %s: %d %s", path, rec.Code, rec.Body)
+		}
+	}
+}
+
 func TestQueryHandler_AQueryThatSkipsFiltersIgnoresAll(t *testing.T) {
 	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
 	skips := NewBarVertical(sql.New(sql.From("http_logs"), sql.SkipFilters())).X(sql.Field("status")).Y(sql.Count())

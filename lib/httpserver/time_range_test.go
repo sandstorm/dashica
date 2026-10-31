@@ -131,7 +131,7 @@ func TestResolveTimeRange_SaysWhatIsWrong(t *testing.T) {
 func TestTimeRangeHandler(t *testing.T) {
 	query := url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00 to 2026-10-28 09:30"}}
 	rec := httptest.NewRecorder()
-	TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+query.Encode(), nil))
+	TimeRangeHandler{}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+query.Encode(), nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
@@ -139,6 +139,20 @@ func TestTimeRangeHandler(t *testing.T) {
 	to := time.Date(2026, 10, 28, 9, 30, 0, 0, time.Local).UnixMilli()
 	if want := fmt.Sprintf(`{"from":%d,"to":%d}`, from, to); strings.TrimSpace(rec.Body.String()) != want {
 		t.Errorf("body = %s, want %s", rec.Body, want)
+	}
+}
+
+func TestTimeRangeHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
+	target := "/time-range?" + url.Values{"time": {"1h"}, "sql": {"status >= 500"}}.Encode()
+	rec := httptest.NewRecorder()
+	TimeRangeHandler{}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
+		t.Errorf("off: %d %s", rec.Code, rec.Body)
+	}
+	rec = httptest.NewRecorder()
+	TimeRangeHandler{SqlEnabled: true}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("on: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -153,7 +167,7 @@ func TestTimeRangeHandler_SaysWhatIsWrong(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			TimeRangeHandler(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+tt.query.Encode(), nil))
+			TimeRangeHandler{}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+tt.query.Encode(), nil))
 			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), tt.want) {
 				t.Errorf("got %d %q, want 400 naming %s", rec.Code, rec.Body, tt.want)
 			}

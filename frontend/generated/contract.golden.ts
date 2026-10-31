@@ -37,6 +37,7 @@ export const workbench = {
     }
   ],
   "explore": false,
+  "sqlEnabled": false,
   "connections": []
 } satisfies WorkbenchJson;
 

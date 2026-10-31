@@ -168,7 +168,9 @@ filter" describe the spike's "Remove grouping" (`?grouping=none`, `sql.Ungrouped
 - **The gate and the free SQL filter:** the gate decides which rows `/rows` serves. The page's free SQL filter (`sql=`)
   goes with every request, `grouping=none` included, and is SQL from the client: without grouping it sees the raw
   columns, and on any chart, Explore off, it can already ask about raw columns through `/query` (subqueries included).
-  It keeps its existing trust model (all authenticated users are trusted); permissions later cover both.
+  It keeps its existing trust model (all authenticated users are trusted); permissions later cover both. Since step
+  9a of the workbench concept (§3.15 D16) it runs only with `filters.sqlEnabled`; off, a `sql=` is a 400 on every
+  handler.
 - **No selection from the rows without grouping:** a click on one of their group rows offers no "Filter by" /
   "Exclude". Their columns are raw, and a page filter on a column the chart also computes as a dimension (Caddy's
   `customer_project`) filters on the dimension's definition, which the raw value (`sandstorm.shop`) does not match:

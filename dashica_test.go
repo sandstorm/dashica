@@ -30,22 +30,22 @@ func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
 		return rec.Body.String()
 	}
 
-	if got := get(); got != `{"menu":[],"explore":false,"connections":[]}`+"\n" {
+	if got := get(); got != `{"menu":[],"explore":false,"sqlEnabled":false,"connections":[]}`+"\n" {
 		t.Errorf("before any group: %s", got)
 	}
 	d.RegisterDashboardGroup("Shop")
-	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}],"explore":false,"connections":[]}`+"\n" {
+	if got := get(); got != `{"menu":[{"title":"Shop","entries":[]}],"explore":false,"sqlEnabled":false,"connections":[]}`+"\n" {
 		t.Errorf("after registering: %s", got)
 	}
 }
 
-func TestWorkbenchJson_SaysWhetherExploreIsEnabledAndTheConnections(t *testing.T) {
+func TestWorkbenchJson_SaysWhetherExploreAndSqlFiltersAreEnabledAndTheConnections(t *testing.T) {
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}}}
 	rec := httptest.NewRecorder()
-	deps := rendering.Dependencies{ExploreEnabled: true, ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop())}
+	deps := rendering.Dependencies{ExploreEnabled: true, SqlEnabled: true, ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop())}
 	(&DashicaImpl{deps: deps}).serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
 
-	if got := rec.Body.String(); got != `{"menu":[],"explore":true,"connections":["alert_storage","default"]}`+"\n" {
+	if got := rec.Body.String(); got != `{"menu":[],"explore":true,"sqlEnabled":true,"connections":["alert_storage","default"]}`+"\n" {
 		t.Errorf("got %s", got)
 	}
 }

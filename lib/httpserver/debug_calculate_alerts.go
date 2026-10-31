@@ -10,6 +10,8 @@ import (
 type debugCalculateAlertsHandler struct {
 	batchEvaluator   *alerting2.BatchEvaluator
 	alertResultStore *alerting2.AlertResultStore
+	// sqlEnabled is filters.sqlEnabled (ParseQueryState)
+	sqlEnabled bool
 }
 
 func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) error {
@@ -17,7 +19,7 @@ func (da debugCalculateAlertsHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 		return err
 	}
 
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, da.sqlEnabled)
 	if err != nil {
 		return err
 	}

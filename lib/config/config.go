@@ -35,11 +35,16 @@ type Config struct {
 	Filters  FiltersConfig  `koanf:"filters"`
 }
 
-// FiltersConfig is how the server signs the page's pills (docs/2026-10-28-workbench.md §3.8).
+// FiltersConfig is how the server signs the page's pills and whether it takes SQL chips (docs/2026-10-28-workbench.md
+// §3.8, §3.15).
 type FiltersConfig struct {
 	// Secret is the key of the HMAC each pill carries, so that the conditions of a page's URL are the server's own;
 	// required (CheckFilterSecret). Never in a checked-in file: set it as FILTERS__SECRET.
 	Secret string `koanf:"secret"`
+	// SqlEnabled: the page's SQL chips (`?sql=`) go into every query's WHERE, and the filter bar lets the viewer type
+	// them; off by default, since a SQL chip is the viewer's own SQL. Off, every handler that reads the query state
+	// answers a `sql` with 400 (httpserver.ParseQueryState). FILTERS__SQLENABLED=true sets it from the environment.
+	SqlEnabled bool `koanf:"sqlEnabled"`
 }
 
 // MinFilterSecretLength is the shortest filters.secret the server starts with (`openssl rand -hex 32` gives 64).
@@ -256,6 +261,7 @@ func PrintConfig(config *Config) {
 
 	fmt.Printf("explore.enabled: %v\n", config.Explore.Enabled)
 	fmt.Printf("filters.secret: %s\n", maskSecret(config.Filters.Secret))
+	fmt.Printf("filters.sqlEnabled: %v\n", config.Filters.SqlEnabled)
 
 	fmt.Println("Alerting Configuration:")
 	fmt.Printf("  helvetikit_alerting_url: %s\n", config.Alerting.HelvetikitAlertingUrl)

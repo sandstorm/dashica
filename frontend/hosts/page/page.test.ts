@@ -31,7 +31,7 @@ const memento = (): Memento => ({
 });
 
 function createHost(browserWindow: Window = window): PageHost {
-  const created = new PageHost(browserWindow, { menu: [], explore: false, connections: [] }, content, memento());
+  const created = new PageHost(browserWindow, { menu: [], explore: false, sqlEnabled: false, connections: [] }, content, memento());
   created.registerPageRenderer('dashboard', (el, shown, context) => {
     el.textContent = shown.title;
     rendered.push(shown.title);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for table.ts: the rows drawn into a table, ticked rows as the widget's selected records, a click on a cell of a
 // category column offering to filter by its value or exclude it, a cell's menu (`table/cell`) adding a condition to
-// the page's SQL filter, a column header's (`table/header`) sizing the columns.
+// the page's SQL filter (none while SQL filters are off), a column header's (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
@@ -179,5 +179,18 @@ describe('table', () => {
     await click(openCellMenu(el, 'path', 0), 'Filter: Contains this value');
 
     expect(testbed.query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '%/api%'" }]);
+  });
+
+  it('has no SQL entries in a cell’s menu while SQL filters are off', async () => {
+    testbed.dispose();
+    testbed = widgetTestbed({ sqlEnabled: false });
+    testbed.activate(table, filters);
+    vi.stubGlobal('CSS', {});
+    testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    await inView();
+
+    expect(labels(openCellMenu(el, 'path', 0))).toEqual([]);
+    expect(labels(openCellMenu(el, 'timestamp', 0))).toEqual([]);
   });
 });
