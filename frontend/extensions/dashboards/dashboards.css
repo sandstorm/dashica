@@ -1,27 +1,17 @@
 /*
- * See dashboards.ts. A dense list (d-list): one line per entry (a long name cut off, in full on hover), the page shown
- * tinted. A group is set apart from the dashboards: a rule above it, its heading in the text colour, its entries indented
- * behind a guide line; a favorite's group follows its title, muted. The "…" and the star sit at an entry's right end, shown on hover (a favorite's
- * star always).
+ * See dashboards.ts. A view per group (createView), its entries a dense list (d-list) in line with the view's title:
+ * one line per entry (a long name cut off, in full on hover), the page shown tinted; a favorite's group follows its
+ * title, muted. The "…" and the star sit at an entry's right end, shown on hover (a favorite's star always); a
+ * favorite's grip in front of it, shown on hover, the favorite dragged by it faded.
  */
 .d-dashboards-menu {
   width: 100%;
-  padding: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-2);
 }
 
-.d-dashboards-menu__group + .d-dashboards-menu__group {
-  margin-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
-}
-
-.d-dashboards-menu__heading {
-  color: var(--color-text);
-}
-
+/* the entries' text below the view's title: the chevron's width and gap less the item's own padding */
 .d-dashboards-menu__entries {
-  margin-left: var(--space-2);
-  padding-left: var(--space-1);
-  border-left: 1px solid var(--color-border);
+  padding-left: calc(var(--space-1) + 16px + var(--space-1) - var(--space-2));
 }
 
 .d-dashboards-menu__group-name {
@@ -66,6 +56,33 @@
 .d-dashboards-menu__star:focus-visible,
 .d-dashboards-menu__star--active {
   opacity: 1;
+}
+
+.d-dashboards-menu__grip {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  display: flex;
+  padding: var(--space-1) 0;
+  color: var(--color-text-muted);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+  transform: translateY(-50%);
+  transition: opacity var(--duration-fast);
+}
+
+.d-dashboards-menu__entry:hover > .d-dashboards-menu__grip,
+.d-dashboards-menu__entry--dragged > .d-dashboards-menu__grip {
+  opacity: 1;
+}
+
+.d-dashboards-menu__entry--dragged {
+  opacity: 0.6;
+}
+
+.d-dashboards-menu__entry--dragged > .d-dashboards-menu__grip {
+  cursor: grabbing;
 }
 
 .d-list__item--active ~ .d-dashboards-menu__more,

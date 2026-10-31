@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for dashboards.ts in the workbench: the menu, the active tab's page marked, favorites, "Open in new tab" with
-// the workbench's tab bar, search everywhere (with the charts of searchEverywhere after the dashboards, Cmd / Ctrl+Enter
+// Tests for dashboards.ts in the workbench: the menu (a view per group), the active tab's page marked, favorites
+// (toggled, moved by dragging and by Alt+arrows), "Open in new tab" with the workbench's tab bar, search everywhere (with the charts of searchEverywhere after the dashboards, Cmd / Ctrl+Enter
 // in a new tab).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
@@ -39,6 +39,7 @@ beforeEach(async () => {
 afterEach(() => {
   workbench.dispose();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   document.body.replaceChildren();
   localStorage.clear();
   sessionStorage.clear();
@@ -50,8 +51,8 @@ const link = (title: string) => [...menu().querySelectorAll('a')].find((a) => a.
 const titles = (selector: string) => [...menu().querySelectorAll(selector)].map((el) => el.textContent);
 
 describe('dashboards', () => {
-  it('lists the groups and marks the page shown', () => {
-    expect(titles('.d-list__heading')).toEqual(['Shop']);
+  it('lists the groups as views and marks the page shown', () => {
+    expect(titles('.d-view__title')).toEqual(['Shop']);
     expect(titles('a')).toEqual(['Orders', 'Checkout']);
     expect(titles('a.d-list__item--active')).toEqual(['Orders']);
   });
@@ -86,14 +87,14 @@ describe('dashboards', () => {
   it('keeps a starred dashboard among the favorites, with its group, for the next visit too; its star there removes it', () => {
     const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')][1];
     star().click();
-    expect(titles('.d-list__heading')).toEqual(['Favorites', 'Shop']);
+    expect(titles('.d-view__title')).toEqual(['Favorites', 'Shop']);
     expect(titles('a')).toEqual(['CheckoutShop', 'Orders', 'Checkout']);
     expect(titles('.d-dashboards-menu__group-name')).toEqual(['Shop']);
     expect(JSON.parse(localStorage.getItem('dashica:global:dashboards:favorites')!)).toEqual([{ url: '/p/checkout', title: 'Checkout' }]);
 
     // the favorite's own star, under "Favorites"
     menu().querySelector<HTMLButtonElement>('.d-dashboards-menu__star')!.click();
-    expect(titles('.d-list__heading')).toEqual(['Shop']);
+    expect(titles('.d-view__title')).toEqual(['Shop']);
   });
 
   it('keeps a star toggled where it was on screen and focused, though the favorites above it grow or shrink', () => {
@@ -112,6 +113,83 @@ describe('dashboards', () => {
     expect(document.activeElement).toBe(star());
     star().click();
     expect(panel.scrollTop).toBe(0);
+  });
+
+  it('closes the view of a group, and keeps it closed when the menu is drawn anew and for the next visit', async () => {
+    const shop = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-view__toggle')].find((toggle) => toggle.textContent?.includes('Shop'))!;
+    shop().click();
+    expect(shop().getAttribute('aria-expanded')).toBe('false');
+    link('Checkout').click();
+    await settle();
+    expect(shop().getAttribute('aria-expanded')).toBe('false');
+    expect(localStorage.getItem('dashica:global:dashboards:views.group.Shop.collapsed')).toBe('true');
+    // its count, while closed
+    expect(shop().querySelector('.d-view__description')!.textContent).toBe('2');
+  });
+
+  describe('moving favorites', () => {
+    const favorites = () => [...(menu().querySelector('[data-view=favorites]')?.querySelectorAll<HTMLElement>('.d-dashboards-menu__entry') ?? [])];
+    const favoriteTitles = () => favorites().map((row) => row.querySelector('a')!.firstChild!.textContent);
+    const stored = () => JSON.parse(localStorage.getItem('dashica:global:dashboards:favorites')!).map((f: { title: string }) => f.title);
+
+    beforeEach(() => {
+      // Orders, then Checkout
+      for (const n of [0, 1]) [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')].at(-2 + n)!.click();
+      expect(favoriteTitles()).toEqual(['Orders', 'Checkout']);
+      // jsdom lays out nothing: each favorite one row of 24px below the one before
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const top = Math.max(0, favorites().indexOf(this)) * 24;
+        return { top, bottom: top + 24, left: 0, right: 0, width: 0, height: 24, x: 0, y: top, toJSON: () => ({}) };
+      });
+    });
+
+    const grip = (title: string) => favorites().find((row) => row.querySelector('a')!.firstChild!.textContent === title)!.querySelector('.d-dashboards-menu__grip')!;
+    const pointer = (target: EventTarget, type: string, clientY: number) => target.dispatchEvent(new PointerEvent(type, { clientY, bubbles: true, cancelable: true }));
+
+    it('moves a favorite dragged by its grip past the middle of another, and stores the order', () => {
+      pointer(grip('Checkout'), 'pointerdown', 30);
+      pointer(document, 'pointermove', 20);
+      expect(favoriteTitles()).toEqual(['Orders', 'Checkout']);
+      pointer(document, 'pointermove', 6);
+      expect(favoriteTitles()).toEqual(['Checkout', 'Orders']);
+      pointer(document, 'pointerup', 6);
+      expect(favoriteTitles()).toEqual(['Checkout', 'Orders']);
+      expect(stored()).toEqual(['Checkout', 'Orders']);
+      // the next move starts from the order stored
+      pointer(grip('Checkout'), 'pointerdown', 6);
+      pointer(document, 'pointermove', 40);
+      pointer(document, 'pointerup', 40);
+      expect(stored()).toEqual(['Orders', 'Checkout']);
+    });
+
+    it('puts a dragged favorite back on Escape', () => {
+      pointer(grip('Checkout'), 'pointerdown', 30);
+      pointer(document, 'pointermove', 6);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(favoriteTitles()).toEqual(['Orders', 'Checkout']);
+      pointer(document, 'pointerup', 6);
+      expect(stored()).toEqual(['Orders', 'Checkout']);
+    });
+
+    it('moves a favorite with Alt+ArrowUp / Alt+ArrowDown, its focused part keeping the focus', () => {
+      const linkOf = (title: string) => favorites().find((row) => row.querySelector('a')!.firstChild!.textContent === title)!.querySelector('a')!;
+      expect(linkOf('Checkout').getAttribute('aria-keyshortcuts')).toBe('Alt+ArrowUp Alt+ArrowDown');
+      const press = (key: string, altKey = true) =>
+        (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key, altKey, bubbles: true, cancelable: true }));
+      linkOf('Checkout').focus();
+      press('ArrowUp', false);
+      expect(favoriteTitles()).toEqual(['Orders', 'Checkout']);
+      press('ArrowUp');
+      expect(favoriteTitles()).toEqual(['Checkout', 'Orders']);
+      expect(stored()).toEqual(['Checkout', 'Orders']);
+      expect(document.activeElement).toBe(linkOf('Checkout'));
+      // at the top already
+      press('ArrowUp');
+      expect(favoriteTitles()).toEqual(['Checkout', 'Orders']);
+      press('ArrowDown');
+      expect(stored()).toEqual(['Orders', 'Checkout']);
+      expect(document.activeElement).toBe(linkOf('Checkout'));
+    });
   });
 
   it('finds the dashboards in search everywhere, with their group', async () => {

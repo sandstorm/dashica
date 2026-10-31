@@ -240,3 +240,4 @@ export interface BarPlacement {
 }
 
 export { UiHost } from './ui-impl';
+export { createView, type ViewOptions } from './views/view';

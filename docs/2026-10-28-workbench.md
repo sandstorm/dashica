@@ -121,7 +121,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
 | Tab bar | above the filter bar: a tab per open page, the active one selected, × to close (§3.4.1) |
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the title bar adds a SQL chip (step 7b, §3.8) |
-| Left side panel | "Dashboards" (menu groups, favorites, search); later Explore's widget tree |
+| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Bottom panel | Debug (query, EXPLAIN); later row details |
 | Status bar | query count, loading, failures, timings |
@@ -282,6 +282,32 @@ names nothing and the dashboard renders.
 | `workbench/workbench.ts` | no window-wide `QueryHost`; the `page` host makes one per tab and draws into the `TabBar` |
 | `extensions/dashboard-page`, `dashboards`, `search-everywhere`, `chart-link` | `context.hash`; "Open in new tab"; Cmd / Ctrl+Enter; `page.activeTab.url` instead of `location` |
 
+#### 3.4.2 Views in a panel (step 7c)
+
+A panel's body can hold several **views** one below the other, each a header (chevron, title, while closed a muted
+description such as its count, then optional action buttons) above a body the header closes and opens. Views scroll
+with the panel; a header stays at the top while its body scrolls past (`position: sticky`); no sashes between views
+*(proposed)*. First users: the Dashboards panel ("Favorites", then a view per menu group, replacing the group headings,
+the rule between groups and the guide line); later Debug's sections.
+
+- **API: a pure helper, no registry** *(proposed)*: `createView({ id, title, description?, actions?, collapsed?,
+  state, body })` (exported from `hosts/ui/ui.ts`, in `hosts/ui/views/view.ts`) returns the view's element; its owner
+  puts it where it wants and draws it anew when its content changes. No `panel.registerView`: the owner already draws
+  its panel's content, and a registry would keep view elements alive beside it.
+- **Collapsed state:** kept in the owner's memento (`state`) under `views.<id>.collapsed`, read whenever the view is
+  drawn; Dashboards keeps it in `globalState`, across visits *(proposed)*. `collapsed` is the state before the viewer
+  chose one.
+- **Keyboard:** the title is a `<button aria-expanded aria-controls>` inside an `<h2>` (Enter / Space toggle);
+  ArrowLeft closes, ArrowRight opens *(proposed)*. The actions sit beside the heading, never inside the button.
+- **Favorites in their order:** the stored `globalState` `favorites` is the order shown; a new favorite goes last. A
+  favorite moves by its grip (in front of it, shown on hover): pointer events (mouse, pen, touch), not HTML5 drag and
+  drop, so the row moves in the list as the pointer passes the middle of another and jsdom can test it *(proposed)*;
+  releasing stores the order, Escape or `pointercancel` puts it back. From the keyboard: Alt+ArrowUp / Alt+ArrowDown on
+  any part of a favorite, the focus staying on that part; the link announces the keys (`aria-keyshortcuts`)
+  *(proposed)*.
+- Kept: a favorite names its group, muted after its title; a star toggled keeps its place on screen; the page shown
+  tinted. The entries' text lines up with the view's title.
+
 ### 3.5 Extensions and UI code
 
 As in Zwiebelfisch: an extension is `{ id, contributes, activate(context) }`; it registers into the hosts' contribution
@@ -297,7 +323,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `ui` | side / bottom panels, title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
+| `ui` | side / bottom panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
 | `widgets` | `registerWidget` (§3.6) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
@@ -1173,6 +1199,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7a.5 ✅ | reload: the tabs in sessionStorage, the background ones restored unloaded; Playwright `e2e/tabs.spec.ts` (open, switch, the address bar, Back, reload, paused refresh). ✅ (key `dashica:workbench:tabs`, the layout's memento) `e2e/tabs.spec.ts` not run | reload keeps the tabs |
 | (spike) | `spike/perspective`, rebased onto 7a, in its own commit (`frontend/extensions/explore-view/**`, `e2e/explore-view.spec.ts`, the Perspective doc): the renderer of kind `explore`; "Open in Explore view" is `navigate(<tab's URL>#explore=<id>, { newTab: true })`; "Close" is `context.close()`; its `showOverContent` in `hosts/ui` and its hash-keeping in `query-impl.ts` are dropped (the tab's URL keeps the hash) | the Explore view as a tab |
 | 7b ✅ | **SQL filter as a chip** (decided 2026-10-31, §3.8 "The SQL filter is a chip"): one list of chips (`FilterChip`, `FiltersModel.chips` / `replace`, `sql` / `setSql` / `fields` gone); one `?sql=` per SQL chip, chip order kept across `f` and `sql`, a single old `?sql=` one chip; the funnel adds a SQL chip, every chip edited and removed alike; a filter button a toggle, its chip labelled by its title (`buttonOf`); Go `QueryState.Sql []string`, `SqlClause` ANDs each in parentheses. Files: `lib/httpserver/query_state.go`, `time_range.go` (+ tests), `frontend/hosts/query/{query,query-impl,active-query}.ts` (+ tests), `frontend/extensions/filters/*`, `e2e/filter-chips.spec.ts`; no generated file changes. ✅ 2026-10-31 (vitest and Go tests without ClickHouse green; Playwright written, not run), deviations: `FilterChip = FieldFilter \| SqlFilter` (`FieldFilter` has `kind: 'field'`, `SqlFilter` `{kind: 'sql', sql}`); a SQL chip of only spaces is no chip in the URL, in `add` / `replace` and in Go (`TrimSpace`), not only an empty one; the `=` / `≠` of a structured chip flips its op at once (`replace`), in edit mode it flips the edit's op; the funnel is titled "Add a SQL filter" (its label "Filters" kept); filter buttons show only on a page with `filterBar`, as before; a chip of a `...` button is labelled `Title: value` (several `...` joined with `, `), one of a plain button its title alone; pressing a pressed button removes its chips one by one (one refresh each); tests also in `table`, `widgets`, `dashboard-page`, `bar-vertical`. **Open:** a chip can match two buttons (`/p_wetell/app`: "Host = app.wetell.de" and "Host" with `'...'`): both show pressed, the chip is labelled by the first in page order, either releases it | one filter bar of chips; old links open as before |
+| 7c ✅ | **views in a panel** (§3.4.2): `createView` (`hosts/ui/views/view.ts`: header button, ArrowLeft / ArrowRight, collapsed state in the owner's memento); the Dashboards panel as views ("Favorites", one per menu group; headings, rules and the guide line gone); favorites moved by a grip (pointer events) and Alt+ArrowUp / Alt+ArrowDown, the order stored in `favorites`; `e2e/dashboards-views.spec.ts`. ✅ 2026-10-31 (vitest green; Playwright written, not run), deviations: a pure helper instead of `panel.registerView` (no `setTitle` / `dispose`: the owner draws the view anew); a view's description shows only while it is closed; headers stick to the panel's top | collapsible groups, favorites in the viewer's order |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
 | Risk | Mitigation |
