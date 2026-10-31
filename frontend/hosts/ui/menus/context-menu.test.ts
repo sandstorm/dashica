@@ -78,6 +78,26 @@ describe('ContextMenu', () => {
     expect(host.querySelector('[role=listbox]')!.classList.contains('d-workbench__quick-pick-list--checks')).toBe(true);
   });
 
+  it('shows an entry that is not `enabled` greyed with its tooltip, and runs nothing when it is chosen', () => {
+    const items: MenuItem[] = [
+      { command: 'exploreView.open', title: 'Explore', enabled: (context) => context.favorite === true, tooltip: 'Explore is not enabled (explore.enabled)' },
+      { command: 'dashboards.copyLink', title: 'Copy link' },
+    ];
+    const { host, menu, items: options, field, ran, isOpen } = setup(menusWith('workbench/global', items));
+    menu.show('workbench/global', { anchor: host, title: 'Dashica', context: { favorite: false } });
+    expect(options().map((entry) => [entry.getAttribute('aria-disabled'), entry.title])).toEqual([
+      ['true', 'Explore is not enabled (explore.enabled)'],
+      [null, ''],
+    ]);
+    options()[0].click();
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect([ran, isOpen()]).toEqual([[], true]);
+    menu.show('workbench/global', { anchor: host, title: 'Dashica', context: { favorite: true } });
+    expect(options()[0].hasAttribute('aria-disabled')).toBe(false);
+    options()[0].click();
+    expect(ran).toEqual([['exploreView.open', true]]);
+  });
+
   it("runs a chosen entry's command with the menu's arguments right after closing, the focus back on the trigger", () => {
     const { show, items, ran, isOpen } = setup();
     show(false);

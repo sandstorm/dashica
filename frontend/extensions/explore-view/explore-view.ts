@@ -1,13 +1,14 @@
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
+import type { MenuItem } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { chartTitle, renderExploreView, type ChartWithRows, type Perspective } from './view';
 import './explore-view.css';
 
 /**
- * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore.enabled): "Open in Explore view"
- * in a chart's menu (`widget/context`, charts with a `rowsUrl`) opens a new tab with the chart's result in
- * `<perspective-viewer>`, its config rebuilt from the chart's props, while the tab's time range and filters keep
+ * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore.enabled; else only "Explore"
+ * greyed in the global menu, EXPLORE_NOT_ENABLED): "Open in Explore view" in a chart's menu (`widget/context`, charts
+ * with a `rowsUrl`) opens a new tab with the chart's result in `<perspective-viewer>`, its config rebuilt from the chart's props, while the tab's time range and filters keep
  * working on it. "SQL" shows the chart's SQL as it runs, its placeholders kept and their values beside it; the viewer
  * edits it and runs it (`#explore=3&exploreSql=…`), and the page's time range and filters no longer apply until
  * "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
@@ -19,7 +20,10 @@ import './explore-view.css';
 export const exploreView: Extension = {
   id: 'exploreView',
   activate({ ui, page, widgets, commands, globalState, subscriptions }) {
-    if (!page.workbench.explore) return;
+    if (!page.workbench.explore) {
+      subscriptions.push(ui.registerMenuItem('workbench/global', EXPLORE_NOT_ENABLED));
+      return;
+    }
     subscriptions.push(
       page.registerPageRenderer('explore', (el, shown, context) => {
         const id = new URLSearchParams(context.hash.slice(1)).get('explore') ?? '';
@@ -63,6 +67,18 @@ export const exploreView: Extension = {
       }),
     );
   },
+};
+
+/**
+ * The global menu's only trace of the Explore view while it is not enabled: "Explore" greyed, its tooltip saying so.
+ * Its command `exploreView.open` comes with Explore without a chart (workbench step 8i).
+ */
+export const EXPLORE_NOT_ENABLED: MenuItem = {
+  command: 'exploreView.open',
+  title: 'Explore',
+  group: 'explore',
+  enabled: () => false,
+  tooltip: 'Explore is not enabled (explore.enabled)',
 };
 
 /** The URL of the Explore view of the chart `id` on the page at `url` (a tab's): its path and query, the hash `#explore=<id>`. */

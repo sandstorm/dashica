@@ -184,8 +184,9 @@ function isSeparator<T extends QuickPickItem>(item: T | QuickPickSeparator): ite
 }
 
 /**
- * Picks one item: a listbox the field steers (arrows, Enter) with the active item marked; groups under headings. The
- * listbox's id (and its rows', prefixed by it) differs from every other picker's on the page.
+ * Picks one item: a listbox the field steers (arrows, Enter) with the active item marked; groups under headings; a
+ * `disabled` item is shown and can be active, but is not picked. The listbox's id (and its rows', prefixed by it)
+ * differs from every other picker's on the page.
  */
 class OnePicker<T extends QuickPickItem> {
   #options: { item: T; element: HTMLElement }[] = [];
@@ -231,7 +232,7 @@ class OnePicker<T extends QuickPickItem> {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const active = this.#options[this.#active];
-      if (active) this.pick(active.item, event.metaKey || event.ctrlKey);
+      if (active && !active.item.disabled) this.pick(active.item, event.metaKey || event.ctrlKey);
     }
   }
 
@@ -249,10 +250,12 @@ class OnePicker<T extends QuickPickItem> {
     const option = itemElement(item);
     option.setAttribute('role', 'option');
     if (item.checked !== undefined) option.setAttribute('aria-checked', String(item.checked));
+    if (item.disabled) option.setAttribute('aria-disabled', 'true');
+    if (item.tooltip) option.title = item.tooltip;
     option.id = `${this.parts.listbox.id}-${++this.#rows}`;
     // keeps the focus in the field
     option.addEventListener('mousedown', (event) => event.preventDefault());
-    option.addEventListener('click', (event) => this.pick(item, event.metaKey || event.ctrlKey));
+    option.addEventListener('click', (event) => item.disabled || this.pick(item, event.metaKey || event.ctrlKey));
     this.#options.push({ item, element: option });
     return option;
   }

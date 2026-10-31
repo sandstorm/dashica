@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Tests for exploreView in explore-view.ts: nothing while Explore is not enabled, the chart menu's entry opening a tab,
-// the view as the page kind `explore` named in the tab's hash, its title, Close, the widget found in the page's tree.
+// Tests for exploreView in explore-view.ts: only "Explore" greyed in the global menu while Explore is not enabled, the
+// chart menu's entry opening a tab, the view as the page kind `explore` named in the tab's hash, its title, Close, the
+// widget found in the page's tree.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
@@ -9,7 +10,7 @@ import type { ExtensionContext } from '../../hosts/extension-host/extension-host
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { exploreUrl, exploreView, findWidget } from './explore-view';
+import { EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
 
 const chart: WidgetNode = {
   type: 'barVertical',
@@ -78,12 +79,14 @@ function renderTab(hash: string) {
 }
 
 describe('exploreView', () => {
-  it('registers nothing while Explore is not enabled: no menu entry, no page kind', () => {
+  it('registers only "Explore" greyed in the global menu while Explore is not enabled: no chart menu entry, no page kind', () => {
     for (const subscription of subscriptions.splice(0).reverse()) subscription.dispose();
     menuItems = [];
+    renderers.clear();
     activate(false);
-    expect(subscriptions).toEqual([]);
-    expect(menuItems).toEqual([]);
+    expect(menuItems).toEqual([{ menuId: 'workbench/global', ...EXPLORE_NOT_ENABLED }]);
+    expect(EXPLORE_NOT_ENABLED).toMatchObject({ title: 'Explore', tooltip: 'Explore is not enabled (explore.enabled)' });
+    expect(EXPLORE_NOT_ENABLED.enabled!({})).toBe(false);
     expect(renderers.size).toBe(0);
   });
 

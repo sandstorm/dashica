@@ -1,7 +1,7 @@
 // Tests for the top row and the side panels' chrome (docs/2026-10-28-workbench.md §3.4, step 8d): one top bar with the
 // Dashica icon, the tabs, "+" and the time range, no title bar; "+" opens the start page in a new tab; search
 // everywhere opens from its button in the left rail, whose tooltip names its key; a panel shows under a header with
-// its name in caps and "…", whose "Hide" closes it.
+// its name in caps and "…", whose "Hide" closes it; with Explore off the global "…" shows "Explore" greyed (8g).
 import {expect, test} from '@playwright/test';
 
 test.beforeEach(async ({page}) => {
@@ -43,4 +43,15 @@ test('shows a panel under its header in caps, whose "…" hides it', async ({pag
     await page.getByRole('option', {name: 'Hide'}).click();
     await expect(header).toBeHidden();
     await expect(page.getByTestId('wb-panel-toggle-dashboards')).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('with Explore off, the global "…" shows only "Explore", greyed, its tooltip saying why', async ({page, request}) => {
+    const workbench = await (await request.get('/workbench.json')).json();
+    test.skip(workbench.explore, 'Explore is on (explore.enabled)');
+    await page.getByTestId('wb-global-menu').click();
+    const explore = page.getByRole('option', {name: 'Explore'});
+    await expect(explore).toHaveAttribute('aria-disabled', 'true');
+    await expect(explore).toHaveAttribute('title', 'Explore is not enabled (explore.enabled)');
+    await explore.click();
+    await expect(page.getByRole('tab')).toHaveCount(1);
 });

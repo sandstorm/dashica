@@ -146,6 +146,10 @@ export interface QuickPickItem {
   readonly icon?: QuickPickIcon;
   /** An item that is on or off (a menu's toggled entry): a check mark in front while on; `undefined` for any other. */
   readonly checked?: boolean;
+  /** Shown greyed; choosing it does nothing (a menu's entry that is not enabled). */
+  readonly disabled?: boolean;
+  /** Shown on hover over the item. */
+  readonly tooltip?: string;
 }
 
 /** An item's icon: what it shows and what it says to a screen reader. */

@@ -59,6 +59,10 @@ export interface MenuItem<C extends object = MenuContext> {
   readonly icon?: string;
   /** Whether the entry shows, asked each time the menu is shown; default: always. */
   readonly when?: (context: C) => boolean;
+  /** Whether the entry can be chosen, asked each time the menu is shown; one that cannot shows greyed; default: always. */
+  readonly enabled?: (context: C) => boolean;
+  /** Shown on hover over the entry: what it does, or why it is greyed ("Explore is not enabled (explore.enabled)"). */
+  readonly tooltip?: string;
   /** For an entry that turns something on or off: whether it is on (a check mark), asked each time the menu is shown. */
   readonly toggled?: (context: C) => boolean;
   /** Entries are grouped by this: `navigation` first, the others by name, a separator between groups; default ''. */
