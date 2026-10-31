@@ -4,7 +4,7 @@ import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
-import type { MenuAnchor, UiApi } from '../../hosts/ui/ui';
+import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type FilterableTable } from './add-filter';
@@ -80,6 +80,15 @@ export function buttonOf(chip: FilterChip, buttons: readonly FilterButton[]): { 
   const made = chip.kind === 'pill' ? pillButton(chip.key) : undefined;
   const button = made && buttons.find(({ queryPart }) => queryPart === made.button);
   return button && { button, value: made.value };
+}
+
+/**
+ * The condition of the filter button with `queryPart` for `value`, as its page makes it (lib/dashboard/filter,
+ * `NewButton`): each `...` replaced by `value` as a ClickHouse string literal, `\` and `'` escaped with a backslash
+ * (sql.Quote). Only what the input box shows while the value is typed; the pill is the page's.
+ */
+export function buttonCondition(queryPart: string, value: string): string {
+  return queryPart.replaceAll('...', `'${value.replace(/[\\']/g, '\\$&')}'`);
 }
 
 /**
@@ -337,8 +346,9 @@ class FilterBar {
 
   /**
    * Adds `button`'s pill: the one `page.json` signed, or for a button with `...` (`path ILIKE concat(..., '%')`) the
-   * one its page makes of the value the viewer is asked for, in an input box below `el`; with `index`, that pill
-   * replaces the chip there (a new value for a pressed button), the value shown first.
+   * one its page makes of the value the viewer is asked for, in an input box below `el` named after the button, the
+   * condition it makes shown below the field as it is typed (`buttonCondition`), an empty one refused; with `index`,
+   * that pill replaces the chip there (a new value for a pressed button), the value shown first and selected.
    */
   async #press(button: FilterButton, el: HTMLElement, index?: number): Promise<void> {
     if (!button.url) {
@@ -347,9 +357,11 @@ class FilterBar {
     }
     const shown = index === undefined ? undefined : this.query.get(FILTERS)[index];
     const value = await this.ui.showInputBox({
-      title: 'Parameter value',
-      prompt: `${button.title}: ${button.queryPart}`,
+      title: button.title,
+      placeholder: button.queryPart,
       value: shown && buttonOf(shown, [button])?.value,
+      validateInput: (typed) =>
+        typed === '' ? 'Enter a value.' : { message: buttonCondition(button.queryPart, typed), severity: InputBoxValidationSeverity.Info },
       anchor: el,
     });
     if (!value) return;

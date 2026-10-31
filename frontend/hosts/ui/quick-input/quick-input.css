@@ -1,7 +1,8 @@
 /* The quick pick and the input box (see QuickInput in quick-input.ts): a box at the top in the middle of the
    workbench or fixed at its anchor, a field, a progress line, the items in groups under headings (or only a line
    between them), check marks and icons in front, the matched characters marked; a menu's field out of sight until
-   more than a letter is typed, its opener tinted while it is open. Its values are tokens. */
+   more than a letter is typed, its opener tinted while it is open; an input box's validation message. Its values are
+   tokens. */
 .d-workbench__quick-pick {
   position: absolute;
   z-index: 40;
@@ -94,7 +95,8 @@ button[aria-haspopup][aria-expanded='true'] { background: var(--color-accent-sub
 .d-workbench__quick-pick-empty { padding: var(--space-1) var(--space-2); color: var(--color-text-muted); }
 .d-workbench__quick-pick-empty[hidden],
 .d-workbench__quick-pick-progress[hidden],
-.d-workbench__quick-pick-hint[hidden] { display: none; }
+.d-workbench__quick-pick-hint[hidden],
+.d-workbench__quick-pick-message[hidden] { display: none; }
 .d-workbench__quick-pick-progress {
   height: 2px;
   border-radius: var(--radius-sm);
@@ -104,3 +106,7 @@ button[aria-haspopup][aria-expanded='true'] { background: var(--color-accent-sub
 @keyframes d-quick-pick-progress { from { background-position: -50% 0; } to { background-position: 150% 0; } }
 @media (prefers-reduced-motion: reduce) { .d-workbench__quick-pick-progress { animation: none; opacity: 0.4; background: var(--color-accent); } }
 .d-workbench__quick-pick-hint { padding: var(--space-1) var(--space-1) 0; border-top: var(--border-width) solid var(--color-border); color: var(--color-text-muted); font-size: var(--text-xs); }
+/* an input box's validation message below the field: what the text makes (a filter button's condition), or in the
+   danger colour what is wrong with it */
+.d-workbench__quick-pick-message { padding: 0 var(--space-1); color: var(--color-text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.d-workbench__quick-pick-message--error { color: var(--color-danger); }

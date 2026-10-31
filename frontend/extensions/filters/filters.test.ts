@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Tests for filters.ts: the filter bar per page, the chips (pills and SQL, added, SQL ones edited, removed), no
 // funnel in the top bar, the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
-// button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
+// button's value asked for in an input box (the condition it makes below the field, buttonCondition; an empty one
+// refused), made a pill by its page and shown beside it, a new value in its chip's
 // place, "Add filter" while a chart filters a table or SQL chips are taken, its "SQL condition…" adding a SQL chip; a
 // field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
 // input box), each made again by a chart of the page (a column's by the table's first chart), one no chart makes only
@@ -14,7 +15,7 @@ import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashi
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { FILTERS, addChip, replaceChip, type FilterChip } from './chips';
-import { buttonOf, filters } from './filters';
+import { buttonCondition, buttonOf, filters } from './filters';
 
 let query: QueryHost;
 let topBar: HTMLElement;
@@ -24,7 +25,7 @@ let ui: object;
 let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
-let asked: { title?: string; prompt?: string; value?: string; anchor?: unknown }[];
+let asked: { title?: string; prompt?: string; placeholder?: string; value?: string; validateInput?: (value: string) => unknown; anchor?: unknown }[];
 /** The quick picks shown (all cancelled, unless `picked` names the label to choose): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
 let picked: string | undefined;
@@ -97,7 +98,7 @@ beforeEach(() => {
       (name === 'top' ? topBar : bar).appendChild(el);
       return { dispose: () => el.remove() };
     },
-    showInputBox: async (options: { title?: string; prompt?: string; value?: string; anchor?: unknown }) => (asked.push(options), answer),
+    showInputBox: async (options: (typeof asked)[number]) => (asked.push(options), answer),
     showQuickPick: async (items: { label?: string; kind?: number }[], options: { anchor?: unknown }) => (
       picks.push({ labels: items.map((i) => (i.kind === -1 ? `— ${i.label}` : i.label!)), anchor: options.anchor }), items.find((i) => i.label === picked)
     ),
@@ -145,6 +146,14 @@ const key = (field: Element, k: string, init: KeyboardEventInit = {}) => field.d
 const type = (text: string) => {
   editor()!.value = text;
 };
+
+describe('buttonCondition', () => {
+  it('writes the value in for each `...` as a ClickHouse string literal, `\\` and `\'` escaped with a backslash', () => {
+    expect(buttonCondition("event_original.username ILIKE concat('%', ..., '%')", 'acme')).toBe("event_original.username ILIKE concat('%', 'acme', '%')");
+    expect(buttonCondition('a = ... OR b = ...', "x'\\y")).toBe("a = 'x\\'\\\\y' OR b = 'x\\'\\\\y'");
+    expect(buttonCondition('status >= 500', 'x')).toBe('status >= 500');
+  });
+});
 
 describe('buttonOf', () => {
   const buttons = shop.filterButtons;
@@ -218,7 +227,7 @@ describe('filters', () => {
     pressed.click();
     await vi.waitFor(() => expect(held()).toEqual([pathChip("O'Brien")]));
     expect(fetched).toEqual([`/p/shop/button?i=1&value=O%27Brien`]);
-    expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: undefined, anchor: pressed }]);
+    expect(asked).toEqual([expect.objectContaining({ title: 'Path', placeholder: PATH, value: undefined, anchor: pressed })]);
     expect([button('Path').getAttribute('aria-pressed'), values('Path').map((b) => b.textContent), chips()]).toEqual(['true', ["O'Brien"], []]);
     query.set(FILTERS, []);
     answer = undefined;
@@ -233,7 +242,14 @@ describe('filters', () => {
     const value = values('Path')[0];
     value.click();
     await vi.waitFor(() => expect(held()).toEqual([chipOf('host = a'), pathChip('/b'), chipOf('host = b')]));
-    expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: '/a', anchor: value }]);
+    expect(asked).toEqual([expect.objectContaining({ title: 'Path', value: '/a', anchor: value })]);
+  });
+
+  it('shows below the field the condition a typed value makes, as the page will write it; refuses an empty value', () => {
+    button('Path').click();
+    const { validateInput } = asked[0]!;
+    expect(validateInput!("O'Brien")).toEqual({ message: "path ILIKE concat('O\\'Brien', '%')", severity: 1 });
+    expect(validateInput!('')).toBe('Enter a value.');
   });
 
   it('adds nothing when the page refuses the value', async () => {

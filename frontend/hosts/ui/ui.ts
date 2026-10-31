@@ -44,8 +44,9 @@ export interface UiApi {
    */
   showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options?: QuickPickOptions): Promise<T | undefined>;
   /**
-   * Asks for a text in a box at `options.anchor` (else at the top in the middle): resolves with it on Enter, once the
-   * box is gone and the focus back, or `undefined` when it was hidden without. As VS Code's `window.showInputBox`.
+   * Asks for a text in a box at `options.anchor` (else at the top in the middle), `options.validateInput`'s message
+   * below the field: resolves with it on Enter (unless that message is an error), once the box is gone and the focus
+   * back, or `undefined` when it was hidden without. As VS Code's `window.showInputBox`.
    */
   showInputBox(options?: InputBoxOptions): Promise<string | undefined>;
   /**
@@ -127,9 +128,28 @@ export interface InputBoxOptions {
   readonly placeholder?: string;
   /** The text in the field at first. */
   readonly value?: string;
+  /** The part of `value` selected at first, as [start, end) offsets; else all of it. As VS Code's. */
+  readonly valueSelection?: readonly [number, number];
+  /**
+   * Checks the text when the box shows, as it is typed and on Enter; what it says shows below the field. A text (or an
+   * `Error` message) says what is wrong, and Enter does nothing; an `Info` message only tells (the condition a filter
+   * button's value makes); `undefined`, `null` or '' that all is fine. As VS Code's.
+   */
+  readonly validateInput?: (value: string) => string | InputBoxValidationMessage | undefined | null;
   /** Where the box opens, as `QuickPickOptions.anchor`. */
   readonly anchor?: MenuAnchor;
 }
+
+/** What `InputBoxOptions.validateInput` says of a text, and whether it lets Enter through (`severity`). */
+export interface InputBoxValidationMessage {
+  readonly message: string;
+  readonly severity: InputBoxValidationSeverity;
+}
+
+/** How a validation message counts: `Info` lets Enter through, `Error` does not. VS Code's values. */
+export const InputBoxValidationSeverity = { Info: 1, Error: 3 } as const;
+
+export type InputBoxValidationSeverity = (typeof InputBoxValidationSeverity)[keyof typeof InputBoxValidationSeverity];
 
 /** How an item of a quick pick was picked. */
 export interface QuickPickAccept {

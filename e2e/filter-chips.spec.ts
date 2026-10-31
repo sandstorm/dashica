@@ -3,7 +3,8 @@
 // pointer is on it, an unsigned pill fails the
 // charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26), a chip's × removes it from the URL, a pill's operator and value are edited in
 // place on a page whose charts filter its table, a filter button toggles in place as a signed pill, without a chip; a
-// button with `...` asks its value, shows it beside it and takes a new one in its place.
+// button with `...` asks its value (the condition it makes shown below the field, an empty one refused), shows it
+// beside it and takes a new one in its place (the current value selected).
 //
 // The page defaults to the Sandstorm instance's "/clickhouse/table_sizes": its tables use `FromFileWithoutFilters`,
 // so every chart ignores every pill. Another page: DASHICA_E2E_FILTER_PAGE. The pills are signed by a chart of
@@ -180,13 +181,19 @@ test('a filter button toggles in place, pressed while its filter is set, without
     await expect(page).not.toHaveURL(/[?&]f=/);
 });
 
-test('a filter button with `...` asks its value, shows it beside it, and a click on it takes a new one', async ({page}) => {
+test('a filter button with `...` asks its value, the condition below the field, shows it beside it, and a click on it takes a new one', async ({page}) => {
     await page.goto(BUTTON_PAGE);
     const bar = page.getByTestId('wb-filter-bar');
     const button = bar.getByRole('button', {name: VALUE_BUTTON, exact: true});
     await button.click();
-    const field = page.getByRole('textbox', {name: 'Parameter value'});
+    // the box is named after the button; below the field the condition the value makes, an empty one refused
+    const field = page.getByRole('textbox', {name: VALUE_BUTTON});
+    const message = page.locator('.d-workbench__quick-pick-message');
+    await expect(message).toHaveText('Enter a value.');
+    await field.press('Enter');
+    await expect(field).toBeVisible();
     await field.fill("/it's");
+    await expect(message).toContainText("'/it\\'s'");
     await field.press('Enter');
     await expect(button).toHaveAttribute('aria-pressed', 'true');
     const value = bar.getByRole('group', {name: VALUE_BUTTON}).locator('.d-filter-button__value');
@@ -197,6 +204,8 @@ test('a filter button with `...` asks its value, shows it beside it, and a click
 
     await value.click();
     await expect(field).toHaveValue("/it's");
+    // the current value selected: typing replaces it
+    expect(await field.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd])).toEqual([0, "/it's".length]);
     await field.fill('/api');
     await field.press('Enter');
     await expect(value).toHaveText('/api');

@@ -1020,7 +1020,8 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
   where it is, pressed (`aria-pressed="true"`), its `title` its `queryPart`. A pressed `...` button shows each value
   beside its title (`Host` `app.wetell.de`, one control) *(proposed)*; a click on a value asks a new one and replaces
   that chip in place, a click on the title removes every chip of the button. Pressing it otherwise adds its pill
-  (asking for `...` with `showInputBox`). So a link with the key of "Errors only" opens with it pressed and no chip;
+  (asking for `...` with `showInputBox`, named after the button, the condition the value makes shown below the field
+  as it is typed, an empty value refused; since 9z, D37). So a link with the key of "Errors only" opens with it pressed and no chip;
   on a page without that button it is a pill chip, labelled with the button's title (`Path: /api`) *(proposed)*. The
   SQL chips stay unsigned (D6): with `filters.sqlEnabled` on (§3.15 D16), a `?sql=` link still runs the viewer's own
   SQL in every chart's WHERE, also while Explore is off.
@@ -1118,7 +1119,9 @@ interface UiApi {
 
   showQuickPick<T>(items: (T | QuickPickSeparator)[], o?: { title?; placeholder?; anchor?; menu? }): Promise<T | undefined>;
                                           // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s)
-  showInputBox(o?: { title?; prompt?; placeholder?; value?; anchor? }): Promise<string | undefined>;   // a button's `...`
+  showInputBox(o?: { title?; prompt?; placeholder?; value?; valueSelection?; validateInput?; anchor? }): Promise<string | undefined>;
+                                          // a button's `...`; validateInput(value): string (an error, Enter blocked) or
+                                          // { message, severity: Info | Error } below the field, live (9z, D37)
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
   showInformationMessage / showWarningMessage / showErrorMessage(message: string, ...items): Promise<…>;
@@ -1652,6 +1655,18 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   entries) or a function (`TIME`'s own entries, sent also when it is the default, since the server needs a time range
   and does not know the page's); the form widgets' "No extension keeps the page params" error is gone, as `PARAMS` is
   always there; `dashboardPage` no longer touches `wp`.
+- **D37 The input box validates as typst-experiment's (9z, decided 2026-10-31):** `InputBoxOptions` gets
+  `valueSelection` (the part of `value` selected at first, else all of it) and `validateInput(value)`, as VS Code's:
+  run when the box shows, on each keystroke and on Enter, its answer shown below the field; a text or an `Error`
+  message (`InputBoxValidationSeverity`) blocks Enter, an `Info` message only tells. That `Info` message is the prompt
+  that follows the typed value (no second option). A filter button with `...` uses it: the box is named after the
+  button, its placeholder the button's `queryPart`, and below the field shows the raw condition the value makes
+  (`buttonCondition`: each `...` replaced by the value as `sql.Quote` writes it, e.g.
+  `event_original.username ILIKE concat('%', 'acme', '%')`) — the preview only, the page still makes the signed key;
+  an empty value is refused ("Enter a value."); a new value for a pressed button starts with the current one filled in
+  and selected. *(proposed)* `validateInput` is synchronous (nothing asks the server while typing) and the severities
+  are VS Code's `Info` and `Error` only (no `Warning`); the box's title stays its accessible name, not a visible line;
+  the step's id is 9z, as 9x was taken by D32.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -1797,7 +1812,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   200 nor 500; as text it would match both). **Open:** written, not run (the sandbox blocks ClickHouse).
 - **The client:** pressing a button without `...` adds `{key, label: title}`; one with asks the value
   (`showInputBox` below the button) and adds the page's answer; a pressed `...` button is a group of its title
-  (releases it) and a button per value (`d-filter-button__value`: asks a new value, the old one filled in, and
+  (releases it) and a button per value (`d-filter-button__value`: asks a new value, the old one filled in and selected, and
   `replace`s that chip at its index, unless the chips changed meanwhile). A refused value is logged, nothing added.
   The buttons work with `filters.sqlEnabled` off.
 - **Tests:** Go `filter` (`NewButton`, its key back through `Open`, `Apply` to a table, another one, a SQL file
@@ -1980,6 +1995,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9t ✅ | **D31 enablement belongs to the command** (§3.11, §3.15): `Commands.registerCommand(id, handler, options?)` with `CommandOptions` `{enablement, disabledReason}`, `Commands.enablement(id)` → `CommandEnablement`; `CommandsHost` keeps the options, skips a key (and a double tap) whose command is not enabled, `executeCommand` ignores it; `ContextMenu` sets `QuickPickItem.disabled` / `tooltip` from it; `SideBar.#railButton` greys a button (`aria-disabled`, `window-layout.css`) and ignores its click; `commandSearch` and `SearchPick`'s rows carry `disabled` / `tooltip`; `MenuItem.enabled` / `tooltip` deleted; `explore-view.ts` (`EXPLORE_NOT_ENABLED` as `CommandOptions`, "Start from chart…"), `details.ts`, `debug.ts` migrated. Files: `frontend/hosts/commands/{commands,commands-impl}.ts`, `frontend/hosts/ui/{ui.ts,menus/context-menu.ts,layout/side-bar.ts,layout/window-layout.css}`, `frontend/extensions/search-everywhere/ui/{command-search,search-pick}.ts`, `frontend/extensions/{explore-view/explore-view,details/details,debug/debug}.ts` (+ tests, new `command-search.test.ts`). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; no e2e spec needed a change, Playwright not run), deviations: the step's id is 9t, as 9r was taken by D28; enabled entries have no hover any more; the new reasons' wording; a disabled command's key goes on to the content; a rail button asks on add, hover, focus and click *(all proposed)* | a command greyed alike in every place |
 | 9x ✅ | **D32 the Schema view's views** (§3.15, Perspective §4.8): Go `clickhouse.Schema.Database` (the connection's own database, `assembleSchema(database, …)`); the `schema` extension: views "On this page" (`pageTables`, `onlyTables`, `drawPageTables`: the page's tables, connection › database › table, drawn while the panel shows and for each page) and "All connections" (every connection, asked when opened), `createView` with `globalState`; `Schemas` (each connection's schema asked once, shared, a failure forgotten); "Show comments" (`schema.toggleComments`, toggled, `globalState` `showComments`, `d-schema--no-comments`); `pageConnections` / `orderConnections` gone. Files: `lib/clickhouse/schema{,_test}.go`, `frontend/extensions/schema/schema.{ts,css,test.ts}`, `e2e/schema-view.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: the step's id is 9x, as 9s was taken by D30; the connection's database in `/schema.json`; "On this page" fetches while the panel shows, drawn open to the tables; comments hidden by CSS; a missing table hinted *(all proposed)* | the page's tables at a glance |
 | 9y ✅ 2026-10-31 | **D33 a popped-out view's tab without page bars** (§3.4.6, §3.15): `PageHost.showsPoppedView`; `UiHost.showPageBars(shown)` withholds the top bar's and the filter bar's items (`Bar.withhold`, the tab bar stays); `createWorkbench` calls it on each change of the tabs; tests: `bar.test.ts`, `page.test.ts`, `workbench.test.ts`, e2e `pop-out.spec.ts` (written, not run) | *(proposed)* time range and auto refresh hidden as well, not greyed; id 9y (9t taken by D31) |
+| 9z ✅ 2026-10-31 | **D37 the input box validates** (§3.8, §3.11, §3.15): `InputBoxOptions.valueSelection` / `validateInput` (`InputBoxValidationMessage`, `InputBoxValidationSeverity`), the message below the field (`d-workbench__quick-pick-message`, `--error`, `aria-invalid`); a `...` filter button's box named after it, its condition previewed (`buttonCondition`), an empty value refused, a pressed button's value selected. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,css,test.ts}`, `frontend/extensions/filters/filters.{ts,test.ts}`, `e2e/filter-chips.spec.ts` (written, not run) | *(proposed)* synchronous `validateInput`, `Info` / `Error` only, title not shown; id 9z (9x taken by D32) |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

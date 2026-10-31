@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
-// Tests for quick-input.ts (createQuickPick, showQuickPick, showInputBox).
+// Tests for quick-input.ts (createQuickPick, showQuickPick, showInputBox with its validation message and selection).
 import { afterEach, describe, expect, it } from 'vitest';
-import { QuickPickItemKind } from '../ui';
+import { InputBoxValidationSeverity, QuickPickItemKind } from '../ui';
 import { QuickInput } from './quick-input';
 
 afterEach(() => document.body.replaceChildren());
+
+/** The texts of the elements `el` is described by (`aria-describedby`), in its order, the empty ones left out. */
+function described(host: HTMLElement, el: Element): string {
+  const texts = (el.getAttribute('aria-describedby') ?? '').split(' ').map((id) => host.querySelector(`#${id}`)!.textContent);
+  return texts.filter((text) => text !== '').join(' ');
+}
 
 function setup() {
   const host = document.body.appendChild(document.createElement('div'));
@@ -229,11 +235,45 @@ describe('showInputBox', () => {
     button.focus();
     const asked = quickInput.showInputBox({ title: 'Parameter value', prompt: 'Replaces the ... of the filter', placeholder: '/api/', value: '/a', anchor: { x: 1, y: 2 } });
     expect([box()!.getAttribute('aria-label'), field().value, field().placeholder, document.activeElement]).toEqual(['Parameter value', '/a', '/api/', field()]);
-    expect(host.querySelector(`#${field().getAttribute('aria-describedby')}`)!.textContent).toBe('Replaces the ... of the filter');
+    expect(described(host, field())).toBe('Replaces the ... of the filter');
+    expect([field().selectionStart, field().selectionEnd]).toEqual([0, 2]);
     type(field(), '/api/');
     key(field(), 'Enter');
     expect(await asked).toBe('/api/');
     expect([box(), document.activeElement]).toEqual([null, button]);
+  });
+
+  it('selects the part of the value `valueSelection` says', () => {
+    const { quickInput, field } = setup();
+    void quickInput.showInputBox({ value: 'report.csv', valueSelection: [0, 6] });
+    expect([field().selectionStart, field().selectionEnd]).toEqual([0, 6]);
+  });
+
+  it('shows what validateInput says below the field, at once and as the text is typed; an error keeps Enter from taking the text, an info does not', async () => {
+    const { host, quickInput, key, type, field, box } = setup();
+    const asked = quickInput.showInputBox({
+      prompt: 'Path',
+      validateInput: (value) => (value === '' ? 'Enter a value.' : { message: `path = '${value}'`, severity: InputBoxValidationSeverity.Info }),
+    });
+    const message = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick-message')!;
+    const shown = () => [message().hidden ? null : message().textContent, message().classList.contains('d-workbench__quick-pick-message--error'), field().getAttribute('aria-invalid')];
+    expect(shown()).toEqual(['Enter a value.', true, 'true']);
+    expect(described(host, field())).toBe('Enter a value. Path');
+    key(field(), 'Enter');
+    expect(box()).not.toBeNull();
+    type(field(), '/a');
+    expect(shown()).toEqual(["path = '/a'", false, null]);
+    key(field(), 'Enter');
+    expect(await asked).toBe('/a');
+  });
+
+  it('shows no message while validateInput says nothing', () => {
+    const { host, quickInput, type, field } = setup();
+    void quickInput.showInputBox({ validateInput: (value) => (value === 'x' ? { message: '', severity: InputBoxValidationSeverity.Error } : null) });
+    const message = host.querySelector<HTMLElement>('.d-workbench__quick-pick-message')!;
+    expect(message.hidden).toBe(true);
+    type(field(), 'x');
+    expect([message.hidden, field().hasAttribute('aria-invalid')]).toEqual([true, false]);
   });
 
   it('resolves with undefined on Escape', async () => {

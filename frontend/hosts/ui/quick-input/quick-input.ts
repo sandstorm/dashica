@@ -4,6 +4,8 @@ import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
 import {
   type InputBoxOptions,
+  type InputBoxValidationMessage,
+  InputBoxValidationSeverity,
   type MenuAnchor,
   type QuickPick,
   type QuickPickAccept,
@@ -17,8 +19,9 @@ import {
 /**
  * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `host` (a new
  * one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the top in
- * the middle. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was. A menu's box
- * (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
+ * the middle; an input box's validation message below its field. Escape or a mouse press elsewhere hides it; hiding
+ * gives the focus back to where it was. A menu's box (`menu`) marks the element it is anchored at, its opener,
+ * `aria-expanded` while it is open.
  */
 export class QuickInput {
   #open: Open | null = null;
@@ -66,19 +69,35 @@ export class QuickInput {
     const name = options.title ?? 'Input';
     const field = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" aria-label=${name} placeholder=${options.placeholder ?? ''}>`;
     field.value = options.value ?? '';
+    const message = html`<div class="d-workbench__quick-pick-message" id=${uniqueId('dashica-input-box-message')} aria-live="polite" hidden></div>`;
     const prompt = options.prompt ? html`<div class="d-workbench__quick-pick-hint" id=${uniqueId('dashica-input-box')}>${options.prompt}</div>` : null;
-    if (prompt) field.setAttribute('aria-describedby', prompt.id);
-    const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field}${prompt}</div>`;
+    field.setAttribute('aria-describedby', prompt ? `${message.id} ${prompt.id}` : message.id);
+    const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field}${message}${prompt}</div>`;
+    // shows what `validateInput` says of the text in the field; whether Enter takes it
+    const validate = (): boolean => {
+      const said = validation(options.validateInput?.(field.value));
+      message.textContent = said?.message ?? '';
+      message.hidden = !said;
+      const error = said?.severity === InputBoxValidationSeverity.Error;
+      message.classList.toggle('d-workbench__quick-pick-message--error', error);
+      if (error) field.setAttribute('aria-invalid', 'true');
+      else field.removeAttribute('aria-invalid');
+      return !error;
+    };
     return new Promise((resolve) => {
       let value: string | undefined;
+      field.addEventListener('input', validate);
       field.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
+        if (!validate()) return;
         value = field.value;
         if (this.#open?.box === box) this.#open.close();
       });
+      validate();
       this.#present(box, field, () => resolve(value), options.anchor);
-      field.setSelectionRange(field.value.length, field.value.length);
+      const [start, end] = options.valueSelection ?? [0, field.value.length];
+      field.setSelectionRange(start, end);
     });
   }
 
@@ -155,6 +174,13 @@ function narrow<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator
     shown.push({ ...item, highlights, item });
   }
   return shown;
+}
+
+/** What `validateInput` answered as a message: a text is an error; none for `undefined`, `null` or ''. */
+function validation(said: string | InputBoxValidationMessage | undefined | null): InputBoxValidationMessage | undefined {
+  if (!said) return undefined;
+  if (typeof said === 'string') return { message: said, severity: InputBoxValidationSeverity.Error };
+  return said.message ? said : undefined;
 }
 
 /** Puts `box` at `anchor` (below an element's left edge, or at a point), inside the viewport; else where its CSS says. */
