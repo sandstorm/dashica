@@ -174,6 +174,10 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   lastResult: QueryResult | undefined;
   status: WidgetStatus = { kind: 'idle' };
   records: readonly WidgetRecord[] = [];
+  /** The calls of `query` so far: only the latest one sets the status. */
+  #queries = 0;
+  /** The status of the last query that answered or failed, put back when the latest one is aborted. */
+  #settled: WidgetStatus = this.status;
 
   constructor(
     readonly widget: WidgetNode,
@@ -189,24 +193,29 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
     return `${this.widget.dataUrl}${path}?${this.state.requestParams()}`;
   }
 
+  /** Queries `/query`; the status tells how the latest call goes, an aborted latest call puts back the last answer's. */
   async query(signal?: AbortSignal): Promise<QueryResult> {
-    const before = this.status;
+    const turn = ++this.#queries;
     const started = performance.now();
     this.#setStatus({ kind: 'loading' });
+    let result: QueryResult;
     try {
-      this.lastResult = await fetchQueryResult(this.url('/query'), signal);
+      result = await fetchQueryResult(this.url('/query'), signal);
     } catch (error) {
       const ms = Math.round(performance.now() - started);
-      this.#setStatus(signal?.aborted ? before : { kind: 'error', message: error instanceof Error ? error.message : String(error), ms });
+      if (turn === this.#queries) this.#setStatus(signal?.aborted ? this.#settled : { kind: 'error', message: error instanceof Error ? error.message : String(error), ms });
       throw error;
     }
+    if (turn !== this.#queries) return result;
     const ms = Math.round(performance.now() - started);
-    this.#setStatus({ kind: 'done', rows: this.lastResult.numRows, ms, diagnostics: this.lastResult.dashicaDiagnostics ?? {} });
-    return this.lastResult;
+    this.lastResult = result;
+    this.#setStatus({ kind: 'done', rows: result.numRows, ms, diagnostics: result.dashicaDiagnostics ?? {} });
+    return result;
   }
 
   #setStatus(status: WidgetStatus): void {
     this.status = status;
+    if (status.kind !== 'loading') this.#settled = status;
     this.host.statusChanged(this);
   }
 

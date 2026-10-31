@@ -89,7 +89,11 @@ export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: Wid
 export interface WidgetContext {
   /** The time range, filter and params of the widget's tab; `state.onDidRequestRefresh`: query again. */
   readonly state: QueryApi;
-  /** The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's message. */
+  /**
+   * The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's
+   * message. The widget's status and `lastResult` follow the latest call only: an earlier one still answering changes
+   * neither, an aborted latest one puts back the status of the last answer.
+   */
   query(signal?: AbortSignal): Promise<QueryResult>;
   /** `path` below the widget's handler with the page's query state (`/p/shop/api/8/speedscope-query?time=1h&sql=…`). */
   url(path: string): string;
@@ -124,7 +128,7 @@ export interface WidgetMenuContext {
   readonly widget: WidgetNode;
   /** `path` below the widget's handler with the page's query state, as `WidgetContext.url`. */
   url(path: string): string;
-  /** What `query()` gave last; `undefined` before. */
+  /** What the latest `query()` answered; `undefined` before. */
   readonly lastResult: QueryResult | undefined;
 }
 

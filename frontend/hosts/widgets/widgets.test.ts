@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Tests for WidgetsHost and ChartFrame: rendering by type, the widget context (query, children, menu, filters), the
 // selection, the active widget, the chart frame.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { tableFromArrays, tableToIPC } from 'apache-arrow';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
@@ -297,6 +298,39 @@ describe('WidgetsHost', () => {
       await expect(contexts[0].query()).rejects.toThrow();
       expect(testbed.widgets.active?.status).toMatchObject({ kind: 'error', message: 'Code: 60. Table default.http_logs does not exist' });
       expect(changes).toBe(5);
+    });
+
+    it('tells the latest query only: an aborted earlier one keeps it loading, an aborted latest one puts back the last answer', async () => {
+      testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
+      const { el } = testbed.render(requests);
+      press(el);
+      await contexts[0].query();
+      const answered = testbed.widgets.active?.status;
+      // each fetch waits until it is aborted, rejecting then as the browser does, or answered
+      const pending: (() => void)[] = [];
+      vi.stubGlobal('fetch', (_url: string, { signal }: { signal: AbortSignal }) =>
+        new Promise<Response>((resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          pending.push(() => resolve(new Response(tableToIPC(tableFromArrays({ time: [1] })) as Uint8Array<ArrayBuffer>)));
+        }),
+      );
+      const first = new AbortController();
+      const firstQuery = contexts[0].query(first.signal);
+      first.abort();
+      const second = new AbortController();
+      const secondQuery = contexts[0].query(second.signal);
+      await expect(firstQuery).rejects.toThrow();
+      expect(testbed.widgets.active?.status).toEqual({ kind: 'loading' });
+      pending[1]();
+      await secondQuery;
+      expect(testbed.widgets.active?.status).toMatchObject({ kind: 'done', rows: 1 });
+
+      const third = new AbortController();
+      const thirdQuery = contexts[0].query(third.signal);
+      third.abort();
+      await expect(thirdQuery).rejects.toThrow();
+      expect(testbed.widgets.active?.status).toMatchObject({ kind: 'done', rows: 1 });
+      expect(testbed.widgets.active?.status).not.toBe(answered);
     });
 
     it('holds the records selected on it; selecting records makes a widget active, none leave it so', () => {
