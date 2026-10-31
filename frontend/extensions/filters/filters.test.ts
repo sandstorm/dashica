@@ -100,6 +100,10 @@ describe('buttonOf', () => {
     expect(buttonOf("path LIKE '/api%'", buttons)).toEqual({ button: buttons[1], values: ['/api'] });
   });
 
+  it("gives the text as typed, the string literal's backslash escapes undone", () => {
+    expect(buttonOf("path LIKE 'O\\'Brien\\\\%'", buttons)).toEqual({ button: buttons[1], values: ["O'Brien\\"] });
+  });
+
   it('finds none for other SQL, or an empty text in place of `...`', () => {
     expect(buttonOf('status >= 400', buttons)).toBeUndefined();
     expect(buttonOf("path LIKE '%'", buttons)).toBeUndefined();
@@ -163,6 +167,13 @@ describe('filters', () => {
     button('Path').click();
     await Promise.resolve();
     expect([query.filters.chips, asked.length]).toEqual([[], 2]);
+  });
+
+  it("writes a button's value into its condition as a string literal's text: quote and backslash escaped, `$` as it is", async () => {
+    answer = "O'Brien\\$'";
+    button('Path').click();
+    await vi.waitFor(() => expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE 'O\\'Brien\\\\$\\'%'" }]));
+    expect(button('Path').textContent).toBe("Path: O'Brien\\$'");
   });
 
   it('shows a SQL chip that matches no button as `SQL:` and its text on one line', () => {

@@ -944,17 +944,19 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
   - **Shown** while there is a chip, the page has buttons, or a chip is being added; on a page with `filterBar` only,
     as today.
 - **A filter button is pressed in place while toggled on** (step 8f, D7): its filter is a plain SQL chip in the
-  model, its text the button's `queryPart` (the `...` filled in, as today); no new URL key. A pure function in
+  model, its text the button's `queryPart` (the `...` filled in as a string literal's text: `\` and `'`
+  backslash-escaped, as Go's `sql.Quote`, so `O'Brien` in `'...%'` stays one value); no new URL key. A pure function in
   `filters.ts`, `buttonOf(sql, buttons)`, gives the button a SQL chip's text matches: equal to its `queryPart`, or for
   a `queryPart` with `...` equal with a non-empty text in place of every `...` (`request__host = '...'` matches
-  `request__host = 'app.wetell.de'`, the value `app.wetell.de`). Such a chip is not drawn in the chip row; the button
+  `request__host = 'app.wetell.de'`, the value `app.wetell.de`, its escapes undone). Such a chip is not drawn in the chip row; the button
   stays where it is, pressed (`aria-pressed="true"`), its `title` its `queryPart`. A `...` button shows the values
   after its title (`Host: app.wetell.de`; several chips of it: `Host: a, b`) *(proposed)*. Pressing a pressed button
   removes every chip that matches it, pressing it otherwise adds its chip (asking for `...` with `showInputBox`). So a
   link with `?sql=status NOT BETWEEN 200 AND 399` opens with "Errors only" pressed and no chip. A button's filter is
   not edited in the bar (release and press it again); on a page without that button it is a plain SQL chip
-  *(proposed)*. A chip from a `...` button whose value contains the text around `...` (`'` inside `'...'`) may match
-  no button; it stays a plain SQL chip.
+  *(proposed)*. The SQL chips stay unsigned (D6, a feature flag comes later): a `?sql=`
+  link, or a `...` written outside quotes (`duration_ms >= ...`), still runs the viewer's own SQL in every chart's
+  WHERE, also while Explore is off.
 - **The table cell menu** ("Filter: Contains this value", the timestamp entries) adds a SQL chip through `add(condition)`
   as before; each entry is now a chip of its own, removable alone.
 - **The Explore view's tab** shows the same chips; how they apply to an edited query is the Perspective concept's

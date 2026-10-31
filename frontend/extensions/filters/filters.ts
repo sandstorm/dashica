@@ -53,8 +53,9 @@ export const filters: Extension = {
 };
 
 /**
- * The button among `buttons` whose condition the SQL chip `sql` is, and the text in place of its `...`s (`values`):
- * `sql` equals its `queryPart`, or a `queryPart` with `...` with a non-empty text in place of each.
+ * The button among `buttons` whose condition the SQL chip `sql` is, and the text in place of its `...`s (`values`, as
+ * the viewer typed them, `literalOf` undone): `sql` equals its `queryPart`, or a `queryPart` with `...` with a non-empty
+ * text in place of each.
  */
 export function buttonOf(sql: string, buttons: readonly FilterButton[]): { button: FilterButton; values: string[] } | undefined {
   for (const button of buttons) {
@@ -62,9 +63,17 @@ export function buttonOf(sql: string, buttons: readonly FilterButton[]): { butto
     if (!button.queryPart.includes('...')) continue;
     const pattern = button.queryPart.split('...').map(escapeRegExp).join('([\\s\\S]+)');
     const match = new RegExp(`^${pattern}$`).exec(sql);
-    if (match) return { button, values: match.slice(1) };
+    if (match) return { button, values: match.slice(1).map((text) => text.replace(/\\([\s\S])/g, '$1')) };
   }
   return undefined;
+}
+
+/**
+ * `value` as the text inside a ClickHouse string literal, `\` and `'` backslash-escaped (as Go's `sql.Quote`): a
+ * button's `...` mostly sits in quotes (`path LIKE '...%'`), so `O'Brien` stays one value.
+ */
+function literalOf(value: string): string {
+  return value.replace(/[\\']/g, '\\$&');
 }
 
 function escapeRegExp(text: string): string {
@@ -222,7 +231,7 @@ class FilterBar {
 
   /**
    * Adds `button`'s condition; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for, in an input box
-   * below the button (`el`).
+   * below the button (`el`), written in as `literalOf` it.
    */
   async #press(button: FilterButton, el: HTMLElement): Promise<void> {
     if (!button.queryPart.includes('...')) {
@@ -230,7 +239,7 @@ class FilterBar {
       return;
     }
     const value = await this.ui.showInputBox({ title: 'Parameter value', prompt: `${button.title}: ${button.queryPart}`, anchor: el });
-    if (value) this.query.filters.add(button.queryPart.replaceAll('...', value));
+    if (value) this.query.filters.add(button.queryPart.replaceAll('...', () => literalOf(value)));
   }
 
   /** Removes every chip that has `button`'s condition, in one change. */
