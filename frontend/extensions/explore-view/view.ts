@@ -49,6 +49,8 @@ export interface PerspectiveViewer extends HTMLElement {
   save(): Promise<ViewerConfig>;
   /** Back to no config; `all`: the plugin's settings too. */
   reset(all?: boolean): Promise<unknown>;
+  /** Opens (`true`) or closes the settings panel, else toggles it. */
+  toggleConfig(force?: boolean): Promise<unknown>;
   delete(): Promise<unknown>;
 }
 
@@ -81,20 +83,22 @@ export interface ExploreViewOptions {
   close(): void;
   /** A click on a group row's value (`perspective-click`): offers to filter by it, at the click. */
   offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
+  /** Asks below `at` (the "Reset" button) whether to reset the viewer's config; `true`: reset. */
+  confirmReset(at: Element): Promise<boolean>;
 }
 
 /**
  * Fills `el` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's result",
  * the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor (open from the
- * start) with the values of its parameters beside it, the notes of the config mapping, and `<perspective-viewer>`.
- * Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result with the page's query state and
- * the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`) kept and their values listed,
- * both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the listed values into the hash
- * (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's time range and filters do
- * not change, until "Reset to the chart's query". It keeps the config the viewer changed per chart and mode; "Reset"
- * goes back to the chart's. A blank Explore (no `widget`) has a connection picker in its bar in place of the chart's
- * state: its editor starts empty, Run shows the rows of its text on the picked connection (`/rows?connection=…`), and
- * the pick is the hash's `connection`.
+ * start) with the values of its parameters beside it, the notes of the config mapping, and `<perspective-viewer>`
+ * with its settings panel open. Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result
+ * with the page's query state and the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`)
+ * kept and their values listed, both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the
+ * listed values into the hash (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's
+ * time range and filters do not change, until "Reset to the chart's query". It keeps the config the viewer changed
+ * per chart and mode; "Reset" goes back to the chart's once the viewer confirmed it (`confirmReset`). A blank Explore
+ * (no `widget`) has a connection picker in its bar in place of the chart's state: its editor starts empty, Run shows
+ * the rows of its text on the picked connection (`/rows?connection=…`), and the pick is the hash's `connection`.
  */
 export function renderExploreView(el: HTMLElement, options: ExploreViewOptions): Disposable {
   const view = new ExploreView(el, options);
@@ -147,9 +151,12 @@ function sameQuery(a: EditedQuery | undefined, b: EditedQuery | undefined): bool
   return withEditedQuery('', a) === withEditedQuery('', b);
 }
 
-/** What the viewer's config keeps across visits: without the table's name (new per visit), its theme and title. */
+/**
+ * What the viewer's config keeps across visits: without the table's name (new per visit), its theme, title and
+ * whether the settings panel is open (it opens with every viewer).
+ */
 export function persistable(config: ViewerConfig): ViewerConfig {
-  const { table: _table, theme: _theme, title: _title, ...kept } = config;
+  const { table: _table, theme: _theme, title: _title, settings: _settings, ...kept } = config;
   return kept;
 }
 
@@ -196,7 +203,9 @@ class ExploreView {
     const title = chartTitle(options.widget);
     const reset: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-reset">Reset</button>`;
     const close: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-close">Close</button>`;
-    reset.onclick = () => void this.#reset();
+    reset.onclick = async () => {
+      if ((await options.confirmReset(reset)) && !this.#disposed) await this.#reset();
+    };
     close.onclick = () => options.close();
     this.#sqlButton.onclick = () => this.#setSqlOpen(!this.#sqlOpen);
     const run: HTMLButtonElement = html`<button class="d-button d-button--primary" type="button" data-testid="explore-view-run">Run</button>`;
@@ -302,7 +311,7 @@ class ExploreView {
 
   /**
    * Shows `arrow`: into the table shown (the viewer keeps its config), else a new table and viewer with the saved or
-   * the chart's config. A table made when the load was stopped meanwhile is deleted unshown.
+   * the chart's config, its settings panel open. A table made when the load was stopped meanwhile is deleted unshown.
    */
   async #showNow(arrow: ArrayBuffer, signal: AbortSignal): Promise<void> {
     const stale = () => signal.aborted || this.#disposed;
@@ -342,6 +351,7 @@ class ExploreView {
     this.#listen(viewer);
     await viewer.load(table);
     await this.#restore(this.options.state.get<ViewerConfig>(stateKey(this.options.widget, this.#edited !== undefined)));
+    await viewer.toggleConfig(true);
   }
 
   /**

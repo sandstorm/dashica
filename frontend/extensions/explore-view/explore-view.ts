@@ -1,5 +1,6 @@
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { MenuItem } from '../../hosts/commands/commands';
+import type { UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { editedQueryKeys, fetchSql, sqlRequest, type EditedQuery } from './rows';
@@ -9,12 +10,13 @@ import './explore-view.css';
 /**
  * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore.enabled; else only "Explore"
  * greyed in the global menu, EXPLORE_NOT_ENABLED): "Open in Explore view" in a chart's menu (`widget/context`, charts
- * with a `rowsUrl`) opens a new tab with the chart's result in `<perspective-viewer>`, its config rebuilt from the chart's props, while the tab's time range and filters keep
+ * with a `rowsUrl`) opens a new tab with the chart's result in `<perspective-viewer>`, its settings panel open and its config rebuilt from the chart's props, while the tab's time range and filters keep
  * working on it. "SQL" shows the chart's SQL as it runs, its placeholders kept and their values beside it; the viewer
  * edits it and runs it (`#explore=3&exploreSql=…`), and the page's time range and filters no longer apply until
  * "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
  * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
- * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab. A click on a
+ * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab, "Reset" asks
+ * first (`confirmReset`). A click on a
  * group row's value of the chart's result offers to filter the tab by it or exclude it. The global menu's "Explore"
  * opens a blank Explore in a new tab (`#explore=&connection=<name>`): a connection picker and an empty editor, run on
  * that connection (`/rows?connection=…`); its "Start from chart…" opens one with the SQL and parameters of a chart of
@@ -46,6 +48,7 @@ export const exploreView: Extension = {
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
           offerFilters: (at, candidates) => widget && widgets.offerFilters(at, candidates, context.query, widget as ChartWithRows),
+          confirmReset: (at) => confirmReset(ui, at),
         });
         return {
           dispose: () => {
@@ -107,6 +110,18 @@ export const EXPLORE_NOT_ENABLED: MenuItem = {
   enabled: () => false,
   tooltip: 'Explore is not enabled (explore.enabled)',
 };
+
+/** "Reset" and "Cancel" of `confirmReset`. */
+const RESET_CHOICES = [
+  { label: 'Reset', detail: 'The viewer’s config back to its start; what was changed in it is forgotten', reset: true },
+  { label: 'Cancel', reset: false },
+];
+
+/** Asks in a quick pick below `at` (the view's "Reset") whether to reset the viewer's config; `true` once "Reset" was picked. */
+export async function confirmReset(ui: Pick<UiApi, 'showQuickPick'>, at: Element): Promise<boolean> {
+  const picked = await ui.showQuickPick(RESET_CHOICES, { title: 'Reset the view', placeholder: 'Reset the viewer’s config?', anchor: at });
+  return picked?.reset === true;
+}
 
 /**
  * The URL of a blank Explore on the connection `connection` from the page at `url` (a tab's): its path and query, the

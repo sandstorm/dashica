@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for renderExploreView in view.ts, Perspective faked at its module boundary: the rows with the page's query
-// state, their description, the config from the chart or kept per chart, Reset, a refresh, the SQL editor (following
+// state, their description, the settings panel open, the config from the chart or kept per chart, Reset once confirmed, a refresh, the SQL editor (following
 // the chart, its parameters listed, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a
 // click on a group row; a blank Explore (its connection picker, Run on the picked connection, a chart's SQL from the
 // hash).
@@ -33,7 +33,7 @@ const widget = {
 
 /** What the fake Perspective was asked. */
 let tables: { data: string; replaced: string[]; deleted: boolean }[];
-let viewer: PerspectiveViewer & { restored: ViewerConfig[]; resets: number; saved: ViewerConfig };
+let viewer: PerspectiveViewer & { restored: ViewerConfig[]; resets: number; saved: ViewerConfig; settingsOpen: boolean };
 let schema: Record<string, string>;
 let failRestoreOf: ((config: ViewerConfig) => boolean) | undefined;
 /** While set, a new table waits for it (Perspective still loading). */
@@ -74,6 +74,8 @@ const perspective: Perspective = {
       },
       save: async () => el.saved,
       reset: async () => el.resets++,
+      settingsOpen: false,
+      toggleConfig: async (force?: boolean) => (el.settingsOpen = force ?? !el.settingsOpen),
       delete: async () => {},
     });
     viewer = el;
@@ -94,6 +96,9 @@ let requests: string[];
 let closed: number;
 /** What the view offered to filter by, and where. */
 let offered: { at: unknown; candidates: readonly unknown[] }[];
+/** Where Reset asked to confirm, and the answer. */
+let confirmations: unknown[];
+let confirmed: boolean;
 let answer: (url: URL) => Response;
 /** The tab's hash, as Run and Reset navigate it. */
 let hash: string;
@@ -124,6 +129,8 @@ beforeEach(() => {
   requests = [];
   closed = 0;
   offered = [];
+  confirmations = [];
+  confirmed = true;
   answer = serve('rows-1');
   hash = '#explore=3';
   hashChanged = new EventEmitter<void>();
@@ -159,6 +166,7 @@ function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
     },
     close: () => closed++,
     offerFilters: (at, candidates) => offered.push({ at, candidates }),
+    confirmReset: async (at) => (confirmations.push(at), confirmed),
   });
 }
 
@@ -229,11 +237,25 @@ describe('renderExploreView', () => {
     expect(el.querySelector('.d-explore-view__notes')!.textContent).toContain('the kept view does not fit these rows (Invalid column "gone")');
   });
 
-  it('goes back to the chart’s config on Reset, forgetting the kept one', async () => {
+  it('opens the viewer with its settings panel open, after its config', async () => {
+    open();
+    await settle();
+    expect(viewer.settingsOpen).toBe(true);
+  });
+
+  it('goes back to the chart’s config on Reset once confirmed, forgetting the kept one', async () => {
     stored.set(stateKey(widget), { plugin: 'Datagrid' });
     open();
     await settle();
-    el.querySelector<HTMLButtonElement>('[data-testid="explore-view-reset"]')!.click();
+    const reset = el.querySelector<HTMLButtonElement>('[data-testid="explore-view-reset"]')!;
+    confirmed = false;
+    reset.click();
+    await settle();
+    expect(confirmations).toEqual([reset]);
+    expect(stored.size).toBe(1);
+    expect(viewer.resets).toBe(0);
+    confirmed = true;
+    reset.click();
     await settle();
     expect(stored.size).toBe(0);
     expect(viewer.resets).toBe(1);
@@ -580,7 +602,7 @@ describe('editedQuery and withEditedQuery', () => {
 });
 
 describe('persistable', () => {
-  it('leaves out the table’s name, the theme and the title', () => {
-    expect(persistable({ plugin: 'Y Bar', table: 't1', theme: 'Pro Dark', title: 'x', settings: true })).toEqual({ plugin: 'Y Bar', settings: true });
+  it('leaves out the table’s name, the theme, the title and the settings panel', () => {
+    expect(persistable({ plugin: 'Y Bar', table: 't1', theme: 'Pro Dark', title: 'x', settings: false })).toEqual({ plugin: 'Y Bar' });
   });
 });

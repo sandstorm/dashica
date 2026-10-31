@@ -4,7 +4,8 @@ Status: **draft (2026-10-30); simplified (2026-10-31, after the maintainer's not
 `spike/perspective`, not yet run in a browser: see §8. Decided 2026-10-31: the view shows the chart's materialized SQL
 in an editor, and an edited query runs as it is written; this replaces "Remove grouping" (§4.7). Decided 2026-10-31
 as well (§4.8, workbench §3.14 D8–D13): placeholders instead of literals, `exploreSql`, Explore off means off (✅ built
-2026-10-31, step 8g; the Schema view in step 8h; a global "Explore" without a chart in step 8i); planned: CodeMirror.**
+2026-10-31, step 8g; the Schema view in step 8h; a global "Explore" without a chart in step 8i; the settings panel
+open and Reset asking in step 8k); planned: CodeMirror.**
 
 Builds on the workbench concept (`docs/2026-10-28-workbench.md`: §3.8 selections, §6 "Explore rebuilt", "drill to
 detail", "Perspective instead of the Tabulator table").
@@ -219,14 +220,15 @@ handler) is not planned.
   to explore" in the tab. Before: the dashboard's hash, laid over the content by `UiApi.showOverContent` (gone).
 - **Toolbar:** title, "n rows of the chart's result" / "the first n rows (limit)" (an edited query), the filters the
   chart ignores, "SQL" (closes and opens the SQL editor, §4.7; since step 8g always there, as the view only exists with
-  Explore enabled), "Reset", "Close". "Remove grouping" goes (§4.7).
+  Explore enabled), "Reset" (asks first, §4.8 D13), "Close". "Remove grouping" goes (§4.7). The viewer opens with its
+  settings panel open (§4.8 D13).
 - **Filters from the view:** `perspective-click` on a group row gives `[[column, '==', value], …]`; the deepest such
   value on a column that is no date or time is offered in the quick pick "Filter" at the click (since workbench step
   8c: `widgets.offerFilters`, "Filter" / "Exclude"), which adds a page filter chip at once (all rows re-fetched); on
   the chart's result only, an edited query's rows offer nothing (§4.7). Perspective's own filters stay local.
 - **State:** `viewer.save()` per chart and mode in the extension's `globalState` (localStorage), keys `view:<dataUrl>`
-  and `view:<dataUrl>:edited` (was `:ungrouped`), kept once the viewer was used; "Reset" goes back to the config from
-  props. The edited SQL itself is in the tab's hash (§4.7).
+  and `view:<dataUrl>:edited` (was `:ungrouped`), kept once the viewer was used, without `settings` (the panel opens
+  every time, §4.8 D13); "Reset", once confirmed, goes back to the config from props. The edited SQL itself is in the tab's hash (§4.7).
 - **Loading:** a second esbuild entry, `public/dist/perspective.js` + `perspective.css` and its wasm files, `import()`ed
   by URL on first use; dashboards load none of it.
 - **Theme:** `explore-view.css` maps `--psp-*` onto `frontend/core/style/tokens.css`, light and dark.
@@ -382,7 +384,7 @@ only the greyed "Explore". Playwright (`e2e/explore-view.spec.ts`, skipped while
 editor open with `{__from}` listed, delete the `GROUP BY`, Run (more rows, the note, `exploreSql` and `param___from`
 in the URL), reload (still edited), Reset.
 
-### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, D10 in step 8i, the rest planned)
+### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, D10 in step 8i, D13 in step 8k, D12 planned)
 
 The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each step rewrites what it changes above.
 
@@ -436,8 +438,12 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
 - **D12 SQL editor (step 8j):** CodeMirror 6, `@codemirror/lang-sql` with a ClickHouse dialect (`SQLDialect.define`),
   its `schema` option fed by the Schema data; loaded only when Explore opens (with the Perspective bundle). Replaces
   the `<textarea>` of §4.7.
-- **D13 Viewer (step 8k):** Perspective's settings panel opens when the view opens; "Reset" asks for confirmation
-  first.
+- **D13 Viewer (step 8k, ✅ 2026-10-31):** Perspective's settings panel opens when the view opens; "Reset" asks for
+  confirmation first. Built: each new viewer gets `toggleConfig(true)` after its config is restored (Perspective's
+  documented call); the kept config leaves out `settings`, so the panel opens every time, whatever it was when the
+  viewer closed *(proposed)*. "Reset" asks in a quick pick below the button, "Reset" or "Cancel"
+  (`confirmReset`, `ui.showQuickPick` as D3); Escape or a press elsewhere is Cancel *(proposed)*. Reset itself leaves
+  the panel as it is *(proposed)*.
 
 ## 5. Alternatives considered
 
@@ -507,7 +513,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
    2026-10-31: vitest, typecheck, top comments, `go vet` and the Go tests without ClickHouse green; the ClickHouse
    tests and Playwright written, not run, deviations in §4.8); ✅ 8h D11 (Schema view, 2026-10-31, the same checks,
    deviations in §4.8); ✅ 8i D10 (global "…" menu, blank Explore, `/rows?connection=`, 2026-10-31, the same checks,
-   deviations in §4.8); planned, not built: 8j D12 (CodeMirror), 8k D13 (settings panel, Reset asks).
+   deviations in §4.8); ✅ 8k D13 (settings panel open, Reset asks; 2026-10-31, vitest, typecheck, top comments
+   green, Playwright written, not run, deviations in §4.8); planned, not built: 8j D12 (CodeMirror).
 
 ## 7. Open questions
 
@@ -564,7 +571,7 @@ Updated 2026-10-31 to the SQL editor of §4.7, which replaced "Remove grouping" 
 - A click on a group row of the chart's result opens the quick pick "Filter" ("Filter" / "Exclude" its value, since
   workbench step 8c); either adds a filter chip at once and the rows re-fetch. The rows of an edited query offer
   nothing (§4.7).
-- The viewer's config is kept per chart and mode once the user has changed it; "Reset" forgets it.
+- The viewer's config is kept per chart and mode once the user has changed it; "Reset", once confirmed, forgets it.
 
 Steps for the maintainer (none of them were run in the spike):
 
@@ -580,7 +587,8 @@ Steps for the maintainer (none of them were run in the spike):
 6. Change the time range or add a filter: the rows re-fetch, the grouping stays. Click a group row → "Filter by".
 7. Press "SQL": the chart's query with the window and chips written in. Delete its `GROUP BY` (and the aggregates),
    press "Run": the Caddy rows of the window. "Reset to the chart's query": the chart's result again.
-8. Regroup in the viewer, close, reopen: the grouping is back. "Reset" returns to the chart's config.
+8. Regroup in the viewer, close, reopen: the grouping is back, the settings panel open. "Reset", then "Reset" in its
+   quick pick, returns to the chart's config ("Cancel" keeps it).
 9. E2E: `npm run e2e -- explore-view.spec.ts` against your running instance (defaults to the page and chart above;
    `DASHICA_E2E_EXPLORE_PAGE` / `DASHICA_E2E_EXPLORE_CHART` pick others); the SQL editor test is skipped without
    `explore.enabled` (step 2).

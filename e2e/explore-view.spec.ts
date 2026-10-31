@@ -2,7 +2,8 @@
 // new tab with the chart's result in Perspective (the dashboard's URL with `#explore=<id>`, docs/2026-10-28-workbench.md
 // §3.4.1); "SQL" shows the chart's SQL with its placeholders and their values beside it, an edited query runs with
 // them and stays over a reload until "Reset to the chart's query" (§4.7, §4.8); the link opens it, Close closes its
-// tab, Back shows the dashboard's tab, a changed config is kept per chart until Reset; the global "…" menu's "Explore"
+// tab, Back shows the dashboard's tab, the viewer opens with its settings panel, a changed config is kept per chart
+// until Reset, which asks first (Cancel keeps it); the global "…" menu's "Explore"
 // opens a blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from
 // chart…" one with a chart's SQL (§4.8, D10). All of it needs `explore.enabled` (workbench.json's `explore`), else
 // every test is skipped.
@@ -43,6 +44,7 @@ test('opens the chart’s result in Perspective in a new tab, the dashboard’s 
     await expect(view.locator('.d-explore-view__title')).toHaveText(`Explore: ${CHART}`);
     await expect(view.locator('perspective-viewer')).toBeVisible();
     await expect(view.locator('.d-explore-view__status')).toHaveText(/^[\d,]+ rows of the chart’s result$/);
+    await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).settings)).toBe(true);
 });
 
 test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY, Run, a reload, Reset', async ({page}) => {
@@ -146,6 +148,10 @@ test('keeps the config the viewer changed for the chart, until Reset', async ({p
     view = await openExplore(page);
     await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).plugin)).toBe('Datagrid');
     await view.getByTestId('explore-view-reset').click();
+    await page.getByRole('option', {name: 'Cancel'}).click();
+    await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).plugin)).toBe('Datagrid');
+    await view.getByTestId('explore-view-reset').click();
+    await page.getByRole('option', {name: 'Reset'}).click();
     await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).plugin)).not.toBe('Datagrid');
 });
 

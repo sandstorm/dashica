@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Tests for exploreView in explore-view.ts: only "Explore" greyed in the global menu while Explore is not enabled, the
 // chart menu's entry opening a tab, the view as the page kind `explore` named in the tab's hash, its title, Close, the
-// widget found in the page's tree; the global menu's "Explore" and "Start from chart…" opening a blank Explore.
+// widget found in the page's tree; the global menu's "Explore" and "Start from chart…" opening a blank Explore; Reset's
+// confirmation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
@@ -10,7 +11,7 @@ import type { ExtensionContext } from '../../hosts/extension-host/extension-host
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { blankExploreUrl, chartsOf, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
+import { blankExploreUrl, chartsOf, confirmReset, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
 
 const chart: WidgetNode = {
   type: 'barVertical',
@@ -199,5 +200,22 @@ describe('findWidget', () => {
   it('finds the widget by the id in its dataUrl among the children', () => {
     expect(findWidget(page.widgets, '3')).toBe(chart);
     expect(findWidget(page.widgets, '4')).toBeUndefined();
+  });
+});
+
+describe('confirmReset', () => {
+  /** A quick pick that records its items and options and picks the item labelled `label` (none: hidden without). */
+  const pickLabelled = (label: string | undefined, shown: unknown[]) => ({
+    showQuickPick: async <T extends { label: string }>(items: readonly T[], options?: unknown) => (shown.push({ items, options }), items.find((item) => item.label === label)),
+  });
+
+  it('asks below the button, Reset or Cancel, and says yes only to Reset', async () => {
+    const button = document.createElement('button');
+    const shown: { items: { label: string }[]; options: { anchor: unknown } }[] = [];
+    expect(await confirmReset(pickLabelled('Reset', shown) as never, button)).toBe(true);
+    expect(shown[0].items.map((item) => item.label)).toEqual(['Reset', 'Cancel']);
+    expect(shown[0].options.anchor).toBe(button);
+    expect(await confirmReset(pickLabelled('Cancel', shown) as never, button)).toBe(false);
+    expect(await confirmReset(pickLabelled(undefined, shown) as never, button)).toBe(false);
   });
 });
