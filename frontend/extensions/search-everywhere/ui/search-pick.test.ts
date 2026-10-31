@@ -133,6 +133,17 @@ describe('SearchPick', () => {
     expect(picked).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a disabled item greyed with its tooltip and runs nothing when it is picked', () => {
+    const accept = vi.fn();
+    const { host, search, field } = setup({ id: 'commands', label: 'Commands', provideItems: () => [{ label: 'Explore', disabled: true, tooltip: 'Explore is not enabled (explore.enabled)', accept }] });
+    search.show('explore');
+    const option = host.querySelector<HTMLElement>('[role=option]')!;
+    expect([option.getAttribute('aria-disabled'), option.title]).toEqual(['true', 'Explore is not enabled (explore.enabled)']);
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    option.click();
+    expect(accept).not.toHaveBeenCalled();
+  });
+
   it('logs a failing provider and shows the others', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const failing: SearchProvider = {

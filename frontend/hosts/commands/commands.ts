@@ -3,17 +3,43 @@ import type { Disposable } from '../../core/disposable/disposable';
 /**
  * Commands: named actions an extension offers to the others. Other extensions, menu entries, key bindings and search
  * everywhere run them by id. The handler runs synchronously inside `executeCommand`, so focus and selection are still
- * those of the user's click or key.
+ * those of the user's click or key. Whether a command can run now is the command's own (its `enablement`, as VS Code's
+ * `contributes.commands[].enablement`): every place that shows or triggers it asks `enablement(id)`, so a menu entry,
+ * a rail button and search everywhere show it greyed with its `disabledReason` on hover, and its keys do nothing.
+ * A menu entry's `when` only says whether the entry shows.
  */
 export interface Commands {
-  /** Registers `handler` as `id` (`<extension>.<name>`, e.g. `refresh.now`) until disposed; throws if `id` is taken. */
-  registerCommand(id: string, handler: (...args: any[]) => unknown): Disposable;
-  /** Resolves to the handler's result; rejects for an unknown `id` and when the handler throws or rejects. */
+  /**
+   * Registers `handler` as `id` (`<extension>.<name>`, e.g. `refresh.now`) until disposed, with what `options` says
+   * of when it can run; throws if `id` is taken.
+   */
+  registerCommand(id: string, handler: (...args: any[]) => unknown, options?: CommandOptions): Disposable;
+  /**
+   * Resolves to the handler's result, whatever its `enablement` (code runs what it means to run); rejects for an
+   * unknown `id` and when the handler throws or rejects.
+   */
   executeCommand<T = unknown>(id: string, ...args: unknown[]): Promise<T>;
+  /** Whether `id` can run from a menu, a key, a button or search everywhere now; enabled for an unknown `id`. */
+  enablement(id: string): CommandEnablement;
   /** The declared commands (`contributes.commands`) registered now, in declaration order: what search everywhere lists. */
   getCommands(): readonly CommandContribution[];
   /** The label of the first key bound to `id` (`⌘⇧F` on the Mac, else `Ctrl+Shift+F`); undefined: none. */
   keybindingLabel(id: string): string | undefined;
+}
+
+/** What `registerCommand` knows of when a command can run. */
+export interface CommandOptions {
+  /** Whether it can run now, asked each time it is shown or a key would run it; default: always. */
+  readonly enablement?: () => boolean;
+  /** Shown on hover while it cannot run: why ("Explore is not enabled (explore.enabled)"). */
+  readonly disabledReason?: string;
+}
+
+/** What `enablement` answers: whether the command can run now and, while it cannot, why. */
+export interface CommandEnablement {
+  readonly enabled: boolean;
+  /** Only while not `enabled`: the command's `disabledReason`. */
+  readonly disabledReason?: string;
 }
 
 /** A command as an extension declares it in `contributes.commands`, for menus and search everywhere. */
@@ -47,8 +73,9 @@ export interface KeybindingContribution {
 }
 
 /**
- * One entry of a menu (`ui.registerMenuItem`): a command by its id, shown while `when` holds. `C`: what the menu is
- * shown for (e.g. `{ url, title }` of a dashboard entry), which `when` and `toggled` are asked with.
+ * One entry of a menu (`ui.registerMenuItem`): a command by its id, shown while `when` holds, greyed while the command
+ * is not enabled (`Commands.enablement`). `C`: what the menu is shown for (e.g. `{ url, title }` of a dashboard
+ * entry), which `when` and `toggled` are asked with.
  */
 export interface MenuItem<C extends object = MenuContext> {
   /** Run with the arguments the menu was shown with. */
@@ -59,10 +86,6 @@ export interface MenuItem<C extends object = MenuContext> {
   readonly icon?: string;
   /** Whether the entry shows, asked each time the menu is shown; default: always. */
   readonly when?: (context: C) => boolean;
-  /** Whether the entry can be chosen, asked each time the menu is shown; one that cannot shows greyed; default: always. */
-  readonly enabled?: (context: C) => boolean;
-  /** Shown on hover over the entry: what it does, or why it is greyed ("Explore is not enabled (explore.enabled)"). */
-  readonly tooltip?: string;
   /** For an entry that turns something on or off: whether it is on (a check mark), asked each time the menu is shown. */
   readonly toggled?: (context: C) => boolean;
   /** Entries are grouped by this: `navigation` first, the others by name, a separator between groups; default ''. */

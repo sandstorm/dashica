@@ -95,6 +95,9 @@
 .d-workbench__rail-button[hidden] { display: none; }
 .d-workbench__rail-button:hover { background: var(--color-hover); color: var(--color-text); }
 .d-workbench__rail-button[aria-pressed='true'] { background: var(--color-accent-subtle); color: var(--color-accent); }
+/* its command cannot run now (Commands.enablement) */
+.d-workbench__rail-button[aria-disabled='true'] { opacity: var(--opacity-muted); cursor: default; }
+.d-workbench__rail-button[aria-disabled='true']:hover { background: none; color: var(--color-text-muted); }
 .d-workbench__rail-button svg { width: 16px; height: 16px; }
 .d-workbench__panel {
   position: relative;

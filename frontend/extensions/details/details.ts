@@ -15,8 +15,8 @@ import './details.css';
  * without records clears them when they are that widget's (another table's cleared ticks leave them). The panel shows
  * the widget's title, then a view per record, its fields one below the other (a JSON value pretty-printed, a value of
  * several lines as it is), drawn anew on each call; each view starts open, its collapsed state not kept (a place in
- * one selection says nothing about another's). "Pop out" (the panel's menu `panel/details`) opens a tab comparing the
- * records kept then side by side, a column per record; the tab keeps them, also when the table's next answer clears
+ * one selection says nothing about another's). "Pop out" (the panel's menu `panel/details`, its command enabled while
+ * records are shown) opens a tab comparing the records kept then side by side, a column per record; the tab keeps them, also when the table's next answer clears
  * its ticks. The status bar says "3 records selected" while there are some (else the item is hidden); a click on it
  * opens the panel.
  */
@@ -42,23 +42,21 @@ export const details: Extension = {
         shown = given.records.length > 0 ? given : undefined;
         update();
       }),
-      commands.registerCommand('details.popOut', () => {
-        if (!shown) return;
-        const title = widgetTitle(shown.widget);
-        const { records } = shown;
-        return page.popOut({
-          title: `Details: ${title}`,
-          // the tab's element is emptied when it closes
-          render: (el) => (el.append(drawComparison(title, records)), Disposable.from()),
-        });
-      }),
-      ui.registerMenuItem('panel/details', {
-        command: 'details.popOut',
-        title: 'Pop out',
-        icon: createElement(SquareArrowOutUpRight).outerHTML,
-        enabled: () => shown !== undefined,
-        tooltip: 'The selected records side by side in a tab of their own',
-      }),
+      commands.registerCommand(
+        'details.popOut',
+        () => {
+          if (!shown) return;
+          const title = widgetTitle(shown.widget);
+          const { records } = shown;
+          return page.popOut({
+            title: `Details: ${title}`,
+            // the tab's element is emptied when it closes
+            render: (el) => (el.append(drawComparison(title, records)), Disposable.from()),
+          });
+        },
+        { enablement: () => shown !== undefined, disabledReason: 'No records selected' },
+      ),
+      ui.registerMenuItem('panel/details', { command: 'details.popOut', title: 'Pop out', icon: createElement(SquareArrowOutUpRight).outerHTML }),
     );
   },
 };

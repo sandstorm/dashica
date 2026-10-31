@@ -1,12 +1,13 @@
 // See Commands in commands.ts.
 import { Disposable } from '../../core/disposable/disposable';
-import type { CommandContribution, Commands, KeybindingContribution, Platform } from './commands';
+import type { CommandContribution, CommandEnablement, CommandOptions, Commands, KeybindingContribution, Platform } from './commands';
 import { DOUBLE_TAP, keyLabel, LABELS, PLATFORM } from './commands-helpers';
 import { listenForDoubleTap } from './double-tap';
 
 /** The workbench's `Commands`; listens for the bound keys on `root`. `platform`: whose keys apply, default the browser's. */
 export class CommandsHost implements Commands {
   readonly #handlers = new Map<string, CommandHandler>();
+  readonly #options = new Map<string, CommandOptions>();
   readonly #keybindings: { key: string; matches(event: KeyboardEvent): boolean; command: string; args: unknown[] }[] = [];
   readonly #taps: Disposable[] = [];
   #declared: readonly CommandContribution[] = [];
@@ -22,10 +23,20 @@ export class CommandsHost implements Commands {
     root.addEventListener('keydown', this.#handleKey, true);
   }
 
-  registerCommand(id: string, handler: CommandHandler): Disposable {
+  registerCommand(id: string, handler: CommandHandler, options: CommandOptions = {}): Disposable {
     if (this.#handlers.has(id)) throw new Error(`Command ${id} is registered already`);
     this.#handlers.set(id, handler);
-    return new Disposable(() => this.#handlers.delete(id));
+    this.#options.set(id, options);
+    return new Disposable(() => {
+      this.#handlers.delete(id);
+      this.#options.delete(id);
+    });
+  }
+
+  enablement(id: string): CommandEnablement {
+    const { enablement, disabledReason } = this.#options.get(id) ?? {};
+    if (!enablement || enablement()) return ENABLED;
+    return disabledReason === undefined ? { enabled: false } : { enabled: false, disabledReason };
   }
 
   executeCommand<T = unknown>(id: string, ...args: unknown[]): Promise<T> {
@@ -63,6 +74,7 @@ export class CommandsHost implements Commands {
   dispose(): void {
     this.root.removeEventListener('keydown', this.#handleKey, true);
     this.#handlers.clear();
+    this.#options.clear();
     this.#keybindings.length = 0;
     for (const taps of this.#taps.splice(0)) taps.dispose();
   }
@@ -76,7 +88,8 @@ export class CommandsHost implements Commands {
 
   readonly #handleKey = (event: KeyboardEvent): void => {
     for (const binding of this.#keybindings) {
-      if (!binding.matches(event) || !this.#handlers.has(binding.command)) continue;
+      // a command that cannot run now leaves the key to the next binding or the content
+      if (!binding.matches(event) || !this.#handlers.has(binding.command) || !this.enablement(binding.command).enabled) continue;
       // prevented now, while the event is dispatched; the command may finish later
       event.preventDefault();
       event.stopPropagation();
@@ -85,9 +98,9 @@ export class CommandsHost implements Commands {
     }
   };
 
-  /** Logs a failure: for a key press, the console is where it is reported. */
+  /** Runs a key's command while it can run; logs a failure: for a key press, the console is where it is reported. */
   #run({ command, args }: { command: string; args: unknown[] }): void {
-    if (this.#handlers.has(command)) this.executeCommand(command, ...args).catch((error: unknown) => console.error(`Command ${command} failed:`, error));
+    if (this.#handlers.has(command) && this.enablement(command).enabled) this.executeCommand(command, ...args).catch((error: unknown) => console.error(`Command ${command} failed:`, error));
   }
 }
 
@@ -98,6 +111,8 @@ function modifierKey(modifier: string, mac: boolean): string {
 }
 
 type CommandHandler = (...args: any[]) => unknown;
+
+const ENABLED: CommandEnablement = { enabled: true };
 
 /** `Mod+Alt+KeyM` → a test for the event: that `code`, and exactly the named modifiers pressed. */
 function parseKey(key: string, mac: boolean): (event: KeyboardEvent) => boolean {

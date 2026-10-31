@@ -178,4 +178,39 @@ describe('CommandsHost', () => {
     commands.registerCommand('test.undeclared', () => {});
     expect(commands.getCommands()).toEqual([{ command: 'test.refresh', title: 'Refresh', category: 'Test' }]);
   });
+
+  it('says whether a command can run now, asking its enablement each time, with its reason only while it cannot', () => {
+    const { commands } = setup();
+    let explore = false;
+    const registration = commands.registerCommand('test.explore', () => {}, { enablement: () => explore, disabledReason: 'Explore is not enabled (explore.enabled)' });
+    commands.registerCommand('test.plain', () => {});
+    expect(commands.enablement('test.explore')).toEqual({ enabled: false, disabledReason: 'Explore is not enabled (explore.enabled)' });
+    explore = true;
+    expect(commands.enablement('test.explore')).toEqual({ enabled: true });
+    expect([commands.enablement('test.plain'), commands.enablement('test.unknown')]).toEqual([{ enabled: true }, { enabled: true }]);
+    explore = false;
+    registration.dispose();
+    expect(commands.enablement('test.explore')).toEqual({ enabled: true });
+  });
+
+  it('runs a command that is not enabled from code, as VS Code does, but not from its keys, which go on to the content', async () => {
+    const { inner, root, commands } = setup();
+    const run = vi.fn();
+    let enabled = false;
+    commands.registerCommand('test.run', run, { enablement: () => enabled });
+    commands.declareKeybindings([
+      { key: 'Mod+KeyM', command: 'test.run' },
+      { key: 'Shift Shift', command: 'test.run' },
+    ]);
+    const content = vi.fn();
+    root.addEventListener('keydown', content);
+    expect(press(inner, { code: 'KeyM', ctrlKey: true }).defaultPrevented).toBe(false);
+    for (const type of ['keydown', 'keyup', 'keydown', 'keyup']) inner.dispatchEvent(new KeyboardEvent(type, { key: 'Shift', shiftKey: type === 'keydown', bubbles: true }));
+    expect([run.mock.calls.length, content.mock.calls.length > 0]).toEqual([0, true]);
+    await commands.executeCommand('test.run', 'given');
+    expect(run.mock.calls).toEqual([['given']]);
+    enabled = true;
+    expect(press(inner, { code: 'KeyM', ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
 });

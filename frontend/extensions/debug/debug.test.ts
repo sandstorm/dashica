@@ -3,6 +3,7 @@
 // popped out into a tab, bound to the widget active then.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
+import type { CommandOptions } from '../../hosts/commands/commands';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import type { PoppedView } from '../../hosts/page/page';
 import type { WidgetStatus } from '../../hosts/widgets/widgets';
@@ -16,7 +17,9 @@ let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
 let active: FakeWidget | undefined;
 let commands: Record<string, () => unknown>;
-let menuItems: { menuId: string; title?: string; enabled?: () => boolean }[];
+let menuItems: { menuId: string; command: string; title?: string }[];
+/** Each command's `enablement` as registered. */
+let enablements: Record<string, (() => boolean) | undefined>;
 let popped: PoppedView[];
 let requested: string[];
 
@@ -30,6 +33,7 @@ beforeEach(() => {
   active = undefined;
   menuItems = [];
   commands = {};
+  enablements = {};
   popped = [];
   requested = [];
   vi.stubGlobal('fetch', async (url: string) => {
@@ -62,7 +66,7 @@ beforeEach(() => {
         status = element;
         return { dispose() {} };
       },
-      registerMenuItem: (menuId: string, item: { title?: string; enabled?: () => boolean }) => menuItems.push({ menuId, title: item.title, enabled: item.enabled }),
+      registerMenuItem: (menuId: string, item: { command: string; title?: string }) => menuItems.push({ menuId, command: item.command, title: item.title }),
     },
     widgets: {
       get active() {
@@ -71,7 +75,12 @@ beforeEach(() => {
       onDidChangeActive: activeChanged.event,
     },
     page: { popOut: async (view: PoppedView) => void popped.push(view) },
-    commands: { registerCommand: (id: string, run: () => unknown) => (commands[id] = run) },
+    commands: {
+      registerCommand: (id: string, run: () => unknown, options?: CommandOptions) => {
+        commands[id] = run;
+        enablements[id] = options?.enablement;
+      },
+    },
   };
   debug.activate(context as unknown as ExtensionContext);
 });
@@ -115,12 +124,13 @@ describe('debug', () => {
 
   it('pops the active widget’s debug info out into a tab, which keeps following that widget, not the active one', async () => {
     const popOut = menuItems.find((item) => item.menuId === 'panel/debug')!;
-    expect(popOut.enabled!()).toBe(false);
+    const enabled = enablements[popOut.command]!;
+    expect(enabled()).toBe(false);
     commands['debug.popOut']();
     expect(popped).toEqual([]);
 
     activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
-    expect(popOut.enabled!()).toBe(true);
+    expect(enabled()).toBe(true);
     commands['debug.popOut']();
     expect(popped.map((view) => view.title)).toEqual(['Debug: Requests']);
     const tab = document.body.appendChild(document.createElement('div'));

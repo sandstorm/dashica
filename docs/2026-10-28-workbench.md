@@ -426,10 +426,10 @@ widget. It is kept in memory only.
 - **In memory only:** the stored tabs (`storedTabs(list, kept)`) leave out the popped tabs, so a reload closes them; a
   `#view=<id>` with no view in memory names no kind, so a link to it (or a reload while it is shown, the address bar
   going into the tab shown last of the others) shows the page *(proposed)*.
-- **Debug:** "Pop out" in `panel/debug` (greyed without an active widget): a tab "Debug: <title>" with the same views,
+- **Debug:** "Pop out" in `panel/debug` (greyed without an active widget; since 9t its command's enablement): a tab "Debug: <title>" with the same views,
   following that widget's status as the panel does (`followDebug`, shared by both), so it asks `/debug` again when the
   widget's query answered *(proposed)*.
-- **Details:** "Pop out" in `panel/details` (greyed while Details has no records): a tab "Details: <title>" with the
+- **Details:** "Pop out" in `panel/details` (greyed while Details has no records; since 9t its command's enablement): a tab "Details: <title>" with the
   records kept then side by side (`drawComparison`: a row per field, a column per record, a row whose values
   differ tinted, a missing field empty). It keeps those records: the table clears its ticks on each answer, so
   following them would empty the tab on the next refresh *(proposed)*.
@@ -455,7 +455,7 @@ query states `time` and `refresh` (§3.7)
 
 | Host | Offers |
 |---|---|
-| `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
+| `commands` | `registerCommand` (with the command's `enablement` / `disabledReason`, 9t), `executeCommand`, `enablement`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
 | `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status; a click to filter is the `filters` extension's command `filters.offer` (§3.8, 9f); the chart frame is `chart-library`'s (9h) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
@@ -1084,8 +1084,10 @@ interface ExtensionContext {
 
 // commands — as Zwiebelfisch
 interface Commands {
-  registerCommand(id: string, handler: (...args: any[]) => unknown): Disposable;
-  executeCommand<T>(id: string, ...args: unknown[]): Promise<T>;
+  registerCommand(id: string, handler: (...args: any[]) => unknown,
+                  o?: { enablement?: () => boolean; disabledReason?: string }): Disposable;   // as VS Code's enablement (9t)
+  executeCommand<T>(id: string, ...args: unknown[]): Promise<T>;   // runs whatever the enablement (code means it)
+  enablement(id: string): { enabled: boolean; disabledReason?: string };   // asked by menus, keys, rail, search everywhere
   getCommands(): readonly CommandContribution[];      // what the palette lists
   keybindingLabel(id: string): string | undefined;
 }
@@ -1100,7 +1102,7 @@ interface UiApi {
   registerBarItem(bar: 'top' | 'filter' | 'status', el: HTMLElement,
                   o: { alignment: 'left' | 'center' | 'right'; priority?: number }): Disposable;   // top: around the tabs
 
-  registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
+  registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when (shown) / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
   showContextMenu(menuId: string, o: { anchor: Element | {x: number; y: number}; context?: object; args?: unknown[] }): void;
                                           // the menu's entries in the quick pick as a menu at the anchor (8c, 9s)
@@ -1183,14 +1185,21 @@ column, value, timestamp, `filtering`) or the header's fields (`TableHeaderMenuC
 `autoSizeAll`); Debug's result table through `ui.showContextMenu` with the cell's or header's alone. The `table`
 extension contributes the entries (commands `table.filter…`, `table.autoSizeColumn(s)`). **Since 8c every menu is the
 quick pick** (§3.14 D3), since 9s as a menu (§3.15 D30): `showContextMenu` shows the entries in it at the anchor, a line between
-groups, a check mark for a `toggled` entry, an entry that is not `enabled` greyed (`aria-disabled`, choosing it does
-nothing) with its `tooltip` on hover (since 8g, `MenuItem.enabled` / `tooltip`, `QuickPickItem.disabled` / `tooltip`),
-the command run right after the box closed (still in the viewer's
+groups, a check mark for a `toggled` entry, an entry whose command is not enabled greyed (`aria-disabled`, choosing it
+does nothing) with the command's `disabledReason` on hover (`QuickPickItem.disabled` / `tooltip`, set by `ContextMenu`
+from `commands.enablement`; since 9t, §3.15 D31; 8g had `MenuItem.enabled` / `tooltip`), the command run right after the box closed (still in the viewer's
 gesture). A menu of the moment needs no id: its owner calls `ui.showQuickPick(items, {anchor, title})` (a chart's
 click: the `filters` extension's `filters.offer`, §3.8), with `menu: true` when it is a menu; `showChoices` is gone. A registered menu without entries hides the open box.
 The "…" buttons say `aria-haspopup="dialog"`, the quick pick's role. The rule "never by a right click" stands, with
 the `table/cell` deviation above *(proposed: D3's "right click" read as that one existing menu, no new right-click
 menus)*.
+
+**Enablement is the command's, a menu's `when` is visibility — as VS Code** (9t, §3.15 D31): a command says whether it
+can run now (`registerCommand(id, handler, { enablement, disabledReason })`, VS Code's
+`contributes.commands[].enablement`), so every place that shows or triggers it agrees: a menu entry, a rail button and
+search everywhere's command list show it greyed with the reason on hover, its key does nothing (the key goes on to the
+next binding or the content), and `executeCommand` from code runs it anyway. A menu entry keeps `when` (shown or not)
+and `toggled`; it has no `enabled` or `tooltip` of its own.
 
 Folders as in Zwiebelfisch: `frontend/core/<name>/` (primitives), `frontend/hosts/<name>/` (contribution points),
 `frontend/extensions/<name>/` (one folder per built-in extension); `frontend/workbench/` puts hosts and extensions
@@ -1451,7 +1460,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 
 ### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D30, D31, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1636,6 +1645,23 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   filter"'s op step) is a menu too, a short fixed choice that the maintainer's picker list leaves out; the Reset
   confirmation's question ("Reset the viewer’s config?", its placeholder until 9s) is the menu's heading; a point
   anchor (a right click, a chart click) has no opener to mark.
+- **D31 Enablement belongs to the command (9t, decided 2026-10-31; maintainer: "yes, do as vs code"):** as VS Code's
+  `contributes.commands[].enablement`, `commands.registerCommand(id, handler, { enablement?: () => boolean,
+  disabledReason?: string })`, read by `commands.enablement(id)` (`{ enabled, disabledReason }`, the reason only while
+  not enabled). Every place that shows or triggers a command asks it: a menu draws a disabled command greyed
+  (`QuickPickItem.disabled` stays the quick input's generic flag, set by `ContextMenu` from the command) with
+  `disabledReason` on hover; its keybinding does nothing; rail buttons and search everywhere's command list show it
+  greyed. `executeCommand` from code ignores enablement, as VS Code's. `MenuItem.enabled` and `MenuItem.tooltip` are
+  gone; a menu entry keeps `when` (shown or not) and `toggled`. Migrated: Explore off registers `exploreView.open`
+  never enabled (`EXPLORE_NOT_ENABLED`, now the command's options) with the reason "Explore is not enabled
+  (explore.enabled)"; "Start from chart…" (`exploreView.startFromChart`), Details' and Debug's "Pop out"
+  (`details.popOut`, `debug.popOut`). *(proposed)* The hover of an enabled entry is gone with `MenuItem.tooltip`
+  (the descriptions of "Explore", "Start from chart…" and the pop-outs; VS Code's menus have none either); the new
+  reasons are "The shown page has no chart", "No records selected" and "No active chart" (Debug's status bar text);
+  a key of a disabled command is not prevented, so the next binding or the content gets it (VS Code skips such a
+  binding); a rail button asks the enablement when it is added and whenever its tooltip may show (pointer enters,
+  focus) and on a click, as there is no change event (VS Code's context keys have one), and shows greyed by
+  `aria-disabled` (`--opacity-muted`), its tooltip "<label>: <reason>"; the step's id is 9t, as 9r was taken by D28.
 
 ✅ **Built in 9k (2026-10-31): the ops by type**, with these details and deviations:
 
@@ -1927,6 +1953,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9q ✅ | **D29 a readable, short pill key** (§3.8, §3.15): Go `filter.Sign(secret, pill, database)` / `Open(secret, key, database)` write and read `[<connection>:][<database>.]<table>.<field><op><value>[~<condition>]~<mac>` and `@<queryPart>[~<value>]~<mac>` (percent-encoded separators, HMAC-SHA256 truncated to 128 bits, 22 characters of base64url), `filter.ShortName`, `sql.Op.Operator`; `Pill` without `Type` and JSON tags, its `Label` made from the rest, `Column` for a key without condition; `filter.New` without type; `/pill` without `type`, a click on a field that is just a column making the column's pill; `page.json`'s `table` as the key names it; client: `pillField`, `pillButton`, `pillLabel` read the new key, the filter bar asks `/type` when a pill's op or value is edited, `fetchPill` sends no type; e2e specs check the key's form and a hand-changed key's 400. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: step id 9q (9p was taken); `conn:` for the connection; a plain builder field's pill is the column's; a button by its `queryPart`, labelled with its condition off its page; no type in the key, `/type` asked per edit *(all proposed)* | `f` of ~50 characters, readable |
 | 9r ✅ | **D28 a chart that ignores filters drawn muted** (§3.6, §3.8, §3.15): `ChartFrame` toggles `d-chart-frame--muted` on its frame while its "ignores …" badge shows (not while skipped, not after a failed query); `chart-frame.css` fades the stage by the new tokens `--opacity-muted` / `--saturation-muted` (`core/style/tokens.css`) and draws it at full strength on `:hover`, `:focus-within` and inside `d-widget--active`; the title row and the badge stay as they are. Files: `frontend/extensions/chart-library/chart-frame.{ts,css}` (+ test), `frontend/core/style/tokens.css`, `e2e/filter-chips.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the step's id is 9r, as 9o was taken by D26; a muted look of opacity and desaturation together, the same values on both schemes *(proposed)* | one sees at a glance which charts a filter leaves out |
 | 9s ✅ | **D30 a menu mode of the quick input** (§3.11, §3.15): `QuickPickOptions.menu` / `QuickPick.menu`; `OwnedQuickPick` conceals its field in a menu until a second letter (`#typed`), `OnePicker.jump` activates the first entry starting with the first letter; `QuickInput.#present` marks the opener (an `Element` anchor of a menu) `aria-expanded`; `quick-input.css` conceals the field and tints `button[aria-haspopup][aria-expanded='true']`; `ContextMenu.show`, `offerFilters`, `confirmReset` and the op pickers (`FilterBar.#changeOp`, `addFilter`'s op step) pass `menu: true`. Files: `frontend/hosts/ui/{ui.ts,quick-input/quick-input.{ts,css},menus/context-menu.ts}` (+ tests), `frontend/extensions/filters/{offer,filters,add-filter}.ts`, `frontend/extensions/explore-view/explore-view.ts` (+ tests), `e2e/{bar-selection,top-bar}.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright written, not run), deviations: the step's id is 9s, as 9q was taken by D29; the op pickers are menus; Reset's question a heading *(all proposed)* | menus without a search field, the opener pressed while open |
+| 9t ✅ | **D31 enablement belongs to the command** (§3.11, §3.15): `Commands.registerCommand(id, handler, options?)` with `CommandOptions` `{enablement, disabledReason}`, `Commands.enablement(id)` → `CommandEnablement`; `CommandsHost` keeps the options, skips a key (and a double tap) whose command is not enabled, `executeCommand` ignores it; `ContextMenu` sets `QuickPickItem.disabled` / `tooltip` from it; `SideBar.#railButton` greys a button (`aria-disabled`, `window-layout.css`) and ignores its click; `commandSearch` and `SearchPick`'s rows carry `disabled` / `tooltip`; `MenuItem.enabled` / `tooltip` deleted; `explore-view.ts` (`EXPLORE_NOT_ENABLED` as `CommandOptions`, "Start from chart…"), `details.ts`, `debug.ts` migrated. Files: `frontend/hosts/commands/{commands,commands-impl}.ts`, `frontend/hosts/ui/{ui.ts,menus/context-menu.ts,layout/side-bar.ts,layout/window-layout.css}`, `frontend/extensions/search-everywhere/ui/{command-search,search-pick}.ts`, `frontend/extensions/{explore-view/explore-view,details/details,debug/debug}.ts` (+ tests, new `command-search.test.ts`). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; no e2e spec needed a change, Playwright not run), deviations: the step's id is 9t, as 9r was taken by D28; enabled entries have no hover any more; the new reasons' wording; a disabled command's key goes on to the content; a rail button asks on add, hover, focus and click *(all proposed)* | a command greyed alike in every place |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

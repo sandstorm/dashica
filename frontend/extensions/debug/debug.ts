@@ -15,7 +15,8 @@ import './debug.css';
  * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
  * a table. It follows the active widget's status (`onDidChangeStatus`) and asks `/debug` only while it is shown: on
  * showing, on another active widget, and when that widget's query answered or failed. Which widget it is tells its
- * outline, not the panel. "Pop out" (the panel's menu `panel/debug`) shows the same for the active widget
+ * outline, not the panel. "Pop out" (the panel's menu `panel/debug`, its command enabled while a widget is active)
+ * shows the same for the active widget
  * in a tab of its own, which keeps following that widget's status, not the active widget. The status bar
  * says the widget's rows, query time, its error or the filters it ignores ("No active chart" on the start page); a
  * click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
@@ -55,24 +56,22 @@ export const debug: Extension = {
     subscriptions.push(commands.registerCommand('debug.showWidget', () => panel.show()));
     subscriptions.push(ui.registerMenuItem('widget/context', { command: 'debug.showWidget', title: 'Debug', group: 'debug' }));
     subscriptions.push(
-      commands.registerCommand('debug.popOut', () => {
-        const active = widgets.active;
-        if (!active) return;
-        return page.popOut({
-          title: `Debug: ${widgetTitle(active.widget)}`,
-          render: (el) => {
-            const tab: HTMLElement = el.appendChild(html`<div class="d-debug-tab"></div>`);
-            return followDebug(tab, active, showMenu, globalState);
-          },
-        });
-      }),
-      ui.registerMenuItem('panel/debug', {
-        command: 'debug.popOut',
-        title: 'Pop out',
-        icon: createElement(SquareArrowOutUpRight).outerHTML,
-        enabled: () => widgets.active !== undefined,
-        tooltip: 'The active chart’s debug info in a tab of its own',
-      }),
+      commands.registerCommand(
+        'debug.popOut',
+        () => {
+          const active = widgets.active;
+          if (!active) return;
+          return page.popOut({
+            title: `Debug: ${widgetTitle(active.widget)}`,
+            render: (el) => {
+              const tab: HTMLElement = el.appendChild(html`<div class="d-debug-tab"></div>`);
+              return followDebug(tab, active, showMenu, globalState);
+            },
+          });
+        },
+        { enablement: () => widgets.active !== undefined, disabledReason: 'No active chart' },
+      ),
+      ui.registerMenuItem('panel/debug', { command: 'debug.popOut', title: 'Pop out', icon: createElement(SquareArrowOutUpRight).outerHTML }),
     );
   },
 };

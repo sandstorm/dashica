@@ -1,5 +1,5 @@
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { MenuItem } from '../../hosts/commands/commands';
+import type { CommandOptions, MenuItem } from '../../hosts/commands/commands';
 import { QuickPickItemKind, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
@@ -10,7 +10,7 @@ import './explore-view.css';
 
 /**
  * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore.enabled; else only "Explore"
- * greyed in the global menu, EXPLORE_NOT_ENABLED): "Open in Explore view" in a chart's menu (`widget/context`, charts
+ * greyed in the global menu, its command `exploreView.open` not enabled, EXPLORE_NOT_ENABLED): "Open in Explore view" in a chart's menu (`widget/context`, charts
  * with a `rowsUrl`) opens a new tab with the chart's result in `<perspective-viewer>`, its settings panel open and its config rebuilt from the chart's props, while the tab's time range and filters keep
  * working on it. "SQL" shows the chart's SQL as it runs, its placeholders kept and their values beside it; the viewer
  * edits it and runs it (`#explore=3&exploreSql=…`), and the page's time range and filters no longer apply until
@@ -27,7 +27,7 @@ export const exploreView: Extension = {
   id: 'exploreView',
   activate({ ui, page, query, commands, globalState, subscriptions }) {
     if (!page.workbench.explore) {
-      subscriptions.push(ui.registerMenuItem('workbench/global', EXPLORE_NOT_ENABLED));
+      subscriptions.push(commands.registerCommand(EXPLORE_ENTRY.command, () => {}, EXPLORE_NOT_ENABLED), ui.registerMenuItem('workbench/global', EXPLORE_ENTRY));
       return;
     }
     subscriptions.push(
@@ -71,25 +71,22 @@ export const exploreView: Extension = {
       commands.registerCommand('exploreView.open', () =>
         page.navigate(blankExploreUrl(page.activeTab.url, charts()[0]?.connection ?? page.workbench.connections[0] ?? 'default'), { newTab: true }),
       ),
-      commands.registerCommand('exploreView.startFromChart', async () => {
-        const picked = await ui.showQuickPick(
-          charts().map((chart) => ({ label: chartTitle(chart), description: chart.connection, chart })),
-          { title: 'Start from chart', placeholder: 'The chart whose SQL the editor starts with' },
-        );
-        if (!picked) return;
-        const { sql, parameters } = await fetchSql(sqlRequest(picked.chart.dataUrl, query.requestParams()));
-        const connection = picked.chart.connection ?? page.workbench.connections[0] ?? 'default';
-        return page.navigate(blankExploreUrl(page.activeTab.url, connection, sql === '' ? undefined : { sql, parameters }), { newTab: true });
-      }),
-      ui.registerMenuItem('workbench/global', { ...EXPLORE_ENTRY, tooltip: 'A blank Explore: SQL on a connection of dashica_config' }),
-      ui.registerMenuItem('workbench/global', {
-        command: 'exploreView.startFromChart',
-        title: 'Start from chart…',
-        group: 'explore',
-        order: 1,
-        enabled: () => charts().length > 0,
-        tooltip: 'A blank Explore with the SQL of one of the shown page’s charts',
-      }),
+      commands.registerCommand(
+        'exploreView.startFromChart',
+        async () => {
+          const picked = await ui.showQuickPick(
+            charts().map((chart) => ({ label: chartTitle(chart), description: chart.connection, chart })),
+            { title: 'Start from chart', placeholder: 'The chart whose SQL the editor starts with' },
+          );
+          if (!picked) return;
+          const { sql, parameters } = await fetchSql(sqlRequest(picked.chart.dataUrl, query.requestParams()));
+          const connection = picked.chart.connection ?? page.workbench.connections[0] ?? 'default';
+          return page.navigate(blankExploreUrl(page.activeTab.url, connection, sql === '' ? undefined : { sql, parameters }), { newTab: true });
+        },
+        { enablement: () => charts().length > 0, disabledReason: 'The shown page has no chart' },
+      ),
+      ui.registerMenuItem('workbench/global', EXPLORE_ENTRY),
+      ui.registerMenuItem('workbench/global', { command: 'exploreView.startFromChart', title: 'Start from chart…', group: 'explore', order: 1 }),
     );
     subscriptions.push(
       ui.registerMenuItem<WidgetMenuContext>('widget/context', {
@@ -105,11 +102,13 @@ export const exploreView: Extension = {
 /** The global menu's "Explore": a blank Explore in a new tab (`exploreView.open`). */
 const EXPLORE_ENTRY: MenuItem = { command: 'exploreView.open', title: 'Explore', group: 'explore' };
 
-/** The global menu's only trace of the Explore view while it is not enabled: "Explore" greyed, its tooltip saying so. */
-export const EXPLORE_NOT_ENABLED: MenuItem = {
-  ...EXPLORE_ENTRY,
-  enabled: () => false,
-  tooltip: 'Explore is not enabled (explore.enabled)',
+/**
+ * The global menu's only trace of the Explore view while it is not enabled: its command `exploreView.open` never
+ * enabled, so "Explore" shows greyed, its hover saying why.
+ */
+export const EXPLORE_NOT_ENABLED: CommandOptions = {
+  enablement: () => false,
+  disabledReason: 'Explore is not enabled (explore.enabled)',
 };
 
 /** The question, "Reset" and "Cancel" of `confirmReset`. */

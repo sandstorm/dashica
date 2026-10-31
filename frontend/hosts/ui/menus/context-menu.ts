@@ -6,8 +6,8 @@ import type { Menus } from './menus';
 
 /**
  * What `showContextMenu` shows: the menu's entries in the quick pick as a menu at the anchor (`menu`), a line
- * between groups, an entry with `toggled` with a check mark while it holds, one that is not `enabled` greyed, an
- * entry's key at its end and its `tooltip` on hover. Choosing an
+ * between groups, an entry with `toggled` with a check mark while it holds, one whose command is not enabled
+ * (`Commands.enablement`) greyed with the command's `disabledReason` on hover, an entry's key at its end. Choosing an
  * entry closes the box and gives the focus back; its command runs right after, still in the viewer's gesture (a
  * failing one is logged). A menu without entries hides the open box and shows nothing.
  */
@@ -15,8 +15,8 @@ export class ContextMenu {
   constructor(
     private readonly quickInput: Pick<QuickInput, 'pickOne' | 'hide'>,
     private readonly menus: Menus,
-    /** Runs a chosen entry's command with the menu's arguments; names the entries' keys. */
-    private readonly commands: Pick<CommandsHost, 'executeCommand' | 'keybindingLabel'>,
+    /** Runs a chosen entry's command with the menu's arguments; names the entries' keys; says which can run. */
+    private readonly commands: Pick<CommandsHost, 'executeCommand' | 'keybindingLabel' | 'enablement'>,
   ) {}
 
   show(menuId: string, options: ContextMenuOptions): void {
@@ -27,12 +27,13 @@ export class ContextMenu {
     for (const item of this.menus.items(menuId, context)) {
       if (group !== undefined && (item.group ?? '') !== group) picks.push({ kind: QuickPickItemKind.Separator });
       group = item.group ?? '';
+      const { enabled, disabledReason } = this.commands.enablement(item.command);
       picks.push({
         label: item.title ?? item.command,
         keybinding: this.commands.keybindingLabel(item.command),
         checked: item.toggled?.(context),
-        disabled: item.enabled ? !item.enabled(context) : undefined,
-        tooltip: item.tooltip,
+        disabled: enabled ? undefined : true,
+        tooltip: disabledReason,
         command: item.command,
       });
     }

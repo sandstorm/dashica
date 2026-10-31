@@ -11,6 +11,7 @@ import type { ExtensionContext } from '../../hosts/extension-host/extension-host
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
 import { QuickPickItemKind } from '../../hosts/ui/ui';
+import type { CommandOptions } from '../../hosts/commands/commands';
 import { TIME } from '../time-library/time-state';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { blankExploreUrl, chartsOf, confirmReset, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
@@ -25,8 +26,10 @@ const chart: WidgetNode = {
 const markdown: WidgetNode = { type: 'markdown', props: {} };
 const page = { kind: 'dashboard', title: 'Shop', filterBar: true, filterButtons: [], widgets: [{ type: 'grid', props: {}, children: { a: markdown, b: chart } }] } as PageJson;
 
-let menuItems: { menuId: string; title?: string; when?: (context: WidgetMenuContext) => boolean; enabled?: (context: object) => boolean }[];
+let menuItems: { menuId: string; command: string; title?: string; when?: (context: WidgetMenuContext) => boolean }[];
 let commands: Map<string, (context?: WidgetMenuContext) => unknown>;
+/** The options each command was registered with. */
+let options: Map<string, CommandOptions | undefined>;
 /** The page the active tab shows; `undefined` while none is. */
 let current: PageJson | undefined;
 /** What the fake quick pick was shown; it picks the first item. */
@@ -40,6 +43,7 @@ let closed: number;
 beforeEach(() => {
   menuItems = [];
   commands = new Map();
+  options = new Map();
   current = page;
   picks = [];
   navigated = [];
@@ -71,13 +75,17 @@ function activate(explore: boolean): void {
     },
     ui: {
       showQuickPick: async <T extends { label: string }>(items: readonly T[]) => (picks.push(items), items[0]),
-      registerMenuItem: (menuId: string, item: { title?: string; when?: (context: WidgetMenuContext) => boolean }) => {
+      registerMenuItem: (menuId: string, item: { command: string; title?: string; when?: (context: WidgetMenuContext) => boolean }) => {
         menuItems.push({ menuId, ...item });
         return new Disposable(() => {});
       },
     },
     commands: {
-      registerCommand: (id: string, command: (context?: WidgetMenuContext) => unknown) => (commands.set(id, command), new Disposable(() => commands.delete(id))),
+      registerCommand: (id: string, command: (context?: WidgetMenuContext) => unknown, given?: CommandOptions) => {
+        commands.set(id, command);
+        options.set(id, given);
+        return new Disposable(() => commands.delete(id));
+      },
     },
   };
   exploreView.activate(context as unknown as ExtensionContext);
@@ -103,9 +111,11 @@ describe('exploreView', () => {
     menuItems = [];
     renderers.clear();
     activate(false);
-    expect(menuItems).toEqual([{ menuId: 'workbench/global', ...EXPLORE_NOT_ENABLED }]);
-    expect(EXPLORE_NOT_ENABLED).toMatchObject({ title: 'Explore', tooltip: 'Explore is not enabled (explore.enabled)' });
-    expect(EXPLORE_NOT_ENABLED.enabled!({})).toBe(false);
+    expect(menuItems).toEqual([{ menuId: 'workbench/global', command: 'exploreView.open', title: 'Explore', group: 'explore' }]);
+    // greyed: its command is never enabled, its hover says why
+    expect([...commands.keys()]).toEqual(['exploreView.open']);
+    expect(options.get('exploreView.open')).toBe(EXPLORE_NOT_ENABLED);
+    expect([EXPLORE_NOT_ENABLED.enablement!(), EXPLORE_NOT_ENABLED.disabledReason]).toEqual([false, 'Explore is not enabled (explore.enabled)']);
     expect(renderers.size).toBe(0);
   });
 
@@ -131,15 +141,19 @@ describe('exploreView', () => {
     expect(el.children).toHaveLength(0);
   });
 
-  it('puts "Explore" and "Start from chart…" into the global menu, the second greyed without a chart on the shown page', () => {
+  it('puts "Explore" and "Start from chart…" into the global menu, the second’s command enabled only with a chart on the shown page', () => {
     const global = menuItems.filter(({ menuId }) => menuId === 'workbench/global');
-    expect(global.map(({ title }) => title)).toEqual(['Explore', 'Start from chart…']);
-    expect(global[0].enabled).toBeUndefined();
-    expect(global[1].enabled!({})).toBe(true);
+    expect(global.map(({ title, command }) => [title, command])).toEqual([
+      ['Explore', 'exploreView.open'],
+      ['Start from chart…', 'exploreView.startFromChart'],
+    ]);
+    expect(options.get('exploreView.open')).toBeUndefined();
+    const startFromChart = options.get('exploreView.startFromChart')!;
+    expect([startFromChart.enablement!(), startFromChart.disabledReason]).toEqual([true, 'The shown page has no chart']);
     current = { ...page, widgets: [markdown] };
-    expect(global[1].enabled!({})).toBe(false);
+    expect(startFromChart.enablement!()).toBe(false);
     current = undefined;
-    expect(global[1].enabled!({})).toBe(false);
+    expect(startFromChart.enablement!()).toBe(false);
   });
 
   it('opens a blank Explore in a new tab on the connection of the shown page’s first chart, else the first connection', async () => {

@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
+import type { CommandOptions } from '../../hosts/commands/commands';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { PoppedView } from '../../hosts/page/page';
 import type { WidgetRecord } from '../../hosts/widgets/widgets';
@@ -39,10 +40,15 @@ beforeEach(() => {
         status = element;
         return { dispose() {} };
       },
-      registerMenuItem: (_menuId: string, item: { enabled: () => boolean }) => (popOutEnabled = item.enabled),
+      registerMenuItem: () => ({ dispose() {} }),
     },
     page: { popOut: async (view: PoppedView) => void popped.push(view) },
-    commands: { registerCommand: (id: string, run: () => unknown) => (commands[id] = run) },
+    commands: {
+      registerCommand: (id: string, run: () => unknown, options?: CommandOptions) => {
+        commands[id] = run;
+        if (id === 'details.popOut') popOutEnabled = options!.enablement!;
+      },
+    },
   };
   details.activate(context as unknown as ExtensionContext);
 });

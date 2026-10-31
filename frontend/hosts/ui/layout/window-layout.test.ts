@@ -407,6 +407,25 @@ describe('WindowLayout', () => {
     expect(rail()).toEqual(['Dashboards']);
   });
 
+  it("greys a command button while its command cannot run, its tooltip saying why, asked again on hover; a click then runs nothing", async () => {
+    const { host, layout, commands } = setup();
+    const ran: string[] = [];
+    let enabled = false;
+    commands.registerCommand('test.search', () => ran.push('search'), { enablement: () => enabled, disabledReason: 'Nothing to search' });
+    layout.addRailButton('search', { label: 'Search everywhere', icon: '<svg></svg>', command: 'test.search' });
+    const button = host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!;
+    expect([button.getAttribute('aria-disabled'), button.title]).toEqual(['true', 'Search everywhere: Nothing to search']);
+    button.click();
+    await Promise.resolve();
+    expect(ran).toEqual([]);
+    enabled = true;
+    button.dispatchEvent(new Event('pointerenter'));
+    expect([button.hasAttribute('aria-disabled'), button.title]).toEqual([false, 'Search everywhere']);
+    button.click();
+    await Promise.resolve();
+    expect(ran).toEqual(['search']);
+  });
+
   it('shows a side that has only a command button', () => {
     const { host, layout } = setup();
     const right = host.querySelector<HTMLElement>('.d-workbench__side--right')!;

@@ -22,9 +22,17 @@ function menusWith(menuId: string, items: readonly MenuItem[]): Menus {
   return menus;
 }
 
-/** Commands that run nothing and have no keys, else as `more` says. */
-function commandsWith(more: { executeCommand?(command: string, ...args: unknown[]): Promise<unknown>; keybindingLabel?(command: string): string | undefined } = {}) {
-  return { executeCommand: async () => undefined, keybindingLabel: () => undefined, ...more } as Pick<CommandsHost, 'executeCommand' | 'keybindingLabel'>;
+type FakeCommands = Pick<CommandsHost, 'executeCommand' | 'keybindingLabel' | 'enablement'>;
+
+/** Commands that run nothing, have no keys and can all run, else as `more` says. */
+function commandsWith(
+  more: {
+    executeCommand?(command: string, ...args: unknown[]): Promise<unknown>;
+    keybindingLabel?(command: string): string | undefined;
+    enablement?: FakeCommands['enablement'];
+  } = {},
+): FakeCommands {
+  return { executeCommand: async () => undefined, keybindingLabel: () => undefined, enablement: () => ({ enabled: true }), ...more } as FakeCommands;
 }
 
 function setup(menus = menusWith('dashboards/entry', ENTRIES), more: Parameters<typeof commandsWith>[0] = {}) {
@@ -86,13 +94,16 @@ describe('ContextMenu', () => {
     expect(host.querySelector('[role=listbox]')!.classList.contains('d-workbench__quick-pick-list--checks')).toBe(true);
   });
 
-  it('shows an entry that is not `enabled` greyed with its tooltip, and runs nothing when it is chosen', () => {
+  it("shows an entry whose command is not enabled greyed with the command's reason, asked each time, and runs nothing when it is chosen", () => {
     const items: MenuItem[] = [
-      { command: 'exploreView.open', title: 'Explore', enabled: (context) => context.favorite === true, tooltip: 'Explore is not enabled (explore.enabled)' },
+      { command: 'exploreView.open', title: 'Explore' },
       { command: 'dashboards.copyLink', title: 'Copy link' },
     ];
-    const { host, menu, items: options, field, ran, isOpen } = setup(menusWith('workbench/global', items));
-    menu.show('workbench/global', { anchor: host, title: 'Dashica', context: { favorite: false } });
+    let explore = false;
+    const { host, menu, items: options, field, ran, isOpen } = setup(menusWith('workbench/global', items), {
+      enablement: (command) => (command !== 'exploreView.open' || explore ? { enabled: true } : { enabled: false, disabledReason: 'Explore is not enabled (explore.enabled)' }),
+    });
+    menu.show('workbench/global', { anchor: host, title: 'Dashica' });
     expect(options().map((entry) => [entry.getAttribute('aria-disabled'), entry.title])).toEqual([
       ['true', 'Explore is not enabled (explore.enabled)'],
       [null, ''],
@@ -100,8 +111,9 @@ describe('ContextMenu', () => {
     options()[0].click();
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     expect([ran, isOpen()]).toEqual([[], true]);
-    menu.show('workbench/global', { anchor: host, title: 'Dashica', context: { favorite: true } });
-    expect(options()[0].hasAttribute('aria-disabled')).toBe(false);
+    explore = true;
+    menu.show('workbench/global', { anchor: host, title: 'Dashica' });
+    expect([options()[0].hasAttribute('aria-disabled'), options()[0].title]).toEqual([false, '']);
     options()[0].click();
     expect(ran).toEqual([['exploreView.open', true]]);
   });

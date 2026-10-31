@@ -113,6 +113,8 @@ interface Row {
   readonly detail?: string;
   readonly keybinding?: string;
   readonly highlights?: QuickPickHighlights;
+  readonly disabled?: boolean;
+  readonly tooltip?: string;
   readonly item: SearchItem;
 }
 
@@ -158,7 +160,10 @@ function provided(provider: SearchProvider, query: string, round: CancellationTo
  */
 function rank(items: readonly SearchItem[], query: string): Ranked {
   const scored: { row: Row; score: number }[] = [];
-  const row = (item: SearchItem, highlights: QuickPickHighlights): Row => ({ label: item.label, description: item.description, detail: item.detail, keybinding: item.keybinding, highlights, item });
+  const row = (item: SearchItem, highlights: QuickPickHighlights): Row => {
+    const { label, description, detail, keybinding, disabled, tooltip } = item;
+    return { label, description, detail, keybinding, highlights, disabled, tooltip, item };
+  };
   for (const item of items) {
     if (item.highlights) {
       scored.push({ row: row(item, item.highlights), score: Infinity });

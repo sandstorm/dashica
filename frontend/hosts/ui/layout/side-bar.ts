@@ -4,7 +4,7 @@ import { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { html } from 'htl';
 import { Ellipsis, createElement } from 'lucide';
-import type { MenuItem } from '../../commands/commands';
+import type { CommandEnablement, MenuItem } from '../../commands/commands';
 import type { ContextMenuOptions, Panel, RailButtonOptions, SidePanelOptions } from '../ui';
 
 /**
@@ -16,7 +16,7 @@ import type { ContextMenuOptions, Panel, RailButtonOptions, SidePanelOptions } f
  * panel, else the first panel whose owner asked for it (`setDefault`). As an overlay (`setOverlay`, the narrow
  * workbench's left side) a pick lasts for the moment only, and Escape, a click outside or `dismiss()` close the panel.
  * Each panel's command `workbench.view.<id>` picks it from the keyboard; its rail button's tooltip names the key, as a
- * command button's names its command's.
+ * command button's names its command's; a button whose command cannot run now shows greyed.
  */
 export class SideBar {
   readonly element: HTMLElement;
@@ -179,15 +179,24 @@ export class SideBar {
 
   /**
    * A rail button with `options`' icon, running `click`; its tooltip names `command`'s key, asked anew whenever the
-   * tooltip may show (the key may be bound after the button is added).
+   * tooltip may show (the key may be bound after the button is added). While `command` cannot run
+   * (`Commands.enablement`, asked then too) it shows greyed, its tooltip says why and a click does nothing.
    */
   #railButton(options: { label: string; icon: string }, command: string, click: () => void): HTMLButtonElement {
     const describe = () => {
       const key = this.owner.commands.keybindingLabel(command);
-      button.title = key ? `${options.label} (${key})` : options.label;
+      const { enabled, disabledReason } = this.owner.commands.enablement(command);
+      const title = key ? `${options.label} (${key})` : options.label;
+      button.title = disabledReason ? `${title}: ${disabledReason}` : title;
+      if (enabled) button.removeAttribute('aria-disabled');
+      else button.setAttribute('aria-disabled', 'true');
+      return enabled;
+    };
+    const onclick = () => {
+      if (describe()) click();
     };
     const button = html<HTMLButtonElement>`<button type="button" class="d-workbench__rail-button" aria-label=${options.label}
-      onpointerenter=${describe} onfocus=${describe} onclick=${click}></button>`;
+      onpointerenter=${describe} onfocus=${describe} onclick=${onclick}></button>`;
     describe();
     button.insertAdjacentHTML('beforeend', options.icon);
     return button;
@@ -362,11 +371,12 @@ export interface SideBarOwner {
   readonly menus: PanelMenus;
 }
 
-/** What a side needs of the commands: to register a panel's, run a rail button's, and the label of a key. */
+/** What a side needs of the commands: to register a panel's, run a rail button's, the label of a key, whether one can run. */
 export interface PanelCommands {
   registerCommand(id: string, handler: () => void): Disposable;
   executeCommand(id: string): Promise<unknown>;
   keybindingLabel(id: string): string | undefined;
+  enablement(id: string): CommandEnablement;
 }
 
 /** What a panel's "…" needs of the menus: to add "Hide" to its menu and to show it. */
