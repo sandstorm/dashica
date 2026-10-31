@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for speedscope-link.ts: the viewer's link on the profile with the page's state.
+// Tests for speedscope-link.ts: the viewer's link on the profile with the page's state; a click opens it in a tab.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { speedscopeLink } from './speedscope-link';
@@ -30,6 +30,23 @@ describe('speedscopeLink', () => {
     expect(profile.pathname).toBe('/p/shop/api/4/speedscope-query');
     expect(profile.searchParams.get('time')).toBe('24h');
     expect(JSON.parse(profile.searchParams.get('wp')!)).toEqual({ path: '^/api/' });
+  });
+
+  it('opens the viewer in a tab of the workbench on a click, in an iframe; a click with a modifier key stays the browser’s', () => {
+    const { el } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
+    const link = el.querySelector('a')!;
+    const withCtrl = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+    link.dispatchEvent(withCtrl);
+    expect(testbed.popped).toEqual([]);
+    expect(withCtrl.defaultPrevented).toBe(false);
+
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(testbed.popped.map((view) => view.title)).toEqual(['Speedscope']);
+    const tab = document.createElement('div');
+    testbed.popped[0].render(tab);
+    expect(tab.querySelector('iframe')!.src).toBe(link.href);
   });
 
   it('follows a change of the time range', () => {

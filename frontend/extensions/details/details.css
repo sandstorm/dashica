@@ -1,5 +1,5 @@
 /* See details.ts: the left side panel "Details" (the active widget's title, then a view per selected record, its fields
-   one below the other) and the status bar's item. */
+   one below the other), the records side by side in a tab, and the status bar's item. */
 .d-details {
   display: flex;
   flex-direction: column;
@@ -47,6 +47,35 @@
   border-radius: var(--radius-md);
   background: var(--color-surface);
   white-space: pre;
+}
+
+/* popped out: a row per field, a column per record; a row whose values differ tinted */
+.d-details-compare {
+  padding: var(--space-3);
+  overflow-x: auto;
+}
+
+.d-details-compare__table {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.d-details-compare__table th,
+.d-details-compare__table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.d-details-compare__table thead th {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-bold);
+}
+
+.d-details-compare__row--differs {
+  background: var(--color-hover);
 }
 
 /* the status bar's item: a button as wide as its text */

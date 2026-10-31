@@ -66,9 +66,13 @@ export function adjacentTab(tabs: readonly Tab[], id: string, step: 1 | -1): str
   return tabs[(at + step + tabs.length) % tabs.length].id;
 }
 
-/** What survives a reload of the browser tab (sessionStorage): the tabs in their order and the active one. */
-export function storedTabs(list: TabList): { tabs: readonly Tab[]; active: string } {
-  return { tabs: list.tabs, active: list.active };
+/**
+ * What survives a reload of the browser tab (sessionStorage): the tabs `kept` (default all; a popped-out view's tab is
+ * not) in their order, and the active one, else the one of them shown last.
+ */
+export function storedTabs(list: TabList, kept: (tab: Tab) => boolean = () => true): { tabs: readonly Tab[]; active: string } {
+  const tabs = list.tabs.filter(kept);
+  return { tabs, active: list.recent.find((id) => tabs.some((tab) => tab.id === id)) ?? '' };
 }
 
 /**

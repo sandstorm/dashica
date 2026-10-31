@@ -1,6 +1,6 @@
 import { html } from 'htl';
-import { ListChecks, createElement } from 'lucide';
-import type { Disposable } from '../../core/disposable/disposable';
+import { ListChecks, SquareArrowOutUpRight, createElement } from 'lucide';
+import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { createView } from '../../hosts/ui/ui';
 import { widgetTitle, type RenderedWidget, type WidgetRecord } from '../../hosts/widgets/widgets';
@@ -12,12 +12,14 @@ import './details.css';
  * (`widgets.active.records`: a table's ticked rows). The panel shows the widget's title, then a view per record, its
  * fields one below the other (a JSON value pretty-printed, a value of several lines as it is), drawn anew when the
  * active widget or its records change (`onDidChangeRecords`), not on its status; each view starts open, its collapsed
- * state not kept (a place in one selection says nothing about another's). The status bar says "3 records selected"
- * while there are some (else the item is hidden); a click on it opens the panel.
+ * state not kept (a place in one selection says nothing about another's). "Pop out" (the panel's menu `panel/details`)
+ * opens a tab comparing the records selected then side by side, a column per record; the tab keeps them, also when the
+ * table's next answer clears its ticks. The status bar says "3 records selected" while there are some (else the item
+ * is hidden); a click on it opens the panel.
  */
 export const details: Extension = {
   id: 'details',
-  activate({ ui, widgets, subscriptions }) {
+  activate({ ui, widgets, page, commands, subscriptions }) {
     const panel = ui.registerSidePanel('details', { label: 'Details', icon: createElement(ListChecks).outerHTML, order: 20 });
     const status: HTMLButtonElement = html`<button type="button" class="d-details-status" data-testid="details-status" title="Show Details" onclick=${() => panel.show()}></button>`;
     subscriptions.push(panel, ui.registerBarItem('status', status, { alignment: 'left' }));
@@ -38,6 +40,27 @@ export const details: Extension = {
     };
     follow();
     subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(update), { dispose: () => following?.dispose() });
+
+    subscriptions.push(
+      commands.registerCommand('details.popOut', () => {
+        const active = widgets.active;
+        if (!active || active.records.length === 0) return;
+        const title = widgetTitle(active.widget);
+        const records = active.records;
+        return page.popOut({
+          title: `Details: ${title}`,
+          // the tab's element is emptied when it closes
+          render: (el) => (el.append(drawComparison(title, records)), Disposable.from()),
+        });
+      }),
+      ui.registerMenuItem('panel/details', {
+        command: 'details.popOut',
+        title: 'Pop out',
+        icon: createElement(SquareArrowOutUpRight).outerHTML,
+        enabled: () => (widgets.active?.records.length ?? 0) > 0,
+        tooltip: 'The selected records side by side in a tab of their own',
+      }),
+    );
   },
 };
 
@@ -58,13 +81,42 @@ function drawDetails(active: RenderedWidget | undefined): HTMLElement {
 /** `record`'s fields, one below the other: a JSON value pretty-printed, a value of several lines as it is. */
 export function drawRecord(record: WidgetRecord): HTMLElement {
   return html`<dl class="d-details__record">
-    ${Object.entries(record).map(([key, value]) => {
-      const text = String(value);
-      const block = tryPrettyJson(text) ?? (text.trim().includes('\n') ? text : null);
-      return html`<div class="d-details__field">
+    ${Object.entries(record).map(
+      ([key, value]) => html`<div class="d-details__field">
         <dt class="d-details__key">${key}</dt>
-        <dd class="d-details__value">${block === null ? text : html`<pre class="d-details__block">${block}</pre>`}</dd>
-      </div>`;
-    })}
+        <dd class="d-details__value">${drawValue(value)}</dd>
+      </div>`,
+    )}
   </dl>`;
+}
+
+/**
+ * `records` side by side under the widget's `title`: a row per field (in the order the records first have them), a
+ * column per record; a row whose values differ is marked (`d-details-compare__row--differs`), a missing field is empty.
+ */
+export function drawComparison(title: string, records: readonly WidgetRecord[]): HTMLElement {
+  const keys = [...new Set(records.flatMap((record) => Object.keys(record)))];
+  return html`<div class="d-details-compare">
+    <h2 class="d-details__title">${title}</h2>
+    <table class="d-details-compare__table">
+      <thead><tr><th scope="col">Field</th>${records.map((_, i) => html`<th scope="col">Record ${i + 1}</th>`)}</tr></thead>
+      <tbody>
+        ${keys.map((key) => {
+          const texts = records.map((record) => (key in record ? String(record[key]) : undefined));
+          const differs = new Set(texts).size > 1;
+          return html`<tr class=${differs ? 'd-details-compare__row--differs' : ''}>
+            <th scope="row" class="d-details__key">${key}</th>
+            ${records.map((record) => html`<td class="d-details__value">${key in record ? drawValue(record[key]) : ''}</td>`)}
+          </tr>`;
+        })}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/** A field's value: a JSON value pretty-printed, a value of several lines as it is, others as text. */
+function drawValue(value: unknown): Node | string {
+  const text = String(value);
+  const block = tryPrettyJson(text) ?? (text.trim().includes('\n') ? text : null);
+  return block === null ? text : html`<pre class="d-details__block">${block}</pre>`;
 }

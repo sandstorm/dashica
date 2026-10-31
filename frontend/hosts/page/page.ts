@@ -10,7 +10,8 @@ import type { Tab } from './tabs';
  * back and forward. The address bar shows the active tab's URL. A page opens with the time range it declares and is
  * rendered by the renderer of its `kind` (`dashboard`), or of a kind its hash names (`#explore=3`), which an extension
  * registers. A tab in the background keeps its page; its queries and auto refresh wait until it is shown.
- * `workbench` is what `/workbench.json` says about all pages (the dashboards menu).
+ * `workbench` is what `/workbench.json` says about all pages (the dashboards menu). A side panel's view pops out into a
+ * tab of its own (`popOut`), kept in memory only.
  */
 export interface PageApi {
   readonly workbench: WorkbenchJson;
@@ -38,8 +39,24 @@ export interface PageApi {
   showTab(id: string): void;
   /** Closes the tab `id`, its page and its queries; the tab shown before it becomes active. The last tab stays. */
   closeTab(id: string): void;
+  /**
+   * Opens `view` in a new tab after the active one, shown: Debug or Details popped out of their panel, Speedscope. The
+   * tab is the active tab's page with `#view=<tab id>` and keeps `view` in memory only: it is not kept over a reload,
+   * and a link to it shows the page.
+   */
+  popOut(view: PoppedView): Promise<void>;
   /** Renders the pages of `kind` until disposed; one renderer per kind. */
   registerPageRenderer(kind: string, renderer: PageRenderer): Disposable;
+}
+
+/**
+ * A view in a tab of its own (`popOut`): what the tab says, and how it fills the tab's element; disposing the result
+ * stops what it started (the tab closed). It shows what it was given when popped out (the widget then active), not
+ * whatever becomes active later.
+ */
+export interface PoppedView {
+  readonly title: string;
+  render(el: HTMLElement): Disposable;
 }
 
 /**

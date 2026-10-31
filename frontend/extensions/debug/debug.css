@@ -1,9 +1,14 @@
-/* See debug.ts: the left side panel "Debug" (the active widget's views one below the other) and the status bar's item
-   (the active widget's rows, time, error, one after another). */
+/* See debug.ts: the left side panel "Debug" (the active widget's views one below the other), the same popped out into
+   a tab, and the status bar's item (the active widget's rows, time, error, one after another). */
 .d-debug {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+
+/* popped out: the views with room around them in the tab */
+.d-debug-tab {
+  padding: var(--space-3);
 }
 
 .d-debug > .d-spinner {

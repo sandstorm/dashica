@@ -2,7 +2,7 @@
 // Tests for page.ts: the first page, navigate, links, back and forward, a hash on the page, a page that cannot be shown;
 // the tabs: opening, switching, closing, the address bar and history following the active tab, a background tab kept
 // and paused, a switch to a tab without a page, a closed tab's query state disposed, a page kind named in the hash, the
-// tabs after a reload, a URL without `page.json`.
+// tabs after a reload, a URL without `page.json`; a popped-out view in a tab of its own, kept in memory only.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { PageJson } from '../../generated/zz_generated.dashica';
@@ -466,6 +466,55 @@ describe('PageHost', () => {
       await settle();
       expect(fetched()).toEqual(['/p/checkout/page.json']);
       expect(host.activeTab).toEqual({ id: checkout, url: '/p/checkout', title: 'Checkout' });
+      expect(shownText()).toBe('Checkout');
+    });
+
+    it('pops a view out into a new tab after the active one, on the page shown without fetching it again', async () => {
+      reloadAt('/p/shop?time=1h');
+      await host.start();
+      vi.mocked(fetch).mockClear();
+      const entries = history.length;
+      const views: string[] = [];
+      await host.popOut({
+        title: 'Debug: Requests',
+        render: (el) => {
+          el.textContent = 'debug of Requests';
+          views.push('rendered');
+          return new Disposable(() => views.push('disposed'));
+        },
+      });
+      const popped = host.activeTab;
+      expect(host.tabs.map((tab) => tab.title)).toEqual(['Shop', 'Debug: Requests']);
+      expect(popped.url).toBe(`/p/shop?time=1h#view=${popped.id}`);
+      expect(address()).toBe(popped.url);
+      expect(history.length).toBe(entries + 1);
+      expect(shownText()).toBe('debug of Requests');
+      expect(host.current?.title).toBe('Shop');
+      expect(fetched()).toEqual([]);
+      // the page's own renderer is not asked for it
+      expect(rendered).toEqual(['Shop']);
+      host.closeTab(popped.id);
+      expect(views).toEqual(['rendered', 'disposed']);
+      expect(shownText()).toBe('Shop');
+    });
+
+    it('keeps a popped-out view in memory only: not stored for a reload, its link shows the page', async () => {
+      await host.start();
+      await host.navigate('/p/checkout', { newTab: true });
+      const checkout = host.activeTab;
+      await host.popOut({ title: 'Details: Orders', render: (el) => ((el.textContent = 'records'), Disposable.from()) });
+      const popped = host.activeTab;
+      expect(stored.get('tabs')).toEqual({ tabs: [host.tabs[0], checkout], active: checkout.id });
+
+      host.dispose();
+      content.replaceChildren();
+      host = createHost();
+      await host.start();
+      expect(host.tabs.map((tab) => tab.id)).toEqual([host.tabs[0].id, checkout.id]);
+      expect(host.activeTab.id).toBe(checkout.id);
+      expect(host.activeTab.url).toBe(popped.url);
+      // `#view=<id>` names no view in memory: the page shows
+      expect(popped.url).toBe(`/p/checkout#view=${popped.id}`);
       expect(shownText()).toBe('Checkout');
     });
 

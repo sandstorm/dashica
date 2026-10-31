@@ -1,20 +1,34 @@
 import { html } from 'htl';
-import type { Disposable } from '../../core/disposable/disposable';
+import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
+import type { PageApi } from '../../hosts/page/page';
 import type { WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import './speedscope-link.css';
 
 /**
  * The widget type `speedscopeLink`: a button that opens the Speedscope flame graph viewer the widget's handler serves
- * (`<dataUrl>/viewer/`) in a new tab, on the profile its query gives with the page's time range, filter and params
- * (`<dataUrl>/speedscope-query`).
+ * (`<dataUrl>/viewer/`) in a new tab of the workbench (`page.popOut`, the viewer in an iframe), on the profile its
+ * query gives with the page's time range, filter and params then (`<dataUrl>/speedscope-query`). The button is a link
+ * to the viewer, so a click with a modifier key or the middle button opens it in a browser tab.
  */
 export const speedscopeLink: Extension = {
   id: 'speedscopeLink',
-  activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('speedscopeLink', renderSpeedscopeLink)),
+  activate: ({ widgets, page, subscriptions }) =>
+    subscriptions.push(widgets.registerWidget('speedscopeLink', (el, widget, ctx) => renderSpeedscopeLink(el, widget, ctx, page))),
 };
 
-function renderSpeedscopeLink(el: HTMLElement, widget: WidgetOf<'speedscopeLink'>, ctx: WidgetContext): Disposable {
-  const link: HTMLAnchorElement = html`<a target="_blank" class="d-button d-button--primary">${widget.props.title || 'Open Speedscope'}</a>`;
+function renderSpeedscopeLink(el: HTMLElement, widget: WidgetOf<'speedscopeLink'>, ctx: WidgetContext, page: Pick<PageApi, 'popOut'>): Disposable {
+  const open = (event: MouseEvent) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const src = link.href;
+    void page.popOut({
+      title: 'Speedscope',
+      // the tab's element is emptied when it closes
+      render: (tab) => (tab.append(html`<iframe class="d-speedscope-tab" title="Speedscope" src=${src}></iframe>`), Disposable.from()),
+    });
+  };
+  const link: HTMLAnchorElement = html`<a target="_blank" class="d-button d-button--primary" onclick=${open}>${widget.props.title || 'Open Speedscope'}</a>`;
   const showHref = () => {
     const origin = el.ownerDocument.location.origin;
     const profile = origin + ctx.url('/speedscope-query');

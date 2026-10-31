@@ -121,14 +121,14 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles in place, pressed while their filter is set, without a chip of their own (step 8f); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
 | Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
-| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); later Explore's widget tree |
+| Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
 
 - **Panel headers (step 8d):** the shown panel sits under a header row: its name in caps ("DEBUG", CSS
   `text-transform`, so screen readers read "Debug"; the panel's body is labelled by it) and "…", which shows the menu
   `panel/<id>` (context and arguments none). Every such menu has "Hide" (command `workbench.view.<id>.hide`), so "…"
-  is never empty *(proposed)*; D14's "Pop out" goes there too.
+  is never empty *(proposed)*; Debug's and Details' have "Pop out" too (step 8l, §3.4.6).
 - **"+"** opens the start page "/" in a new tab, or shows the tab that has it (`navigate('/', { newTab: true })`)
   *(proposed)*. The Dashica icon is lucide's `ChartColumn` in the accent colour *(proposed: Dashica has no logo of its
   own in the frontend; `/assets/favicon/…` is not served by the framework)*.
@@ -207,9 +207,11 @@ interface PageApi {
   navigate(url: string, options?: { newTab?: boolean }): Promise<void>;
   showTab(id: string): void;                     // the tab bar, the tab commands
   closeTab(id: string): void;
+  popOut(view: PoppedView): Promise<void>;       // a view in a new tab, in memory only (step 8l, §3.4.6)
   registerPageRenderer(kind: string, renderer: PageRenderer): Disposable;
 }
 interface Tab { readonly id: string; readonly url: string; readonly title: string }
+interface PoppedView { readonly title: string; render(el: HTMLElement): Disposable }
 
 type PageRenderer = (el: HTMLElement, page: PageJson, context: PageContext) => { dispose(): unknown; readonly title?: string };
 interface PageContext {
@@ -244,7 +246,8 @@ background tab never scrolls.
 
 **Opening and closing.**
 
-- **Opens a tab:** "Open in Explore view" (always a new tab); "Open in new tab" in a dashboard entry's menu
+- **Opens a tab:** "Open in Explore view" (always a new tab); "Pop out" of Debug and Details, "Open Speedscope"
+  (`popOut`, §3.4.6); "Open in new tab" in a dashboard entry's menu
   (`dashboards/entry`); search everywhere with Cmd / Ctrl+Enter (`SearchItem.accept({ newTab })`) *(proposed)*. A plain
   click on a link navigates the active tab as today; Cmd / Ctrl / Shift / middle click stays the browser's (a new
   browser tab), since every tab's URL is a real link *(proposed)*.
@@ -402,6 +405,30 @@ to filter by its value (§3.8, since 8c in the quick pick "Filter"); the two nev
 - **Status bar:** a second item, of the `details` extension: "2 records selected", hidden while none (step 8a: it
   stays registered); a click opens Details *(proposed)*.
 
+#### 3.4.6 A view popped out into a tab (step 8l, D14, decided 2026-10-31)
+
+A side panel's view pops out into a tab of its own, bound to what it showed then: the tab no longer follows the active
+widget. It is kept in memory only.
+
+- **API (`page` host):** `page.popOut({ title, render(el) })` opens a new tab after the active one and shows it (a new
+  history entry, as `navigate(…, { newTab })`). The tab is the active tab's page with `#view=<tab id>`: the page kind
+  `view`, which the host renders itself with the view's `render`, the tab titled `title`. It takes the page shown,
+  without fetching its `page.json` again *(proposed)*; its time range and filters are the tab's own and change nothing
+  the view shows *(proposed)*. Closing the tab disposes what `render` returned and forgets the view.
+- **In memory only:** the stored tabs (`storedTabs(list, kept)`) leave out the popped tabs, so a reload closes them; a
+  `#view=<id>` with no view in memory names no kind, so a link to it (or a reload while it is shown, the address bar
+  going into the tab shown last of the others) shows the page *(proposed)*.
+- **Debug:** "Pop out" in `panel/debug` (greyed without an active widget): a tab "Debug: <title>" with the same views,
+  following that widget's status as the panel does (`followDebug`, shared by both), so it asks `/debug` again when the
+  widget's query answered *(proposed)*.
+- **Details:** "Pop out" in `panel/details` (greyed while no records are selected): a tab "Details: <title>" with the
+  records selected then side by side (`drawComparison`: a row per field, a column per record, a row whose values
+  differ tinted, a missing field empty). It keeps those records: the table clears its ticks on each answer, so
+  following them would empty the tab on the next refresh *(proposed)*.
+- **Speedscope:** "Open Speedscope" opens a tab "Speedscope" with the viewer in an `<iframe>`, on the profile of the
+  page's state at the click; it stays a link, so a click with a modifier key or the middle button opens the viewer in a
+  browser tab as before *(proposed)*.
+
 ### 3.5 Extensions and UI code
 
 As in Zwiebelfisch: an extension is `{ id, contributes, activate(context) }`; it registers into the hosts' contribution
@@ -419,7 +446,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
 | `widgets` | `registerWidget` (§3.6), `offerFilters` (click to filter, §3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
-| `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
+| `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
 
@@ -1020,6 +1047,7 @@ interface PageApi {
   readonly current: PageJson | undefined;   // the active tab's, from <url>/page.json (generated type); undefined while it loads or failed
   readonly onDidChangePage: Event<PageJson | undefined>;   // with `current`: another page, a failed one, every switch of tabs
   navigate(url: string, o?: { newTab?: boolean }): Promise<void>;   // fetch page.json, pushState, swap the tab's content
+  popOut(view: { title: string; render(el: HTMLElement): Disposable }): Promise<void>;   // a view in a tab, in memory (§3.4.6)
   registerPageRenderer(kind: string, render: (el: HTMLElement, page: PageJson, context: PageContext) => Disposable): Disposable;
 }                                           // `dashboard` by the extension dashboardPage; a kind in the hash (`#explore=3`)
 
@@ -1327,10 +1355,10 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   `schema` from D11), loaded only when Explore opens.
 - **D13 Explore (8k):** Perspective's settings panel opens with the view; "Reset" asks for confirmation first (✅ step 8k:
   `toggleConfig(true)`, `confirmReset` in the quick pick; Perspective §4.8).
-- **D14 View pop-out (8l):** a side panel view pops out into its own tab, bound to the widget it showed then; the
-  popped tab no longer follows the active widget; kept in memory only (gone after a reload). Details pops out to a tab
-  comparing all selected records side by side; Debug pops out; "Open Speedscope" opens a new tab with Speedscope in
-  an iframe.
+- **D14 View pop-out (8l, ✅ 2026-10-31):** a side panel view pops out into its own tab, bound to the widget it showed
+  then; the popped tab no longer follows the active widget; kept in memory only (gone after a reload). Details pops out
+  to a tab comparing all selected records side by side; Debug pops out; "Open Speedscope" opens a new tab with
+  Speedscope in an iframe. Built as §3.4.6 says.
 - **D15 Ad hoc pills (8m, as Grafana's ad hoc filters):** an "add filter" button on the filter bar: pick a table,
   then a field (the filterable fields the shown page's widgets declare, per table), then `eq` / `ne`, then a value
   from a lazy `SELECT DISTINCT <expression> … LIMIT 100` over the time range on the base query of a widget with that
@@ -1448,7 +1476,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8i ✅ | **D10 global "…" menu** (Perspective §4.8): `httpserver.ConnectionRowsHandler` at `/rows?connection=<name>&exploreSql=…&param_…` (404 while Explore is off, checked in the handler, and for a connection not in dashica_config; 400 for an empty text; read-only, `httpserver.ExploreRowLimit`, plain Arrow casts, shared with `HandleEditedRows` by `answerEdited`); the `explore-view` extension registers `exploreView.open` ("Explore" in `workbench/global`: a new tab `#explore=&connection=<name>`) and `exploreView.startFromChart` ("Start from chart…": the quick pick of the shown page's charts with rows, `chartsOf`, their `/sql` into a blank tab's hash); the view without a chart (`widget` `undefined`): a connection picker in its bar (`pickedConnection`, `withConnection`), an empty editor, rows from `/rows?connection=` (`connectionRowsRequest`), a datagrid (`initialView` without a widget); `e2e/explore-view.spec.ts` (two tests, skipped while Explore is off). ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound test in `rows_e2e_test.go` blocked in the sandbox; Playwright written, not run), deviations: the blank tab is the page kind `explore` with an empty id on the URL of the tab it came from; "Explore" takes the connection of the shown page's first chart, else the first one; "Start from chart…" runs the chart's SQL at once (it goes into the hash as a Run does); one viewer config for all blank tabs *(all proposed)* | Explore without a chart |
 | 8j | **D12 SQL editor:** CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 8k ✅ | **D13 Explore:** settings panel open from the start; "Reset" asks first (Perspective §4.8): `PerspectiveViewer.toggleConfig(true)` on each new viewer after its config; `persistable` leaves out `settings`; "Reset" asks `confirmReset` (`ui.showQuickPick` below the button: "Reset" / "Cancel"); `e2e/explore-view.spec.ts` checks the panel and Cancel / Reset. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the kept config never reopens or closes the panel; Escape or a press elsewhere is Cancel; Reset leaves the panel as it is *(all proposed)* | the viewer's settings at hand, Reset not by accident |
-| 8l | **D14 view pop-out:** a side panel view into its own tab, bound to its widget, in memory only; Details compares the selected records side by side; Debug pops out; Speedscope in a tab (iframe) | views as tabs |
+| 8l ✅ | **D14 view pop-out** (§3.4.6): `PageApi.popOut({title, render})` (a new tab `<page>#view=<tab id>`, the page kind `view` rendered by the host while its view is in memory, the page shown taken without fetching `page.json` again, the view forgotten when its tab closes); `storedTabs(list, kept)` leaves the popped tabs out (active: the one of the others shown last); Debug's "Pop out" (`panel/debug`, `debug.popOut`: "Debug: <title>", `followDebug` shared with the panel); Details' "Pop out" (`panel/details`, `details.popOut`: "Details: <title>", `drawComparison`); "Open Speedscope" pops out the viewer in an `<iframe>`; the widget testbed's `page.popOut` records the views (`popped`); `e2e/pop-out.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the popped tab's time range and filters change nothing it shows; Debug's tab follows its widget's status, Details' keeps the records of the pop (the table clears them on each answer); a `#view=` link or a reload shows the page; Speedscope stays a link for a modifier click *(all proposed)* | views as tabs |
 | 8m | **D15 ad hoc pills:** "add filter" on the filter bar: table, field, `eq` / `ne`, a value from `<dataUrl>/values?field=…&search=…` (`SELECT DISTINCT … LIMIT 100` over the time range), signed through that widget's `/pill` | filters without a click on a chart |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

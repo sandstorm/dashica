@@ -1,0 +1,7 @@
+/* See speedscope-link.ts: the Speedscope viewer in a tab of its own, as large as the tab. */
+.d-speedscope-tab {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+}

@@ -6,6 +6,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica';
 import { CommandsHost } from '../commands/commands';
 import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
+import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost } from '../query/query';
 import { UiHost, type ContextMenuOptions } from '../ui/ui';
 import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus } from './widgets';
@@ -25,7 +26,13 @@ export function widgetTestbed() {
   const query = new QueryHost(window);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
   const pageChanged = new EventEmitter<PageJson | undefined>();
-  const page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event'] } = { current: undefined, onDidChangePage: pageChanged.event };
+  /** The views extensions popped out (`page.popOut`), in order. */
+  const popped: PoppedView[] = [];
+  const page: { current: PageJson | undefined } & Pick<PageApi, 'onDidChangePage' | 'popOut'> = {
+    current: undefined,
+    onDidChangePage: pageChanged.event,
+    popOut: async (view) => void popped.push(view),
+  };
   const workbench = document.body.appendChild(document.createElement('div'));
   const commands = new CommandsHost(workbench);
   const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
@@ -98,6 +105,8 @@ export function widgetTestbed() {
     pill: (field: string, op: 'eq' | 'ne', value: string) => ({ kind: 'pill' as const, ...fakePill(field, op, value) }),
     /** The page shown, for the extensions that read it. */
     page,
+    /** The views popped out into a tab (`page.popOut`). */
+    popped,
     /** The URLs fetched, in order. */
     requests,
     /** Answers `path` with the Arrow table of `columns` (a Table for list or map columns), and `headers`. */

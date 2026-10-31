@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-// Tests for debug.ts: the panel following the active widget, asking /debug only while shown, its views, the status bar.
+// Tests for debug.ts: the panel following the active widget, asking /debug only while shown, its views, the status bar;
+// popped out into a tab, bound to the widget active then.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
+import type { PoppedView } from '../../hosts/page/page';
 import type { WidgetStatus } from '../../hosts/widgets/widgets';
 import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
 import { debug, statusParts } from './debug';
@@ -13,8 +15,9 @@ let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
 let active: FakeWidget | undefined;
-let runCommand: () => void;
-let menuItems: { menuId: string; title?: string }[];
+let commands: Record<string, () => unknown>;
+let menuItems: { menuId: string; title?: string; enabled?: () => boolean }[];
+let popped: PoppedView[];
 let requested: string[];
 
 const memento: Memento = { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento;
@@ -26,6 +29,8 @@ beforeEach(() => {
   activeChanged = new EventEmitter<void>();
   active = undefined;
   menuItems = [];
+  commands = {};
+  popped = [];
   requested = [];
   vi.stubGlobal('fetch', async (url: string) => {
     requested.push(url);
@@ -57,7 +62,7 @@ beforeEach(() => {
         status = element;
         return { dispose() {} };
       },
-      registerMenuItem: (menuId: string, item: { title?: string }) => menuItems.push({ menuId, title: item.title }),
+      registerMenuItem: (menuId: string, item: { title?: string; enabled?: () => boolean }) => menuItems.push({ menuId, title: item.title, enabled: item.enabled }),
     },
     widgets: {
       get active() {
@@ -65,7 +70,8 @@ beforeEach(() => {
       },
       onDidChangeActive: activeChanged.event,
     },
-    commands: { registerCommand: (_id: string, run: () => void) => (runCommand = run) },
+    page: { popOut: async (view: PoppedView) => void popped.push(view) },
+    commands: { registerCommand: (id: string, run: () => unknown) => (commands[id] = run) },
   };
   debug.activate(context as unknown as ExtensionContext);
 });
@@ -99,9 +105,42 @@ const showPanel = () => {
 
 describe('debug', () => {
   it('is in the chart’s menu, which opens the panel', () => {
-    expect(menuItems).toEqual([{ menuId: 'widget/context', title: 'Debug' }]);
-    runCommand();
+    expect(menuItems.map(({ menuId, title }) => ({ menuId, title }))).toEqual([
+      { menuId: 'widget/context', title: 'Debug' },
+      { menuId: 'panel/debug', title: 'Pop out' },
+    ]);
+    commands['debug.showWidget']();
     expect(panel.shown).toBe(1);
+  });
+
+  it('pops the active widget’s debug info out into a tab, which keeps following that widget, not the active one', async () => {
+    const popOut = menuItems.find((item) => item.menuId === 'panel/debug')!;
+    expect(popOut.enabled!()).toBe(false);
+    commands['debug.popOut']();
+    expect(popped).toEqual([]);
+
+    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
+    expect(popOut.enabled!()).toBe(true);
+    commands['debug.popOut']();
+    expect(popped.map((view) => view.title)).toEqual(['Debug: Requests']);
+    const tab = document.body.appendChild(document.createElement('div'));
+    const shown = popped[0].render(tab);
+    await settle();
+    expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
+    expect(tab.querySelector('.d-debug-tab pre')!.textContent).toBe('SELECT count() FROM http_logs');
+
+    // another active widget: the tab stays with its own, whose next answer it asks for
+    const bound = active!;
+    activate(chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 2));
+    bound.setStatus({ kind: 'done', rows: 4, ms: 9, diagnostics: {} });
+    await settle();
+    expect(requested).toEqual(['/p/shop/api/1/debug?time=24h', '/p/shop/api/1/debug?time=24h']);
+
+    // the tab closed: nothing more
+    shown.dispose();
+    bound.setStatus({ kind: 'done', rows: 5, ms: 9, diagnostics: {} });
+    await settle();
+    expect(requested).toHaveLength(2);
   });
 
   it('asks nothing while hidden; shown without an active widget, it hints to click a chart', () => {

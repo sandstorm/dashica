@@ -4,13 +4,14 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../extension-host/extension-host';
 import { QueryHost } from '../query/query';
-import type { PageApi, PageContext, PageRenderer } from './page';
+import type { PageApi, PageContext, PageRenderer, PoppedView } from './page';
 import { closeTab, openTab, restoreTabs, showTab, storedTabs, titleOf, updateTab, type Tab, type TabList } from './tabs';
 
 /**
  * The workbench's `PageApi` in `browserWindow`, a tab's page in an element of its own in `content` (`hidden` while
  * the tab is in the background). The open tabs come back from `state` (sessionStorage, key `tabs`) after a reload;
- * those in the background stay unloaded until shown. `start` loads the active tab's page.
+ * those in the background stay unloaded until shown. `start` loads the active tab's page. A popped-out view is the
+ * page kind `view` (`#view=<tab id>`), which only names a kind while its view is in memory.
  */
 export class PageHost implements PageApi {
   readonly #onDidChangePage = new EventEmitter<PageJson | undefined>();
@@ -18,6 +19,8 @@ export class PageHost implements PageApi {
   readonly #onDidChangeTabs = new EventEmitter<void>();
   readonly onDidChangeTabs = this.#onDidChangeTabs.event;
   readonly #renderers = new Map<string, PageRenderer>();
+  /** The views popped out (`popOut`), by the id of their tab. */
+  readonly #popped = new Map<string, PoppedView>();
   #list: TabList;
   /** What each open tab shows, by its id. */
   readonly #open = new Map<string, OpenTab>();
@@ -29,6 +32,11 @@ export class PageHost implements PageApi {
     private readonly content: HTMLElement,
     private readonly state: Memento,
   ) {
+    this.#renderers.set(POPPED, (el, _page, context) => {
+      const view = this.#popped.get(new URLSearchParams(context.hash.slice(1)).get(POPPED)!)!;
+      const rendered = view.render(el);
+      return { dispose: () => rendered.dispose(), title: view.title };
+    });
     const { history } = browserWindow;
     this.#list = restoreTabs(state.get<unknown>('tabs'), this.#addressBar(), entryTab(history.state), newTabId());
     for (const tab of this.#list.tabs) this.#open.set(tab.id, this.#createTab(tab.id));
@@ -87,6 +95,20 @@ export class PageHost implements PageApi {
       return;
     }
     return this.#load(open, relative(target), 'navigate');
+  }
+
+  popOut(view: PoppedView): Promise<void> {
+    const source = this.#active();
+    const shown = new URL(this.activeTab.url, 'http://dashica');
+    const id = newTabId();
+    this.#popped.set(id, view);
+    // the page shown already, so its `page.json` is not fetched again
+    const open = this.#createTab(id);
+    open.loaded = source.page !== undefined;
+    this.#open.set(id, open);
+    this.#change(openTab(this.#list, { id, url: `${shown.pathname}${shown.search}#${POPPED}=${id}`, title: view.title }), 'push');
+    if (source.page) this.#show(open, shown, source.page);
+    return open.loading?.promise ?? Promise.resolve();
   }
 
   showTab(id: string): void {
@@ -149,6 +171,7 @@ export class PageHost implements PageApi {
   }
 
   #disposeTab(open: OpenTab): void {
+    this.#popped.delete(open.id);
     open.loading?.abort.abort();
     this.#unrender(open);
     open.listening.dispose();
@@ -220,7 +243,7 @@ export class PageHost implements PageApi {
   }
 
   #save(): void {
-    void this.state.update('tabs', storedTabs(this.#list));
+    void this.state.update('tabs', storedTabs(this.#list, (tab) => !this.#popped.has(tab.id)));
   }
 
   /**
@@ -304,7 +327,7 @@ export class PageHost implements PageApi {
   /** Renders the tab's page by the renderer of the kind its hash names (`#explore=3`), else of the page's kind. */
   #render(open: OpenTab): void {
     const page = open.page!;
-    const named = [...new URLSearchParams(hashOf(this.#tab(open.id)).slice(1))].find(([key]) => this.#renderers.has(key));
+    const named = this.#namedKind(open);
     const kind = named ? named[0] : page.kind;
     open.renderedAs = named ? `${named[0]}=${named[1]}` : page.kind;
     const renderer = this.#renderers.get(kind);
@@ -328,7 +351,7 @@ export class PageHost implements PageApi {
   #hashChanged(open: OpenTab): void {
     const page = open.page;
     if (!page) return;
-    const named = [...new URLSearchParams(hashOf(this.#tab(open.id)).slice(1))].find(([key]) => this.#renderers.has(key));
+    const named = this.#namedKind(open);
     if ((named ? `${named[0]}=${named[1]}` : page.kind) === open.renderedAs) {
       open.hashChanged.fire();
       return;
@@ -336,6 +359,11 @@ export class PageHost implements PageApi {
     this.#unrender(open);
     open.page = page;
     this.#render(open);
+  }
+
+  /** The kind the tab's hash names, with its value (`['explore', '3']`): a registered one, `view` only while its view is in memory. */
+  #namedKind(open: OpenTab): [string, string] | undefined {
+    return [...new URLSearchParams(hashOf(this.#tab(open.id)).slice(1))].find(([key, value]) => this.#renderers.has(key) && (key !== POPPED || this.#popped.has(value)));
   }
 
   #showError(open: OpenTab, error: unknown): void {
@@ -373,6 +401,9 @@ export class PageHost implements PageApi {
     void this.navigate(target.href);
   }
 }
+
+/** The page kind of a popped-out view, named in its tab's hash with the tab's id (`#view=<id>`). */
+const POPPED = 'view';
 
 /** What the page host keeps for one open tab. */
 interface OpenTab {

@@ -1,9 +1,9 @@
 import { html } from 'htl';
 import { instance as viz } from '@viz-js/viz';
-import { Bug, createElement } from 'lucide';
-import type { Disposable } from '../../core/disposable/disposable';
+import { Bug, SquareArrowOutUpRight, createElement } from 'lucide';
+import { Disposable } from '../../core/disposable/disposable';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import type { RenderedWidget, WidgetStatus } from '../../hosts/widgets/widgets';
+import { widgetTitle, type RenderedWidget } from '../../hosts/widgets/widgets';
 import { createView, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
 import './debug.css';
@@ -14,13 +14,14 @@ import './debug.css';
  * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
  * a table. It follows the active widget's status (`onDidChangeStatus`), not its records, and asks `/debug` only while
  * it is shown: on showing, on another active widget, and when that widget's query answered or failed. Which widget it
- * is tells its outline, not the panel. The status bar
+ * is tells its outline, not the panel. "Pop out" (the panel's menu `panel/debug`) shows the same for the active widget
+ * in a tab of its own, which keeps following that widget's status, not the active widget. The status bar
  * says the widget's rows, query time, its error or the filters it ignores ("No active chart" on the start page); a
  * click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
  */
 export const debug: Extension = {
   id: 'debug',
-  activate({ ui, widgets, commands, globalState, subscriptions }) {
+  activate({ ui, widgets, page, commands, globalState, subscriptions }) {
     const panel = ui.registerSidePanel('debug', { label: 'Debug', icon: createElement(Bug).outerHTML, order: 10 });
     subscriptions.push(panel);
     // its result table's menus (`table/cell`, `table/header`)
@@ -28,46 +29,73 @@ export const debug: Extension = {
     const status: HTMLButtonElement = html`<button type="button" class="d-debug-status" data-testid="debug-status" onclick=${() => panel.show()}></button>`;
     subscriptions.push(ui.registerBarItem('status', status, { alignment: 'left' }));
 
-    let loading: AbortController | undefined;
-    /** The widget the panel shows, once it asked for its debug info, and its status then. */
-    let shown: RenderedWidget | undefined;
-    let shownStatus: WidgetStatus | undefined;
-    const update = () => {
+    /** What the panel shows while visible: the active widget's debug info, followed. */
+    let showing: Disposable | undefined;
+    const showPanel = () => {
+      showing?.dispose();
+      showing = undefined;
+      if (!panel.visible) return;
       const active = widgets.active;
-      drawStatus(status, active);
-      if (!panel.visible) {
-        loading?.abort();
-        shown = undefined;
-        return;
-      }
-      // its query running again: the panel keeps what it shows until the answer (or until an aborted one puts back the
-      // status it asked for)
-      if (active && active === shown && (active.status.kind === 'loading' || active.status === shownStatus)) return;
-      loading?.abort();
-      shown = active;
-      shownStatus = active?.status;
-      if (!active) {
-        panel.body.replaceChildren(html`<div class="d-debug__hint">Click a chart to see what it queried.</div>`);
-        return;
-      }
-      loading = new AbortController();
-      void showDebug(panel.body, active, showMenu, globalState, loading.signal);
+      if (active) showing = followDebug(panel.body, active, showMenu, globalState);
+      else panel.body.replaceChildren(html`<div class="d-debug__hint">Click a chart to see what it queried.</div>`);
     };
-    /** The active widget's status, listened to. */
+    /** The active widget's status, listened to for the status bar. */
     let following: Disposable | undefined;
     const follow = () => {
       following?.dispose();
-      following = widgets.active?.onDidChangeStatus(update);
-      update();
+      following = widgets.active?.onDidChangeStatus(() => drawStatus(status, widgets.active));
+      drawStatus(status, widgets.active);
+      showPanel();
     };
     follow();
-    subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(update));
-    subscriptions.push({ dispose: () => (loading?.abort(), following?.dispose()) });
+    subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(showPanel));
+    subscriptions.push({ dispose: () => (showing?.dispose(), following?.dispose()) });
     // a press on the chart's menu button made it active already
     subscriptions.push(commands.registerCommand('debug.showWidget', () => panel.show()));
     subscriptions.push(ui.registerMenuItem('widget/context', { command: 'debug.showWidget', title: 'Debug', group: 'debug' }));
+    subscriptions.push(
+      commands.registerCommand('debug.popOut', () => {
+        const active = widgets.active;
+        if (!active) return;
+        return page.popOut({
+          title: `Debug: ${widgetTitle(active.widget)}`,
+          render: (el) => {
+            const tab: HTMLElement = el.appendChild(html`<div class="d-debug-tab"></div>`);
+            return followDebug(tab, active, showMenu, globalState);
+          },
+        });
+      }),
+      ui.registerMenuItem('panel/debug', {
+        command: 'debug.popOut',
+        title: 'Pop out',
+        icon: createElement(SquareArrowOutUpRight).outerHTML,
+        enabled: () => widgets.active !== undefined,
+        tooltip: 'The active chart’s debug info in a tab of its own',
+      }),
+    );
   },
 };
+
+/**
+ * Shows in `el` what `widget` queried (`showDebug`), and asks again when its query answered or failed. While its query
+ * runs, `el` keeps what it shows; an aborted query putting back the status asked for asks nothing.
+ */
+export function followDebug(el: HTMLElement, widget: RenderedWidget, showMenu: ShowTableMenu, state: Memento): Disposable {
+  let loading = new AbortController();
+  let asked = widget.status;
+  void showDebug(el, widget, showMenu, state, loading.signal);
+  const listening = widget.onDidChangeStatus(() => {
+    if (widget.status.kind === 'loading' || widget.status === asked) return;
+    loading.abort();
+    loading = new AbortController();
+    asked = widget.status;
+    void showDebug(el, widget, showMenu, state, loading.signal);
+  });
+  return new Disposable(() => {
+    loading.abort();
+    listening.dispose();
+  });
+}
 
 /** What `<dataUrl>/debug` answers (httpserver.DebugInfo). */
 interface DebugInfo {

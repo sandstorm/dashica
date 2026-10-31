@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-// Tests for details.ts: the panel following the active widget's selected records, a view per record, the status bar.
+// Tests for details.ts: the panel following the active widget's selected records, a view per record, the status bar;
+// popped out: the records selected then side by side in a tab.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
+import type { PoppedView } from '../../hosts/page/page';
 import type { WidgetRecord } from '../../hosts/widgets/widgets';
 import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
-import { details, drawRecord, recordsSelected } from './details';
+import { details, drawComparison, drawRecord, recordsSelected } from './details';
 
 let body: HTMLElement;
 let status: HTMLElement;
@@ -13,6 +15,9 @@ let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
 let active: FakeWidget | undefined;
+let commands: Record<string, () => unknown>;
+let popOutEnabled: () => boolean;
+let popped: PoppedView[];
 
 beforeEach(() => {
   body = document.body.appendChild(document.createElement('div'));
@@ -20,6 +25,8 @@ beforeEach(() => {
   visibility = new EventEmitter<void>();
   activeChanged = new EventEmitter<void>();
   active = undefined;
+  commands = {};
+  popped = [];
   const context = {
     subscriptions: [],
     ui: {
@@ -36,7 +43,10 @@ beforeEach(() => {
         status = element;
         return { dispose() {} };
       },
+      registerMenuItem: (_menuId: string, item: { enabled: () => boolean }) => (popOutEnabled = item.enabled),
     },
+    page: { popOut: async (view: PoppedView) => void popped.push(view) },
+    commands: { registerCommand: (id: string, run: () => unknown) => (commands[id] = run) },
     widgets: {
       get active() {
         return active;
@@ -116,6 +126,34 @@ describe('details', () => {
     expect(body.childElementCount).toBe(0);
     showPanel();
     expect(titles()).toEqual(['Record 1']);
+  });
+
+  it('pops the records selected out into a tab, side by side, kept when the table clears its ticks', () => {
+    expect(popOutEnabled()).toBe(false);
+    commands['details.popOut']();
+    expect(popped).toEqual([]);
+    table([{ path: '/api', status: 200 }, { path: '/api', status: 500 }]);
+    expect(popOutEnabled()).toBe(true);
+    commands['details.popOut']();
+    expect(popped.map((view) => view.title)).toEqual(['Details: Latest requests']);
+    const tab = document.createElement('div');
+    popped[0].render(tab);
+    active!.setRecords([]);
+    expect([...tab.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Field', 'Record 1', 'Record 2']);
+    expect([...tab.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((cell) => cell.textContent))).toEqual([
+      ['path', '/api', '/api'],
+      ['status', '200', '500'],
+    ]);
+  });
+
+  it('compares records by field, marks a row whose values differ, leaves a missing field empty', () => {
+    const compared = drawComparison('Latest requests', [{ path: '/api', attrs: '{"user":"anna"}' }, { path: '/api', host: 'web-1' }]);
+    expect(compared.querySelector('.d-details__title')!.textContent).toBe('Latest requests');
+    const rows = [...compared.querySelectorAll('tbody tr')];
+    expect(rows.map((row) => row.querySelector('th')!.textContent)).toEqual(['path', 'attrs', 'host']);
+    expect(rows.map((row) => row.classList.contains('d-details-compare__row--differs'))).toEqual([false, true, true]);
+    expect(rows[1].querySelector('pre')!.textContent).toBe('{\n  "user": "anna"\n}');
+    expect(rows[2].querySelectorAll('td')[0].textContent).toBe('');
   });
 
   it('shows a record’s JSON pretty-printed, a value of several lines as it is, others as text', () => {
