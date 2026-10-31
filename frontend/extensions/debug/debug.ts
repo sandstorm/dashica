@@ -3,7 +3,7 @@ import { instance as viz } from '@viz-js/viz';
 import { Bug, createElement } from 'lucide';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import { widgetTitle, type ActiveWidget } from '../../hosts/widgets/widgets';
+import { widgetTitle, type ActiveWidget, type WidgetStatus } from '../../hosts/widgets/widgets';
 import { createView, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
 import './debug.css';
@@ -13,8 +13,8 @@ import './debug.css';
  * shows, as views, what the widget queried: the SQL as sent, its stats, ClickHouse's EXPLAIN (plan, pipeline as a
  * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
  * a table. It asks `/debug` only while it is shown: on showing, on another active widget, and when that widget's query
- * answered or failed. The status bar says the widget's title, rows, query time, its error or the filters it ignores;
- * a click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
+ * answered or failed, not when its records change. The status bar says the widget's title, rows, query time, its
+ * error or the filters it ignores; a click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
  */
 export const debug: Extension = {
   id: 'debug',
@@ -27,8 +27,9 @@ export const debug: Extension = {
     subscriptions.push(ui.registerBarItem('status', status, { alignment: 'left' }));
 
     let loading: AbortController | undefined;
-    /** The widget the panel shows, once it asked for its debug info. */
+    /** The widget the panel shows, once it asked for its debug info, and its status then. */
     let shown: WidgetNode | undefined;
+    let shownStatus: WidgetStatus | undefined;
     const update = () => {
       const active = widgets.active;
       drawStatus(status, active);
@@ -37,10 +38,11 @@ export const debug: Extension = {
         shown = undefined;
         return;
       }
-      // its query running again: the panel keeps what it shows until the answer
-      if (active && active.widget === shown && active.status.kind === 'loading') return;
+      // its query running again: the panel keeps what it shows until the answer; its records changed: nothing to ask
+      if (active && active.widget === shown && (active.status.kind === 'loading' || active.status === shownStatus)) return;
       loading?.abort();
       shown = active?.widget;
+      shownStatus = active?.status;
       if (!active) {
         panel.body.replaceChildren(html`<div class="d-debug__hint">Click a chart to see what it queried.</div>`);
         return;

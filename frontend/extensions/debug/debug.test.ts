@@ -142,6 +142,21 @@ describe('debug', () => {
     expect(requested).toHaveLength(3);
   });
 
+  it('asks nothing again when only the shown widget’s records change', async () => {
+    active = chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} });
+    showPanel();
+    await settle();
+    expect(requested).toHaveLength(1);
+    const drawn = body.querySelector('.d-debug');
+    active = { ...active, records: [{ status: 500 }] };
+    activeChanged.fire();
+    active = { ...active, records: [{ status: 500 }, { status: 502 }] };
+    activeChanged.fire();
+    await settle();
+    expect(requested).toHaveLength(1);
+    expect(body.querySelector('.d-debug')).toBe(drawn);
+  });
+
   it('shows the server’s error in the panel', async () => {
     vi.stubGlobal('fetch', async () => new Response('Code: 60. Table default.http_logs does not exist', { status: 500 }));
     active = chart({ kind: 'idle' });
