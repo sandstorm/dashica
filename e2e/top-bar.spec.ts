@@ -1,9 +1,9 @@
-// Tests for the top row and the side panels' chrome (docs/2026-10-28-workbench.md §3.4, steps 8d and 9i): one top bar
-// over the content only, with the tabs, "+" and the time range, no title bar and no Dashica icon; the left rail and
-// panel reach from the window's top to the status bar, the global "…" first in the rail, above search everywhere; "+"
-// opens the start page in a new tab; search everywhere opens from its rail button, whose tooltip names its key; a panel
-// shows under a header with its name in caps and "…", whose "Hide" closes it; with Explore off the global "…" shows
-// "Explore" greyed (8g).
+// Tests for the top row and the side panels' chrome (docs/2026-10-28-workbench.md §3.4, steps 8d, 9i and 9o): one top
+// bar over the content only, with the tabs, "+" and the time range, no title bar, no Dashica icon and no filter funnel;
+// the left rail and panel reach from the window's top to the status bar, the global "…" first in the rail, above search
+// everywhere; "+" opens the start page in a new tab; search everywhere opens from its rail button, whose tooltip names
+// its key; a panel shows under a header with its name in caps and "…", whose "Hide" closes it; with Explore off the
+// global "…" shows "Explore" greyed (8g).
 import {expect, test} from '@playwright/test';
 
 test.beforeEach(async ({page}) => {
@@ -20,6 +20,12 @@ test('has the tabs, "+" and the time range in one top bar, without the Dashica i
     await expect(top.getByRole('button', {name: 'Shift back'})).toBeVisible();
     await expect(page.getByTestId('wb-tab-bar')).toHaveCount(1);
     await expect(page.locator('.d-workbench__title-bar')).toHaveCount(0);
+});
+
+test('has no filter funnel: a SQL condition is added from the filter bar’s "Add filter"', async ({page}) => {
+    await page.goto(process.env.DASHICA_E2E_FILTER_PAGE || '/clickhouse/table_sizes');
+    await expect(page.getByTestId('wb-top-bar').getByRole('tab', {selected: true})).toBeVisible();
+    await expect(page.getByTestId('wb-top-bar').getByRole('button', {name: 'Filters'})).toHaveCount(0);
 });
 
 test('the left rail and panel reach from the top to the status bar; the top bar is only over the content', async ({page}) => {

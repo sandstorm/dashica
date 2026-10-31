@@ -1,6 +1,7 @@
 // Tests for the filter bar's "Add filter" (docs/2026-10-28-workbench.md §3.14 D15, step 8m): a field of a table the
 // page's charts filter, `=`, a value from the field's chart's `/values` (narrowed as one types), added as a signed
-// pill; `/values` answers 422 for a field that cannot filter.
+// pill; its last entry "SQL condition…" under "Advanced" only while SQL chips are taken (D26); `/values` answers 422
+// for a field that cannot filter.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", whose charts filter its table;
 // another page: DASHICA_E2E_ADD_FILTER_PAGE.
@@ -32,6 +33,16 @@ test('"Add filter" adds a pill on a value the field’s chart offers', async ({p
     // the chip shows an empty value as the box does, "(empty)", so that it can be clicked to change it
     await expect(chips.first()).toHaveText(`${field} = ${value}`);
     await expect(page).toHaveURL(/[?&]f=/);
+});
+
+test('"Add filter" ends with "SQL condition…" only while SQL chips are taken (filters.sqlEnabled)', async ({page, request}) => {
+    const workbench = await (await request.get('/workbench.json')).json();
+    await page.goto(PAGE);
+    await page.getByRole('button', {name: 'Add filter'}).click();
+    const options = page.locator('.d-workbench__quick-pick').getByRole('option');
+    await expect(options.first()).toBeVisible();
+    await expect(options.filter({hasText: 'SQL condition…'})).toHaveCount(workbench.sqlEnabled ? 1 : 0);
+    if (workbench.sqlEnabled) await expect(options.last()).toContainText('SQL condition…');
 });
 
 test('/values answers 422 for a field that cannot filter', async ({page}) => {

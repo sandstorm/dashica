@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-// Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
-// edited, removed), the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
+// Tests for filters.ts: the filter bar per page, the chips (pills and SQL, added, SQL ones edited, removed), no
+// funnel in the top bar, the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
 // button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
-// place, "Add filter" while a chart filters a table; a field's pill edited in place, its operator picked among the ops
-// of its type and its value asked anew (a time's in an input box), each made again by a chart of the page, one no
-// chart makes only removed; with SQL filters off
-// (filters.sqlEnabled), no funnel and a SQL chip only removed, the buttons and the pills as before; a chart click's
-// `filters.offer` adding the pill chosen to the tab shown.
+// place, "Add filter" while a chart filters a table or SQL chips are taken, its "SQL condition…" adding a SQL chip; a
+// field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
+// input box), each made again by a chart of the page, one no chart makes only removed; with SQL filters off
+// (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; a chart
+// click's `filters.offer` adding the pill chosen to the tab shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
@@ -88,8 +88,8 @@ beforeEach(() => {
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: { title?: string; prompt?: string; value?: string; anchor?: unknown }) => (asked.push(options), answer),
-    showQuickPick: async (items: { label: string }[], options: { anchor?: unknown }) => (
-      picks.push({ labels: items.map((i) => i.label), anchor: options.anchor }), items.find((i) => i.label === picked)
+    showQuickPick: async (items: { label?: string; kind?: number }[], options: { anchor?: unknown }) => (
+      picks.push({ labels: items.map((i) => (i.kind === -1 ? `— ${i.label}` : i.label!)), anchor: options.anchor }), items.find((i) => i.label === picked)
     ),
   };
   asked = [];
@@ -122,7 +122,8 @@ afterEach(() => {
 const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((b) => b.textContent === title)!;
 /** The values shown beside the pressed `...` button `title`. */
 const values = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>(`[aria-label="${title}"] .d-filter-button__value`)];
-const funnel = () => topBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
+/** "Add filter", when the bar shows it. */
+const add = () => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__chips button')].find((b) => b.textContent === 'Add filter');
 const editor = () => bar.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-testid=filter-chip-editor] textarea, [data-testid=filter-chip-editor] input');
 const chips = () => [...bar.querySelectorAll<HTMLElement>('[data-testid=filter-chip]')];
 const chipText = (chip: HTMLElement) =>
@@ -241,28 +242,24 @@ describe('filters', () => {
     expect(chips()[0].title).toBe('a \nAND b');
   });
 
-  it('adds a SQL chip from the funnel on Enter; Escape or an empty text adds none', () => {
-    expect(editor()).toBeNull();
-    funnel().click();
-    expect(document.activeElement).toBe(editor());
-    type("method = 'POST'");
-    key(editor()!, 'Enter');
-    expect(held()).toEqual([{ kind: 'sql', sql: "method = 'POST'" }]);
-    expect(editor()).toBeNull();
-    funnel().click();
-    type('status >= 500');
-    key(editor()!, 'Escape');
-    funnel().click();
-    key(editor()!, 'Enter');
-    expect(held()).toHaveLength(1);
-    expect(editor()).toBeNull();
+  it('has no funnel in the top bar', () => {
+    expect(topBar.children.length).toBe(0);
   });
 
-  it('keeps a new line typed with Shift+Enter in the SQL chip being added', () => {
-    funnel().click();
-    type('a');
-    expect(key(editor()!, 'Enter', { shiftKey: true, cancelable: true })).toBe(true);
-    expect(held()).toEqual([]);
+  it('adds a SQL chip from "Add filter"’s advanced "SQL condition…", asked in an input box below it; Escape or only spaces add none', async () => {
+    picked = 'SQL condition…';
+    answer = "method = 'POST'";
+    add()!.click();
+    await vi.waitFor(() => expect(held()).toEqual([{ kind: 'sql', sql: "method = 'POST'" }]));
+    expect(picks).toEqual([{ labels: ['— Advanced', 'SQL condition…'], anchor: add() }]);
+    expect(asked).toEqual([expect.objectContaining({ title: 'SQL condition', anchor: add() })]);
+    answer = undefined;
+    add()!.click();
+    answer = '  ';
+    add()!.click();
+    await vi.waitFor(() => expect(asked).toHaveLength(3));
+    await Promise.resolve();
+    expect(held()).toHaveLength(1);
   });
 
   it('edits a SQL chip in place: Enter or leaving the field applies, Escape cancels, an empty text removes it', () => {
@@ -290,13 +287,11 @@ describe('filters', () => {
     expect(chips()[0].classList).toContain('d-filter-chip--pill');
   });
 
-  it('has no filter bar on a page without filter buttons until the funnel adds a SQL chip', () => {
+  it('shows the filter bar with "Add filter" alone on a page without filter buttons or filterable charts', () => {
     show({ ...shop, title: 'Checkout', filterButtons: [] });
-    expect(bar.children.length).toBe(0);
-    funnel().click();
     expect(bar.children.length).toBe(1);
-    key(editor()!, 'Escape');
-    expect(bar.children.length).toBe(0);
+    expect(bar.querySelector('.d-filter-bar__chips')!.children).toEqual(expect.objectContaining({ length: 1 }));
+    expect(add()).toBeDefined();
   });
 
   it('shows a chip per pill, its label', () => {
@@ -321,27 +316,15 @@ describe('filters', () => {
     expect(chips().map(chipText)).toEqual(['host = b']);
   });
 
-  it('shows the filter bar while there are chips, on a page without filter buttons', () => {
-    show({ ...shop, title: 'Checkout', filterButtons: [] });
-    expect(bar.children.length).toBe(0);
-    addPill(pill('host = a'));
-    expect(bar.children.length).toBe(1);
-    query.set(FILTERS, []);
-    expect(bar.children.length).toBe(0);
-  });
-
   it('shows "Add filter" after the chips while a chart filters a table, which asks for a field of it below the button', async () => {
     const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
-    const add = () => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__chips button')].find((b) => b.textContent === 'Add filter');
-    expect(add()).toBeUndefined();
-
     show({ ...shop, title: 'Checkout', filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
     addSql('a');
 
     expect(bar.children.length).toBe(1);
     expect(bar.querySelector('.d-filter-bar__chips')!.lastElementChild).toBe(add());
     add()!.click();
-    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['host'], anchor: add() }]));
+    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['host', '— Advanced', 'SQL condition…'], anchor: add() }]));
   });
 
   it('is gone on a page without filters', () => {
@@ -489,9 +472,14 @@ describe('filters with SQL filters off', () => {
     expect([held(), button('Errors').getAttribute('aria-pressed')]).toEqual([[{ kind: 'pill', key: errorsKey }], 'true']);
   });
 
-  it('has no funnel: the bar offers no way to type SQL', () => {
-    expect(funnel()).toBeNull();
+  it('offers no way to type SQL: no funnel, no "Add filter" without a filterable chart, none of its entries SQL', async () => {
     expect(topBar.children.length).toBe(0);
+    show({ ...shop, filterButtons: [] });
+    expect([add(), bar.children.length]).toEqual([undefined, 0]);
+    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+    show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
+    add()!.click();
+    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['host'], anchor: add() }]));
   });
 
   it('shows a link’s SQL chip, not edited, saying why; its × removes it', () => {
@@ -501,6 +489,15 @@ describe('filters with SQL filters off', () => {
     expect(chips()[0].title).toBe('status >= 400\nSQL filters are not enabled (filters.sqlEnabled)');
     chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove status >= 400"]')!.click();
     expect(held()).toEqual([]);
+  });
+
+  it('shows the filter bar while there are chips, on a page without filter buttons, ', () => {
+    show({ ...shop, title: 'Checkout', filterButtons: [] });
+    expect(bar.children.length).toBe(0);
+    addPill(pill('host = a'));
+    expect(bar.children.length).toBe(1);
+    query.set(FILTERS, []);
+    expect(bar.children.length).toBe(0);
   });
 
   it('still shows the pills and "Add filter"', () => {

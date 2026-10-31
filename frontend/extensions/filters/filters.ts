@@ -1,5 +1,5 @@
 import { html } from 'htl';
-import { Filter, ListFilterPlus, X, createElement } from 'lucide';
+import { ListFilterPlus, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
@@ -21,13 +21,13 @@ import './filters.css';
  * offers the ops of its type (`opsOf`: `=` / `≠`, for a number or a time also `<` `≤` `>` `≥`), one on its value asks
  * a new one (as "Add filter" does); each edit asks a chart of the page on the pill's table with that field
  * (`fieldSource`) for the pill again and puts it in the chip's place. A pill no chart of the page makes, and a
- * button's pill outside its page, can only be removed. The funnel button in the top bar adds
- * a SQL chip. Both only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a
+ * button's pill outside its page, can only be removed. "Add filter"'s advanced entry "SQL condition…" adds a SQL chip
+ * (§3.15 D26). Both only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a
  * SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
  * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
  * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
  * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on one of the
- * tables the page's charts filter (`addFilter`), while there is one. The bar shows while it has a chip, a button or
+ * tables the page's charts filter (`addFilter`), shown while there is one or SQL chips are taken. The bar shows while it has a chip, a button or
  * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
  * runs the command `filters.offer` (`(at, candidates, { dataUrl, filterable })`): its quick pick adds the pill chosen to
  * the tab shown (`offerFilters`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
@@ -44,7 +44,6 @@ export const filters: Extension = {
       // a table cell's SQL filters ("Filter: Contains this value")
       commands.registerCommand('filters.addSql', (condition: string) => query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'sql', sql: condition }))),
     );
-    let button: Disposable | undefined;
     let bar: Disposable | undefined;
     const showBar = () => {
       const wanted = page.current?.filterBar === true && filterBar.wanted;
@@ -57,10 +56,7 @@ export const filters: Extension = {
     };
     const filterBar = new FilterBar(query, ui, sqlEnabled, showBar);
     const showForPage = () => {
-      button?.dispose();
-      button = undefined;
       filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : [], page.current?.filterBar ? filterableTables(page.current.widgets) : []);
-      if (page.current?.filterBar && sqlEnabled) button = ui.registerBarItem('top', filterBar.toggle, { alignment: 'right', priority: 40 });
       showBar();
     };
     subscriptions.push(page.onDidChangePage(showForPage));
@@ -70,7 +66,6 @@ export const filters: Extension = {
         showBar();
       }),
     );
-    subscriptions.push({ dispose: () => button?.dispose() });
     subscriptions.push({ dispose: () => bar?.dispose() });
   },
 };
@@ -96,23 +91,14 @@ async function fetchButtonPill(url: string, value: string): Promise<Pill> {
   return { key };
 }
 
-/** Which SQL chip is edited: its index in the chips, or `new` for the one the funnel adds. */
-type Editing = number | 'new' | undefined;
-
 /**
- * The funnel button (`toggle`) and the filter bar's content (`el`): `chips`, "Add filter" for the page's
- * filterable tables and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only while
- * `sqlEnabled`. `onDidChangeWanted` is called when an edit starts (the funnel's new SQL chip
- * among them) or ends without a change of the chips.
+ * The filter bar's content (`el`): `chips`, "Add filter" for the page's filterable tables (and, while `sqlEnabled`, a
+ * SQL condition) and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only while
+ * `sqlEnabled`. `onDidChangeWanted` is called when an edit starts or ends without a change of the chips.
  */
 class FilterBar {
   readonly #chips: HTMLElement = html`<div class="d-filter-bar__chips" hidden></div>`;
   readonly #buttons: HTMLElement = html`<div class="d-filter-bar__buttons" hidden></div>`;
-  readonly toggle: HTMLButtonElement = html`<button
-    type="button"
-    class="d-button d-button--ghost d-button--icon"
-    title="Add a SQL filter"
-    aria-label="Filters">${createElement(Filter, { width: 16, height: 16 })}</button>`;
   readonly #add: HTMLButtonElement = html`<button
     type="button"
     class="d-button d-button--ghost"
@@ -120,7 +106,8 @@ class FilterBar {
   readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}</div>`;
   #pageButtons: readonly FilterButton[] = [];
   #tables: readonly FilterableTable[] = [];
-  #editing: Editing;
+  /** The index of the SQL chip being edited. */
+  #editing: number | undefined;
   /** The field of the chip being edited, focused once it is in the document. */
   #editor: HTMLElement | undefined;
 
@@ -133,13 +120,18 @@ class FilterBar {
     private readonly sqlEnabled: boolean,
     private readonly onDidChangeWanted: () => void,
   ) {
-    this.toggle.addEventListener('click', () => this.#edit('new'));
-    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add));
+    if (sqlEnabled) this.#add.title = "Add a filter on a field of the page's charts, or a SQL condition";
+    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.sqlEnabled));
   }
 
-  /** Whether the filter bar has something to show: a chip, the page's buttons, "Add filter", or the SQL chip being added. */
+  /** Whether "Add filter" has something to offer: a table the page's charts filter, or a SQL condition. */
+  get #adds(): boolean {
+    return this.#tables.length > 0 || this.sqlEnabled;
+  }
+
+  /** Whether the filter bar has something to show: a chip, the page's buttons, or "Add filter". */
   get wanted(): boolean {
-    return this.query.get(FILTERS).length > 0 || this.#pageButtons.length > 0 || this.#tables.length > 0 || this.#editing === 'new';
+    return this.query.get(FILTERS).length > 0 || this.#pageButtons.length > 0 || this.#adds;
   }
 
   /** The page's filter buttons, and the tables its charts filter ("Add filter"). */
@@ -152,7 +144,7 @@ class FilterBar {
 
   /** Draws the chips and the buttons; an edit of a chip ends, the model changed under it. */
   show(): void {
-    if (this.#editing !== 'new') this.#editing = undefined;
+    this.#editing = undefined;
     this.#draw();
   }
 
@@ -170,8 +162,7 @@ class FilterBar {
     const shown = chips.flatMap((chip, index) =>
       ofButton[index] ? [] : [this.#editing === index && chip.kind === 'sql' ? this.#editorOf(chip, index) : this.#chipOf(chip, index)],
     );
-    if (this.#editing === 'new') shown.push(this.#editorOf({ kind: 'sql', sql: '' }, 'new'));
-    if (this.#tables.length > 0) shown.push(this.#add);
+    if (this.#adds) shown.push(this.#add);
     this.#chips.hidden = shown.length === 0;
     this.#chips.replaceChildren(...shown);
     this.#buttons.hidden = this.#pageButtons.length === 0;
@@ -296,10 +287,10 @@ class FilterBar {
   }
 
   /**
-   * The SQL chip `chip` at `index` (or the funnel's `new` one) in edit mode: its text in a textarea (Shift+Enter a new
+   * The SQL chip `chip` at `index` in edit mode: its text in a textarea (Shift+Enter a new
    * line). Enter or leaving the field applies, Escape cancels.
    */
-  #editorOf(chip: SqlFilter, index: number | 'new'): HTMLElement {
+  #editorOf(chip: SqlFilter, index: number): HTMLElement {
     const field: HTMLTextAreaElement = html`<textarea
       class="d-field d-field--full d-field--mono"
       placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
@@ -310,8 +301,7 @@ class FilterBar {
       if (this.#editing !== index) return;
       this.#editing = undefined;
       const before = this.query.get(FILTERS);
-      if (apply && index === 'new') this.query.set(FILTERS, addChip(before, { kind: 'sql', sql: field.value }));
-      else if (apply && typeof index === 'number') this.#replace(index, { kind: 'sql', sql: field.value });
+      if (apply) this.#replace(index, { kind: 'sql', sql: field.value });
       // the chips did not change (cancelled, empty, the same again), so no `onDidChange` draws them
       if (this.query.get(FILTERS) === before) {
         this.#draw();
@@ -330,7 +320,7 @@ class FilterBar {
     return html`<span class="d-filter-chip d-filter-chip--editing" data-testid="filter-chip-editor">${field}</span>`;
   }
 
-  #edit(editing: Editing): void {
+  #edit(editing: number): void {
     this.#editing = editing;
     this.#draw();
     this.onDidChangeWanted();

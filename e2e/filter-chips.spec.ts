@@ -1,6 +1,6 @@
 // Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b and 9c): a link's `f`
 // and `sql` show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the
-// charts, the funnel adds a SQL chip, a chip's × removes it from the URL, a pill's operator and value are edited in
+// charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26), a chip's × removes it from the URL, a pill's operator and value are edited in
 // place on a page whose charts filter its table, a filter button toggles in place as a signed pill, without a chip; a
 // button with `...` asks its value, shows it beside it and takes a new one in its place.
 //
@@ -106,7 +106,9 @@ test('a pill not signed by the server fails the charts with 400', async ({page})
     expect((await answered).status()).toBe(400);
 });
 
-test('a link with two `sql` shows two SQL chips; the funnel adds one; × removes one', async ({page}) => {
+test('a link with two `sql` shows two SQL chips; "Add filter"’s "SQL condition…" adds one; × removes one', async ({page, request}) => {
+    const workbench = await (await request.get('/workbench.json')).json();
+    test.skip(!workbench.sqlEnabled, 'SQL chips are off (filters.sqlEnabled)');
     const pill = await signedPill(page, 'eq', 'system');
     await page.goto(`${PAGE}?sql=${encodeURIComponent('1 = 1')}&f=${encodeURIComponent(pill.key)}&sql=${encodeURIComponent('2 = 2')}`);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
@@ -115,8 +117,10 @@ test('a link with two `sql` shows two SQL chips; the funnel adds one; × removes
     await expect(chips.nth(1)).toHaveText(pill.label);
     await expect(chips.nth(2)).toHaveText(/SQL:\s*2 = 2/);
 
-    await page.getByRole('button', {name: 'Filters'}).click();
-    const field = page.getByRole('textbox', {name: 'SQL filter'});
+    await expect(page.getByTestId('wb-top-bar').getByRole('button', {name: 'Filters'})).toHaveCount(0);
+    await page.getByTestId('wb-filter-bar').getByRole('button', {name: 'Add filter'}).click();
+    await page.locator('.d-workbench__quick-pick').getByRole('option').filter({hasText: 'SQL condition…'}).click();
+    const field = page.getByRole('textbox', {name: 'SQL condition'});
     await expect(field).toBeFocused();
     await field.fill('3 = 3');
     await field.press('Enter');
@@ -128,7 +132,9 @@ test('a link with two `sql` shows two SQL chips; the funnel adds one; × removes
     await expect(page).not.toHaveURL(/sql=1(\+|%20)%3D/);
 });
 
-test('a SQL chip is edited in place', async ({page}) => {
+test('a SQL chip is edited in place', async ({page, request}) => {
+    const workbench = await (await request.get('/workbench.json')).json();
+    test.skip(!workbench.sqlEnabled, 'SQL chips are off (filters.sqlEnabled)');
     await page.goto(`${PAGE}?sql=${encodeURIComponent('1 = 1')}`);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await chips.first().locator('.d-filter-chip__value').click();

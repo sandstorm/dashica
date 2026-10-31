@@ -120,8 +120,8 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 
 | Region | Holds |
 |---|---|
-| Top bar | one row over the content only (between the sides, step 9i), always visible: the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
-| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
+| Top bar | one row over the content only (between the sides, step 9i), always visible: the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the time range and refresh (the filter funnel went in step 9o, D26) (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m) or `filters.sqlEnabled` is on, its last entry "SQL condition…" under "Advanced" adding a SQL chip (step 9o, §3.15 D26; the funnel button in the top bar of step 7b is gone) |
 | Rails | from the window's top to the status bar, as their panels (step 9i): at the left rail's start the global menu's "…" (menu `workbench/global`, `UiHost.railStart`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i); a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first after the "…"; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the ticked rows a table gave it by command, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -987,16 +987,17 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
 - **The filter bar** (`FilterBar` in `filters.ts`): one row of chips in the model's order, then the page's buttons.
   A structured chip shows `id`, `=` / `≠`, value; a SQL chip shows `SQL:` and its text on one line (cut with an
   ellipsis, the whole text in its `title`). × removes a chip (`remove(index)`).
-  - **Adding:** the funnel in the top bar opens a new, empty SQL chip in edit mode at the end of the chips; Enter
-    adds it (`add(text)`), Escape or an empty text drops it. The funnel's dot (marked while a SQL filter was set) goes:
+  - **Adding** (since 9o, §3.15 D26): "Add filter"'s advanced entry "SQL condition…" asks the condition in an input
+    box (`showInputBox`, one line) and adds it at the end of the chips; Escape or an empty text adds none. Until 9o the
+    funnel in the top bar opened a new, empty SQL chip in edit mode instead. The funnel's dot (marked while a SQL filter was set) goes:
     the chips show what is set. (proposed)
   - **Editing, the same for every chip** (proposed): a click on a chip's text puts it in edit mode in its place, one
     chip at a time. A SQL chip edits its text in a textarea (`d-field--mono`, Shift+Enter a new line); a structured
     chip edits its value in an input, and a click on its `=` / `≠` flips the op. Enter or leaving the field applies it
     (`replace(index, chip)`), Escape cancels it, an empty SQL text removes the chip. The URL changes once per applied
     edit, not per keystroke.
-  - **Shown** while there is a chip, the page has buttons, or a chip is being added; on a page with `filterBar` only,
-    as today.
+  - **Shown** while there is a chip, the page has buttons, or "Add filter" offers something (a filterable table, or a
+    SQL condition while `filters.sqlEnabled` is on); on a page with `filterBar` only, as today.
 - **A filter button is pressed in place while toggled on** (step 8f, D7; signed since step 9b, §3.15 D17): its
   filter is a signed pill without a table (`filter.NewButton`), its condition the button's `queryPart`, a `...` in it
   replaced by the value as a string literal (`sql.Quote`) on the server; no new URL key (`f`). A pure function in
@@ -1015,9 +1016,9 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
   (`docs/2026-10-30-perspective.md`, "Editable SQL").
 - **Tests:** `query.test.ts` (two `sql` and `f` interleaved keep their order through `parseSearch` / `formatSearch`, a
   single old `sql` is one chip, `?sql=` none, `add(condition)` once, `replace`, `remove`), `filters.test.ts` (a SQL chip
-  from the funnel, editing a SQL and a structured chip, Escape, `buttonOf` of a button's pill, a pressed button
+  from "Add filter"'s "SQL condition…" (since 9o; the funnel before), editing a SQL and a structured chip, Escape, `buttonOf` of a button's pill, a pressed button
   has no chip and removes its filter, a `...` button shows its values and takes a new one in place), Go: `query_state_test.go` (several `sql`, an empty one), `time_range_test.go` (`SqlClause` with
-  two chips). Playwright: `e2e/filter-chips.spec.ts` (a link with two `sql` shows two chips, the funnel adds one, × on
+  two chips). Playwright: `e2e/filter-chips.spec.ts` (a link with two `sql` shows two chips, "SQL condition…" adds one (the funnel until 9o), × on
   one, a filter button toggles in place without a chip).
 
 ### 3.9 Go actions
@@ -1444,7 +1445,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 
 ### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1494,7 +1495,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   *(proposed)*. `showWidgetError` stays in the `widgets` host, unexported: only the host shows an error in place
   of a widget (a type without renderer, a renderer that throws) *(proposed)*.
 - **D23 Layout fix of D5 (9i, decided after 9h):** the left rail and the left side panel go full height, from the
-  window's top to the status bar; the tab row (tabs, "+", at its end the funnel, time range, refresh) sits only above
+  window's top to the status bar; the tab row (tabs, "+", at its end the funnel (gone since 9o, D26), time range, refresh) sits only above
   the content (`WindowLayout`: the top bar is the centre column's first row); the global "…" moves to the left rail's
   start, above search everywhere; the Dashica icon (home button) goes. The right side is full height as well, the
   same rule on both sides *(proposed)*.
@@ -1518,6 +1519,14 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   chart's time value offers `≥` and `≤` it (beside `=` / `≠`); the table cell menu's time windows (±5 minutes …) stay.
   A pill's op button opens a quick pick of its type's ops. `FilterAs(func(op sql.Op, value string) string)`; the
   default condition `(<expression>) <op> <quoted value>`.
+- **D26 No funnel; a SQL condition from "Add filter" (9o, decided 2026-10-31):** the funnel button in the top bar
+  (next to the time range), which added a SQL chip, goes. "Add filter"'s first quick pick (the tables, or the fields
+  of a page with one table) ends with "SQL condition…" under the heading "Advanced", only while `filters.sqlEnabled` is
+  on; it asks the condition in an input box (`showInputBox`) and adds it as a SQL chip. Editing an existing SQL chip
+  stays in the filter bar (its textarea), also only with the flag on. *(proposed)* With the flag on, "Add filter" shows
+  on every page with `filterBar`, and with it the filter bar, also without a filterable chart (then "SQL condition…" is
+  its only entry), so that a SQL chip can be added on any such page; the input box is one line (no Shift+Enter, as the
+  chip's textarea has).
 - **D34 Free text in headers percent-encoded (9u, decided 2026-10-31):** a header Dashica writes with free text
   (`X-Dashica-Diagnostics`, `X-Dashica-Column-Types`) is its JSON through Go's `url.PathEscape`; every reader runs
   `decodeURIComponent` before `JSON.parse` (`fetchQueryResult` in the `widgets` host, `fetchRows` in `explore-view`).
@@ -1611,7 +1620,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   (`QueryHandler`, `SchemaHandler`, `ConnectionRowsHandler`; `TimeRangeHandler` needs none). Each checks the setting
   where it applies: `explore.enabled` in the Explore handlers, `filters.sqlEnabled` in `SqlClause`, `filters.secret`
   where pills are signed and opened.
-- **The client:** without `sqlEnabled` the filter bar has no funnel, a SQL chip of a link is not edited (only ×; its
+- **The client:** without `sqlEnabled` the filter bar has no funnel (since 9o no "SQL condition…" in "Add filter", D26), a SQL chip of a link is not edited (only ×; its
   tooltip says "SQL filters are not enabled (filters.sqlEnabled)"), and the table's cell menu has no SQL entries
   ("Filter: Contains this value", the time windows). The filter buttons still added SQL chips until D17, so
   while the flag was off a pressed button failed the charts with 400 *(proposed: for one step)*; since 9b they add
@@ -1619,7 +1628,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 - **Tests:** Go `config` (the flag from the file and from the environment), `httpserver` (`SqlClause` off and on, an
   empty `sql`; `/time-range` takes a chip, since 9v), `widget` (every data endpoint of a chart and Speedscope 400 off,
   past the check on),
-  `dashica` (`workbench.json` says it); vitest: the filter bar off (no funnel, a SQL chip not edited, pills and "Add
+  `dashica` (`workbench.json` says it); vitest: the filter bar off (no funnel, since 9o no "SQL condition…", a SQL chip not edited, pills and "Add
   filter" stay), the table's cell menu off.
 
 ✅ **Built in 9b (2026-10-31): the filter buttons signed**, with these details and deviations:
@@ -1823,6 +1832,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9u ✅ | **D34 free text in headers percent-encoded** (§3.8, §3.15): `WriteDiagnostics` and `columnTypesHeader` write their JSON through `url.PathEscape`; `fetchQueryResult` (`widgets` host) and `fetchRows` (`explore-view/rows.ts`) `decodeURIComponent` it before `JSON.parse`; `util.ASCIIJSON` and its test gone; Go tests: a non-ASCII label round-trips, the column types' header encoded, the handlers' Diagnostics compared decoded; vitest: the encoded headers decoded. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox) | "≠" and umlauts in headers without hand-written escapes |
 | 9v ✅ | **D35 the config injected, not copied flags** (§3.15): `rendering.Dependencies.Config` (`*config.Config`, read only) replaces `ExploreEnabled`, `FilterSecret` and `SqlEnabled`; `QueryHandler`, `SchemaHandler` and `ConnectionRowsHandler` get `Config` as a field, `TimeRangeHandler` no field; `httpserver.ParseQueryState(r)` only reads the request; `QueryState.SqlClause(timeRange, cfg.Filters)` answers SQL chips with `ErrSqlNotEnabled` (400) while `filters.sqlEnabled` is off, so `/query`, `/debug`, `/rows`, `/sql`, `/values`, `/type` and Speedscope refuse them and `/time-range` and the alert widgets take them; `newDashicaImpl` takes the config from `deps.Config`; the unused `queryAlertsHandler`, `queryAlertChartHandler` and `debugCalculateAlertsHandler` deleted. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: the check is a parameter of `SqlClause` (the one place a chip goes into a WHERE) rather than a separate call at each handler; a chart's `/sql` with Explore off is a 404 before the SQL-chip 400 *(both proposed)* | one source of the settings |
 | 9w ✅ | **D36 typed query keys** (§3.7, §3.15): `queryKey<T>(urlKeys, { parse, format, sentToServer })` in `hosts/query/query.ts`; `QueryApi.get` / `set` / `onDidChange(key, listener)` in `QueryHost` and `activeQuery`; `QueryKeys` (the keys used, in first-use order, shared by the tabs, a URL key in one key only) replaces `QueryStates`; `TIME`, `REFRESH`, `FILTERS`, `PARAMS` replace `timeState` / `TIME_STATE`, `refreshState` / `REFRESH_STATE`, `chipsState` / `FILTERS_STATE`, `paramsState` / `PARAMS_STATE` / `paramsOf`; `registerState`, `state<T>(id)` and the registrations' dispose gone; `WidgetContext.state` → `ctx.query`, the data fetch `ctx.query()` → `ctx.runQuery()`; every use and test migrated (`time-range`, `refresh`, `filters` with `offer` / `add-filter`, `ChartFrame`, the form widgets, Speedscope, `dashboardPage` without a registration). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `ctx.runQuery()`; `queryKey`'s first argument the URL key(s); `sentToServer` a function for `TIME`; a key is sent once used; the params error gone *(all proposed)* | `query.get(TIME)` |
+| 9o ✅ | **D26 no funnel; "SQL condition…" in "Add filter"** (§3.8, §3.15): `FilterBar.toggle` (the funnel, `ui.registerBarItem('top', …)`) and the `new` SQL chip in edit mode are gone; `addFilter(ui, query, tables, anchor, sqlEnabled)` ends its first quick pick with a separator "Advanced" and "SQL condition…" while `sqlEnabled`, which asks the condition in `showInputBox` and adds a SQL chip (`addSqlCondition`); "Add filter" shows while a chart filters a table or `sqlEnabled`. Files: `frontend/extensions/filters/{filters,add-filter}.ts` (+ tests), `e2e/{filter-chips,add-filter,top-bar}.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the step's id is 9o, as 9l was taken by a bugfix; with the flag on, the filter bar shows on every page with `filterBar`; the input box is one line *(all proposed)* | SQL typed only as the advanced way of "Add filter" |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

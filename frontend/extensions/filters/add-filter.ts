@@ -1,7 +1,7 @@
 // See addFilter.
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { QueryApi } from '../../hosts/query/query';
-import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
+import { QuickPickItemKind, type MenuAnchor, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
 import type { PillSource } from '../../hosts/widgets/widgets';
 import { typeKind } from '../widget-library/clickhouse-type';
 import { FILTERS, addChip, type FilterOp } from './chips';
@@ -56,23 +56,35 @@ export function fieldSource(tables: readonly FilterableTable[], { connection, ta
  * in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its fields, an op of the
  * field's type (`opsOf`; the type from the field's chart's `/type` in `query`'s state, asked once the field is chosen,
  * which reads no values, so a time's are never asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`, with the
- * type), added to the chips of `query`. Escape at any step adds nothing; a failed `/pill` goes to the console.
+ * type), added to the chips of `query`. While `sqlEnabled` (filters.sqlEnabled, §3.15 D26) the first quick pick ends
+ * with "SQL condition…" under "Advanced" (its only entry while no chart filters a table), which asks the condition in
+ * an input box (`addSqlCondition`). Escape at any step adds nothing; a failed `/pill` goes to the console.
  */
 export async function addFilter(
   ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox'>,
   query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
   tables: readonly FilterableTable[],
   anchor: MenuAnchor,
+  sqlEnabled: boolean,
 ): Promise<void> {
-  const table =
-    tables.length === 1
-      ? tables[0]
-      : (await ui.showQuickPick(tables.map((t) => ({ label: t.table, description: t.connection, table: t })), { anchor, title: 'Add filter', placeholder: 'The table to filter' }))?.table;
-  if (!table) return;
-  const field = await ui.showQuickPick(
-    table.fields.map((f) => ({ label: f.field, ...f })),
+  const advanced: readonly (SqlItem | QuickPickSeparator)[] = sqlEnabled
+    ? [{ kind: QuickPickItemKind.Separator, label: 'Advanced' }, { label: 'SQL condition…', description: 'every query’s WHERE', sql: true }]
+    : [];
+  let table = tables.length === 1 ? tables[0] : undefined;
+  if (!table) {
+    const first = await ui.showQuickPick<(QuickPickItem & { table: FilterableTable }) | SqlItem>(
+      [...tables.map((t) => ({ label: t.table, description: t.connection, table: t })), ...advanced],
+      { anchor, title: 'Add filter', placeholder: tables.length > 0 ? 'The table to filter' : undefined },
+    );
+    if (first && 'sql' in first) return addSqlCondition(ui, query, anchor);
+    table = first?.table;
+    if (!table) return;
+  }
+  const field = await ui.showQuickPick<(QuickPickItem & FilterableField) | SqlItem>(
+    [...table.fields.map((f) => ({ label: f.field, ...f })), ...(tables.length === 1 ? advanced : [])],
     { anchor, title: 'Add filter', placeholder: `A field of ${table.table}` },
   );
+  if (field && 'sql' in field) return addSqlCondition(ui, query, anchor);
   if (!field) return;
   // the type decides the ops; a failed answer leaves it unknown (= and ≠), the value step shows the message
   const first = await fetchType(field.widget.dataUrl, field.field, query.requestParams()).catch(() => undefined);
@@ -92,6 +104,25 @@ export async function addFilter(
   } catch (error) {
     console.error(`Filter ${field.field} ${sign} ${value} failed:`, error);
   }
+}
+
+/** "Add filter"'s advanced entry, "SQL condition…". */
+interface SqlItem extends QuickPickItem {
+  readonly sql: true;
+}
+
+/**
+ * Asks for a SQL condition (`duration > 2000`) in an input box at `anchor` and adds it to the chips of `query` as a SQL
+ * chip; nothing on Escape or a text of only spaces.
+ */
+async function addSqlCondition(ui: Pick<UiApi, 'showInputBox'>, query: Pick<QueryApi, 'get' | 'set'>, anchor: MenuAnchor): Promise<void> {
+  const sql = await ui.showInputBox({
+    title: 'SQL condition',
+    prompt: 'Added to the WHERE of every query of the page',
+    placeholder: "e.g., status = 'active' AND region IN ('us-east', 'eu-west')",
+    anchor,
+  });
+  if (sql !== undefined) query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'sql', sql }));
 }
 
 /**

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for add-filter.ts: the page's filterable tables (filterableTables), the chart that makes a pill again
 // (fieldSource), "add filter" through table, field, operator (of the field's type) and value to the pill of the
-// field's chart (addFilter), a time's value in an input box at the edge of the time range (askValue), the value's
+// field's chart (addFilter), its advanced "SQL condition…" while SQL chips are taken, a time's value in an input box at the edge of the time range (askValue), the value's
 // quick pick asking the server as the text changes (pickValue), and the requests of /values and /type (fetchValues,
 // fetchType).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -105,7 +105,7 @@ describe('addFilter', () => {
   it('asks table, field, operator and value, and adds the pill of the field’s chart', async () => {
     values = (search) => ['admin', 'login'].filter((v) => v.includes(search));
     query.set(TIME, presetRange('1h'));
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, false);
 
     await pick('default.http_logs default', 'audit logs');
     await pick('host', 'status', 'timestamp');
@@ -125,7 +125,7 @@ describe('addFilter', () => {
   });
 
   it('offers a time’s operators, ≥ and ≤ first, and asks its value in an input box at the time range’s edge', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, false);
 
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['host', 'status', 'timestamp']));
     options()[2].click();
@@ -143,7 +143,7 @@ describe('addFilter', () => {
   });
 
   it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor);
+    void addFilter(quickInput, query, filterableTables([audit]), anchor, false);
 
     await pick('action');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -152,11 +152,48 @@ describe('addFilter', () => {
   });
 
   it('asks no table when the page has one, and adds nothing on Escape', async () => {
-    const done = addFilter(quickInput, query, filterableTables([audit]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([audit]), anchor, false);
 
     await pick('action');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await done;
+
+    expect(query.get(FILTERS)).toEqual([]);
+  });
+});
+
+describe('addFilter with SQL chips taken', () => {
+  const headings = () => [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick-heading')].map((h) => h.textContent?.trim());
+  const input = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+
+  it('ends the table’s pick with "SQL condition…", which asks the condition in an input box and adds a SQL chip', async () => {
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, true);
+
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['default.http_logs default', 'audit logs', expect.stringContaining('SQL condition…')]));
+    expect(headings()).toEqual(['Advanced']);
+    options()[2].click();
+    await vi.waitFor(() => expect(options()).toHaveLength(0));
+    input().value = 'duration > 2000';
+    input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await done;
+
+    expect(query.get(FILTERS)).toEqual([{ kind: 'sql', sql: 'duration > 2000' }]);
+  });
+
+  it('ends the field’s pick with it on a page of one table, and is the only entry without one', async () => {
+    void addFilter(quickInput, query, filterableTables([audit]), anchor, true);
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['action', expect.stringContaining('SQL condition…')]));
+    void addFilter(quickInput, query, [], anchor, true);
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual([expect.stringContaining('SQL condition…')]));
+  });
+
+  it('adds nothing on Escape in the input box', async () => {
+    const done = addFilter(quickInput, query, [], anchor, true);
+    await vi.waitFor(() => expect(options()).toHaveLength(1));
+    options()[0].click();
+    await vi.waitFor(() => expect(options()).toHaveLength(0));
+    input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await done;
 
     expect(query.get(FILTERS)).toEqual([]);
