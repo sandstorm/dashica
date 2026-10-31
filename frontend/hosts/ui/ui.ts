@@ -31,8 +31,8 @@ export interface UiApi {
   /** Fires with a menu's id when its entries change. */
   readonly onDidChangeMenu: Event<string>;
   /**
-   * Pops up the menu `menuId` at `options.anchor`, its entries in the quick pick (typing narrows them); nothing while no
-   * entry applies (an open box hides). Choosing an entry runs its command with `options.args`, after the box closed
+   * Pops up the menu `menuId` at `options.anchor`, its entries in the quick pick as a menu (`QuickPickOptions.menu`);
+   * nothing while no entry applies (an open box hides). Choosing an entry runs its command with `options.args`, after the box closed
    * and gave the focus back. One box at a time: a new one closes the open one; so do Escape and a press elsewhere.
    */
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
@@ -108,6 +108,13 @@ export interface QuickPickOptions {
   readonly placeholder?: string;
   /** Where the box opens: below an element, or at a point (a click's `clientX` / `clientY`); else at the top in the middle. */
   readonly anchor?: MenuAnchor;
+  /**
+   * A menu (a context menu, a short choice): a plain list without a field in sight, the arrow keys and Enter working
+   * at once; a first letter typed makes the first item starting with it active, more letters show the field and narrow
+   * as usual. The element it is anchored at (its opener) is `aria-expanded` and tinted while it is open. Else (a
+   * picker: "Add filter", search everywhere) the field shows from the start.
+   */
+  readonly menu?: boolean;
 }
 
 /** Where and how `showInputBox` shows its box. */
@@ -188,6 +195,8 @@ export interface QuickPick<T extends QuickPickItem> {
   title: string | undefined;
   /** Where the box opens, as `QuickPickOptions.anchor`; read on `show`. */
   anchor: MenuAnchor | undefined;
+  /** Shown as a menu, as `QuickPickOptions.menu`; read on `show`. `onDidChangeValue` fires once the field shows. */
+  menu: boolean;
   /** Shown in the empty field. */
   placeholder: string | undefined;
   /** The text in the field; setting it fires `onDidChangeValue`. */

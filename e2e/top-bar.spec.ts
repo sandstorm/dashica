@@ -72,6 +72,21 @@ test('shows a panel under its header in caps, whose "…" hides it', async ({pag
     await expect(page.getByTestId('wb-panel-toggle-dashboards')).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('the global "…" opens a menu: no field in sight, the arrow keys at once, the button pressed until it closes', async ({page}) => {
+    const button = page.getByTestId('wb-global-menu');
+    await button.click();
+    const box = page.locator('.d-workbench__quick-pick');
+    await expect(box.getByRole('option').first()).toBeVisible();
+    await expect(box.locator('input')).not.toBeVisible();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(button).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await page.keyboard.press('ArrowDown');
+    await expect(box.locator('[role=option][aria-selected=true]')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(box).toHaveCount(0);
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('with Explore off, the global "…" shows only "Explore", greyed, its tooltip saying why', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
     test.skip(workbench.explore, 'Explore is on (explore.enabled)');

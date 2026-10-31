@@ -50,11 +50,13 @@ test('"Exclude" adds the category as ≠', async ({page}) => {
     await expect(chips.first()).toContainText('≠');
 });
 
-test('typing narrows the quick pick; Escape and a click elsewhere close it without a chip; the next click offers again', async ({page}) => {
+test('the offer is a menu: no field in sight until typed; typing narrows it; Escape and a click elsewhere close it without a chip; the next click offers again', async ({page}) => {
     const bar = await firstBar(page);
     await bar.click();
     await expect(quickPick(page)).toBeVisible();
+    await expect(quickPick(page).locator('input')).not.toBeVisible();
     await page.keyboard.type('instance');
+    await expect(quickPick(page).locator('input')).toBeVisible();
     await expect(quickPick(page).getByRole('option').first()).toHaveAccessibleName(/instance = /);
     await page.keyboard.press('Escape');
     await expect(quickPick(page)).toHaveCount(0);

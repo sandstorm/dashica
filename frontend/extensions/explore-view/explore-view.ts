@@ -1,6 +1,6 @@
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { MenuItem } from '../../hosts/commands/commands';
-import type { UiApi } from '../../hosts/ui/ui';
+import { QuickPickItemKind, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { offerFiltersOf } from '../chart-library/filter-on-click';
@@ -112,15 +112,19 @@ export const EXPLORE_NOT_ENABLED: MenuItem = {
   tooltip: 'Explore is not enabled (explore.enabled)',
 };
 
-/** "Reset" and "Cancel" of `confirmReset`. */
-const RESET_CHOICES = [
+/** The question, "Reset" and "Cancel" of `confirmReset`. */
+const RESET_CHOICES: readonly ((QuickPickItem & { readonly reset: boolean }) | QuickPickSeparator)[] = [
+  { kind: QuickPickItemKind.Separator, label: 'Reset the viewer’s config?' },
   { label: 'Reset', detail: 'The viewer’s config back to its start; what was changed in it is forgotten', reset: true },
   { label: 'Cancel', reset: false },
 ];
 
-/** Asks in a quick pick below `at` (the view's "Reset") whether to reset the viewer's config; `true` once "Reset" was picked. */
+/**
+ * Asks in a menu below `at` (the view's "Reset"), under the question as its heading, whether to reset the viewer's
+ * config; `true` once "Reset" was picked.
+ */
 export async function confirmReset(ui: Pick<UiApi, 'showQuickPick'>, at: Element): Promise<boolean> {
-  const picked = await ui.showQuickPick(RESET_CHOICES, { title: 'Reset the view', placeholder: 'Reset the viewer’s config?', anchor: at });
+  const picked = await ui.showQuickPick(RESET_CHOICES, { title: 'Reset the view', anchor: at, menu: true });
   return picked?.reset === true;
 }
 

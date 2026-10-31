@@ -59,6 +59,8 @@ describe('offerFilters', () => {
     const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }], source);
     expect(choices()).toEqual(['Filter status = 500', 'Exclude status = 500', 'Filter instance = web-1', 'Exclude instance = web-1']);
     expect(host.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
+    // a menu: its field out of sight
+    expect(host.querySelector('.d-workbench__quick-pick input')!.classList.contains('d-workbench__quick-pick-field--concealed')).toBe(true);
     choose('Exclude instance = web-1');
     await done;
 

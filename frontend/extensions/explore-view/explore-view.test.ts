@@ -10,6 +10,7 @@ import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica'
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
+import { QuickPickItemKind } from '../../hosts/ui/ui';
 import { TIME } from '../time-library/time-state';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { blankExploreUrl, chartsOf, confirmReset, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
@@ -211,12 +212,16 @@ describe('confirmReset', () => {
     showQuickPick: async <T extends { label: string }>(items: readonly T[], options?: unknown) => (shown.push({ items, options }), items.find((item) => item.label === label)),
   });
 
-  it('asks below the button, Reset or Cancel, and says yes only to Reset', async () => {
+  it('asks in a menu below the button, the question its heading, Reset or Cancel, and says yes only to Reset', async () => {
     const button = document.createElement('button');
-    const shown: { items: { label: string }[]; options: { anchor: unknown } }[] = [];
+    const shown: { items: { label: string; kind?: number }[]; options: { anchor: unknown; menu?: boolean } }[] = [];
     expect(await confirmReset(pickLabelled('Reset', shown) as never, button)).toBe(true);
-    expect(shown[0].items.map((item) => item.label)).toEqual(['Reset', 'Cancel']);
-    expect(shown[0].options.anchor).toBe(button);
+    expect(shown[0].items.map((item) => [item.kind, item.label])).toEqual([
+      [QuickPickItemKind.Separator, 'Reset the viewer’s config?'],
+      [undefined, 'Reset'],
+      [undefined, 'Cancel'],
+    ]);
+    expect([shown[0].options.anchor, shown[0].options.menu]).toEqual([button, true]);
     expect(await confirmReset(pickLabelled('Cancel', shown) as never, button)).toBe(false);
     expect(await confirmReset(pickLabelled(undefined, shown) as never, button)).toBe(false);
   });

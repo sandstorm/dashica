@@ -175,6 +175,54 @@ describe('showQuickPick', () => {
   });
 });
 
+describe('a menu (menu)', () => {
+  const ENTRIES = [{ label: 'Open in new tab' }, { label: 'Copy link' }, { label: 'Close' }, { label: 'Close others' }];
+  const concealed = (field: HTMLInputElement) => field.classList.contains('d-workbench__quick-pick-field--concealed');
+  const active = (host: HTMLElement) => host.querySelector('[aria-selected=true]')!.textContent;
+
+  it('shows a plain list, its field out of sight but focused, so that the arrow keys and Enter work at once', async () => {
+    const { host, button, quickInput, key, field, box } = setup();
+    const picked = quickInput.showQuickPick(ENTRIES, { anchor: button, menu: true });
+    expect([concealed(field()), document.activeElement, box()!.classList.contains('d-workbench__quick-pick--menu')]).toEqual([true, field(), true]);
+    key(field(), 'ArrowDown');
+    expect(active(host)).toBe('Copy link');
+    key(field(), 'Enter');
+    expect((await picked)?.label).toBe('Copy link');
+  });
+
+  it('jumps to the first entry starting with a first letter typed; a further letter shows the field and narrows', () => {
+    const { host, quickInput, type, field, options } = setup();
+    void quickInput.showQuickPick(ENTRIES, { menu: true });
+    type(field(), 'c');
+    expect([concealed(field()), options().length, active(host)]).toEqual([true, 4, 'Copy link']);
+    type(field(), 'x');
+    expect([concealed(field()), options().length, active(host)]).toEqual([true, 4, 'Copy link']);
+    type(field(), 'clo');
+    expect([concealed(field()), options().map((option) => option.textContent)]).toEqual([false, ['Close', 'Close others']]);
+  });
+
+  it('marks the element it opened from expanded until it is dismissed or an entry chosen', async () => {
+    const { button, quickInput, key, field, options } = setup();
+    void quickInput.showQuickPick(ENTRIES, { anchor: button, menu: true });
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    key(field(), 'Escape');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    const picked = quickInput.showQuickPick(ENTRIES, { anchor: button, menu: true });
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    options()[0].click();
+    await picked;
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('is a picker otherwise: the field in sight from the start, the opener left as it is', () => {
+    const { button, quickInput, type, field, options } = setup();
+    void quickInput.showQuickPick(ENTRIES, { anchor: button });
+    expect([concealed(field()), button.hasAttribute('aria-expanded')]).toEqual([false, false]);
+    type(field(), 'c');
+    expect(options().length).toBe(4 - 1);
+  });
+});
+
 describe('showInputBox', () => {
   it('asks for a text (its value, prompt, placeholder) and resolves with it on Enter, the focus back', async () => {
     const { host, button, quickInput, key, type, field, box } = setup();

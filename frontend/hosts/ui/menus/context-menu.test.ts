@@ -60,6 +60,14 @@ describe('ContextMenu', () => {
     expect(items()[2].parentElement!.getAttribute('role')).toBe('group');
   });
 
+  it('shows as a menu: no field in sight, its opener expanded until it is dismissed', () => {
+    const { trigger, menu, field } = setup();
+    menu.show('dashboards/entry', { anchor: trigger, title: 'Shop' });
+    expect([field().classList.contains('d-workbench__quick-pick-field--concealed'), trigger.getAttribute('aria-expanded')]).toEqual([true, 'true']);
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows an entry with `toggled` with a check mark as it says in the context', () => {
     const shown: MenuContext[] = [];
     const items: MenuItem[] = [

@@ -249,13 +249,13 @@ class FilterBar {
   }
 
   /**
-   * Asks a new op for the field's pill `chip` in a quick pick below `el`, the ops of its type (`opsOf`, the type from
+   * Asks a new op for the field's pill `chip` in a quick pick below `el` (a menu), the ops of its type (`opsOf`, the type from
    * `source`'s `/type`, the key carries none; the one it has checked), and makes the pill again with it.
    */
   async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
     const known = await this.#typeOf(made, source);
     const items = opsOf(known?.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op }));
-    const picked = await this.ui.showQuickPick(items, { anchor: el, title: `Operator of ${made.field}` });
+    const picked = await this.ui.showQuickPick(items, { anchor: el, title: `Operator of ${made.field}`, menu: true });
     if (picked && picked.op !== made.op) await this.#remake(chip, index, source, { ...made, op: picked.op });
   }
 

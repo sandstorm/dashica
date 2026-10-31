@@ -65,7 +65,7 @@ export function fieldSource(
 /**
  * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15, §3.15 D25, D27):
  * asks in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its columns or
- * computed fields (`fieldItems`), an op of its type (`opsOf`; a column's type from the schema, a field's from its
+ * computed fields (`fieldItems`), an op of its type (`opsOf`, in a menu; a column's type from the schema, a field's from its
  * chart's `/type` in `query`'s state, asked once the field is chosen, which reads no values, so a time's are never
  * asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
  * chips of `query`. While `sqlEnabled` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
@@ -103,7 +103,7 @@ export async function addFilter(
   const first = field.known ?? (await fetchType(widget.dataUrl, ref, query.requestParams()).catch(() => undefined));
   const op = await ui.showQuickPick(
     opsOf(first?.type).map((op) => ({ label: `${ref.field} ${OP_SIGNS[op]} …`, icon: OP_ICONS[op], op })),
-    { anchor, title: 'Add filter' },
+    { anchor, title: 'Add filter', menu: true },
   );
   if (!op) return;
   const sign = OP_SIGNS[op.op];

@@ -810,7 +810,7 @@ on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter
 the `filters` extension registers it, owns the quick pick, `OP_ICONS`, `fetchPill`, and adds to the tab shown;
 without it a click offers nothing): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
 `<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and the same with a minus icon
-("Exclude …", `ne`); typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
+("Exclude …", `ne`); it is a menu (§3.15 D30), typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
 press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`), the menu `widget/selection` and the
 `filters` commands `filters.filterBySelection` / `excludeSelection`, `WidgetsApi.selection` / `select` /
 `clearSelection`, `WidgetContext.select` / `choose` / `clearSelection`, the `Selection` types, `ui.showChoices`, the
@@ -1103,11 +1103,11 @@ interface UiApi {
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
   showContextMenu(menuId: string, o: { anchor: Element | {x: number; y: number}; context?: object; args?: unknown[] }): void;
-                                          // the menu's entries in the quick pick at the anchor (8c)
+                                          // the menu's entries in the quick pick as a menu at the anchor (8c, 9s)
   readonly onDidChangeMenu: Event<string>;
 
-  showQuickPick<T>(items: (T | QuickPickSeparator)[], o?: { title?; placeholder?; anchor? }): Promise<T | undefined>;
-                                          // typing narrows (fuzzy); a click's candidates, menus (8c)
+  showQuickPick<T>(items: (T | QuickPickSeparator)[], o?: { title?; placeholder?; anchor?; menu? }): Promise<T | undefined>;
+                                          // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s)
   showInputBox(o?: { title?; prompt?; placeholder?; value?; anchor? }): Promise<string | undefined>;   // a button's `...`
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
@@ -1182,12 +1182,12 @@ cell's Tabulator menu did before it became a registered menu; Tabulator's own me
 column, value, timestamp, `filtering`) or the header's fields (`TableHeaderMenuContext`: column, `autoSize`,
 `autoSizeAll`); Debug's result table through `ui.showContextMenu` with the cell's or header's alone. The `table`
 extension contributes the entries (commands `table.filter…`, `table.autoSizeColumn(s)`). **Since 8c every menu is the
-quick pick** (§3.14 D3): `showContextMenu` shows the entries in it at the anchor, typing narrows them, a line between
+quick pick** (§3.14 D3), since 9s as a menu (§3.15 D30): `showContextMenu` shows the entries in it at the anchor, a line between
 groups, a check mark for a `toggled` entry, an entry that is not `enabled` greyed (`aria-disabled`, choosing it does
 nothing) with its `tooltip` on hover (since 8g, `MenuItem.enabled` / `tooltip`, `QuickPickItem.disabled` / `tooltip`),
 the command run right after the box closed (still in the viewer's
 gesture). A menu of the moment needs no id: its owner calls `ui.showQuickPick(items, {anchor, title})` (a chart's
-click: the `filters` extension's `filters.offer`, §3.8); `showChoices` is gone. A registered menu without entries hides the open box.
+click: the `filters` extension's `filters.offer`, §3.8), with `menu: true` when it is a menu; `showChoices` is gone. A registered menu without entries hides the open box.
 The "…" buttons say `aria-haspopup="dialog"`, the quick pick's role. The rule "never by a right click" stands, with
 the `table/cell` deviation above *(proposed: D3's "right click" read as that one existing menu, no new right-click
 menus)*.
@@ -1523,7 +1523,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   asks the type alone (`<dataUrl>/type`, since 9l) once the field is chosen, before the op. A time's value is no list of DISTINCT timestamps but an input box,
   the edge of the time range filled in, read by ClickHouse best effort. A click on a table's timestamp cell or a
   chart's time value offers `≥` and `≤` it (beside `=` / `≠`); the table cell menu's time windows (±5 minutes …) stay.
-  A pill's op button opens a quick pick of its type's ops. `FilterAs(func(op sql.Op, value string) string)`; the
+  A pill's op button opens a quick pick of its type's ops (a menu since 9s, D30). `FilterAs(func(op sql.Op, value string) string)`; the
   default condition `(<expression>) <op> <quoted value>`.
 - **D26 No funnel; a SQL condition from "Add filter" (9o, decided 2026-10-31):** the funnel button in the top bar
   (next to the time range), which added a SQL chip, goes. "Add filter"'s first quick pick (the tables, or the fields
@@ -1619,6 +1619,23 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   entries) or a function (`TIME`'s own entries, sent also when it is the default, since the server needs a time range
   and does not know the page's); the form widgets' "No extension keeps the page params" error is gone, as `PARAMS` is
   always there; `dashboardPage` no longer touches `wp`.
+- **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
+  an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
+  open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
+  input, an option `menu` (`QuickPickOptions.menu`, `QuickPick.menu`), not a second widget. A menu opens as a plain
+  list (box `d-workbench__quick-pick--menu`): its field is out of sight (`d-workbench__quick-pick-field--concealed`)
+  but keeps the focus, so the arrow keys and Enter work at once; a first letter typed makes the first entry whose
+  label starts with it active, a second one shows the field in place and from then on the text narrows as usual
+  (`onDidChangeValue` fires once the field shows). The element a menu is anchored at, its opener, is
+  `aria-expanded="true"` while the menu is open and `"false"` once it is dismissed or an entry chosen, and tinted
+  (`--color-accent-subtle` / `--color-accent`, as a pressed button) by one rule in `quick-input.css` for any button
+  with `aria-haspopup`. Menus: every registered one through `showContextMenu` (the global "…", the panel headers'
+  "…", the chart's "…", the dashboards entries' "…", a table's cell and header menus, Debug's), a click's ⊕ / ⊖ offer
+  (`filters.offer`), Explore's Reset confirmation. Pickers keep the field: "Add filter"'s table, field and value
+  steps, "Start from chart…", search everywhere. *(proposed)* A pill's operator (the filter bar's op button and "Add
+  filter"'s op step) is a menu too, a short fixed choice that the maintainer's picker list leaves out; the Reset
+  confirmation's question ("Reset the viewer’s config?", its placeholder until 9s) is the menu's heading; a point
+  anchor (a right click, a chart click) has no opener to mark.
 
 ✅ **Built in 9k (2026-10-31): the ops by type**, with these details and deviations:
 
@@ -1909,6 +1926,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9p ✅ | **D27 table columns and computed fields; no constants** (§3.8, §3.15): Go `sql.IsCategory` false for a lone literal, `sql.IsConstantColumn` (a SQL file's `'darkred' AS color`), `sql.ColumnOf`, `sql.ColumnField`, `sql.QuoteIdentifier`; `clickhouse.Schema.Columns`; `filter.Pill.Column` (signed); `widget`: `filterableFields(deps, chart)` without constants (the file read with `deps.FileSystem`), `filterBy` (`field=` or `column=`, the column checked against `Client.Schema`), `tableColumns`, `<dataUrl>/columns` (`columnsHandler`, not behind Explore), `/pill`, `/values`, `/type` taking `column`, `httpError` 422 for `ErrCannotFilter`; `Node.Computed` (`computed` in `page.json`, generator, golden contract) and `Node.Table` for every chart with a table; client: `FilterableTable.widget`, `FilterableField.computed`, `fieldItems` ("Table columns" from `fetchColumns`, "Computed fields"), `FieldRef` / `fieldParam` (`offer.ts`), `fetchValues` / `fetchType` / `fetchPill` by `FieldRef`, `pillField`'s `column`, `fieldSource` of a column the table's first chart; tests: Go (`sql`, `clickhouse`, `widget`; `columns_e2e_test.go` against ClickHouse), vitest (`add-filter`, `filters`, `pill-key`), `e2e/add-filter.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new `/columns` and column `/pill` checks among them, blocked in the sandbox; Playwright written, not run), deviations: the step's id is 9p, as 9n was taken by a concept bugfix; a separate `column` parameter and a signed `column` flag; the constant column of a SQL file found by a regular expression, a literal in any SELECT; every SQL file field computed; a column's values over the plain table for a SQL file chart; the plain fields as columns without the schema; `table` on every chart with a table; a table name without database looked up in `default` *(all proposed)* | every column of the table, no `'darkred'` |
 | 9q ✅ | **D29 a readable, short pill key** (§3.8, §3.15): Go `filter.Sign(secret, pill, database)` / `Open(secret, key, database)` write and read `[<connection>:][<database>.]<table>.<field><op><value>[~<condition>]~<mac>` and `@<queryPart>[~<value>]~<mac>` (percent-encoded separators, HMAC-SHA256 truncated to 128 bits, 22 characters of base64url), `filter.ShortName`, `sql.Op.Operator`; `Pill` without `Type` and JSON tags, its `Label` made from the rest, `Column` for a key without condition; `filter.New` without type; `/pill` without `type`, a click on a field that is just a column making the column's pill; `page.json`'s `table` as the key names it; client: `pillField`, `pillButton`, `pillLabel` read the new key, the filter bar asks `/type` when a pill's op or value is edited, `fetchPill` sends no type; e2e specs check the key's form and a hand-changed key's 400. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: step id 9q (9p was taken); `conn:` for the connection; a plain builder field's pill is the column's; a button by its `queryPart`, labelled with its condition off its page; no type in the key, `/type` asked per edit *(all proposed)* | `f` of ~50 characters, readable |
 | 9r ✅ | **D28 a chart that ignores filters drawn muted** (§3.6, §3.8, §3.15): `ChartFrame` toggles `d-chart-frame--muted` on its frame while its "ignores …" badge shows (not while skipped, not after a failed query); `chart-frame.css` fades the stage by the new tokens `--opacity-muted` / `--saturation-muted` (`core/style/tokens.css`) and draws it at full strength on `:hover`, `:focus-within` and inside `d-widget--active`; the title row and the badge stay as they are. Files: `frontend/extensions/chart-library/chart-frame.{ts,css}` (+ test), `frontend/core/style/tokens.css`, `e2e/filter-chips.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the step's id is 9r, as 9o was taken by D26; a muted look of opacity and desaturation together, the same values on both schemes *(proposed)* | one sees at a glance which charts a filter leaves out |
+| 9s ✅ | **D30 a menu mode of the quick input** (§3.11, §3.15): `QuickPickOptions.menu` / `QuickPick.menu`; `OwnedQuickPick` conceals its field in a menu until a second letter (`#typed`), `OnePicker.jump` activates the first entry starting with the first letter; `QuickInput.#present` marks the opener (an `Element` anchor of a menu) `aria-expanded`; `quick-input.css` conceals the field and tints `button[aria-haspopup][aria-expanded='true']`; `ContextMenu.show`, `offerFilters`, `confirmReset` and the op pickers (`FilterBar.#changeOp`, `addFilter`'s op step) pass `menu: true`. Files: `frontend/hosts/ui/{ui.ts,quick-input/quick-input.{ts,css},menus/context-menu.ts}` (+ tests), `frontend/extensions/filters/{offer,filters,add-filter}.ts`, `frontend/extensions/explore-view/explore-view.ts` (+ tests), `e2e/{bar-selection,top-bar}.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright written, not run), deviations: the step's id is 9s, as 9q was taken by D29; the op pickers are menus; Reset's question a heading *(all proposed)* | menus without a search field, the opener pressed while open |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

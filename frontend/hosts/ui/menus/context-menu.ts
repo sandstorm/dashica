@@ -5,7 +5,7 @@ import { type ContextMenuOptions, type QuickPickItem, QuickPickItemKind, type Qu
 import type { Menus } from './menus';
 
 /**
- * What `showContextMenu` shows: the menu's entries in the quick pick at the anchor (typing narrows them), a line
+ * What `showContextMenu` shows: the menu's entries in the quick pick as a menu at the anchor (`menu`), a line
  * between groups, an entry with `toggled` with a check mark while it holds, one that is not `enabled` greyed, an
  * entry's key at its end and its `tooltip` on hover. Choosing an
  * entry closes the box and gives the focus back; its command runs right after, still in the viewer's gesture (a
@@ -40,7 +40,7 @@ export class ContextMenu {
       this.quickInput.hide();
       return;
     }
-    this.quickInput.pickOne(picks, { title: options.title, anchor: options.anchor }, (picked) => {
+    this.quickInput.pickOne(picks, { title: options.title, anchor: options.anchor, menu: true }, (picked) => {
       if (picked) this.#run(picked.command, args);
     });
   }

@@ -17,7 +17,8 @@ import {
 /**
  * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `host` (a new
  * one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the top in
- * the middle. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was.
+ * the middle. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was. A menu's box
+ * (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
  */
 export class QuickInput {
   #open: Open | null = null;
@@ -26,7 +27,7 @@ export class QuickInput {
 
   createQuickPick<T extends QuickPickItem>(): QuickPick<T> {
     return new OwnedQuickPick<T>({
-      show: (box, field, onHide, anchor) => this.#present(box, field, onHide, anchor),
+      show: (box, field, onHide, anchor, opener) => this.#present(box, field, onHide, anchor, opener),
       hide: (box) => {
         if (this.#open?.box === box) this.#open.close();
       },
@@ -46,6 +47,7 @@ export class QuickInput {
     pick.title = options.title;
     pick.placeholder = options.placeholder;
     pick.anchor = options.anchor;
+    pick.menu = options.menu ?? false;
     let picked: T | undefined;
     pick.onDidChangeValue((value) => (pick.items = narrow(items, value)));
     pick.onDidAccept(() => {
@@ -90,10 +92,10 @@ export class QuickInput {
   }
 
   /**
-   * Shows `box` (hiding an open one) at `anchor` and focuses `focus`; Escape, a press outside or `close` remove it and
-   * call `onHide`.
+   * Shows `box` (hiding an open one) at `anchor` and focuses `focus`, `opener` expanded meanwhile; Escape, a press
+   * outside or `close` remove it and call `onHide`.
    */
-  #present(box: HTMLElement, focus: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined): void {
+  #present(box: HTMLElement, focus: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined, opener?: Element): void {
     this.#open?.close();
     const doc = this.host.ownerDocument;
     const previous = doc.activeElement;
@@ -114,6 +116,7 @@ export class QuickInput {
       box.removeEventListener('keydown', onkeydown);
       const hadFocus = box.contains(doc.activeElement);
       box.remove();
+      opener?.setAttribute('aria-expanded', 'false');
       if (this.#open?.box === box) this.#open = null;
       if (hadFocus && previous instanceof HTMLElement && previous.isConnected) previous.focus();
       onHide();
@@ -121,6 +124,7 @@ export class QuickInput {
     box.addEventListener('keydown', onkeydown);
     this.#open = { box, close };
     this.host.append(box);
+    opener?.setAttribute('aria-expanded', 'true');
     place(box, anchor);
     doc.addEventListener('mousedown', outside, true);
     focus.focus();
@@ -224,6 +228,13 @@ class OnePicker<T extends QuickPickItem> {
     this.#activate(0);
   }
 
+  /** Makes the first item whose label starts with `prefix` (in any case) active; none such: leaves the active one. */
+  jump(prefix: string): void {
+    const start = prefix.toLowerCase();
+    const index = this.#options.findIndex(({ item }) => item.label.toLowerCase().startsWith(start));
+    if (index >= 0) this.#activate(index);
+  }
+
   key(event: KeyboardEvent): void {
     const count = this.#options.length;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -274,7 +285,9 @@ class OnePicker<T extends QuickPickItem> {
 
 /**
  * The quick pick of `createQuickPick`: a box with a field, a progress line, the owner's items, "No results" and the
- * prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`.
+ * prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`. As a `menu` its field is concealed
+ * (it keeps the focus, so the keys work at once): a first letter typed makes the first item starting with it active,
+ * the next one shows the field and the text from then on goes to the owner as usual.
  */
 class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #box: HTMLElement;
@@ -288,6 +301,7 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #hidden = new EventEmitter<void>();
   #title: string | undefined;
   anchor: MenuAnchor | undefined;
+  menu = false;
   #items: readonly (T | QuickPickSeparator)[] = [];
   #selected: readonly T[] = [];
   #busy = false;
@@ -298,12 +312,12 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 
   constructor(
     private readonly boxes: {
-      show(box: HTMLElement, field: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined): void;
+      show(box: HTMLElement, field: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined, opener: Element | undefined): void;
       hide(box: HTMLElement): void;
     },
   ) {
     this.#field = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" role="combobox" aria-autocomplete="list" aria-expanded="true"
-      oninput=${() => this.#changed.fire(this.#field.value)} onkeydown=${(event: KeyboardEvent) => this.#picker.key(event)}>`;
+      oninput=${() => this.#typed()} onkeydown=${(event: KeyboardEvent) => this.#picker.key(event)}>`;
     this.#progress = html`<div class="d-workbench__quick-pick-progress"></div>`;
     const listbox = html`<div class="d-workbench__quick-pick-list" role="listbox"></div>`;
     this.#empty = html`<div class="d-workbench__quick-pick-empty">No results</div>`;
@@ -341,6 +355,7 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   set value(value: string) {
     this.#field.value = value;
     this.#field.setSelectionRange(value.length, value.length);
+    if (value !== '') this.#conceal(false);
     this.#changed.fire(value);
   }
 
@@ -379,10 +394,13 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   show(): void {
     if (this.#shown) return;
     this.#shown = true;
+    this.#box.classList.toggle('d-workbench__quick-pick--menu', this.menu);
+    this.#conceal(this.menu && this.#field.value === '');
+    const opener = this.menu && this.anchor instanceof Element ? this.anchor : undefined;
     this.boxes.show(this.#box, this.#field, () => {
       this.#shown = false;
       this.#hidden.fire();
-    }, this.anchor);
+    }, this.anchor, opener);
     this.#field.setSelectionRange(this.#field.value.length, this.#field.value.length);
   }
 
@@ -397,6 +415,23 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
     this.#hidden.dispose();
   }
 
+  /** The text typed: while the field is concealed, a letter only jumps (`OnePicker.jump`); else it goes to the owner. */
+  #typed(): void {
+    const value = this.#field.value;
+    if (this.#field.classList.contains(CONCEALED)) {
+      if (value.length <= 1) {
+        this.#picker.jump(value);
+        return;
+      }
+      this.#conceal(false);
+    }
+    this.#changed.fire(value);
+  }
+
+  #conceal(concealed: boolean): void {
+    this.#field.classList.toggle(CONCEALED, concealed);
+  }
+
   /** The names, the progress line, "No results" and the prompt as the state says. */
   #update(): void {
     const name = this.#title ?? 'Pick';
@@ -409,6 +444,9 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
     else this.#field.setAttribute('aria-describedby', this.#prompt.id);
   }
 }
+
+/** A menu's field before more than a letter is typed: out of sight, still focused. */
+const CONCEALED = 'd-workbench__quick-pick-field--concealed';
 
 /**
  * An item's check mark, icon, label, description, key and detail, the `highlights` marked; a space before each further
