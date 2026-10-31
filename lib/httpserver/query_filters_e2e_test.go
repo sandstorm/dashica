@@ -1,5 +1,6 @@
 // Tests for pills against a real ClickHouse (QueryHandler.HandleQuery with filter.Apply's conditions): a quoted value
-// compared with a column of another type, a filter button's value among them; the values of a field (HandleValues).
+// compared with a column of another type, a filter button's value and a time as the filter bar writes it among them;
+// the type and the values of a field (HandleValues).
 package httpserver
 
 import (
@@ -8,6 +9,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
@@ -23,7 +25,13 @@ FROM values('status UInt16, timestamp DateTime', (500, now() - 60), (200, now() 
 WHERE {{DASHICA_FILTERS}}`).With(sql.Table("default.status_rows"))
 
 // queryStatusRows answers statusRows with the pill on `status` `op` `value`.
-func queryStatusRows(t *testing.T, op, value string) (*httptest.ResponseRecorder, error) {
+func queryStatusRows(t *testing.T, op sql.Op, value string) (*httptest.ResponseRecorder, error) {
+	t.Helper()
+	return queryStatusRowsBy(t, "status", op, value)
+}
+
+// queryStatusRowsBy answers statusRows with the pill on `field` `op` `value`.
+func queryStatusRowsBy(t *testing.T, field string, op sql.Op, value string) (*httptest.ResponseRecorder, error) {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
@@ -33,7 +41,7 @@ func queryStatusRows(t *testing.T, op, value string) (*httptest.ResponseRecorder
 		t.Fatalf("ParseQueryState: %v", err)
 	}
 	table, ok := filter.TableOf(statusRows, func(string) string { return "default" })
-	pill, err := filter.New(table, sql.Field("status"), op, value)
+	pill, err := filter.New(table, sql.Field(field), op, value, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -43,7 +51,7 @@ func queryStatusRows(t *testing.T, op, value string) (*httptest.ResponseRecorder
 }
 
 func TestHandleQuery_AQuotedValueMatchesAUInt16Column(t *testing.T) {
-	for op, want := range map[string]string{"eq": "hit-500", "ne": "hit-200"} {
+	for op, want := range map[sql.Op]string{sql.OpEq: "hit-500", sql.OpNe: "hit-200"} {
 		rec, err := queryStatusRows(t, op, "500")
 		if err != nil {
 			t.Fatalf("%s: %v", op, err)
@@ -82,6 +90,29 @@ func TestHandleQuery_AButtonsQuotedValueComparesAUInt16ColumnAsANumber(t *testin
 	}
 }
 
+func TestHandleQuery_AnISOTimeComparesADateTimeColumn(t *testing.T) {
+	// the filter bar writes a time as ISO 8601 in UTC (`toISOString`); the rows are a minute old
+	iso := func(d time.Duration) string { return time.Now().Add(d).UTC().Format("2006-01-02T15:04:05.000Z") }
+	for _, tt := range []struct {
+		op    sql.Op
+		value string
+		hits  bool
+	}{
+		{sql.OpGe, iso(-10 * time.Minute), true},
+		{sql.OpGe, iso(10 * time.Minute), false},
+		{sql.OpLe, iso(-10 * time.Minute), false},
+		{sql.OpLt, iso(10 * time.Minute), true},
+	} {
+		rec, err := queryStatusRowsBy(t, "timestamp", tt.op, tt.value)
+		if err != nil {
+			t.Fatalf("%s %s: %v", tt.op, tt.value, err)
+		}
+		if got := bytes.Contains(rec.Body.Bytes(), []byte("hit-500")); got != tt.hits {
+			t.Errorf("timestamp %s %s: hits %v, want %v", tt.op.Sign(), tt.value, got, tt.hits)
+		}
+	}
+}
+
 func TestHandleQuery_AQuotedValueThatDoesNotConvertFailsTheQuery(t *testing.T) {
 	_, err := queryStatusRows(t, "eq", "abc")
 	if err == nil {
@@ -99,7 +130,7 @@ func TestHandleQuery_AValueWithQuotesStaysOneLiteral(t *testing.T) {
 func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
-	for search, want := range map[string]string{"": `["200","500"]`, "50": `["500"]`, "x": `[]`} {
+	for search, want := range map[string]string{"": `{"type":"UInt16","values":["200","500"]}`, "50": `{"type":"UInt16","values":["500"]}`, "x": `{"type":"UInt16","values":[]}`} {
 		r := httptest.NewRequest(http.MethodGet, "/values?time=1h", nil)
 		state, err := ParseQueryState(r, true)
 		if err != nil {
@@ -111,6 +142,9 @@ func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
 		}
 		if got := string(bytes.TrimSpace(rec.Body.Bytes())); got != want {
 			t.Errorf("%q: %s, want %s", search, got, want)
+		}
+		if rec.Header().Get("X-Dashica-Resolved-Time-Range") == "" {
+			t.Errorf("%q: no resolved time range", search)
 		}
 	}
 }

@@ -215,5 +215,6 @@ async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<Quer
   result.clickhouseSummary = JSON.parse(response.headers.get('X-Clickhouse-Summary') || 'null');
   result.dashicaAlertIf = JSON.parse(response.headers.get('X-Dashica-Alert-If') || 'null');
   result.dashicaDiagnostics = JSON.parse(response.headers.get('X-Dashica-Diagnostics') || '{}');
+  result.dashicaColumnTypes = JSON.parse(response.headers.get('X-Dashica-Column-Types') || '{}');
   return result;
 }

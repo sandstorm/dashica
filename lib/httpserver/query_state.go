@@ -6,10 +6,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode/utf16"
-	"unicode/utf8"
 
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
+	"github.com/sandstorm/dashica/lib/util"
 )
 
 // QueryState is the page's query state as every data handler reads it, from the keys the page keeps in its own URL
@@ -90,23 +89,5 @@ func WriteDiagnostics(w http.ResponseWriter, d filter.Diagnostics) {
 		return
 	}
 	b, _ := json.Marshal(d) // strings only; cannot fail
-	w.Header().Set("X-Dashica-Diagnostics", asciiJSON(string(b)))
-}
-
-// asciiJSON writes every non-ASCII rune of a JSON text as its \u escape (a surrogate pair above U+FFFF); outside
-// strings JSON is ASCII anyway, so the text stays the same JSON.
-func asciiJSON(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r < utf8.RuneSelf:
-			b.WriteRune(r)
-		case r > 0xFFFF:
-			hi, lo := utf16.EncodeRune(r)
-			fmt.Fprintf(&b, `\u%04x\u%04x`, hi, lo)
-		default:
-			fmt.Fprintf(&b, `\u%04x`, r)
-		}
-	}
-	return b.String()
+	w.Header().Set("X-Dashica-Diagnostics", util.ASCIIJSON(string(b)))
 }

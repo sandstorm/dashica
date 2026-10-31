@@ -76,14 +76,16 @@ test('an exclude shows ≠; back brings a removed chip back', async ({page}) => 
     await expect(chips).toHaveCount(2);
 });
 
-test('a pill’s operator switches and its value changes in place, each a new signed pill', async ({page}) => {
+test('a pill’s operator is picked and its value changes in place, each a new signed pill', async ({page}) => {
     const first = await signedPill(page, 'eq', 'system');
     const second = await signedPill(page, 'ne', 'a:b');
     await page.goto(`${PILL_PAGE}?f=${encodeURIComponent(first.key)}&f=${encodeURIComponent(second.key)}`);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(2);
 
+    // the operator offers the ops of the field's type (a text field: = and ≠)
     await chips.nth(0).locator('.d-filter-chip__op').click();
+    await page.locator('.d-workbench__quick-pick').getByRole('option').filter({hasText: '≠'}).first().click();
     await expect(chips.nth(0)).toContainText('≠');
     await expect(chips.nth(0)).toContainText('system');
     await expect(chips.nth(1)).toHaveText(second.label);

@@ -5,11 +5,12 @@ type SqlField interface {
 	Alias() string
 	WithAlias(s string) SqlField
 	// FilterAs is the field whose pill (a filter on the value it shows, docs/2026-10-28-workbench.md §3.8) is the
-	// condition `condition` writes for that value, in place of `<definition> = <quoted value>`: for a computed field
-	// whose column filters faster, `sql.Field("replace(customer_project, 'customer-', '')").WithAlias("customer").
-	// FilterAs(func(value string) string { return "customer_project = " + sql.Quote("customer-"+value) })`. The
-	// condition quotes the value itself (Quote). A time bucket stays one that cannot filter.
-	FilterAs(condition func(value string) string) SqlField
+	// condition `condition` writes for its op and value, in place of `(<definition>) <op> <quoted value>`: for a
+	// computed field whose column filters faster, `sql.Field("replace(customer_project, 'customer-', '')").
+	// WithAlias("customer").FilterAs(func(op sql.Op, value string) string { return op.Compare("customer_project",
+	// "customer-"+value) })`. The condition quotes the value itself (Op.Compare, Quote). A time bucket stays one that
+	// cannot filter.
+	FilterAs(condition func(op Op, value string) string) SqlField
 }
 
 func Field(definition string) SqlField {
@@ -32,9 +33,9 @@ type fieldImpl struct {
 	// (sql.Field("count(*)")), and lets the editor label the field. Empty is
 	// treated as "expr".
 	kind fieldKind
-	// filterAs is the condition of its pill for a value (FilterAs); nil: `(<definition>) = <quoted value>`. Go only,
-	// so it is not serialized.
-	filterAs func(value string) string
+	// filterAs is the condition of its pill for an op and a value (FilterAs); nil: `(<definition>) <op> <quoted
+	// value>`. Go only, so it is not serialized.
+	filterAs func(op Op, value string) string
 }
 
 func (f *fieldImpl) WithAlias(s string) SqlField {
@@ -43,7 +44,7 @@ func (f *fieldImpl) WithAlias(s string) SqlField {
 	return &cloned
 }
 
-func (f *fieldImpl) FilterAs(condition func(value string) string) SqlField {
+func (f *fieldImpl) FilterAs(condition func(op Op, value string) string) SqlField {
 	cloned := *f
 	cloned.filterAs = condition
 	return &cloned

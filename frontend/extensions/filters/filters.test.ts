@@ -2,8 +2,9 @@
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
 // edited, removed), the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
 // button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
-// place, "Add filter" while a chart filters a table; a field's pill edited in place, its operator switched and its
-// value asked anew, each made again by a chart of the page, one no chart makes only removed; with SQL filters off
+// place, "Add filter" while a chart filters a table; a field's pill edited in place, its operator picked among the ops
+// of its type and its value asked anew (a time's in an input box), each made again by a chart of the page, one no
+// chart makes only removed; with SQL filters off
 // (filters.sqlEnabled), no funnel and a SQL chip only removed, the buttons and the pills as before; a chart click's
 // `filters.offer` adding the pill chosen to the tab shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +23,7 @@ let ui: object;
 let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
-let asked: { title?: string; prompt?: string; anchor?: unknown }[];
+let asked: { title?: string; prompt?: string; value?: string; anchor?: unknown }[];
 /** The quick picks shown (all cancelled, unless `picked` names the label to choose): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
 let picked: string | undefined;
@@ -87,7 +88,7 @@ beforeEach(() => {
       (name === 'top' ? topBar : bar).appendChild(el);
       return { dispose: () => el.remove() };
     },
-    showInputBox: async (options: { title?: string; prompt?: string; anchor?: unknown }) => (asked.push(options), answer),
+    showInputBox: async (options: { title?: string; prompt?: string; value?: string; anchor?: unknown }) => (asked.push(options), answer),
     showQuickPick: async (items: { label: string }[], options: { anchor?: unknown }) => (
       picks.push({ labels: items.map((i) => i.label), anchor: options.anchor }), items.find((i) => i.label === picked)
     ),
@@ -367,13 +368,13 @@ describe('filters, a field’s pill edited', () => {
   const hostChip = (op: 'eq' | 'ne', value: string) => ({ kind: 'pill', key: hostPill(op, value).key });
   /** What the value's quick pick is given, and what it answers next. */
   let valueBox: { title?: string; anchor?: unknown; items?: { label: string }[] } | undefined;
-  let picked: string | undefined;
+  let pickedValue: string | undefined;
   const op = (chip: HTMLElement) => chip.querySelector<HTMLButtonElement>('.d-filter-chip__op')!;
   const value = (chip: HTMLElement) => chip.querySelector<HTMLButtonElement>('button.d-filter-chip__value')!;
 
   beforeEach(() => {
     valueBox = undefined;
-    picked = undefined;
+    pickedValue = undefined;
     (ui as Record<string, unknown>).createQuickPick = () => {
       const accepted: (() => void)[] = [];
       const hidden: (() => void)[] = [];
@@ -386,7 +387,7 @@ describe('filters, a field’s pill edited', () => {
         show: () => {
           valueBox = box as typeof valueBox;
           setTimeout(() => {
-            if (picked !== undefined) box.selectedItems = [{ value: picked }];
+            if (pickedValue !== undefined) box.selectedItems = [{ value: pickedValue }];
             accepted.forEach((f) => f());
           });
         },
@@ -398,7 +399,7 @@ describe('filters, a field’s pill edited', () => {
     vi.stubGlobal('fetch', async (url: string) => {
       fetched.push(url);
       const args = new URL(url, 'http://x').searchParams;
-      if (url.includes('/values')) return new Response(JSON.stringify(['b', 'c']));
+      if (url.includes('/values')) return new Response(JSON.stringify({ type: 'String', values: ['b', 'c'] }));
       return new Response(JSON.stringify(hostPill(args.get('op') as 'eq' | 'ne', args.get('value')!)));
     });
     activate(true);
@@ -408,19 +409,39 @@ describe('filters, a field’s pill edited', () => {
   it('shows its field, operator and value, each part on its own', () => {
     query.load({ search: `?f=${hostPill('ne', 'a').key}` });
     expect(chips().map(chipText)).toEqual(['host ≠ a']);
-    expect([op(chips()[0]).title, value(chips()[0]).title]).toEqual(['Switch to host =', 'Change the value of host']);
+    expect([op(chips()[0]).title, value(chips()[0]).title]).toEqual(['Change the operator of host', 'Change the value of host']);
   });
 
-  it('switches the operator on a click, the pill made again by the chart and put in the chip’s place', async () => {
+  it('offers the ops of its type below the operator, and puts the pill made again with the one chosen in the chip’s place', async () => {
     query.load({ search: `?f=${keyOf('path = /a')}&f=${hostPill('eq', 'a').key}&sql=b` });
+    picked = 'host ≠ a';
     op(chips()[1]).click();
+    expect(picks).toEqual([{ labels: ['host = a', 'host ≠ a'], anchor: op(chips()[1]) }]);
     await vi.waitFor(() => expect(held()).toEqual([chipOf('path = /a'), hostChip('ne', 'a'), { kind: 'sql', sql: 'b' }]));
     expect(fetched).toEqual(['/p/shop/api/1/pill?field=host&op=ne&value=a']);
   });
 
+  it('offers a time’s ops, asks its new value in an input box with the value in it, and sends the type along', async () => {
+    const at = '2026-10-31T10:00:00.000Z';
+    const since = { connection: 'default', table: 'default.http_logs', field: 'timestamp', op: 'ge', value: at, type: 'DateTime' };
+    show({ ...shop, filterButtons: [], widgets: [{ ...byHost, filterable: ['timestamp'] }] as PageJson['widgets'] });
+    query.load({ search: `?f=${keyOf(`timestamp ≥ ${at}`, since)}` });
+    expect(chips().map(chipText)).toEqual([`timestamp ≥ ${at}`]);
+    op(chips()[0]).click();
+    expect(picks[0].labels).toEqual([`timestamp ≥ ${at}`, `timestamp ≤ ${at}`, `timestamp > ${at}`, `timestamp < ${at}`, `timestamp = ${at}`, `timestamp ≠ ${at}`]);
+
+    answer = '2026-10-31T09:00:00Z';
+    const clicked = value(chips()[0]);
+    clicked.click();
+    await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
+    expect(asked).toEqual([expect.objectContaining({ title: 'timestamp ≥', value: at, anchor: clicked })]);
+    expect(fetched.filter((url) => url.includes('/values'))).toEqual([]);
+    expect(fetched.at(-1)).toBe(`/p/shop/api/1/pill?field=timestamp&op=ge&value=${encodeURIComponent(answer).replace(/%20/g, '+')}&type=DateTime`);
+  });
+
   it('asks a new value in the quick pick of "Add filter" below the value, from the chart’s /values, and replaces the chip in place', async () => {
     query.load({ search: `?f=${hostPill('ne', 'a').key}&f=${hostPill('ne', 'z').key}` });
-    picked = 'b';
+    pickedValue = 'b';
     const clicked = value(chips()[0]);
     clicked.click();
     await vi.waitFor(() => expect(held()).toEqual([hostChip('ne', 'b'), hostChip('ne', 'z')]));
@@ -436,6 +457,7 @@ describe('filters, a field’s pill edited', () => {
     await new Promise((resolve) => setTimeout(resolve));
     expect(fetched.some((url) => url.includes('/pill'))).toBe(false);
 
+    picked = 'host ≠ a';
     op(chips()[0]).click();
     state().set(replaceChip(held(), 0, hostChip('eq', 'q') as FilterChip));
     await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));

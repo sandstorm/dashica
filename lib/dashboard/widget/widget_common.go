@@ -288,11 +288,11 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	return mux
 }
 
-// valuesHandler answers `GET /values?field=<alias>&search=<text>` with the values of the chart's filterable field
-// `field` that contain `search` (ignoring case), at most httpserver.ValuesLimit, sorted, as a JSON array of strings
-// (HandleValues): sql.Values of its query in the request's time range, SQL chips and pills, the pills on that field
-// left out, so that a value besides one filtered by is still offered. 422 for a field that cannot filter (as /pill),
-// 400 for a pill not signed with deps.FilterSecret or a query state that cannot be read.
+// valuesHandler answers `GET /values?field=<alias>&search=<text>` with the ClickHouse type of the chart's filterable
+// field `field` and its values that contain `search` (ignoring case), at most httpserver.ValuesLimit, sorted, as JSON
+// `{type, values}` (HandleValues): sql.Values of its query in the request's time range, SQL chips and pills, the
+// pills on that field left out, so that a value besides one filtered by is still offered. 422 for a field that cannot
+// filter (as /pill), 400 for a pill not signed with deps.FilterSecret or a query state that cannot be read.
 func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		alias := r.URL.Query().Get("field")
@@ -319,16 +319,18 @@ func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 	}
 }
 
-// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne` with the pill (filter.New) of the
-// chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with deps.FilterSecret
-// (filter.Sign), its label the chip's text. 422 for a field that cannot filter (none of filterableFields: a count, a
-// time bucket, any field of a chart without a table), 400 for a request without `value` or with another op.
+// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge[&type=<ClickHouse type>]`
+// with the pill (filter.New) of the chart's filterable field `field` on its table, as JSON `{key, label}`: its key
+// signed with deps.FilterSecret (filter.Sign), its label the chip's text; `type`, the field's type as the client
+// learned it (`/values`, the chart's column types), goes into the key for the filter bar's ops. 422 for a field that
+// cannot filter (none of filterableFields: a count, a time bucket, any field of a chart without a table), 400 for a
+// request without `value` or with another op.
 func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		args := r.URL.Query()
-		alias, op := args.Get("field"), args.Get("op")
-		if !args.Has("value") || (op != "eq" && op != "ne") {
-			http.Error(w, "want ?field=<alias>&value=<value>&op=eq|ne", http.StatusBadRequest)
+		alias, op := args.Get("field"), sql.Op(args.Get("op"))
+		if !args.Has("value") || !op.Valid() {
+			http.Error(w, "want ?field=<alias>&value=<value>&op=eq|ne|lt|le|gt|ge", http.StatusBadRequest)
 			return
 		}
 		i := slices.IndexFunc(filterableFields(chart), func(f sql.SqlField) bool { return f.Alias() == alias })
@@ -337,7 +339,7 @@ func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc 
 			http.Error(w, fmt.Sprintf("%q cannot filter this chart's table", alias), http.StatusUnprocessableEntity)
 			return
 		}
-		pill, err := filter.New(table, filterableFields(chart)[i], op, args.Get("value"))
+		pill, err := filter.New(table, filterableFields(chart)[i], op, args.Get("value"), args.Get("type"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return

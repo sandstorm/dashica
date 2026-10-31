@@ -6,6 +6,7 @@ import { Braces, Copy, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { QueryResult, WidgetRecord } from '../../hosts/widgets/widgets';
+import { candidateOf } from './candidate';
 import type { OfferFilters } from './filter-on-click';
 import './table.css';
 
@@ -458,7 +459,7 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
  * tooltips that can be pinned. With `selectRecords`, a checkbox in front of each row (and one for all) ticks it, each
  * change calling `selectRecords` with the ticked rows. With `offerFilters`, a click on a cell of a column in
- * `filterable` (the widget's, page.json) offers its value, its column's name the field id; a NULL offers nothing, and a Map, Array or
+ * `filterable` (the widget's, page.json) offers its value (`candidateOf`, with the column's type), its column's name the field id; a NULL offers nothing, and a Map, Array or
  * Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows the menu
  * `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
  * `TableHeaderMenuContext`); extensions add their entries there (the `table` extension: SQL filters, auto-size).
@@ -655,7 +656,7 @@ export function drawTable(
     const fieldName = cell.getField();
     const value = cell.getValue();
     if (!offerFilters || !filters(fieldName) || value === null || value === undefined) return;
-    offerFilters(cell.getElement(), [{ fieldId: fieldName, value: String(value) }]);
+    offerFilters(cell.getElement(), [candidateOf(fieldName, value, queryResult.dashicaColumnTypes)]);
   });
 
   // Re-paint search highlights after every (re)render — covers filter changes,

@@ -59,33 +59,60 @@ func TestIsCategory_EveryFieldButCountsAndTimeBuckets(t *testing.T) {
 
 func TestCondition_ComparesTheDefinitionWithTheQuotedValue(t *testing.T) {
 	host := JsonExtractString("attrs", "host")
-	if got, ok := Condition(host, "shop", false); !ok || got != "(JSONExtractString(attrs, 'host')) = 'shop'" {
+	if got, ok := Condition(host, OpEq, "shop"); !ok || got != "(JSONExtractString(attrs, 'host')) = 'shop'" {
 		t.Errorf("eq: %q %v", got, ok)
 	}
-	if got, _ := Condition(Enum("level"), "it's", true); got != `(level::String) != 'it\'s'` {
+	if got, _ := Condition(Enum("level"), OpNe, "it's"); got != `(level::String) != 'it\'s'` {
 		t.Errorf("ne: %q", got)
+	}
+	if got, _ := Condition(Field("timestamp"), OpGe, "2026-10-31T10:00:00.000Z"); got != "(timestamp) >= '2026-10-31T10:00:00.000Z'" {
+		t.Errorf("ge: %q", got)
 	}
 }
 
 func TestCondition_AFieldWithFilterAsWritesItsOwn(t *testing.T) {
 	customer := Field("replace(customer_project, 'customer-', '')").WithAlias("customer").
-		FilterAs(func(value string) string { return "customer_project = " + Quote("customer-"+value) })
-	if got, _ := Condition(customer, "acme", false); got != "customer_project = 'customer-acme'" {
+		FilterAs(func(op Op, value string) string { return op.Compare("customer_project", "customer-"+value) })
+	if got, _ := Condition(customer, OpEq, "acme"); got != "customer_project = 'customer-acme'" {
 		t.Errorf("eq: %q", got)
 	}
-	if got, _ := Condition(customer, "acme", true); got != "NOT (customer_project = 'customer-acme')" {
+	if got, _ := Condition(customer, OpNe, "acme"); got != "customer_project != 'customer-acme'" {
 		t.Errorf("ne: %q", got)
 	}
 	// FilterAs keeps the alias, WithAlias keeps FilterAs
-	if renamed, _ := Condition(customer.WithAlias("c"), "x", false); customer.Alias() != "customer" || renamed != "customer_project = 'customer-x'" {
+	if renamed, _ := Condition(customer.WithAlias("c"), OpEq, "x"); customer.Alias() != "customer" || renamed != "customer_project = 'customer-x'" {
 		t.Errorf("alias %q, renamed %q", customer.Alias(), renamed)
 	}
 }
 
 func TestCondition_NoneForACountOrATimeBucket(t *testing.T) {
-	for _, f := range []SqlField{Count(), Timestamp15Min(), AutoBucket("timestamp").FilterAs(func(string) string { return "1" }), nil} {
-		if got, ok := Condition(f, "1", false); ok || got != "" {
+	for _, f := range []SqlField{Count(), Timestamp15Min(), AutoBucket("timestamp").FilterAs(func(Op, string) string { return "1" }), nil} {
+		if got, ok := Condition(f, OpGe, "1"); ok || got != "" {
 			t.Errorf("%v: %q", f, got)
+		}
+	}
+}
+
+func TestOp_SignsAndComparisons(t *testing.T) {
+	tests := []struct {
+		op         Op
+		sign, cond string
+	}{
+		{OpEq, "=", "x = 'v'"},
+		{OpNe, "≠", "x != 'v'"},
+		{OpLt, "<", "x < 'v'"},
+		{OpLe, "≤", "x <= 'v'"},
+		{OpGt, ">", "x > 'v'"},
+		{OpGe, "≥", "x >= 'v'"},
+	}
+	for _, tt := range tests {
+		if !tt.op.Valid() || tt.op.Sign() != tt.sign || tt.op.Compare("x", "v") != tt.cond {
+			t.Errorf("%s: valid %v, sign %q, compare %q", tt.op, tt.op.Valid(), tt.op.Sign(), tt.op.Compare("x", "v"))
+		}
+	}
+	for _, op := range []Op{"", "like", "EQ"} {
+		if op.Valid() {
+			t.Errorf("%q is valid", op)
 		}
 	}
 }

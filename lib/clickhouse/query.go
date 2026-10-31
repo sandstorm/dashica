@@ -164,7 +164,7 @@ func (c *Client) queryInternal(ctx context.Context, method string, query string,
 func (c *Client) QueryToHandler(ctx context.Context, query string, options QueryOptions, w http.ResponseWriter) error {
 	// Arrow cannot serialize JSON/Object/Dynamic/Variant result columns; rewrite
 	// the query to cast exactly those to String when needed (no-op otherwise).
-	query, err := c.ensureArrowCompatible(ctx, query, options)
+	query, columns, err := c.ensureArrowCompatible(ctx, query, options)
 	if err != nil {
 		return err
 	}
@@ -185,6 +185,9 @@ func (c *Client) QueryToHandler(ctx context.Context, query string, options Query
 
 	// Set content type based on format
 	w.Header().Set("Content-Type", getContentType(options.Format))
+	if types := columnTypesHeader(columns); types != "" {
+		w.Header().Set("X-Dashica-Column-Types", types)
+	}
 
 	// Stream the response body to the output
 	_, err = io.Copy(w, resp.Body)

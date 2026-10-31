@@ -107,3 +107,13 @@ func TestPlainArrowCast(t *testing.T) {
 		}
 	}
 }
+
+func TestColumnTypesHeader_IsEachColumnsTypeByNameInASCII(t *testing.T) {
+	got := columnTypesHeader([]describeRow{{"timestamp", "DateTime"}, {"größe", "Nullable(Float64)"}})
+	if want := `{"gr\u00f6\u00dfe":"Nullable(Float64)","timestamp":"DateTime"}`; got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+	if got := columnTypesHeader(nil); got != "" {
+		t.Errorf("without columns: %q", got)
+	}
+}

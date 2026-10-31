@@ -2,10 +2,13 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/sandstorm/dashica/lib/util"
 )
 
 // This file makes arbitrary queries safe to serialize as Apache Arrow — the
@@ -50,9 +53,10 @@ func arrowUnsafeType(chType string) bool {
 //
 // Cost is one DESCRIBE round-trip per Arrow query (~ms, reads no data);
 // negligible next to the actual query and not cached (simpler, never stale).
-func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts QueryOptions) (string, error) {
+// The DESCRIBE's columns come back too: their ClickHouse types before any cast (columnTypesHeader).
+func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts QueryOptions) (string, []describeRow, error) {
 	if !strings.EqualFold(opts.Format, "Arrow") {
-		return query, nil
+		return query, nil, nil
 	}
 
 	// Both the DESCRIBE and the outer wrap embed the query as a subexpression
@@ -61,7 +65,7 @@ func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts Q
 
 	cols, err := c.describeQuery(ctx, inner, opts)
 	if err != nil {
-		return "", fmt.Errorf("arrow-compat describe: %w", err)
+		return "", nil, fmt.Errorf("arrow-compat describe: %w", err)
 	}
 
 	cast := opts.Cast
@@ -70,9 +74,25 @@ func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts Q
 	}
 	wrapped, ok := buildArrowWrap(inner, cols, cast)
 	if !ok {
-		return query, nil
+		return query, cols, nil
 	}
-	return wrapped, nil
+	return wrapped, cols, nil
+}
+
+// columnTypesHeader is X-Dashica-Column-Types for `columns`: each column's ClickHouse type by its name, as JSON in
+// ASCII (`{"timestamp":"DateTime","host":"LowCardinality(String)"}`), the types the query's expressions have before
+// the Arrow casts (a DateTime travels as UInt32 seconds), by which a click on a chart offers the ops its type allows
+// (docs/2026-10-28-workbench.md §3.15 D25); "" without columns.
+func columnTypesHeader(columns []describeRow) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	types := make(map[string]string, len(columns))
+	for _, column := range columns {
+		types[column.Name] = column.Type
+	}
+	b, _ := json.Marshal(types) // strings only; cannot fail
+	return util.ASCIIJSON(string(b))
 }
 
 // castArrowUnsafe casts what Arrow cannot carry (arrowUnsafeType) to String; the default QueryOptions.Cast.

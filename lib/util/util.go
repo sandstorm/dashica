@@ -3,6 +3,9 @@ package util
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 func JsonEncode(input any) string {
@@ -40,4 +43,23 @@ func ValuesToArray[K comparable, T any](in map[K]*T) []T {
 
 func Int64P(i int64) *int64 {
 	return &i
+}
+
+// ASCIIJSON writes every non-ASCII rune of a JSON text as its \u escape (a surrogate pair above U+FFFF), for a JSON
+// header (X-Dashica-Diagnostics, X-Dashica-Column-Types): browsers read header bytes as Latin-1. Outside strings JSON
+// is ASCII anyway, so the text stays the same JSON.
+func ASCIIJSON(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r < utf8.RuneSelf:
+			b.WriteRune(r)
+		case r > 0xFFFF:
+			hi, lo := utf16.EncodeRune(r)
+			fmt.Fprintf(&b, `\u%04x\u%04x`, hi, lo)
+		default:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		}
+	}
+	return b.String()
 }

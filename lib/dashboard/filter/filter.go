@@ -47,18 +47,19 @@ func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table
 	return Table{Connection: connection, Name: name}, true
 }
 
-// Pill is a filter on a table: the rows where a field shows a value (`eq`) or does not (`ne`), as the condition the
-// server wrote for it; or a filter button's condition (Button), on no table. Its key (Sign) carries all of it, signed.
+// Pill is a filter on a table: the rows where a field compares by an op with a value (`customer = acme`, `timestamp ≥
+// 2026-10-31T10:00:00.000Z`), as the condition the server wrote for it; or a filter button's condition (Button), on
+// no table. Its key (Sign) carries all of it, signed.
 type Pill struct {
 	Table
 	// Field is the alias of the field it filters by ("customer"); the pills on one table and field combine (Apply).
 	Field string `json:"field"`
-	// Op is `eq` or `ne`.
-	Op string `json:"op"`
+	// Op is how the field compares with Value (sql.Op: `eq`, `ne`, `lt`, `le`, `gt`, `ge`).
+	Op sql.Op `json:"op"`
 	// Condition is what goes into the WHERE of a chart on Table (`customer_project = 'customer-acme'`).
 	Condition string `json:"condition"`
-	// Label is the chip's text: "customer = acme", "customer ≠ acme"; a button's title, with its value after a colon
-	// ("Duration >= … ms: 500").
+	// Label is the chip's text: "customer = acme", "customer ≠ acme", "duration_ms ≥ 500"; a button's title, with its
+	// value after a colon ("Duration >= … ms: 500").
 	Label string `json:"label"`
 	// Button is the condition of the filter button the pill was made for, as the dashboard declares it
 	// ("duration_ms >= ..."), by which the page finds its button; empty for a field's pill. A button's pill has no
@@ -69,28 +70,30 @@ type Pill struct {
 	// (without "value") reads as not editable; for a button, the value written in for its `...` ("500"), as typed,
 	// empty for one without.
 	Value string `json:"value"`
+	// Type is the field's ClickHouse type as the client learned it from the server (`/values`, a chart's column types:
+	// "DateTime64(3)", "LowCardinality(String)"), by which the filter bar offers the ops it allows; empty when unknown,
+	// and for a button. Nothing reads it as SQL.
+	Type string `json:"type,omitempty"`
 }
 
 // ErrCannotFilter: the field holds no categories (a count, a time bucket), so it makes no pill.
 var ErrCannotFilter = errors.New("cannot filter")
 
-// New is the pill on `table` of the rows where `field` shows `value` (`op` `eq`) or does not (`ne`): its condition as
-// sql.Condition writes it (the field's FilterAs, else its definition compared with the quoted value), labelled with
-// the field's alias; the alias and `value` in it too, so the filter bar can make it again with another op or value.
+// New is the pill on `table` of the rows where `field` compares by `op` with `value`: its condition as sql.Condition
+// writes it (the field's FilterAs, else its definition compared with the quoted value), labelled with the field's
+// alias and the op's sign ("duration_ms ≥ 500"); the alias, `value` and the field's ClickHouse type `columnType` (as
+// the client names it, '' when unknown) in it too, so the filter bar can make it again with another op or value.
 // ErrCannotFilter for a field that cannot filter.
-func New(table Table, field sql.SqlField, op, value string) (Pill, error) {
-	if op != "eq" && op != "ne" {
-		return Pill{}, fmt.Errorf("op %q: want eq or ne", op)
+func New(table Table, field sql.SqlField, op sql.Op, value, columnType string) (Pill, error) {
+	if !op.Valid() {
+		return Pill{}, fmt.Errorf("op %q: want eq, ne, lt, le, gt or ge", op)
 	}
-	condition, ok := sql.Condition(field, value, op == "ne")
+	condition, ok := sql.Condition(field, op, value)
 	if !ok {
 		return Pill{}, ErrCannotFilter
 	}
-	sign := " = "
-	if op == "ne" {
-		sign = " ≠ "
-	}
-	return Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Label: field.Alias() + sign + value, Value: value}, nil
+	label := field.Alias() + " " + op.Sign() + " " + value
+	return Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Label: label, Value: value, Type: columnType}, nil
 }
 
 // NewButton is the pill of the filter button `title` with the condition `queryPart`: `queryPart` itself, or for a
@@ -141,7 +144,7 @@ func Open(secret []byte, key string) (Pill, error) {
 	if err == nil {
 		err = json.Unmarshal(b, &p)
 	}
-	if err != nil || p.Condition == "" || (p.Button == "" && p.Op != "eq" && p.Op != "ne") {
+	if err != nil || p.Condition == "" || (p.Button == "" && !p.Op.Valid()) {
 		return Pill{}, fmt.Errorf("pill %q: unreadable", shorten(key))
 	}
 	return p, nil
@@ -163,12 +166,16 @@ func shorten(key string) string {
 
 // Apply is `q` with the pills on `table` added to its WHERE (a SQL file's {{DASHICA_FILTERS}}), and the Diagnostics
 // naming the others; without a table (`ok` false, TableOf) it applies none. The pills on one field combine, in the
-// order of their first one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), the `ne` ones AND-ed; each
-// combination one Where. A button's pill applies to every query that takes filters, a SQL file without sql.Table
+// order of their first one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op
+// AND-ed (`customer ≠ acme` and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one
+// Where, so a `≥` and a `≤` on one field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table
 // too, each one Where after those of the fields.
 func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQueryable, Diagnostics) {
 	var d Diagnostics
-	type group struct{ field, op string }
+	type group struct {
+		field string
+		op    sql.Op
+	}
 	var order []group
 	conditions := map[group][]string{}
 	var buttons []sql.SqlBuilderOption
@@ -191,9 +198,9 @@ func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQuery
 	}
 	var wheres []sql.SqlBuilderOption
 	for _, g := range order {
-		join := " OR "
-		if g.op == "ne" {
-			join = " AND "
+		join := " AND "
+		if g.op == sql.OpEq {
+			join = " OR "
 		}
 		wheres = append(wheres, sql.Where(strings.Join(conditions[g], join)))
 	}

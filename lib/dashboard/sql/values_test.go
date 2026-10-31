@@ -12,7 +12,8 @@ func TestValues_OfABuilderQueryIsItsBaseGroupedByTheField(t *testing.T) {
 	got := Values(chart, JsonExtractString("attrs", "host"), 100).With(Where("time_clause")).Build()
 
 	want := `SELECT
-    toString(JSONExtractString(attrs, 'host')) AS __value
+    toString(JSONExtractString(attrs, 'host')) AS __value,
+    any(JSONExtractString(attrs, 'host')) AS __type
 FROM
     http_logs
 WHERE
@@ -40,7 +41,7 @@ func TestValues_OfASqlStringIsItsResultInASubquery(t *testing.T) {
 
 	got, err := BuildWithFS(Values(file, NewFieldAlias("host"), 100).With(Where("time_clause")), nil)
 
-	want := `SELECT toString(host) AS __value
+	want := `SELECT toString(host) AS __value, any(host) AS __type
 FROM (
 SELECT host, count() AS cnt FROM http_logs WHERE (time_clause) GROUP BY host -- by host
 

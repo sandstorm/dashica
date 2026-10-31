@@ -67,7 +67,10 @@ export interface PillSource {
 export interface FilterCandidate {
   /** The alias of the clicked field's column (`host`), the field its widget's `/pill` makes the pill of. */
   readonly fieldId: string;
+  /** As the pill compares it: a time as ISO 8601 in UTC (`2026-10-31T10:00:00.000Z`), anything else as it shows. */
   readonly value: string;
+  /** The field's ClickHouse type (`DateTime`, `LowCardinality(String)`), by which the ops are offered; unknown without. */
+  readonly type?: string;
 }
 
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
@@ -122,6 +125,11 @@ export type QueryResult = Table & {
   dashicaAlertIf?: { value_gt?: number | null; value_lt?: number | null } | null;
   /** What the chart did with the page's filters (X-Dashica-Diagnostics); empty when it has nothing to say. */
   dashicaDiagnostics?: Diagnostics;
+  /**
+   * The ClickHouse type of each column by its name (X-Dashica-Column-Types: `{timestamp: 'DateTime'}`), as the query
+   * has it before the Arrow casts (a `DateTime` arrives as seconds); empty when the server sent none.
+   */
+  dashicaColumnTypes?: Readonly<Record<string, string>>;
 };
 
 /** What a chart tells about one answer: the pills it does not apply, or that it did not run. */

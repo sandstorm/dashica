@@ -30,6 +30,11 @@ describe('pillField', () => {
     expect(pillField(keyOf('host = ', { ...host, op: 'eq', value: '' }))).toEqual({ ...host, op: 'eq', value: '' });
   });
 
+  it('reads a range op and the type the pill was made with', () => {
+    const since = { ...host, field: 'timestamp', op: 'ge', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' };
+    expect(pillField(keyOf('timestamp ≥ 2026-10-31T10:00:00.000Z', since))).toEqual(since);
+  });
+
   it('reads none from a key without a value, signed before pills carried it', () => {
     expect(pillField(keyOf('host = acme', { ...host, op: 'eq', value: undefined }))).toBeUndefined();
   });

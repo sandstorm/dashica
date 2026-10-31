@@ -54,7 +54,7 @@ func (f *autoBucketFieldImpl) WithAlias(s string) SqlField {
 }
 
 // FilterAs is the bucket itself: a time bucket filters nothing.
-func (f *autoBucketFieldImpl) FilterAs(func(value string) string) SqlField { return f }
+func (f *autoBucketFieldImpl) FilterAs(func(op Op, value string) string) SqlField { return f }
 
 func (f *autoBucketFieldImpl) withRounding(roundingFn string, sizeMs int64) autoBucketField {
 	cloned := *f
@@ -146,24 +146,17 @@ func IsCategory(f SqlField) bool {
 	return true
 }
 
-// Condition is the WHERE condition of a pill on `f` (docs/2026-10-28-workbench.md §3.8): the rows where `f` shows
-// `value`, or with `negate` the others. By default `(<definition>) = <quoted value>` (`!=` with `negate`); a field
-// with FilterAs its condition (`NOT (…)` with `negate`). False for a field that cannot filter (IsCategory).
-func Condition(f SqlField, value string, negate bool) (string, bool) {
+// Condition is the WHERE condition of a pill on `f` (docs/2026-10-28-workbench.md §3.8, §3.15 D25): the rows where
+// `f` compares by `op` with `value`. By default `(<definition>) <op> <quoted value>` (Op.Compare); a field with
+// FilterAs its condition. False for a field that cannot filter (IsCategory).
+func Condition(f SqlField, op Op, value string) (string, bool) {
 	if f == nil || !IsCategory(f) {
 		return "", false
 	}
 	if own, ok := f.(*fieldImpl); ok && own.filterAs != nil {
-		if negate {
-			return "NOT (" + own.filterAs(value) + ")", true
-		}
-		return own.filterAs(value), true
+		return own.filterAs(op, value), true
 	}
-	op := "="
-	if negate {
-		op = "!="
-	}
-	return fmt.Sprintf("(%s) %s %s", f.Definition(), op, Quote(value)), true
+	return op.Compare("("+f.Definition()+")", value), true
 }
 
 // Quote is `value` as a ClickHouse string literal: in single quotes, each `\` and `'` escaped with a backslash

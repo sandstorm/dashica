@@ -3,13 +3,15 @@ import type { SqlFieldProps } from '../../generated/zz_generated.dashica';
 import type { Commands } from '../../hosts/commands/commands';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource, QueryResult } from '../../hosts/widgets/widgets';
+import { candidateOf } from './candidate';
 import './filter-on-click.css';
 
 /**
  * A Plot mark with which a click offers to filter by a category of the row the chart's tip shows: `mark` (the chart's
  * mark function, `Plot.barY`) with the chart mark's `options` (its tip left out) under Plot's pointer transform, so it
  * points at the same row as the tip, stacking included. A click while it points at a row hands `offerFilters` the row's
- * categories as candidates: one per field of `fields` that is a category with a value, in order, each by its alias. Its
+ * categories as candidates: one per field of `fields` that is a category with a value, in order, each by its alias
+ * (`candidateOf`, with the column's type the answer names). Its
  * element is an empty `g`, with `d-filter-on-click--pointing` while it points at a row (the pointer cursor).
  * `null` without a category among `fields`. Every Plot chart type puts one after its mark.
  */
@@ -43,7 +45,7 @@ export function filterOnClick<O extends Plot.MarkOptions>(
       if (!row) return;
       const candidates = categories.flatMap((field) => {
         const value = row[field.alias];
-        return value == null ? [] : [{ fieldId: field.alias, value: String(value) }];
+        return value == null ? [] : [candidateOf(field.alias, value, data.dashicaColumnTypes)];
       });
       if (candidates.length > 0) offerFilters({ x: event.clientX, y: event.clientY }, candidates);
     });

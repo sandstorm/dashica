@@ -22,9 +22,9 @@ func databases(connection string) string {
 
 var httpLogs = Table{Connection: "default", Name: "default.http_logs"}
 
-func pill(t *testing.T, table Table, field sql.SqlField, op, value string) Pill {
+func pill(t *testing.T, table Table, field sql.SqlField, op sql.Op, value string) Pill {
 	t.Helper()
-	p, err := New(table, field, op, value)
+	p, err := New(table, field, op, value, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -59,16 +59,22 @@ func TestNew_WritesTheFieldsConditionAndLabel(t *testing.T) {
 	if host != want {
 		t.Errorf("got %+v", host)
 	}
-	if _, err := New(httpLogs, sql.Count(), "eq", "1"); !errors.Is(err, ErrCannotFilter) {
+	if _, err := New(httpLogs, sql.Count(), "eq", "1", ""); !errors.Is(err, ErrCannotFilter) {
 		t.Errorf("count: %v", err)
 	}
-	if _, err := New(httpLogs, sql.Field("status"), "like", "5"); err == nil {
+	if _, err := New(httpLogs, sql.Field("status"), "like", "5", ""); err == nil {
 		t.Errorf("op like accepted")
+	}
+	since, err := New(httpLogs, sql.Field("timestamp"), "ge", "2026-10-31T10:00:00.000Z", "DateTime64(3)")
+	want = Pill{Table: httpLogs, Field: "timestamp", Op: "ge", Condition: "(timestamp) >= '2026-10-31T10:00:00.000Z'",
+		Label: "timestamp ≥ 2026-10-31T10:00:00.000Z", Value: "2026-10-31T10:00:00.000Z", Type: "DateTime64(3)"}
+	if err != nil || since != want {
+		t.Errorf("ge: %+v, %v", since, err)
 	}
 }
 
 func TestSignAndOpen_GiveThePillBack(t *testing.T) {
-	p := pill(t, httpLogs, sql.Field("status"), "eq", "500")
+	p, _ := New(httpLogs, sql.Field("status"), "le", "500", "UInt16")
 	key, err := Sign(secret, p)
 	if err != nil {
 		t.Fatal(err)
@@ -162,6 +168,9 @@ func TestApply_PillsOnOneFieldCombine(t *testing.T) {
 		pill(t, httpLogs, customer, "eq", "globex"),
 		pill(t, httpLogs, sql.Field("status"), "ne", "404"),
 		pill(t, httpLogs, customer, "ne", "initech"),
+		pill(t, httpLogs, sql.Field("timestamp"), "ge", "2026-10-31 10:00"),
+		pill(t, httpLogs, sql.Field("timestamp"), "le", "2026-10-31 12:00"),
+		pill(t, httpLogs, sql.Field("timestamp"), "ge", "2026-10-31 11:00"),
 	}
 
 	got, d := Apply(q, httpLogs, true, pills)
@@ -169,7 +178,9 @@ func TestApply_PillsOnOneFieldCombine(t *testing.T) {
 	want := "WHERE\n" +
 		"    (((customer) = 'acme') OR ((customer) = 'globex'))\n" +
 		"    AND (((status) != '500') AND ((status) != '404'))\n" +
-		"    AND (((customer) != 'initech'))"
+		"    AND (((customer) != 'initech'))\n" +
+		"    AND (((timestamp) >= '2026-10-31 10:00') AND ((timestamp) >= '2026-10-31 11:00'))\n" +
+		"    AND (((timestamp) <= '2026-10-31 12:00'))"
 	if !strings.Contains(got.Build(), want) || len(d.Ignored) > 0 {
 		t.Errorf("ignored %v, query:\n%s", d.Ignored, got.Build())
 	}

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Tests for offer.ts: what a click offers (offerFilters, the command filters.offer): "Filter" and "Exclude" per
-// candidate of a field the widget filters by, at the click; the choice made a pill by the widget's /pill and added at
-// once; none on Escape or a failed /pill. The request of /pill (fetchPill).
+// candidate of a field the widget filters by, at the click, and for a time or a number the comparisons of its type;
+// the choice made a pill by the widget's /pill and added at once; none on Escape or a failed /pill. The request of
+// /pill (fetchPill).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryHost, type QueryState } from '../../hosts/query/query';
 import { FILTERS_STATE, chipsState, type FilterChip } from './chips';
@@ -67,6 +68,24 @@ describe('offerFilters', () => {
     expect(chips.get()).toEqual([pill('instance', 'ne', 'web-1')]);
     expect(fetched.at(-1)?.pathname).toBe('/p/shop/api/3/pill');
     expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
+  });
+
+  it('offers ≥ and ≤ a time first, then the other ops of its type, and sends the type along', async () => {
+    const at = '2026-10-31T10:00:00.000Z';
+    const done = offerFilters(quickInput, chips, { x: 10, y: 20 }, [{ fieldId: 'timestamp', value: at, type: 'DateTime' }], { ...source, filterable: ['timestamp'] });
+    expect(choices()).toEqual([
+      `At least timestamp ≥ ${at}`,
+      `At most timestamp ≤ ${at}`,
+      `Above timestamp > ${at}`,
+      `Below timestamp < ${at}`,
+      `Filter timestamp = ${at}`,
+      `Exclude timestamp = ${at}`,
+    ]);
+    choose(`At most timestamp ≤ ${at}`);
+    await done;
+
+    expect(chips.get()).toEqual([pill('timestamp', 'le', at)]);
+    expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'timestamp', op: 'le', value: at, type: 'DateTime' });
   });
 
   it('offers only the fields the widget filters by, and nothing without one', async () => {

@@ -107,6 +107,16 @@ describe('table', () => {
     expect(testbed.offers).toEqual([{ at: cell, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
   });
 
+  it('offers a timestamp cell as ISO 8601 with its column’s ClickHouse type', async () => {
+    const at = Date.UTC(2026, 9, 31, 10, 0, 0);
+    testbed.serve('/p/shop/api/1/query', { timestamp: [at / 1000] }, { 'X-Dashica-Column-Types': '{"timestamp":"DateTime"}' });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['timestamp'] });
+    await inView();
+
+    cellAt(el, 'timestamp', 0).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(testbed.offers.at(-1)?.candidates).toEqual([{ fieldId: 'timestamp', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' }]);
+  });
+
   it('offers nothing from a NULL cell', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', null], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });

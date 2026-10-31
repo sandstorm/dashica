@@ -1,8 +1,14 @@
 // See chipsState.
 import type { QueryEntries, QueryStateSpec } from '../../hosts/query/query';
 
-/** `eq`: the field equals `value` (Filter by …); `ne`: it differs (Exclude …). */
-export type FilterOp = 'eq' | 'ne';
+/**
+ * How a pill compares its field with its value (`sql.Op`): `eq` equals (Filter by …), `ne` differs (Exclude …), `lt`
+ * / `le` / `gt` / `ge` less than, at most, greater than, at least. Which a field offers depends on its type (`opsOf`).
+ */
+export type FilterOp = 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge';
+
+/** Every op, as a number offers them and `pill-key.ts` reads one from a key. */
+export const FILTER_OPS: readonly FilterOp[] = ['eq', 'ne', 'lt', 'le', 'gt', 'ge'];
 
 /** A chip of the filter bar: a pill (`?f=`), or a SQL condition every query of the page adds to its WHERE (`?sql=`). */
 export type FilterChip = PillFilter | SqlFilter;

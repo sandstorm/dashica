@@ -1,7 +1,7 @@
 // See pillLabel, pillButton and pillField.
-import type { FilterOp } from './chips';
+import { FILTER_OPS, type FilterOp } from './chips';
 
-/** What a field's pill filters (`pillField`): the rows of `table` where `field` shows `value` (`eq`) or does not (`ne`). */
+/** What a field's pill filters (`pillField`): the rows of `table` where `field` compares by `op` with `value`. */
 export interface PillField {
   /** The ClickHouse connection of `table` (`default`). */
   readonly connection: string;
@@ -10,8 +10,10 @@ export interface PillField {
   /** The alias of the field (`host`). */
   readonly field: string;
   readonly op: FilterOp;
-  /** As the field shows it (`acme`); '' for an empty one. */
+  /** As the field shows it (`acme`, a time as ISO 8601); '' for an empty one. */
   readonly value: string;
+  /** The field's ClickHouse type as the pill was made with it (`DateTime`), by which its op is edited; unknown without. */
+  readonly type?: string;
 }
 
 /**
@@ -41,10 +43,10 @@ export function pillButton(key: string): { readonly button: string; readonly val
  * again: an empty value is `""`).
  */
 export function pillField(key: string): PillField | undefined {
-  const { connection, table, field, op, value, button } = payloadOf(key);
+  const { connection, table, field, op, value, type, button } = payloadOf(key);
   if (button || typeof connection !== 'string' || typeof table !== 'string' || typeof field !== 'string' || !field) return undefined;
-  if ((op !== 'eq' && op !== 'ne') || typeof value !== 'string') return undefined;
-  return { connection, table, field, op, value };
+  if (!FILTER_OPS.includes(op as FilterOp) || typeof value !== 'string') return undefined;
+  return { connection, table, field, op: op as FilterOp, value, ...(typeof type === 'string' && type ? { type } : {}) };
 }
 
 /** The payload of a pill's key, as JSON (`Sign`); empty for a key without one. */

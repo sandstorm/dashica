@@ -135,7 +135,7 @@ func testArrowWrapOrdering(t *testing.T, ctx context.Context, clickhouseManager 
 	query := fmt.Sprintf(
 		"SELECT timestamp, `%s` FROM full_logs ORDER BY timestamp ASC LIMIT 20", unsafeCol)
 
-	wrapped, err := c.ensureArrowCompatible(ctx, query, DefaultQueryOptions())
+	wrapped, _, err := c.ensureArrowCompatible(ctx, query, DefaultQueryOptions())
 	require.NoError(t, err)
 	require.NotEqual(t, query, wrapped, "query with a JSON column should have been wrapped")
 

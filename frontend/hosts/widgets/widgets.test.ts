@@ -104,6 +104,13 @@ describe('WidgetsHost', () => {
       expect((await ctx.query()).dashicaDiagnostics).toEqual({});
     });
 
+    it('reads the columns’ ClickHouse types, empty without the header', async () => {
+      testbed.serve('/p/shop/api/1/query', { timestamp: [3] }, { 'X-Dashica-Column-Types': '{"timestamp":"DateTime"}' });
+      expect((await ctx.query()).dashicaColumnTypes).toEqual({ timestamp: 'DateTime' });
+      testbed.serve('/p/shop/api/1/query', { timestamp: [3] });
+      expect((await ctx.query()).dashicaColumnTypes).toEqual({});
+    });
+
     it('answers a chart that did not run with no rows and why', async () => {
       testbed.serveNothing('/p/shop/api/1/query', { 'X-Dashica-Diagnostics': '{"skipped":"pick a host"}' });
       const result = await ctx.query();

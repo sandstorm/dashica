@@ -86,6 +86,21 @@ func TestPill_IsTheFieldsConditionSignedAndLabelledWithItsFieldAndValue(t *testi
 	}
 }
 
+func TestPill_ARangeOpCarriesTheTypeTheClientNamed(t *testing.T) {
+	table := NewTable(sql.New(sql.From("http_logs"), sql.Select(sql.Field("timestamp")), sql.Select(sql.Field("status"))))
+
+	rec := askPath(table, "/pill?"+url.Values{"field": {"timestamp"}, "op": {"ge"}, "value": {"2026-10-31T10:00:00.000Z"}, "type": {"DateTime64(3)"}}.Encode())
+	var body struct{ Key, Label string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	pill, err := filter.Open(testSecret, body.Key)
+	if rec.Code != http.StatusOK || err != nil || body.Label != "timestamp ≥ 2026-10-31T10:00:00.000Z" {
+		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
+	}
+	if pill.Condition != "(timestamp) >= '2026-10-31T10:00:00.000Z'" || pill.Op != sql.OpGe || pill.Type != "DateTime64(3)" {
+		t.Errorf("pill %+v", pill)
+	}
+}
+
 func TestPill_AFieldThatCannotFilterIs422(t *testing.T) {
 	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
