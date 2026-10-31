@@ -2,25 +2,24 @@
 // Tests for speedscope-link.ts: the viewer's link on the profile with the page's state; a click opens it in a tab.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
-import { PARAMS_STATE, paramsState, withParam, type Params } from '../widget-library/params-state';
+import { TIME, presetRange, type TimeRange } from '../time-library/time-state';
+import { PARAMS, withParam } from '../widget-library/params-state';
 import { speedscopeLink } from './speedscope-link';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.query.registerState(PARAMS_STATE, paramsState);
-  testbed.query.registerState(TIME_STATE, timeState);
+  // sent along from here on, as by the time-range extension
+  testbed.query.get(TIME);
   testbed.activate(speedscopeLink);
 });
 
 afterEach(() => testbed.dispose());
 
 /** The page params, as the dashboardPage extension keeps them. */
-const params = () => testbed.query.state<Params>(PARAMS_STATE)!;
-const param = (name: string) => params().get()[name];
-const setParam = (name: string, value: string) => params().set(withParam(params().get(), name, value));
+const param = (name: string) => testbed.query.get(PARAMS)[name];
+const setParam = (name: string, value: string) => testbed.query.set(PARAMS, withParam(testbed.query.get(PARAMS), name, value));
 
 /** The profile URL the link hands to the viewer. */
 function profileUrl(link: HTMLAnchorElement): URL {
@@ -60,7 +59,7 @@ describe('speedscopeLink', () => {
 
   it('follows a change of the time range', () => {
     const { el } = testbed.render({ type: 'speedscopeLink', props: { title: 'Flame graph' }, dataUrl: '/p/shop/api/4' });
-    testbed.query.state<TimeRange>(TIME_STATE)!.set(presetRange('1h'));
+    testbed.query.set(TIME, presetRange('1h'));
     const link = el.querySelector('a')!;
     expect(link.textContent).toBe('Flame graph');
     expect(profileUrl(link).searchParams.get('time')).toBe('1h');

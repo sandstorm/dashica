@@ -37,5 +37,5 @@ function renderSpeedscopeLink(el: HTMLElement, widget: WidgetOf<'speedscopeLink'
   showHref();
   el.replaceChildren(html`<div>${link}</div>`);
   // the time range, filter or a param changed
-  return ctx.state.onDidRequestRefresh(showHref);
+  return ctx.query.onDidRequestRefresh(showHref);
 }

@@ -1,16 +1,16 @@
 // Tests for chips.ts: the chips read from the URL's f and sql in their order and written back so, an empty one none;
 // a chip added once, replaced in its place, removed by index or predicate.
 import { describe, expect, it } from 'vitest';
-import { addChip, chipsState, removeChips, replaceChip, type FilterChip } from './chips';
+import { FILTERS, addChip, removeChips, replaceChip, type FilterChip } from './chips';
 
 const sql = (condition: string): FilterChip => ({ kind: 'sql', sql: condition });
 const pill = (key: string): FilterChip => ({ kind: 'pill', key });
 
-describe('chipsState', () => {
+describe('FILTERS', () => {
   it('takes one chip per f and sql in the URL’s order, the keys as they are; an empty f or sql is none', () => {
     const url = new URLSearchParams('?sql=a+%0AAND+b&f=k1.mac&sql=&f=&f=status:eq:500&sql=duration+%3E+2000&time=1h');
-    expect(chipsState.parse(url, undefined)).toEqual([sql('a \nAND b'), pill('k1.mac'), pill('status:eq:500'), sql('duration > 2000')]);
-    expect(chipsState.parse(new URLSearchParams(''), undefined)).toEqual([]);
+    expect(FILTERS.parse(url, undefined)).toEqual([sql('a \nAND b'), pill('k1.mac'), pill('status:eq:500'), sql('duration > 2000')]);
+    expect(FILTERS.parse(new URLSearchParams(''), undefined)).toEqual([]);
   });
 
   it('writes and sends the chips in their order, f and sql interleaved', () => {
@@ -20,9 +20,9 @@ describe('chipsState', () => {
       ['f', 'k1.mac'],
       ['sql', "level != 'info'"],
     ];
-    expect(chipsState.format(chips, undefined)).toEqual(entries);
-    expect(chipsState.request!(chips)).toEqual(entries);
-    expect(chipsState.parse(new URLSearchParams(entries as [string, string][]), undefined)).toEqual(chips);
+    expect(FILTERS.format(chips, undefined)).toEqual(entries);
+    expect(FILTERS.request!(chips)).toEqual(entries);
+    expect(FILTERS.parse(new URLSearchParams(entries as [string, string][]), undefined)).toEqual(chips);
   });
 });
 

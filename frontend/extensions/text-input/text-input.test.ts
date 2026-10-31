@@ -2,23 +2,21 @@
 // Tests for text-input.ts: the empty param, typing into it, the caret, the error without the page params.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { PARAMS_STATE, paramsState, withParam, type Params } from '../widget-library/params-state';
+import { PARAMS, withParam } from '../widget-library/params-state';
 import { textInput } from './text-input';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.query.registerState(PARAMS_STATE, paramsState);
   testbed.activate(textInput);
 });
 
 afterEach(() => testbed.dispose());
 
 /** The page params, as the dashboardPage extension keeps them. */
-const params = () => testbed.query.state<Params>(PARAMS_STATE)!;
-const param = (name: string) => params().get()[name];
-const setParam = (name: string, value: string) => params().set(withParam(params().get(), name, value));
+const param = (name: string) => testbed.query.get(PARAMS)[name];
+const setParam = (name: string, value: string) => testbed.query.set(PARAMS, withParam(testbed.query.get(PARAMS), name, value));
 
 function type(input: HTMLInputElement, text: string): void {
   input.value = text;
@@ -48,13 +46,5 @@ describe('textInput', () => {
     expect(param('path')).toBe('^/checkout');
     type(input, '');
     expect(param('path')).toBe('');
-  });
-
-  it('shows why it cannot render without the extension that keeps the page params', () => {
-    testbed.dispose();
-    testbed = widgetTestbed();
-    testbed.activate(textInput);
-    const { el } = testbed.render({ type: 'textInput', props: { name: 'path' } });
-    expect(el.textContent).toContain('No extension keeps the page params (the query state params)');
   });
 });

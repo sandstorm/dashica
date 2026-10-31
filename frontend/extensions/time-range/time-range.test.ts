@@ -3,8 +3,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
-import { REFRESH_STATE, refreshState, type AutoRefresh } from '../time-library/refresh-state';
-import { TIME_STATE, customRange, presetRange, type TimeRange } from '../time-library/time-state';
+import { REFRESH } from '../time-library/refresh-state';
+import { TIME, customRange, presetRange } from '../time-library/time-state';
 import { timeRange } from './time-range';
 
 let query: QueryHost;
@@ -15,7 +15,6 @@ beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
   // the refresh extension's state, which a fixed range turns off
-  query.registerState(REFRESH_STATE, refreshState);
   query.load();
   bar = document.body.appendChild(document.createElement('div'));
   stored = new Map();
@@ -44,8 +43,8 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const time = () => query.state<TimeRange>(TIME_STATE)!;
-const autoRefresh = () => query.state<AutoRefresh>(REFRESH_STATE)!;
+const time = () => query.get(TIME);
+const autoRefresh = () => query.get(REFRESH);
 const rangeButton = () => bar.querySelector<HTMLButtonElement>('button[aria-haspopup]')!;
 const panel = () => bar.querySelector<HTMLElement>('[role=dialog]')!;
 const input = (label: string) => bar.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
@@ -84,7 +83,7 @@ describe('timeRange', () => {
     rangeButton().click();
     expect(panel().hidden).toBe(false);
     [...panel().querySelectorAll<HTMLButtonElement>(':scope > div li button')].find((item) => item.textContent === 'Last 1 hour')!.click();
-    expect(time().get().range).toBe('1h');
+    expect(time().range).toBe('1h');
     expect(rangeButton().textContent).toBe('Last 1 hour');
     expect(panel().hidden).toBe(true);
   });
@@ -101,11 +100,11 @@ describe('timeRange', () => {
   });
 
   it('opens with From / To of the range shown, in the unit people read it in', () => {
-    time().set(presetRange('720h'));
+    query.set(TIME, presetRange('720h'));
     rangeButton().click();
     expect(input('From').value).toBe('now-30d');
     rangeButton().click();
-    time().set(presetRange('6h'));
+    query.set(TIME, presetRange('6h'));
     rangeButton().click();
     expect(input('From').value).toBe('now-6h');
     expect(input('To').value).toBe('now');
@@ -113,27 +112,27 @@ describe('timeRange', () => {
 
   it('applies a range relative to now once the server read it, auto refresh kept', async () => {
     const asked = serverAnswers(200, '{"from":1761703200000,"to":1761721200000}');
-    autoRefresh().set(30);
+    query.set(REFRESH, 30);
     rangeButton().click();
     type('From', 'now-6h');
     type('To', 'now-1h');
     await submit();
     expect(asked).toEqual([new URLSearchParams({ time: 'custom', range: 'now-6h to now-1h' }).toString()]);
-    expect(time().get().custom).toBe('now-6h to now-1h');
-    expect(autoRefresh().get()).toBe(30);
+    expect(time().custom).toBe('now-6h to now-1h');
+    expect(autoRefresh()).toBe(30);
     expect(rangeButton().textContent).toBe('now-6h to now-1h');
     expect(panel().hidden).toBe(true);
   });
 
   it('applies a fixed range, auto refresh off, its day once on the button', async () => {
     serverAnswers(200, '{"from":1761631200000,"to":1761636600000}');
-    autoRefresh().set(30);
+    query.set(REFRESH, 30);
     rangeButton().click();
     type('From', '2026-10-28 08:00');
     type('To', '2026-10-28 09:30');
     await submit();
-    expect(time().get().custom).toBe('2026-10-28 08:00 to 2026-10-28 09:30');
-    expect(autoRefresh().get()).toBeUndefined();
+    expect(time().custom).toBe('2026-10-28 08:00 to 2026-10-28 09:30');
+    expect(autoRefresh()).toBeUndefined();
     expect(rangeButton().textContent).toBe('2026-10-28 08:00 to 09:30');
   });
 
@@ -144,7 +143,7 @@ describe('timeRange', () => {
     await submit();
     expect(panel().querySelector('[role=alert]')!.textContent).toBe('time "yesterday": neither `now-…` nor `2006-01-02 15:04`');
     expect(panel().hidden).toBe(false);
-    expect(time().get().range).toBe('24h');
+    expect(time().range).toBe('24h');
   });
 
   it('offers the last three custom ranges applied, newest first, and applies one picked', async () => {
@@ -160,7 +159,7 @@ describe('timeRange', () => {
     const recent = [...panel().querySelectorAll<HTMLButtonElement>('form li button')];
     expect(recent.map((item) => item.textContent)).toEqual(['now-4h to now', 'now-2h to now', 'now-3h to now']);
     recent[2].click();
-    await vi.waitFor(() => expect(time().get().custom).toBe('now-3h to now'));
+    await vi.waitFor(() => expect(time().custom).toBe('now-3h to now'));
   });
 
   it('closes on Escape and on a click outside', () => {
@@ -176,29 +175,29 @@ describe('timeRange', () => {
 
   it('shifts the window by its length, auto refresh off', async () => {
     const asked = serverAnswers(200, JSON.stringify({ from: at(11, 0), to: at(12, 0) }));
-    time().set(presetRange('1h'));
-    autoRefresh().set(30);
+    query.set(TIME, presetRange('1h'));
+    query.set(REFRESH, 30);
     click('Shift back');
-    await vi.waitFor(() => expect(time().get().custom).toBe('2026-10-29 10:00 to 2026-10-29 11:00'));
+    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 10:00 to 2026-10-29 11:00'));
     expect(asked).toEqual(['time=1h']);
-    expect(autoRefresh().get()).toBeUndefined();
+    expect(autoRefresh()).toBeUndefined();
     serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(11, 0) }));
     click('Shift forward');
-    await vi.waitFor(() => expect(time().get().custom).toBe('2026-10-29 11:00 to 2026-10-29 12:00'));
+    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 11:00 to 2026-10-29 12:00'));
   });
 
   it('zooms a window ending now out to the preset twice as long', async () => {
     serverAnswers(200, JSON.stringify({ from: at(11, 0), to: at(12, 0) }));
-    time().set(presetRange('1h'));
+    query.set(TIME, presetRange('1h'));
     click('Zoom out');
-    await vi.waitFor(() => expect(time().get().range).toBe('2h'));
+    await vi.waitFor(() => expect(time().range).toBe('2h'));
     expect(rangeButton().textContent).toBe('Last 2h');
   });
 
   it('zooms a fixed window out by half its length on each side', async () => {
     serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(12, 0) }));
-    time().set(customRange('2026-10-29 10:00', '2026-10-29 12:00'));
+    query.set(TIME, customRange('2026-10-29 10:00', '2026-10-29 12:00'));
     click('Zoom out');
-    await vi.waitFor(() => expect(time().get().custom).toBe('2026-10-29 09:00 to 2026-10-29 13:00'));
+    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 09:00 to 2026-10-29 13:00'));
   });
 });

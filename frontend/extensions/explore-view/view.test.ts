@@ -9,7 +9,7 @@ import type { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
-import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
+import { TIME, presetRange, type TimeRange } from '../time-library/time-state';
 import type { ViewerConfig } from './mapping';
 import {
   editedQuery,
@@ -120,7 +120,8 @@ const serve = (result: string) => (url: URL) => {
 
 beforeEach(() => {
   query = new QueryHost();
-  query.registerState(TIME_STATE, timeState);
+  // sent along from here on, as by the time-range extension
+  query.get(TIME);
   query.load({ search: '?time=1h' });
   tables = [];
   schema = { time: 'datetime', status: 'integer', host: 'string', requests: 'integer' };
@@ -268,7 +269,7 @@ describe('renderExploreView', () => {
     open();
     await settle();
     answer = serve('rows-2');
-    query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
+    query.set(TIME, presetRange('3h'));
     await settle();
     expect(requests.at(-1)).toBe('/p/shop/api/3/rows?time=3h');
     expect(tables).toHaveLength(1);
@@ -323,7 +324,7 @@ describe('renderExploreView', () => {
     expect(find('explore-view-sql-panel').hidden).toBe(false);
     expect(requests).toEqual(['/p/shop/api/3/sql?time=1h', '/p/shop/api/3/rows?time=1h']);
     expect(sqlText().value).toBe('SELECT time=1h');
-    query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
+    query.set(TIME, presetRange('3h'));
     await settle();
     expect(sqlText().value).toBe('SELECT time=3h');
     expect(find('explore-view-edited').hidden).toBe(true);
@@ -338,7 +339,7 @@ describe('renderExploreView', () => {
     expect(button.getAttribute('aria-pressed')).toBe('false');
     expect(find('explore-view-sql-panel').hidden).toBe(true);
     const asked = requests.length;
-    query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
+    query.set(TIME, presetRange('3h'));
     await settle();
     expect(requests.slice(asked)).toEqual(['/p/shop/api/3/rows?time=3h']);
     button.click();
@@ -352,7 +353,7 @@ describe('renderExploreView', () => {
     await settle();
     const listed = () => [...find('explore-view-parameters').children].map((child) => child.textContent);
     expect(listed()).toEqual(['{__from}', 'from-1h']);
-    query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
+    query.set(TIME, presetRange('3h'));
     await settle();
     expect(listed()).toEqual(['{__from}', 'from-3h']);
   });
@@ -394,7 +395,7 @@ describe('renderExploreView', () => {
     expect(find('explore-view-sql-panel').hidden).toBe(false);
     expect(sqlText().value).toBe('SELECT {v:UInt8}');
     expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
-    query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
+    query.set(TIME, presetRange('3h'));
     await settle();
     expect(requests.at(-1)).toBe('/p/shop/api/3/rows?exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1');
   });
@@ -423,7 +424,7 @@ describe('renderExploreView', () => {
     expect(find('explore-view-sql-note').textContent).toBe('');
     type('SELECT draft');
     expect(find('explore-view-sql-note').textContent).toBe('not run');
-    query.state<TimeRange>(TIME_STATE)!.set(presetRange('3h'));
+    query.set(TIME, presetRange('3h'));
     await settle();
     expect(sqlText().value).toBe('SELECT draft');
     expect(find('explore-view-sql-note').textContent).toBe('not run');

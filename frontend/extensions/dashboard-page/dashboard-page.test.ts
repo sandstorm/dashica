@@ -9,7 +9,6 @@ import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { collapsible } from '../collapsible/collapsible';
 import { markdown } from '../markdown/markdown';
 import { schemaTable } from '../schema-table/schema-table';
-import { PARAMS_STATE, type Params } from '../widget-library/params-state';
 import { dashboardPage } from './dashboard-page';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -88,17 +87,12 @@ describe('dashboardPage', () => {
 
   it('renders the widgets with its tab’s query state', async () => {
     const states: unknown[] = [];
-    testbed.widgets.registerWidget('stats', (_el, _widget, ctx) => (states.push(ctx.state), { dispose() {} }));
+    testbed.widgets.registerWidget('stats', (_el, _widget, ctx) => (states.push(ctx.query), { dispose() {} }));
     testbed.serveText('/p/stats/page.json', JSON.stringify({ ...shop, widgets: [{ type: 'stats', props: {}, dataUrl: '/p/stats/api/1' }] }));
     const shown = await start('/p/stats');
     expect(states).toEqual([shown.activeQuery]);
   });
 
-  it('keeps the dashboard’s params in its tabs’ URLs, sent with every query', async () => {
-    const shown = await start('/p/shop?wp=%7B%22path%22%3A%22%2Fapi%22%7D');
-    expect(shown.activeQuery.state<Params>(PARAMS_STATE)?.get()).toEqual({ path: '/api' });
-    expect(shown.activeQuery.requestParams().get('wp')).toBe('{"path":"/api"}');
-  });
 
   it('takes the widgets down with the page', async () => {
     (await start('/p/shop')).dispose();

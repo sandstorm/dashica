@@ -4,8 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
-import { QueryHost, QueryStates, activeQuery } from '../../hosts/query/query';
-import { REFRESH_STATE, type AutoRefresh } from '../time-library/refresh-state';
+import { QueryHost, QueryKeys, activeQuery } from '../../hosts/query/query';
+import { REFRESH } from '../time-library/refresh-state';
 import { refresh } from './refresh';
 
 let shop: QueryHost;
@@ -21,9 +21,9 @@ let refreshes: number;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  const states = new QueryStates();
-  shop = new QueryHost(states);
-  checkout = new QueryHost(states);
+  const keys = new QueryKeys();
+  shop = new QueryHost(keys);
+  checkout = new QueryHost(keys);
   const tabs = [
     { id: 'shop', url: '/p/shop', title: 'Shop' },
     { id: 'checkout', url: '/p/checkout', title: 'Checkout' },
@@ -92,7 +92,7 @@ function show(id: string): void {
   tabsChanged.fire();
 }
 
-const seconds = (tab: QueryHost) => tab.state<AutoRefresh>(REFRESH_STATE)?.get();
+const seconds = (tab: QueryHost) => tab.get(REFRESH);
 
 describe('refresh', () => {
   it('refreshes from its button and its command', () => {

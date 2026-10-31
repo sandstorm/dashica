@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// Tests for QueryHost: the states extensions register (registerState) read from the URL, written into it after a pause
-// with its other keys kept, sent, asking for a refresh, shared by the tabs.
+// Tests for QueryHost: typed keys (queryKey) read from the URL, written into it after a pause with its other keys
+// kept, sent, asking for a refresh, shared by the tabs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryHost, QueryStates, type QueryStateSpec } from './query';
+import { QueryHost, QueryKeys, queryKey, type QueryKey } from './query';
 
 let query: QueryHost;
 let refreshes: number;
@@ -23,119 +23,125 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** The keys of the query string given last. */
-const urlParams = () => Object.fromEntries(new URLSearchParams(searches.at(-1) ?? ''));
-
-/** A state kept in `?colors=red,blue`, none by default; `sent`: the handlers read it. */
-function colorsSpec(sent: boolean): QueryStateSpec<readonly string[]> {
-  return {
-    keys: ['colors'],
-    parse: (url) => url.get('colors')?.split(',') ?? [],
-    format: (colors) => (colors.length > 0 ? [['colors', colors.join(',')]] : []),
-    request: sent ? (colors) => [['colors', colors.join(',')]] : undefined,
-  };
+/** A key kept in `?<name>=red,blue`, none by default; `sent`: the handlers read it. */
+function listKey(name: string, sent: boolean): QueryKey<readonly string[]> {
+  return queryKey<readonly string[]>(name, {
+    parse: (url) => url.get(name)?.split(',') ?? [],
+    format: (colors) => (colors.length > 0 ? [[name, colors.join(',')]] : []),
+    sentToServer: sent ? true : undefined,
+  });
 }
 
+const COLORS = listKey('colors', false);
+
+describe('queryKey', () => {
+  it('sends its URL entries for `sentToServer: true`, the function’s for a function, nothing without', () => {
+    expect(listKey('colors', true).request?.(['red'])).toEqual([['colors', 'red']]);
+    expect(COLORS.request).toBeUndefined();
+    const always = queryKey<string>('size', { parse: () => '', format: () => [], sentToServer: (size) => [['size', size]] });
+    expect(always.request?.('xl')).toEqual([['size', 'xl']]);
+    expect(queryKey('size', { parse: () => '', format: () => [] }).urlKeys).toEqual(['size']);
+  });
+});
+
 describe('QueryHost', () => {
-  it('reads a state from the URL, the default for a missing key, again after each load', () => {
-    const colors = query.registerState('colors', colorsSpec(false));
-    expect(colors.get()).toEqual([]);
+  it('reads a key from the URL, the default for a missing key, again after each load', () => {
+    expect(query.get(COLORS)).toEqual([]);
     const changes: string[][] = [];
-    colors.onDidChange(() => changes.push([...colors.get()]));
+    query.onDidChange(COLORS, () => changes.push([...query.get(COLORS)]));
     query.load({ search: '?colors=red,blue' });
     expect(changes).toEqual([['red', 'blue']]);
-    expect(query.state('colors')?.get()).toEqual(['red', 'blue']);
+    expect(query.get(COLORS)).toEqual(['red', 'blue']);
   });
 
-  it('reads and writes a state with the default of the page loaded', () => {
-    const size = query.registerState<string>('size', {
-      keys: ['size'],
+  it('reads and writes a key with the default of the page loaded', () => {
+    const size = queryKey<string>('size', {
       parse: (url, page) => url.get('size') ?? page?.title ?? '',
       format: (value, page) => (value !== page?.title ? [['size', value]] : []),
     });
     query.load({ page: { kind: 'dashboard', title: 'xl', filterBar: false, filterButtons: [], widgets: [] } });
-    expect(size.get()).toBe('xl');
-    size.set('s');
+    expect(query.get(size)).toBe('xl');
+    query.set(size, 's');
     vi.advanceTimersByTime(200);
-    size.set('xl');
+    query.set(size, 'xl');
     vi.advanceTimersByTime(200);
     expect(searches).toEqual(['?size=s', '']);
   });
 
   it('keeps a change from before a load out of the query string of the next page', () => {
-    const colors = query.registerState('colors', colorsSpec(false));
     query.load();
-    colors.set(['red']);
+    query.set(COLORS, ['red']);
     query.load();
     vi.advanceTimersByTime(200);
     expect(searches).toEqual([]);
-    expect(colors.get()).toEqual([]);
+    expect(query.get(COLORS)).toEqual([]);
   });
 
-  it('reads a state registered after the load from the URL loaded', () => {
+  it('reads a key first used after the load from the URL loaded', () => {
     query.load({ search: '?colors=red' });
-    expect(query.registerState('colors', colorsSpec(false)).get()).toEqual(['red']);
+    expect(query.get(COLORS)).toEqual(['red']);
   });
 
   it('writes a set value into its keys after a pause, keeping the other keys, and nothing for one the URL holds alike', () => {
-    const colors = query.registerState('colors', colorsSpec(false));
     query.load({ search: '?tab=2&colors=red' });
-    colors.set(['red']);
+    query.set(COLORS, ['red']);
     vi.advanceTimersByTime(200);
     expect(searches).toEqual([]);
-    colors.set(['blue', 'green']);
+    query.set(COLORS, ['blue', 'green']);
     vi.advanceTimersByTime(200);
-    colors.set([]);
+    query.set(COLORS, []);
     vi.advanceTimersByTime(200);
     expect(searches).toEqual(['?tab=2&colors=blue%2Cgreen', '?tab=2']);
   });
 
-  it('fires a change only for another value', () => {
-    const colors = query.registerState('colors', colorsSpec(false));
+  it('fires a change only for another value, and none after the listener is disposed', () => {
     query.load();
     let changes = 0;
-    colors.onDidChange(() => changes++);
-    colors.set([]);
-    colors.set(['red']);
-    colors.set(['red']);
+    const listening = query.onDidChange(COLORS, () => changes++);
+    query.set(COLORS, []);
+    query.set(COLORS, ['red']);
+    query.set(COLORS, ['red']);
+    expect(changes).toBe(1);
+    listening.dispose();
+    query.set(COLORS, ['blue']);
     expect(changes).toBe(1);
   });
 
-  it('sends a state the handlers read and queries again on its change; one they do not read neither', () => {
-    const sent = query.registerState('colors', colorsSpec(true));
-    const kept = query.registerState('sizes', { ...colorsSpec(false), keys: ['sizes'], parse: (url) => url.get('sizes')?.split(',') ?? [] });
+  it('sends a key the handlers read and queries again on its change; one they do not read neither', () => {
+    const sent = listKey('colors', true);
+    const kept = listKey('sizes', false);
     query.load({ search: '?colors=red&sizes=xl' });
+    query.get(kept);
     refreshes = 0;
+    expect(query.requestParams().getAll('colors')).toEqual([]);
+    query.get(sent);
     expect(query.requestParams().getAll('colors')).toEqual(['red']);
     expect(query.requestParams().has('sizes')).toBe(false);
-    kept.set(['s']);
+    query.set(kept, ['s']);
     expect(refreshes).toBe(0);
-    sent.set(['blue']);
+    query.set(sent, ['blue']);
     expect(refreshes).toBe(1);
     expect(query.requestParams().get('colors')).toBe('blue');
   });
 
-  it('keeps a state for every tab sharing the registered states, each tab with its own value', () => {
-    const states = new QueryStates();
-    const shop = new QueryHost(states);
-    const checkout = new QueryHost(states);
-    shop.registerState('colors', colorsSpec(true));
+  it('knows a key used in one tab in every tab sharing the keys, each tab with its own value', () => {
+    const keys = new QueryKeys();
+    const shop = new QueryHost(keys);
+    const checkout = new QueryHost(keys);
+    const sent = listKey('colors', true);
     shop.load({ search: '?colors=red' });
     checkout.load({ search: '?colors=blue' });
-    checkout.state<readonly string[]>('colors')!.set(['green']);
-    expect(shop.state('colors')?.get()).toEqual(['red']);
+    shop.get(sent);
+    expect(checkout.requestParams().get('colors')).toBe('blue');
+    checkout.set(sent, ['green']);
+    expect(shop.get(sent)).toEqual(['red']);
     expect(checkout.requestParams().get('colors')).toBe('green');
     shop.dispose();
     checkout.dispose();
   });
 
-  it('refuses a second state of the same id or URL key, and forgets a state disposed', () => {
-    const colors = query.registerState('colors', colorsSpec(true));
-    expect(() => query.registerState('colors', colorsSpec(false))).toThrow('There is a query state colors already');
-    expect(() => query.registerState('palette', colorsSpec(false))).toThrow("The URL key colors of the query state palette is another state's");
-    query.load({ search: '?colors=red' });
-    colors.dispose();
-    expect(query.state('colors')).toBeUndefined();
-    expect(query.requestParams().has('colors')).toBe(false);
+  it('refuses a second key of the same URL key', () => {
+    query.get(COLORS);
+    expect(() => query.get(listKey('colors', true))).toThrow('The URL key colors belongs to another query key');
   });
 });

@@ -4,7 +4,7 @@ import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { Diagnostics, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import { formatTime } from '../time-library/format-time';
-import { TIME_STATE, customRange, type TimeRange } from '../time-library/time-state';
+import { TIME, customRange } from '../time-library/time-state';
 import './chart-frame.css';
 
 export interface ChartFrameOptions {
@@ -80,7 +80,7 @@ export class ChartFrame {
     this.#intersection.observe(frame);
     this.#resize = new browserWindow.ResizeObserver(this.#onResize);
     this.#resize.observe(frame);
-    this.#onDidRequestRefresh = ctx.state.onDidRequestRefresh(() => {
+    this.#onDidRequestRefresh = ctx.query.onDidRequestRefresh(() => {
       if (this.#visible) void this.#query();
     });
   }
@@ -111,16 +111,15 @@ export class ChartFrame {
 
   readonly #onSchemeChange = () => void this.#draw();
 
-  /** A range dragged across a time chart becomes its tab's time range (while the time-range extension keeps one). */
-  readonly #onTimeSelect = (from: Date, to: Date) =>
-    this.#ctx.state.state<TimeRange>(TIME_STATE)?.set(customRange(formatTime(from), formatTime(to)));
+  /** A range dragged across a time chart becomes its tab's time range. */
+  readonly #onTimeSelect = (from: Date, to: Date) => this.#ctx.query.set(TIME, customRange(formatTime(from), formatTime(to)));
 
   async #query(): Promise<void> {
     this.#running?.abort();
     const controller = (this.#running = new AbortController());
     this.#spinner.hidden = false;
     try {
-      this.#result = await this.#ctx.query(controller.signal);
+      this.#result = await this.#ctx.runQuery(controller.signal);
       this.#showDiagnostics(this.#result.dashicaDiagnostics ?? {});
       await this.#draw();
     } catch (error) {

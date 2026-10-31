@@ -1,10 +1,4 @@
-import type { QueryStateSpec } from '../../hosts/query/query';
-
-/**
- * The id of the time range in a tab's query state (`query.state<TimeRange>(TIME_STATE)`): the `time-range` extension
- * registers it; a selection on a time chart sets it (`customRange`).
- */
-export const TIME_STATE = 'time';
+import { queryKey } from '../../hosts/query/query';
 
 /** The time range of a tab's queries. */
 export interface TimeRange {
@@ -18,11 +12,12 @@ export interface TimeRange {
 const DEFAULT_TIME = '24h';
 
 /**
- * The time range in the URL, `?time=1h`, `?time=custom&range=now-6h to now-1h`; the page's own (`defaultTime`, else
- * 24h) by default. The data handlers read it, `time` also when it is the default: the server does not know the page's.
+ * The time range of a tab's query state (`query.get(TIME)`), shown and set by the `time-range` extension, set by a
+ * selection on a time chart (`customRange`). In the URL, `?time=1h`, `?time=custom&range=now-6h to now-1h`; the page's
+ * own (`defaultTime`, else 24h) by default. The data handlers read it, `time` also when it is the default: the server
+ * does not know the page's.
  */
-export const timeState: QueryStateSpec<TimeRange> = {
-  keys: ['time', 'range'],
+export const TIME = queryKey<TimeRange>(['time', 'range'], {
   parse(url, page) {
     const range = url.get('time') || page?.defaultTime || DEFAULT_TIME;
     return { range, custom: range === 'custom' ? (url.get('range') ?? '') : '' };
@@ -30,8 +25,8 @@ export const timeState: QueryStateSpec<TimeRange> = {
   format({ range, custom }, page) {
     return [...(range !== (page?.defaultTime || DEFAULT_TIME) ? [['time', range] as const] : []), ...(range === 'custom' && custom ? [['range', custom] as const] : [])];
   },
-  request: ({ range, custom }) => [['time', range], ...(range === 'custom' ? [['range', custom] as const] : [])],
-};
+  sentToServer: ({ range, custom }) => [['time', range], ...(range === 'custom' ? [['range', custom] as const] : [])],
+});
 
 /**
  * The custom range from `from` to `to`, each a time as the server reads it: `2026-10-29 10:00` (a selection on a time

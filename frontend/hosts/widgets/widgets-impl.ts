@@ -37,19 +37,19 @@ export class WidgetsHost implements WidgetsApi {
 
   /** Makes `widget` its tab's active widget, outlining its element in place of the one before. */
   activate(widget: WidgetInstance): void {
-    const before = this.#active.get(widget.state);
+    const before = this.#active.get(widget.query);
     if (before === widget) return;
     before?.el.classList.remove(ACTIVE);
     widget.el.classList.add(ACTIVE);
-    this.#active.set(widget.state, widget);
+    this.#active.set(widget.query, widget);
     this.#tell();
   }
 
   /** `widget` is removed: its tab has no active widget if it was that one. */
   deactivate(widget: WidgetInstance): void {
-    if (this.#active.get(widget.state) !== widget) return;
+    if (this.#active.get(widget.query) !== widget) return;
     widget.el.classList.remove(ACTIVE);
-    this.#active.delete(widget.state);
+    this.#active.delete(widget.query);
     this.#tell();
   }
 
@@ -74,8 +74,8 @@ export class WidgetsHost implements WidgetsApi {
     return new Disposable(() => this.#renderers.delete(type));
   }
 
-  /** Renders `widget` into `el` with `state` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
-  render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable {
+  /** Renders `widget` into `el` with `query` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
+  render(el: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable {
     if ('dataUrl' in widget && widget.dataUrl) el.dataset.dataUrl = widget.dataUrl;
     const renderer = this.#renderers.get(widget.type);
     if (!renderer) {
@@ -83,7 +83,7 @@ export class WidgetsHost implements WidgetsApi {
       return new Disposable(() => el.replaceChildren());
     }
     try {
-      const ctx = new WidgetInstance(widget, el, this, state, this.ui);
+      const ctx = new WidgetInstance(widget, el, this, query, this.ui);
       const rendered = renderer(el, widget, ctx);
       const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
@@ -128,7 +128,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   #status: WidgetStatus = { kind: 'idle' };
   readonly #onDidChangeStatus = new EventEmitter<void>();
   readonly onDidChangeStatus = this.#onDidChangeStatus.event;
-  /** The calls of `query` so far: only the latest one sets the status. */
+  /** The calls of `runQuery` so far: only the latest one sets the status. */
   #queries = 0;
   /** The status of the last query that answered or failed, put back when the latest one is aborted. */
   #settled: WidgetStatus = this.#status;
@@ -138,7 +138,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     /** The element it is rendered into, outlined while it is active. */
     readonly el: HTMLElement,
     private readonly host: WidgetsHost,
-    readonly state: QueryApi,
+    readonly query: QueryApi,
     private readonly ui: Pick<UiApi, 'showContextMenu'>,
   ) {}
 
@@ -148,11 +148,11 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
 
   url(path: string): string {
     if (!('dataUrl' in this.widget)) throw new Error(`the widget ${this.widget.type} has no data`);
-    return `${this.widget.dataUrl}${path}?${this.state.requestParams()}`;
+    return `${this.widget.dataUrl}${path}?${this.query.requestParams()}`;
   }
 
   /** Queries `/query`; the status tells how the latest call goes, an aborted latest call puts back the last answer's. */
-  async query(signal?: AbortSignal): Promise<QueryResult> {
+  async runQuery(signal?: AbortSignal): Promise<QueryResult> {
     const turn = ++this.#queries;
     const started = performance.now();
     this.#setStatus({ kind: 'loading' });
@@ -178,7 +178,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   }
 
   renderChild(el: HTMLElement, child: WidgetNode): Disposable {
-    return this.host.render(el, child, this.state);
+    return this.host.render(el, child, this.query);
   }
 
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void {

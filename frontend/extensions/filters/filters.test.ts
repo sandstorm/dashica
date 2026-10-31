@@ -12,7 +12,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
-import { FILTERS_STATE, addChip, replaceChip, type FilterChip } from './chips';
+import { FILTERS, addChip, replaceChip, type FilterChip } from './chips';
 import { buttonOf, filters } from './filters';
 
 let query: QueryHost;
@@ -63,11 +63,10 @@ let fetched: string[];
 const pill = (label: string) => ({ key: keyOf(label), label });
 const chipOf = (label: string) => ({ kind: 'pill', key: pill(label).key });
 
-/** The tab's filter chips, the query state the extension registered. */
-const state = () => query.state<readonly FilterChip[]>(FILTERS_STATE)!;
-const held = () => state().get();
-const addPill = ({ key }: { key: string }) => state().set(addChip(held(), { kind: 'pill', key }));
-const addSql = (sql: string) => state().set(addChip(held(), { kind: 'sql', sql }));
+/** The tab's filter chips (`FILTERS`). */
+const held = () => query.get(FILTERS);
+const addPill = ({ key }: { key: string }) => query.set(FILTERS, addChip(held(), { kind: 'pill', key }));
+const addSql = (sql: string) => query.set(FILTERS, addChip(held(), { kind: 'sql', sql }));
 
 /** Shows `shown` as the page; `undefined`: a tab without one (loading, or it could not be loaded). */
 function show(shown: PageJson | undefined): void {
@@ -195,7 +194,7 @@ describe('filters', () => {
   it('removes every chip of a released `...` button in one change: one history entry', () => {
     query.load({ search: `?f=${pathPill('/a').key}&f=${keyOf('host = a')}&f=${pathPill('/b').key}` });
     let changes = 0;
-    state().onDidChange(() => changes++);
+    query.onDidChange(FILTERS, () => changes++);
     expect(values('Path').map((b) => b.textContent)).toEqual(['/a', '/b']);
     button('Path').click();
     expect(held()).toEqual([chipOf('host = a')]);
@@ -210,7 +209,7 @@ describe('filters', () => {
     expect(fetched).toEqual([`/p/shop/button?i=1&value=O%27Brien`]);
     expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: undefined, anchor: pressed }]);
     expect([button('Path').getAttribute('aria-pressed'), values('Path').map((b) => b.textContent), chips()]).toEqual(['true', ["O'Brien"], []]);
-    state().set([]);
+    query.set(FILTERS, []);
     answer = undefined;
     button('Path').click();
     await Promise.resolve();
@@ -327,7 +326,7 @@ describe('filters', () => {
     expect(bar.children.length).toBe(0);
     addPill(pill('host = a'));
     expect(bar.children.length).toBe(1);
-    state().set([]);
+    query.set(FILTERS, []);
     expect(bar.children.length).toBe(0);
   });
 
@@ -459,11 +458,11 @@ describe('filters, a field’s pill edited', () => {
 
     picked = 'host ≠ a';
     op(chips()[0]).click();
-    state().set(replaceChip(held(), 0, hostChip('eq', 'q') as FilterChip));
+    query.set(FILTERS, replaceChip(held(), 0, hostChip('eq', 'q') as FilterChip));
     await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve));
     expect(held()).toEqual([hostChip('eq', 'q')]);
-    state().set(replaceChip(held(), 0, hostChip('eq', 'a') as FilterChip));
+    query.set(FILTERS, replaceChip(held(), 0, hostChip('eq', 'a') as FilterChip));
 
     vi.stubGlobal('fetch', async () => new Response('"host" cannot filter this chart\'s table', { status: 422 }));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});

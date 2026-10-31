@@ -4,14 +4,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { TIME_STATE, timeState, type TimeRange } from '../time-library/time-state';
+import { TIME, type TimeRange } from '../time-library/time-state';
 import { ChartFrame } from './chart-frame';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.query.registerState(TIME_STATE, timeState);
+  // sent along from here on, as by the time-range extension
+  testbed.query.get(TIME);
 });
 
 afterEach(() => testbed.dispose());
@@ -128,7 +129,7 @@ describe('ChartFrame', () => {
     testbed.scrollIntoView();
     await settle();
     selectTime(new Date(2026, 9, 29, 10, 0), new Date(2026, 9, 29, 11, 30));
-    expect(testbed.query.state<TimeRange>(TIME_STATE)!.get()).toEqual({ range: 'custom', custom: '2026-10-29 10:00 to 2026-10-29 11:30' });
+    expect(testbed.query.get(TIME)).toEqual({ range: 'custom', custom: '2026-10-29 10:00 to 2026-10-29 11:30' });
   });
 
   it('opens the widget’s menu from its button', () => {

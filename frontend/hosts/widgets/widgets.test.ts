@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { TIME_STATE, presetRange, timeState, type TimeRange } from '../../extensions/time-library/time-state';
+import { TIME, presetRange } from '../../extensions/time-library/time-state';
 import { QueryHost } from '../query/query';
 import { WidgetsHost, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
@@ -15,7 +15,7 @@ let testbed: ReturnType<typeof widgetTestbed>;
 beforeEach(() => {
   testbed = widgetTestbed();
   // as the time-range extension keeps it, which every request carries
-  testbed.query.registerState(TIME_STATE, timeState);
+  testbed.query.get(TIME);
 });
 
 afterEach(() => testbed.dispose());
@@ -65,10 +65,10 @@ describe('WidgetsHost', () => {
   it('renders a widget and its children with the query state it is given (its tab’s)', () => {
     const states: unknown[] = [];
     testbed.widgets.registerWidget('grid', (el, widget, ctx) => {
-      states.push(ctx.state);
+      states.push(ctx.query);
       return Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child)));
     });
-    testbed.widgets.registerWidget('markdown', (_el, _widget, ctx) => (states.push(ctx.state), new Disposable(() => {})));
+    testbed.widgets.registerWidget('markdown', (_el, _widget, ctx) => (states.push(ctx.query), new Disposable(() => {})));
     const tab = new QueryHost();
     const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: {} } } };
     testbed.widgets.render(document.body.appendChild(document.createElement('div')), grid, tab);
@@ -88,9 +88,9 @@ describe('WidgetsHost', () => {
     });
 
     it('queries the widget’s handler with the page’s query state, and reads what the server says in the headers', async () => {
-      testbed.query.state<TimeRange>(TIME_STATE)!.set(presetRange('1h'));
+      testbed.query.set(TIME, presetRange('1h'));
       testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Bucket-Size': '900000', 'X-Dashica-Resolved-Time-Range': '{"from":1,"to":2}' });
-      const result = await ctx.query();
+      const result = await ctx.runQuery();
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);
       expect(result.dashicaBucketSize).toBe(900000);
       expect(result.dashicaResolvedTimeRange).toEqual({ from: 1, to: 2 });
@@ -99,28 +99,28 @@ describe('WidgetsHost', () => {
 
     it('reads the chart’s diagnostics, empty without the header', async () => {
       testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host","status"]}' });
-      expect((await ctx.query()).dashicaDiagnostics).toEqual({ ignored: ['host', 'status'] });
+      expect((await ctx.runQuery()).dashicaDiagnostics).toEqual({ ignored: ['host', 'status'] });
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
-      expect((await ctx.query()).dashicaDiagnostics).toEqual({});
+      expect((await ctx.runQuery()).dashicaDiagnostics).toEqual({});
     });
 
     it('reads the columns’ ClickHouse types, empty without the header', async () => {
       testbed.serve('/p/shop/api/1/query', { timestamp: [3] }, { 'X-Dashica-Column-Types': '{"timestamp":"DateTime"}' });
-      expect((await ctx.query()).dashicaColumnTypes).toEqual({ timestamp: 'DateTime' });
+      expect((await ctx.runQuery()).dashicaColumnTypes).toEqual({ timestamp: 'DateTime' });
       testbed.serve('/p/shop/api/1/query', { timestamp: [3] });
-      expect((await ctx.query()).dashicaColumnTypes).toEqual({});
+      expect((await ctx.runQuery()).dashicaColumnTypes).toEqual({});
     });
 
     it('answers a chart that did not run with no rows and why', async () => {
       testbed.serveNothing('/p/shop/api/1/query', { 'X-Dashica-Diagnostics': '{"skipped":"pick a host"}' });
-      const result = await ctx.query();
+      const result = await ctx.runQuery();
       expect(result.numRows).toBe(0);
       expect(result.dashicaDiagnostics).toEqual({ skipped: 'pick a host' });
     });
 
     it('rejects with the server’s message', async () => {
       testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
-      await expect(ctx.query()).rejects.toThrow('Unknown identifier status');
+      await expect(ctx.runQuery()).rejects.toThrow('Unknown identifier status');
     });
 
     it('names URLs below the widget’s handler with the page’s query state', () => {
@@ -129,7 +129,7 @@ describe('WidgetsHost', () => {
 
     it('shows a menu for the widget, with what it queried last', async () => {
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
-      await ctx.query();
+      await ctx.runQuery();
       const anchor = document.body.appendChild(document.createElement('button'));
       ctx.showMenu('widget/context', anchor);
       ctx.showMenu('shop/rows', { x: 10, y: 20 });
@@ -208,7 +208,7 @@ describe('WidgetsHost', () => {
       const active = testbed.widgets.active!;
       let statuses = 0;
       active.onDidChangeStatus(() => statuses++);
-      await contexts[0].query();
+      await contexts[0].runQuery();
       expect(testbed.widgets.active).toBe(active);
       expect(statuses).toBe(2);
       expect(changes).toBe(1);
@@ -221,7 +221,7 @@ describe('WidgetsHost', () => {
       let statuses = 0;
       testbed.widgets.active!.onDidChangeStatus(() => statuses++);
       expect(testbed.widgets.active?.status).toEqual({ kind: 'idle' });
-      const answered = contexts[0].query();
+      const answered = contexts[0].runQuery();
       expect(testbed.widgets.active?.status).toEqual({ kind: 'loading' });
       await answered;
       const status = testbed.widgets.active?.status;
@@ -229,7 +229,7 @@ describe('WidgetsHost', () => {
       expect(testbed.widgets.active?.lastResult?.numRows).toBe(3);
       expect(testbed.widgets.active?.url('/debug')).toBe('/p/shop/api/1/debug?time=24h');
       testbed.serveText('/p/shop/api/1/query', 'Code: 60. Table default.http_logs does not exist', 500);
-      await expect(contexts[0].query()).rejects.toThrow();
+      await expect(contexts[0].runQuery()).rejects.toThrow();
       expect(testbed.widgets.active?.status).toMatchObject({ kind: 'error', message: 'Code: 60. Table default.http_logs does not exist' });
       expect(statuses).toBe(4);
       expect(changes).toBe(1);
@@ -239,7 +239,7 @@ describe('WidgetsHost', () => {
       testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
       const { el } = testbed.render(requests);
       press(el);
-      await contexts[0].query();
+      await contexts[0].runQuery();
       const answered = testbed.widgets.active?.status;
       // each fetch waits until it is aborted, rejecting then as the browser does, or answered
       const pending: (() => void)[] = [];
@@ -250,10 +250,10 @@ describe('WidgetsHost', () => {
         }),
       );
       const first = new AbortController();
-      const firstQuery = contexts[0].query(first.signal);
+      const firstQuery = contexts[0].runQuery(first.signal);
       first.abort();
       const second = new AbortController();
-      const secondQuery = contexts[0].query(second.signal);
+      const secondQuery = contexts[0].runQuery(second.signal);
       await expect(firstQuery).rejects.toThrow();
       expect(testbed.widgets.active?.status).toEqual({ kind: 'loading' });
       pending[1]();
@@ -261,7 +261,7 @@ describe('WidgetsHost', () => {
       expect(testbed.widgets.active?.status).toMatchObject({ kind: 'done', rows: 1 });
 
       const third = new AbortController();
-      const thirdQuery = contexts[0].query(third.signal);
+      const thirdQuery = contexts[0].runQuery(third.signal);
       third.abort();
       await expect(thirdQuery).rejects.toThrow();
       expect(testbed.widgets.active?.status).toMatchObject({ kind: 'done', rows: 1 });

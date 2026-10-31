@@ -8,7 +8,7 @@ import type { MenuAnchor } from '../ui/ui';
 /**
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
- * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu. Charts put
+ * and a `WidgetContext`: that query state (`query`), its data (`runQuery()`), its children, its menu. Charts put
  * themselves into the chart library's `ChartFrame` (title, spinner, error, menu button).
  * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
  * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
@@ -20,11 +20,11 @@ export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable;
   /**
-   * Renders `widget` (one of a page's widgets) into `el` until disposed, with `state` (its tab's query state,
+   * Renders `widget` (one of a page's widgets) into `el` until disposed, with `query` (its tab's query state,
    * `PageContext.query`); a type without renderer shows its error there. A widget with data marks `el` with its URL
    * (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
    */
-  render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable;
+  render(el: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable;
   /**
    * The active tab's active widget, the same object as long as it is rendered; `undefined` while the viewer has not
    * pressed or focused in a widget with data of that tab, or after it was removed.
@@ -82,16 +82,16 @@ export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: Wid
 /** What a widget's renderer gets to work with. */
 export interface WidgetContext {
   /**
-   * The query state of the widget's tab: the states the extensions registered (`state('time')`), what the handlers read
-   * of them (`requestParams`); `state.onDidRequestRefresh`: query again.
+   * The query state of the widget's tab: a key's value (`query.get(TIME)`), what the handlers read of it
+   * (`requestParams`); `query.onDidRequestRefresh`: query again.
    */
-  readonly state: QueryApi;
+  readonly query: QueryApi;
   /**
    * The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's
    * message. The widget's status and `lastResult` follow the latest call only: an earlier one still answering changes
    * neither, an aborted latest one puts back the status of the last answer.
    */
-  query(signal?: AbortSignal): Promise<QueryResult>;
+  runQuery(signal?: AbortSignal): Promise<QueryResult>;
   /** `path` below the widget's handler with the page's query state (`/p/shop/api/8/speedscope-query?time=1h&sql=…`). */
   url(path: string): string;
   /** Renders `child` (a grid's area, a group's widget) into `el`. */
@@ -109,7 +109,7 @@ export interface WidgetMenuContext {
   readonly widget: WidgetNode;
   /** `path` below the widget's handler with the page's query state, as `WidgetContext.url`. */
   url(path: string): string;
-  /** What the latest `query()` answered; `undefined` before. */
+  /** What the latest `runQuery()` answered; `undefined` before. */
   readonly lastResult: QueryResult | undefined;
 }
 

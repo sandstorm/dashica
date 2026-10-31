@@ -3,23 +3,21 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { PARAMS_STATE, paramsState, withParam, type Params } from '../widget-library/params-state';
+import { PARAMS, withParam } from '../widget-library/params-state';
 import { checkboxGroup } from './checkbox-group';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  testbed.query.registerState(PARAMS_STATE, paramsState);
   testbed.activate(checkboxGroup);
 });
 
 afterEach(() => testbed.dispose());
 
 /** The page params, as the dashboardPage extension keeps them. */
-const params = () => testbed.query.state<Params>(PARAMS_STATE)!;
-const param = (name: string) => params().get()[name];
-const setParam = (name: string, value: string) => params().set(withParam(params().get(), name, value));
+const param = (name: string) => testbed.query.get(PARAMS)[name];
+const setParam = (name: string, value: string) => testbed.query.set(PARAMS, withParam(testbed.query.get(PARAMS), name, value));
 
 const methods: WidgetNode = {
   type: 'checkboxGroup',

@@ -1,7 +1,7 @@
 // See QueryApi in query.ts.
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter, type Event } from '../../core/event-emitter/event-emitter';
-import type { QueryApi, QueryState, QueryStateSpec } from './query';
+import type { QueryApi, QueryKey } from './query';
 
 /** Where `activeQuery` finds the active tab's query state: the `page` host. */
 export interface ActiveQuerySource {
@@ -12,17 +12,17 @@ export interface ActiveQuerySource {
 
 /**
  * The `QueryApi` extensions get (`ExtensionContext.query`): every read and call goes to the active tab's query state.
- * Each registered state's `onDidChange` fires when the active tab's fires, and once when another tab becomes active;
+ * A key's `onDidChange` fires when the active tab's fires, and once when another tab becomes active;
  * `onDidRequestRefresh` only when the active tab's fires. So the time picker, the refresh button and the filter bar
- * show the active tab's state with the code they have for one page. A state registered through it is every tab's.
+ * show the active tab's state with the code they have for one page.
  */
 export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): void } {
   const refreshRequested = new EventEmitter<void>();
-  /** The registered states read through it, by id: each one's value, the active tab's, and its change event. */
-  const states = new Map<string, { readonly state: QueryState<unknown>; readonly changed: EventEmitter<void>; listening: Disposable }>();
+  /** The keys listened to through it: each one's change event, forwarded from the active tab's. */
+  const forwarded = new Map<QueryKey<unknown>, { readonly changed: EventEmitter<void>; listening: Disposable }>();
   const active = () => source.activeQuery;
   const listen = (query: QueryApi) => query.onDidRequestRefresh(() => refreshRequested.fire());
-  const listenTo = (id: string, changed: EventEmitter<void>) => active().state(id)?.onDidChange(() => changed.fire()) ?? Disposable.from();
+  const listenTo = (key: QueryKey<unknown>, changed: EventEmitter<void>) => active().onDidChange(key, () => changed.fire());
   let shown = active();
   let listening = listen(shown);
   const onTabs = source.onDidChangeTabs(() => {
@@ -30,42 +30,33 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
     listening.dispose();
     shown = active();
     listening = listen(shown);
-    for (const [id, forwarded] of states) {
-      forwarded.listening.dispose();
-      forwarded.listening = listenTo(id, forwarded.changed);
+    for (const [key, forwarding] of forwarded) {
+      forwarding.listening.dispose();
+      forwarding.listening = listenTo(key, forwarding.changed);
     }
-    for (const { changed } of [...states.values()]) changed.fire();
+    for (const { changed } of [...forwarded.values()]) changed.fire();
   });
-  /** The value of the state `id` in the active tab, while it is registered. */
-  const state = <T>(id: string): QueryState<T> | undefined => {
-    if (!active().state(id)) return undefined;
-    let forwarded = states.get(id);
-    if (!forwarded) {
-      const changed = new EventEmitter<void>();
-      forwarded = {
-        state: { get: () => active().state(id)?.get(), set: (value) => active().state(id)?.set(value), onDidChange: changed.event },
-        changed,
-        listening: listenTo(id, changed),
-      };
-      states.set(id, forwarded);
-    }
-    return forwarded.state as QueryState<T>;
-  };
   const dispose = new Disposable(() => {
     onTabs.dispose();
     listening.dispose();
     refreshRequested.dispose();
-    for (const { changed, listening: forwarding } of states.values()) {
+    for (const { changed, listening: forwarding } of forwarded.values()) {
       forwarding.dispose();
       changed.dispose();
     }
   });
   return {
-    registerState: <T>(id: string, spec: QueryStateSpec<T>) => {
-      const registration = active().registerState(id, spec);
-      return { ...state<T>(id)!, dispose: () => registration.dispose() };
+    get: (key) => active().get(key),
+    set: (key, value) => active().set(key, value),
+    onDidChange(key, listener) {
+      let forwarding = forwarded.get(key);
+      if (!forwarding) {
+        const changed = new EventEmitter<void>();
+        forwarding = { changed, listening: listenTo(key, changed) };
+        forwarded.set(key, forwarding);
+      }
+      return forwarding.changed.event(listener);
     },
-    state,
     onDidRequestRefresh: refreshRequested.event,
     refresh: () => active().refresh(),
     requestParams: () => active().requestParams(),

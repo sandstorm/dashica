@@ -3,12 +3,12 @@ import { RefreshCw, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { PageApi } from '../../hosts/page/page';
-import type { QueryApi, QueryState } from '../../hosts/query/query';
-import { REFRESH_STATE, refreshState, type AutoRefresh } from '../time-library/refresh-state';
+import type { QueryApi } from '../../hosts/query/query';
+import { REFRESH, type AutoRefresh } from '../time-library/refresh-state';
 
 /**
  * Refresh in the top bar, as one split button: ⟳ queries the page again now (also the command `refresh.now`), the
- * interval beside it queries again every so often (the query state `refresh`, `?refresh=30`; "Off" by default). On
+ * interval beside it queries again every so often (the query key `REFRESH`, `?refresh=30`; "Off" by default). On
  * every page, the start page too. Auto refresh pauses while its tab is in the background or the browser tab is hidden
  * (`autoRefresh`).
  */
@@ -18,8 +18,6 @@ export const refresh: Extension = {
     commands: [{ command: 'refresh.now', title: 'Refresh', category: 'Page' }],
   },
   activate({ ui, query, page, commands, subscriptions }) {
-    const seconds = query.registerState(REFRESH_STATE, refreshState);
-    subscriptions.push(seconds);
     const button: HTMLButtonElement = html`<button
       type="button"
       class="d-button d-button--icon d-segmented__item"
@@ -29,10 +27,10 @@ export const refresh: Extension = {
       class="d-field d-segmented__item"
       aria-label="Auto refresh"></select>`;
     button.addEventListener('click', () => query.refresh());
-    const timer = autoRefresh(query, seconds, page, button.ownerDocument);
+    const timer = autoRefresh(query, page, button.ownerDocument);
     interval.addEventListener('change', () => timer.set(interval.value === '' ? undefined : Number(interval.value)));
     const show = () => {
-      const shown = seconds.get();
+      const shown = query.get(REFRESH);
       const options = INTERVALS.map((option) => ({ label: option.label, value: String(option.seconds ?? '') }));
       // an interval the URL has (`?refresh=45`), though none offered
       if (shown !== undefined && !INTERVALS.some((option) => option.seconds === shown)) options.push({ label: `${shown}s`, value: String(shown) });
@@ -40,7 +38,7 @@ export const refresh: Extension = {
       interval.value = String(shown ?? '');
     };
     show();
-    subscriptions.push(timer, seconds.onDidChange(show));
+    subscriptions.push(timer, query.onDidChange(REFRESH, show));
     subscriptions.push(commands.registerCommand('refresh.now', () => query.refresh()));
     const item = html`<div class="d-segmented">${button}${interval}</div>`;
     subscriptions.push(ui.registerBarItem('top', item, { alignment: 'right', priority: 20 }));
@@ -66,7 +64,6 @@ const INTERVALS = [
  */
 function autoRefresh(
   query: QueryApi,
-  seconds: QueryState<AutoRefresh>,
   page: Pick<PageApi, 'tabs' | 'activeTab' | 'onDidChangeTabs'>,
   doc: Document,
 ): Disposable & { set(seconds: AutoRefresh): void } {
@@ -75,7 +72,7 @@ function autoRefresh(
   let timer: ReturnType<typeof setTimeout> | undefined;
   const schedule = () => {
     clearTimeout(timer);
-    const interval = seconds.get();
+    const interval = query.get(REFRESH);
     if (!interval || doc.hidden) return;
     const { id } = page.activeTab;
     if (!last.has(id)) last.set(id, Date.now());
@@ -93,7 +90,7 @@ function autoRefresh(
   };
   const listening = Disposable.from(
     query.onDidRequestRefresh(refreshed),
-    seconds.onDidChange(schedule),
+    query.onDidChange(REFRESH, schedule),
     page.onDidChangeTabs(tabsChanged),
   );
   doc.addEventListener('visibilitychange', schedule);
@@ -107,7 +104,7 @@ function autoRefresh(
     {
       set(interval: AutoRefresh) {
         last.set(page.activeTab.id, Date.now());
-        seconds.set(interval);
+        query.set(REFRESH, interval);
       },
     },
   );

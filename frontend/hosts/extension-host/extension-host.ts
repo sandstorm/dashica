@@ -39,7 +39,7 @@ export interface ExtensionContext {
   readonly ui: UiApi;
   /** The open tabs and the page each shows, and the way to another one. */
   readonly page: PageApi;
-  /** The state the active tab's queries depend on, as the extensions register it (`registerState`); it follows the tab shown. */
+  /** The state the active tab's queries depend on, by its keys (`query.get(TIME)`); it follows the tab shown. */
   readonly query: QueryApi;
   /** How each widget type is rendered. */
   readonly widgets: WidgetsApi;

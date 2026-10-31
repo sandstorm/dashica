@@ -2,11 +2,11 @@ import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
-import { paramsOf, withParam } from '../widget-library/params-state';
+import { PARAMS, withParam } from '../widget-library/params-state';
 
 /**
  * The widget type `textInput`: a text field whose text is the page's param `name` (`{path:String}` in a query; the
- * query state `params`, `paramsOf`). With `prependCaret`, a text is stored with a leading `^`, so a typed path prefix
+ * query key `PARAMS`). With `prependCaret`, a text is stored with a leading `^`, so a typed path prefix
  * (`/api/`) becomes a regex (`^/api/`); the field shows it without.
  */
 export const textInput: Extension = {
@@ -16,10 +16,10 @@ export const textInput: Extension = {
 
 function renderTextInput(el: HTMLElement, widget: WidgetOf<'textInput'>, ctx: WidgetContext): Disposable {
   const name = widget.props.name ?? '';
-  const params = paramsOf(ctx.state);
-  const set = (value: string) => params.set(withParam(params.get(), name, value));
+  const { query } = ctx;
+  const set = (value: string) => query.set(PARAMS, withParam(query.get(PARAMS), name, value));
   // set before the charts query: ClickHouse refuses a query with {path:String} unset ("Substitution is not set")
-  if (params.get()[name] === undefined) set('');
+  if (query.get(PARAMS)[name] === undefined) set('');
 
   const input: HTMLInputElement = html`<input
     type="text"
@@ -30,7 +30,7 @@ function renderTextInput(el: HTMLElement, widget: WidgetOf<'textInput'>, ctx: Wi
     set(widget.props.prependCaret && text !== '' ? `^${text}` : text);
   });
   const showText = () => {
-    const stored = params.get()[name] ?? '';
+    const stored = query.get(PARAMS)[name] ?? '';
     const text = widget.props.prependCaret && stored.startsWith('^') ? stored.substring(1) : stored;
     // while typing, the field has it already; setting it would move the cursor to the end
     if (input.value !== text) input.value = text;
@@ -42,5 +42,5 @@ function renderTextInput(el: HTMLElement, widget: WidgetOf<'textInput'>, ctx: Wi
     ${input}
   </label>`);
   // the browser's back button, a shared link
-  return params.onDidChange(showText);
+  return query.onDidChange(PARAMS, showText);
 }

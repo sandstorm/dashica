@@ -1,8 +1,8 @@
 // See offerFilters.
-import type { QueryState } from '../../hosts/query/query';
+import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
-import { addChip, type FilterChip, type FilterOp, type Pill } from './chips';
+import { FILTERS, addChip, type FilterOp, type Pill } from './chips';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 
 /**
@@ -11,12 +11,12 @@ import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
  * 500" with a filter icon) or to exclude it (the same with a minus icon), and for a number or a time to compare with it
  * ("timestamp ≥ 2026-10-31T10:00:00.000Z", a time's `≥` and `≤` first; the ops of its type, `opsOf`), in order, those
  * of them whose field `source` names `filterable`; choosing one asks `source`'s `/pill` for its pill and adds it to
- * `chips` (the active tab's: the click happened in the tab shown). A failed answer adds none, it goes to the console.
- * Nothing without such candidates.
+ * the chips of `query` (the active tab's: the click happened in the tab shown). A failed answer adds none, it goes to
+ * the console. Nothing without such candidates.
  */
 export async function offerFilters(
   ui: Pick<UiApi, 'showQuickPick'>,
-  chips: QueryState<readonly FilterChip[]>,
+  query: Pick<QueryApi, 'get' | 'set'>,
   at: MenuAnchor,
   candidates: readonly FilterCandidate[],
   source: PillSource,
@@ -27,7 +27,7 @@ export async function offerFilters(
   if (!picked) return;
   try {
     const { key } = await fetchPill(source.dataUrl, picked);
-    chips.set(addChip(chips.get(), { kind: 'pill', key }));
+    query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
   } catch (error) {
     console.error(`Filter ${picked.fieldId} failed:`, error);
   }
