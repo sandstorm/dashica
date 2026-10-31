@@ -2,6 +2,8 @@ module github.com/sandstorm/dashica
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require github.com/rs/zerolog v1.34.0
 
 require gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -43,7 +45,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/yuin/goldmark v1.7.16 // indirect
+	github.com/yuin/goldmark v1.7.17 // indirect
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
