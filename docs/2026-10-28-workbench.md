@@ -634,7 +634,8 @@ so 500 (as before 6.4). The handler calls the chart's `ApplyFilters`, else `filt
 
 ✅ (step 6.5) **The client keeps, shows and sends them.** A chip's label is its id. `QueryResult.dashicaDiagnostics`
 is the header's JSON (`{ignored?, skipped?}`, `{}` without it; a 204 is an empty table); `ChartFrame` shows "ignores
-host, path" below the chart, hidden while it ignores none, after a failed query and while skipped, and "skipped: …"
+host, path" in the chart's title row (since 2026-10-31: the frame draws every chart's title, Plot and the table draw
+none), hidden while it ignores none, after a failed query and while skipped, and "skipped: …"
 (`d-chart-frame__skipped`) in place of the chart.
 `FiltersModel.fields` holds `{fieldId, op, value}[]` in the order added; `add(fieldId, op, value)` adds one (once:
 the same id, op and value again is no change), `remove(index)` and `clear()` take them away, and `add(condition)` with

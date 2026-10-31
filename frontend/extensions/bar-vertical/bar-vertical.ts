@@ -33,7 +33,6 @@ function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: Dr
     fill: props.fill?.alias ?? (props.fx ? props.x.alias : '#A8C1D1'),
   };
   return Plot.plot({
-    title: props.title,
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,

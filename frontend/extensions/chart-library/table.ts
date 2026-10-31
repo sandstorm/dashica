@@ -531,14 +531,6 @@ export function drawTable(
   const container = document.createElement('div');
   container.classList.add('d-table');
 
-  // the title, as the chart frame shows it for the other chart types
-  if (typeof props.title === 'string' && props.title.length > 0) {
-    const title = document.createElement('h2');
-    title.className = 'd-chart-frame__title';
-    title.textContent = props.title;
-    container.appendChild(title);
-  }
-
   // Create search input
   const searchInput = document.createElement('input');
   searchInput.type = 'text';

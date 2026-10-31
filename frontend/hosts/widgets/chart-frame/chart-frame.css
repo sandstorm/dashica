@@ -46,12 +46,21 @@
     opacity: 1;
 }
 
-/* the title until the chart is drawn, and Observable Plot's own above the chart: one style for both */
-.d-chart-frame__title,
-.d-chart-frame__body figure > h2 {
+/* the chart's title above it, with the filters it ignores beside it (wrapping below a long title) */
+.d-chart-frame__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-2);
     margin: 0 0 var(--space-2) 0;
+    /* clear of the menu button and the spinner at its end */
+    padding-right: calc(2 * var(--space-8));
     font-size: var(--text-md);
     font-weight: var(--weight-bold);
+}
+
+.d-chart-frame__title[hidden] {
+    display: none;
 }
 
 /*
@@ -69,9 +78,8 @@
     stroke: var(--color-border-strong);
 }
 
-/* below the chart: the page's filters it does not interpret */
+/* in the title row: the page's filters the chart does not interpret */
 .d-chart-frame__ignored {
-    margin-top: var(--space-1);
     background: var(--color-surface-subtle);
     color: var(--color-text-muted);
     font-weight: var(--weight-normal);

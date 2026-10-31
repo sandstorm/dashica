@@ -411,16 +411,19 @@ describe('ChartFrame', () => {
 
   const body = (el: HTMLElement) => el.querySelector('.d-chart-frame__body')!;
 
-  it('shows the title until it is drawn, and queries only once it is in view', async () => {
+  it('shows the title above the chart, and queries only once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3, 4] });
     const { el } = testbed.render(requests);
-    expect(body(el).textContent).toBe('Requests');
+    const title = el.querySelector<HTMLElement>('.d-chart-frame__title')!;
+    expect(title.textContent).toBe('Requests');
+    expect(title.nextElementSibling!.contains(body(el))).toBe(true);
     testbed.query.refresh();
     await settle();
     expect(testbed.requests).toHaveLength(0);
     testbed.scrollIntoView();
     await settle();
     expect(body(el).textContent).toBe('2 rows');
+    expect(title.textContent).toBe('Requests');
   });
 
   it('queries again on a refresh, and draws again for another width', async () => {
@@ -459,7 +462,7 @@ describe('ChartFrame', () => {
     expect(body(el).textContent).toBe('Unknown identifier status');
   });
 
-  it('names the page’s filters the chart ignores, by their ids, until it ignores none', async () => {
+  it('names the page’s filters the chart ignores in its title row, by their ids, until it ignores none', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host","path"]}' });
     const { el } = testbed.render(requests);
     testbed.scrollIntoView();
@@ -467,6 +470,7 @@ describe('ChartFrame', () => {
     const ignored = el.querySelector<HTMLElement>('.d-chart-frame__ignored')!;
     expect(ignored.hidden).toBe(false);
     expect(ignored.textContent).toBe('ignores host, path');
+    expect(ignored.parentElement!.textContent).toBe('Requestsignores host, path');
     testbed.serve('/p/shop/api/1/query', { cnt: [3] });
     testbed.query.refresh();
     await settle();

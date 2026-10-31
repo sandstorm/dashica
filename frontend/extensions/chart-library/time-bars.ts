@@ -44,7 +44,6 @@ export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: Dr
   };
 
   return Plot.plot({
-    title: props.title,
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,

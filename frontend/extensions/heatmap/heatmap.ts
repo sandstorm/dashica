@@ -48,7 +48,6 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
   const fill = props.fill?.alias;
 
   return Plot.plot({
-    title: props.title,
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,
@@ -104,7 +103,6 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
   };
 
   return Plot.plot({
-    title: props.title,
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,

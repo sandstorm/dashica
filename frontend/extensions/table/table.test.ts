@@ -45,12 +45,12 @@ const click = (menu: ReturnType<typeof openCellMenu>, label: string) =>
   testbed.commands.executeCommand(menu.entries.find((entry) => entry.title === label)!.command, ...(menu.options.args ?? []));
 
 describe('table', () => {
-  it('draws the rows below its title', async () => {
+  it('draws the rows below its title, which the chart frame shows', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { title: 'Latest', height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
     expect(error(el)).toBeUndefined();
-    expect(el.querySelector('.d-table h2')!.textContent).toBe('Latest');
+    expect(el.querySelector('.d-chart-frame__title')!.textContent).toBe('Latest');
     expect(el.querySelectorAll('.tabulator-cell[tabulator-field="path"]')).toHaveLength(2);
   });
 

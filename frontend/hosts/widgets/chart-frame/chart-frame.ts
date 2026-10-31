@@ -7,7 +7,7 @@ import type { Diagnostics, QueryResult, WidgetContext } from '../widgets';
 import './chart-frame.css';
 
 export interface ChartFrameOptions {
-  /** Shown until the chart is drawn, which brings its own title. */
+  /** The chart's title, above it; the frame draws it, the chart draws none. */
   readonly title?: string;
   /** The chart's height in pixels, kept while it loads. */
   readonly height?: number;
@@ -26,7 +26,7 @@ export interface DrawOptions {
 /**
  * A chart in `el` inside the frame every chart has: its title while it loads, a spinner while it queries, the error of
  * a failed query, its menu button (`widget/context`), and what the server says the chart did with the page's filters:
- * "ignores host, path" below it, "skipped: …" in place of it. It queries once the chart scrolls into view, and again on
+ * "ignores host, path" in its title row, "skipped: …" in place of it. It queries once the chart scrolls into view, and again on
  * each `onDidRequestRefresh` from then on; an answer to an older query is dropped. A chart's renderer returns it.
  */
 export class ChartFrame {
@@ -35,6 +35,7 @@ export class ChartFrame {
   readonly #spinner: HTMLElement;
   readonly #shimmer: HTMLElement;
   readonly #body: HTMLElement;
+  readonly #title: HTMLElement;
   readonly #ignored: HTMLElement;
   /** Why the chart did not run, from its last answer; '' while it ran. */
   #skipped = '';
@@ -58,16 +59,15 @@ export class ChartFrame {
     this.#spinner = html`<div class="d-chart-frame__spinner" title="Refreshing…" hidden><span class="d-spinner"></span></div>`;
     this.#shimmer = html`<div class="d-chart-frame__shimmer"></div>`;
     this.#body = html`<div class="d-chart-frame__body" style=${options.height ? { 'min-height': `${options.height}px` } : {}}></div>`;
-    this.#ignored = html`<div class="d-badge d-chart-frame__ignored" data-testid="chart-ignored-filters" title="Filters of the page this chart does not interpret" hidden></div>`;
+    this.#ignored = html`<span class="d-badge d-chart-frame__ignored" data-testid="chart-ignored-filters" title="Filters of the page this chart does not interpret" hidden></span>`;
     const frame: HTMLElement = html`<div class="d-chart-frame">
       ${this.#spinner}
       <div class="d-chart-frame__menu">
         <button type="button" class="d-button d-button--icon" title="More" aria-label="More" aria-haspopup="menu" onclick=${(event: MouseEvent) => ctx.showMenu('widget/context', event.currentTarget as HTMLElement)}>${menuIcon}</button>
       </div>
+      ${(this.#title = html`<h2 class="d-chart-frame__title" hidden=${!options.title}>${options.title ?? ''}${this.#ignored}</h2>`)}
       <div class="d-chart-frame__stage">${this.#shimmer}${this.#body}</div>
-      ${this.#ignored}
     </div>`;
-    if (options.title) this.#body.append(html`<h2 class="d-chart-frame__title">${options.title}</h2>`);
     el.replaceChildren(frame);
 
     this.#darkScheme = browserWindow.matchMedia('(prefers-color-scheme: dark)');
@@ -150,7 +150,10 @@ export class ChartFrame {
   #showDiagnostics({ ignored = [], skipped = '' }: Diagnostics): void {
     this.#skipped = skipped;
     this.#ignored.hidden = ignored.length === 0 || skipped !== '';
-    this.#ignored.textContent = `ignores ${ignored.join(', ')}`;
+    // part of the heading's text only while shown
+    this.#ignored.textContent = this.#ignored.hidden ? '' : `ignores ${ignored.join(', ')}`;
+    // a chart without a title has its row only for the badge
+    this.#title.hidden = !this.#options.title && this.#ignored.hidden;
   }
 
   #showError(error: unknown): void {

@@ -46,7 +46,6 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
   };
 
   return Plot.plot({
-    title: props.title,
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,
