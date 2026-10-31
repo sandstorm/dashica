@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
-// edited, removed), the buttons as toggles in place (buttonOf), without a chip of their own, a button's value asked
-// for in an input box and shown on it, "Add filter" while a chart filters a table; with SQL filters off
-// (filters.sqlEnabled), no funnel and a SQL chip only removed.
+// edited, removed), the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
+// button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
+// place, "Add filter" while a chart filters a table; with SQL filters off (filters.sqlEnabled), no funnel and a SQL
+// chip only removed, the buttons as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
-import { QueryHost } from '../../hosts/query/query';
+import { QueryHost, type FilterChip } from '../../hosts/query/query';
 import { buttonOf, filters } from './filters';
 
 let query: QueryHost;
@@ -22,22 +23,34 @@ let asked: { title?: string; prompt?: string; anchor?: unknown }[];
 /** The quick picks shown (all cancelled): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
 
+/**
+ * A pill's key as the server signs it (`<payload>.<mac>`, the payload base64url JSON) with `label` and `payload`; its
+ * mac is none.
+ */
+function keyOf(label: string, payload: object = {}): string {
+  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label, ...payload }));
+  return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
+}
+
+const PATH = "path ILIKE concat(..., '%')";
+/** The pill of the button Path for `value`, as `/p/shop/button` answers it, and its chip. */
+const pathPill = (value: string) => ({ key: keyOf(`Path: ${value}`, { button: PATH, value }), label: `Path: ${value}` });
+const pathChip = (value: string) => ({ kind: 'pill', ...pathPill(value) });
+
+const errorsKey = keyOf('Errors', { button: 'status >= 500' });
 const shop: PageJson = {
   kind: 'dashboard',
   title: 'Shop',
   filterBar: true,
   filterButtons: [
-    { title: 'Errors', queryPart: 'status >= 500' },
-    { title: 'Path', queryPart: "path LIKE '...%'" },
+    { title: 'Errors', queryPart: 'status >= 500', key: errorsKey },
+    { title: 'Path', queryPart: PATH, url: '/p/shop/button?i=1' },
   ],
   widgets: [],
 };
 
-/** A pill's key as the server signs it (`<payload>.<mac>`, the payload base64url JSON) with `label`; its mac is none. */
-function keyOf(label: string): string {
-  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label }));
-  return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
-}
+/** The URLs `fetch` was asked; each answered with the pill of the button Path for its `value`. */
+let fetched: string[];
 
 /** The pill labelled `label`, as `/pill` answers it, and the chip it is. */
 const pill = (label: string) => ({ key: keyOf(label), label });
@@ -67,6 +80,11 @@ beforeEach(() => {
   };
   asked = [];
   picks = [];
+  fetched = [];
+  vi.stubGlobal('fetch', async (url: string) => {
+    fetched.push(url);
+    return new Response(JSON.stringify(pathPill(new URL(url, 'http://x').searchParams.get('value')!)));
+  });
 });
 
 /** Activates the extension, the server taking SQL chips or not (filters.sqlEnabled), and shows the page Shop. */
@@ -83,9 +101,10 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-/** The filter button `title`; a pressed `...` one reads `<title>: <values>`. */
-const button = (title: string) =>
-  [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((b) => b.textContent === title || b.textContent?.startsWith(`${title}: `))!;
+/** The filter button `title`. */
+const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((b) => b.textContent === title)!;
+/** The values shown beside the pressed `...` button `title`. */
+const values = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>(`[aria-label="${title}"] .d-filter-button__value`)];
 const funnel = () => topBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
 const editor = () => bar.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-testid=filter-chip-editor] textarea, [data-testid=filter-chip-editor] input');
 const chips = () => [...bar.querySelectorAll<HTMLElement>('[data-testid=filter-chip]')];
@@ -102,52 +121,53 @@ const type = (text: string) => {
 describe('buttonOf', () => {
   const buttons = shop.filterButtons;
 
-  it('finds the button whose condition a SQL chip is, the text in place of each `...`', () => {
-    expect(buttonOf('status >= 500', buttons)).toEqual({ button: buttons[0], values: [] });
-    expect(buttonOf("path LIKE '/api%'", buttons)).toEqual({ button: buttons[1], values: ['/api'] });
+  it('finds the button a pill was made for, by its condition, and the value written in', () => {
+    expect(buttonOf({ kind: 'pill', key: errorsKey, label: 'Errors' }, buttons)).toEqual({ button: buttons[0], value: '' });
+    expect(buttonOf(pathChip("O'Brien") as FilterChip, buttons)).toEqual({ button: buttons[1], value: "O'Brien" });
   });
 
-  it("gives the text as typed, the string literal's backslash escapes undone", () => {
-    expect(buttonOf("path LIKE 'O\\'Brien\\\\%'", buttons)).toEqual({ button: buttons[1], values: ["O'Brien\\"] });
-  });
-
-  it('finds none for other SQL, or an empty text in place of `...`', () => {
-    expect(buttonOf('status >= 400', buttons)).toBeUndefined();
-    expect(buttonOf("path LIKE '%'", buttons)).toBeUndefined();
-    expect(buttonOf('status >= 500', [])).toBeUndefined();
+  it('finds none for a SQL chip, the pill of a field, or a button the page lacks', () => {
+    expect(buttonOf({ kind: 'sql', sql: 'status >= 500' }, buttons)).toBeUndefined();
+    expect(buttonOf(chipOf('host = a') as FilterChip, buttons)).toBeUndefined();
+    expect(buttonOf({ kind: 'pill', key: errorsKey, label: 'Errors' }, [])).toBeUndefined();
   });
 });
 
 describe('filters', () => {
   beforeEach(() => activate(true));
 
-  it('adds a filter button’s condition as a SQL filter and shows the button pressed, with no chip for it', () => {
+  it('adds a filter button’s signed pill and shows the button pressed, with no chip for it', () => {
     expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
     button('Errors').click();
-    expect(query.filters.chips).toEqual([{ kind: 'sql', sql: 'status >= 500' }]);
+    expect(query.filters.chips).toEqual([{ kind: 'pill', key: errorsKey, label: 'Errors' }]);
     expect(chips()).toEqual([]);
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
     expect(button('Errors').title).toBe('status >= 500');
   });
 
-  it('keeps the chips of other filters in their order, a button’s condition among them', () => {
-    query.load({ search: `?sql=a&sql=status+%3E%3D+500&f=${keyOf('host = a')}` });
+  it('keeps the chips of other filters in their order, a button’s pill among them', () => {
+    query.load({ search: `?sql=a&f=${errorsKey}&f=${keyOf('host = a')}` });
     expect(chips().map(chipText)).toEqual(['SQL: a', 'host = a']);
     chips()[1].querySelector<HTMLButtonElement>('button[aria-label="Remove host = a"]')!.click();
     expect(query.filters.chips).toEqual([
       { kind: 'sql', sql: 'a' },
-      { kind: 'sql', sql: 'status >= 500' },
+      { kind: 'pill', key: errorsKey, label: 'Errors' },
     ]);
   });
 
-  it('shows a button’s condition as a SQL chip on a page without that button', () => {
-    query.load({ search: '?sql=status+%3E%3D+500' });
+  it('shows a button’s pill as a chip on a page without that button', () => {
+    query.load({ search: `?f=${errorsKey}` });
     show({ ...shop, title: 'Checkout', filterButtons: [] });
-    expect(chips().map(chipText)).toEqual(['SQL: status >= 500']);
+    expect(chips().map(chipText)).toEqual(['Errors']);
+  });
+
+  it('does not take a SQL chip of the same condition for the button', () => {
+    query.load({ search: '?sql=status+%3E%3D+500' });
+    expect([chips().map(chipText), button('Errors').getAttribute('aria-pressed')]).toEqual([['SQL: status >= 500'], 'false']);
   });
 
   it('removes the chip of a pressed button when it is pressed again', () => {
-    query.load({ search: `?sql=status+%3E%3D+500&f=${keyOf('host = a')}` });
+    query.load({ search: `?f=${errorsKey}&f=${keyOf('host = a')}` });
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
     button('Errors').click();
     expect(query.filters.chips).toEqual([chipOf('host = a')]);
@@ -155,34 +175,47 @@ describe('filters', () => {
   });
 
   it('removes every chip of a released `...` button in one change: one history entry', () => {
-    query.load({ search: `?sql=path+LIKE+%27%2Fa%25%27&f=${keyOf('host = a')}&sql=path+LIKE+%27%2Fb%25%27` });
+    query.load({ search: `?f=${pathPill('/a').key}&f=${keyOf('host = a')}&f=${pathPill('/b').key}` });
     let changes = 0;
     query.filters.onDidChange(() => changes++);
-    expect(button('Path').textContent).toBe('Path: /a, /b');
+    expect(values('Path').map((b) => b.textContent)).toEqual(['/a', '/b']);
     button('Path').click();
     expect(query.filters.chips).toEqual([chipOf('host = a')]);
     expect(changes).toBe(1);
   });
 
-  it('asks for the value of a `...` in a condition in an input box below the button, shown on it; nothing when the viewer cancels', async () => {
-    answer = '/api/';
+  it('asks for the value of a `...` in an input box below the button, its pill made by the page, the value shown beside it; nothing when the viewer cancels', async () => {
+    answer = "O'Brien";
     const pressed = button('Path');
     pressed.click();
-    await vi.waitFor(() => expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '/api/%'" }]));
-    expect(asked).toEqual([{ title: 'Parameter value', prompt: "Path: path LIKE '...%'", anchor: pressed }]);
-    expect([button('Path').textContent, button('Path').getAttribute('aria-pressed'), chips()]).toEqual(['Path: /api/', 'true', []]);
+    await vi.waitFor(() => expect(query.filters.chips).toEqual([pathChip("O'Brien")]));
+    expect(fetched).toEqual([`/p/shop/button?i=1&value=O%27Brien`]);
+    expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: undefined, anchor: pressed }]);
+    expect([button('Path').getAttribute('aria-pressed'), values('Path').map((b) => b.textContent), chips()]).toEqual(['true', ["O'Brien"], []]);
     query.filters.clear();
     answer = undefined;
     button('Path').click();
     await Promise.resolve();
-    expect([query.filters.chips, asked.length]).toEqual([[], 2]);
+    expect([query.filters.chips, asked.length, fetched.length]).toEqual([[], 2, 1]);
   });
 
-  it("writes a button's value into its condition as a string literal's text: quote and backslash escaped, `$` as it is", async () => {
-    answer = "O'Brien\\$'";
+  it('asks a new value for a pressed `...` button on a click on its value, the old one shown, and puts its pill in the chip’s place', async () => {
+    query.load({ search: `?f=${keyOf('host = a')}&f=${pathPill('/a').key}&f=${keyOf('host = b')}` });
+    answer = '/b';
+    const value = values('Path')[0];
+    value.click();
+    await vi.waitFor(() => expect(query.filters.chips).toEqual([chipOf('host = a'), pathChip('/b'), chipOf('host = b')]));
+    expect(asked).toEqual([{ title: 'Parameter value', prompt: `Path: ${PATH}`, value: '/a', anchor: value }]);
+  });
+
+  it('adds nothing when the page refuses the value', async () => {
+    vi.stubGlobal('fetch', async () => new Response('filter button "Path" needs a value', { status: 400 }));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    answer = 'x';
     button('Path').click();
-    await vi.waitFor(() => expect(query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE 'O\\'Brien\\\\$\\'%'" }]));
-    expect(button('Path').textContent).toBe("Path: O'Brien\\$'");
+    await vi.waitFor(() => expect(logged).toHaveBeenCalled());
+    expect(query.filters.chips).toEqual([]);
+    logged.mockRestore();
   });
 
   it('shows a SQL chip that matches no button as `SQL:` and its text on one line', () => {
@@ -309,6 +342,11 @@ describe('filters', () => {
 
 describe('filters with SQL filters off', () => {
   beforeEach(() => activate(false));
+
+  it('still presses a filter button: its pill is signed', () => {
+    button('Errors').click();
+    expect([query.filters.chips, button('Errors').getAttribute('aria-pressed')]).toEqual([[{ kind: 'pill', key: errorsKey, label: 'Errors' }], 'true']);
+  });
 
   it('has no funnel: the bar offers no way to type SQL', () => {
     expect(funnel()).toBeNull();

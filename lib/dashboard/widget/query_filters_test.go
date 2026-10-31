@@ -1,5 +1,6 @@
-// Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields), the
-// values it offers for them (valuesHandler) and the table its node names.
+// Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields), a
+// filter button's among them, the values it offers for them (valuesHandler), the table its node names and the pills
+// of Speedscope's query.
 package widget
 
 import (
@@ -174,6 +175,27 @@ func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 		if rec.Code == http.StatusBadRequest {
 			t.Errorf("on, %s: %d %s", path, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestQueryHandler_AButtonsPillAppliesWithoutATable(t *testing.T) {
+	button, _ := filter.NewButton("Duration", "duration_ms >= ...", "500")
+	key, _ := filter.Sign(testSecret, button)
+	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
+	other := NewBarVertical(sql.New(sql.From("caddy_logs"))).X(sql.Field("upstream")).Y(sql.Count())
+	for name, chart := range map[string]withQuery{"a SQL file without a table": noTable, "a chart on another table": other} {
+		if got := debug(t, chart, key); !strings.Contains(got.query, "(duration_ms >= '500')") || got.diagnostics != "" {
+			t.Errorf("%s: %+v", name, got)
+		}
+	}
+}
+
+func TestSpeedscope_ATamperedPillIsABadRequest(t *testing.T) {
+	link := NewSpeedscopeLink(sql.New(sql.From("http_logs")))
+	rec := httptest.NewRecorder()
+	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/speedscope-query?time=1h&f=status:eq:500", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("%d %s", rec.Code, rec.Body)
 	}
 }
 

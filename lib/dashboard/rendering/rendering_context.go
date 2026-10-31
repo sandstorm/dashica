@@ -105,11 +105,19 @@ type OutlineEntry struct {
 	Group string `json:"group"`
 }
 
-// FilterButton is a button of the filter bar that adds its condition to the filter.
+// FilterButton is a button of the filter bar that adds its condition to the filter, as a signed pill
+// (filter.NewButton).
 type FilterButton struct {
 	Title string `json:"title"`
-	// QueryPart is the SQL condition the button adds to the filter ("status >= 500").
+	// QueryPart is the SQL condition the button adds to the filter ("status >= 500"); a `...` in it is the value the
+	// viewer is asked for ("duration_ms >= ..."), written in as a string literal.
 	QueryPart string `json:"queryPart"`
+	// Key is, in page.json, the signed pill of a button without `...` (filter.Sign), which pressing it puts into the
+	// URL; empty for one with.
+	Key string `json:"key,omitempty"`
+	// Url is, in page.json, where a button with `...` gets its pill for a value: `<page>/button?i=<index>`, the value
+	// appended as `&value=<value>`, answered as `{key, label}`; empty for one without.
+	Url string `json:"url,omitempty"`
 }
 
 type SearchBarOption struct {

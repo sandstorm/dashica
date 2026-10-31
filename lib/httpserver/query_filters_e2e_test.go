@@ -1,11 +1,12 @@
 // Tests for pills against a real ClickHouse (QueryHandler.HandleQuery with filter.Apply's conditions): a quoted value
-// compared with a column of another type; the values of a field (HandleValues).
+// compared with a column of another type, a filter button's value among them; the values of a field (HandleValues).
 package httpserver
 
 import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -51,6 +52,32 @@ func TestHandleQuery_AQuotedValueMatchesAUInt16Column(t *testing.T) {
 		// the Arrow body is uncompressed, so the strings of its rows are in it as they are
 		if body := rec.Body.Bytes(); !bytes.Contains(body, []byte(want)) || bytes.Contains(body, []byte(other)) {
 			t.Errorf("%s: want only the row %s", op, want)
+		}
+	}
+}
+
+func TestHandleQuery_AButtonsQuotedValueComparesAUInt16ColumnAsANumber(t *testing.T) {
+	// a button writes its value in as a string (`status >= '1000'`); compared as text, '200' and '500' would both be
+	// >= '1000', as a number neither is
+	for value, want := range map[string][]string{"300": {"hit-500"}, "1000": nil} {
+		cfg, _ := testServer.LoadTestingConfig(t)
+		qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+		r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
+		state, _ := ParseQueryState(r, false)
+		button, err := filter.NewButton("Status >= …", "status >= ...", value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q, diagnostics := filter.Apply(statusRows, filter.Table{}, false, []filter.Pill{button})
+		rec := httptest.NewRecorder()
+		if err := qh.HandleQuery(q, state, diagnostics, rec, r); err != nil {
+			t.Fatalf("%s: %v", value, err)
+		}
+		body := rec.Body.Bytes()
+		for _, hit := range []string{"hit-500", "hit-200"} {
+			if bytes.Contains(body, []byte(hit)) != slices.Contains(want, hit) {
+				t.Errorf("status >= '%s': want only %v", value, want)
+			}
 		}
 	}
 }

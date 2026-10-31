@@ -1,5 +1,5 @@
 /* See FilterBar in filters.ts: the chips, pills and SQL, a SQL one in edit mode, and the bar's buttons, tinted
-   while pressed (aria-pressed, see controls.css). */
+   while pressed (aria-pressed, see controls.css), a pressed one with `...` joined to its values. */
 .d-filter-bar {
   display: flex;
   flex: 1;
@@ -80,4 +80,28 @@
 .d-filter-chip__remove:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -1px;
+}
+
+/* a pressed button with `...`: its title and each value beside it, one control */
+.d-filter-button {
+  display: inline-flex;
+}
+
+.d-filter-button > .d-button:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.d-filter-button > .d-button:not(:first-child) {
+  margin-left: calc(-1 * var(--border-width));
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.d-filter-button__value {
+  overflow: hidden;
+  max-width: 40ch;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

@@ -32,6 +32,7 @@ func everyWidget() *dashboard.Builder {
 		WithTitle("Shop").
 		DefaultTimeRange("168h").
 		FilterButton("Errors", "status >= 500").
+		FilterButton("Path", "path ILIKE concat(..., '%')").
 		Widget(widget.NewMarkdown().Content("# Shop")).
 		Widget(widget.NewGrid().Template("a b").
 			Area("a", widget.NewTimeBar(logs).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status")).Title("Requests")).
@@ -57,6 +58,8 @@ func TestContract_Golden(t *testing.T) {
 	d := newDashicaImpl(&config.Config{}, logger, mux, rendering.Dependencies{
 		ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger),
 		Logger:                  logger,
+		// signs the filter buttons' pills in page.json; fixed, so the golden file stays the same
+		FilterSecret: []byte("a test secret of at least thirty-two bytes"),
 	})
 	d.RegisterDashboardGroup("Shop").RegisterDashboard("/p/shop", everyWidget())
 

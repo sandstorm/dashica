@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // Tests for QueryHost: the state from and into a query string (parseSearch, formatSearch), the filter chips,
-// what each change asks of the widgets, auto refresh paused while hidden or not shown.
+// what each change asks of the widgets, auto refresh paused while hidden or not shown; what a pill's key says of itself
+// (pillLabel, pillButton).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryHost, formatSearch, formatTime, parseSearch } from './query';
+import { QueryHost, formatSearch, formatTime, parseSearch, pillButton, pillLabel } from './query';
 
 let query: QueryHost;
 let refreshes: number;
@@ -10,8 +11,8 @@ let refreshes: number;
 let searches: string[];
 
 /** A key as the server signs a pill (`<payload>.<mac>`, the payload base64url JSON) with `label`; its mac is none. */
-function keyOf(label: string): string {
-  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label }));
+function keyOf(label: string, payload: object = {}): string {
+  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label, ...payload }));
   return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
 }
 
@@ -369,5 +370,18 @@ describe('parseSearch and formatSearch', () => {
     const state = parseSearch('?time=3h&sql=a&f=k.mac', '1h');
     expect(formatSearch(state, '1h', '?tab=x&time=6h')).toBe('?tab=x&time=3h&sql=a&f=k.mac');
     expect(formatSearch(parseSearch('', '1h'), '1h', '?sql=a')).toBe('');
+  });
+});
+
+describe('pillLabel and pillButton', () => {
+  it("read a pill's label, and the filter button it was made for with its value", () => {
+    const duration = keyOf('Duration: 500', { button: 'duration_ms >= ...', value: '500' });
+    expect([pillLabel(duration), pillButton(duration)]).toEqual(['Duration: 500', { button: 'duration_ms >= ...', value: '500' }]);
+    expect(pillButton(keyOf('Errors', { button: 'status >= 500' }))).toEqual({ button: 'status >= 500', value: '' });
+  });
+
+  it('read no button from the pill of a field, and the key itself as the label of one without a payload', () => {
+    expect(pillButton(keyOf('host = a'))).toBeUndefined();
+    expect([pillLabel('status:eq:500'), pillButton('status:eq:500'), pillButton('!!.mac')]).toEqual(['status:eq:500', undefined, undefined]);
   });
 });

@@ -311,17 +311,34 @@ function parseChip(key: string, value: string): FilterChip | undefined {
  * base64url (lib/dashboard/filter, `Sign`); the key itself when it has none.
  */
 export function pillLabel(key: string): string {
+  const { label } = payloadOf(key);
+  return typeof label === 'string' && label ? label : key;
+}
+
+/**
+ * The filter button a pill's key was made for: its condition as the dashboard declares it (`duration_ms >= ...`,
+ * the button's `queryPart`) and the value written in for its `...` ('' for a button without); `undefined` for the
+ * pill of a field.
+ */
+export function pillButton(key: string): { readonly button: string; readonly value: string } | undefined {
+  const { button, value } = payloadOf(key);
+  if (typeof button !== 'string' || !button) return undefined;
+  return { button, value: typeof value === 'string' ? value : '' };
+}
+
+/** The payload of a pill's key, as JSON (`Sign`); empty for a key without one. */
+function payloadOf(key: string): Record<string, unknown> {
   const dot = key.indexOf('.');
-  if (dot < 0) return key;
+  if (dot < 0) return {};
   try {
     const payload = key.slice(0, dot).replace(/-/g, '+').replace(/_/g, '/');
     const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
-    const { label } = JSON.parse(new TextDecoder().decode(bytes)) as { label?: unknown };
-    if (typeof label === 'string' && label) return label;
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (parsed !== null && typeof parsed === 'object') return parsed as Record<string, unknown>;
   } catch {
     // not a pill's key: the server refuses it, the chip shows it as it is
   }
-  return key;
+  return {};
 }
 
 class ParamsState extends Model implements ParamsModel {

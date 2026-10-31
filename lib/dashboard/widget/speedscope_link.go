@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -57,7 +58,9 @@ func (s *SpeedscopeLink) Handler(deps rendering.Dependencies) http.Handler {
 func (s *SpeedscopeLink) explicitId() string { return s.id }
 
 // serveSpeedscope runs the query and streams the result as space-delimited CSV — the format
-// Speedscope's profileURL ingestor expects.
+// Speedscope's profileURL ingestor expects. It takes the page's filters as a chart does: the window, the SQL chips
+// and the pills on its table and of the filter buttons (filter.Apply); a pill not signed with deps.FilterSecret is a
+// 400.
 func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http.ResponseWriter, r *http.Request) error {
 	client, err := deps.ClickhouseClientManager.GetClient("default")
 	if err != nil {
@@ -74,6 +77,12 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 		return err
 	}
 	maps.Copy(opts.Parameters, state.Params)
+	pills, err := openPills(deps.FilterSecret, state.Pills)
+	if err != nil {
+		return err
+	}
+	table, ok := tableOf(deps, query)
+	query, _ = filter.Apply(query, table, ok, pills)
 
 	q := query
 	if !query.ShouldSkipFilters() {

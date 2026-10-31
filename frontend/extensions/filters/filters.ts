@@ -3,7 +3,7 @@ import { Filter, ListFilterPlus, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { FilterChip, QueryApi, SqlFilter } from '../../hosts/query/query';
+import { pillButton, type FilterChip, type Pill, type QueryApi, type SqlFilter } from '../../hosts/query/query';
 import type { UiApi } from '../../hosts/ui/ui';
 import { addFilter, filterableTables, type FilterableTable } from './add-filter';
 import './filters.css';
@@ -14,8 +14,9 @@ import './filters.css';
  * SQL chip's text edits it, a pill is not edited (its condition is the server's). The funnel button in the top bar adds
  * a SQL chip. Both only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a
  * SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
- * their place: pressed while a SQL filter has their condition (`status >= 500`; a `...` in it is asked for, its value
- * shown on the button), which then has no chip of its own. "Add filter" after the chips adds a pill on one of the
+ * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
+ * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
+ * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on one of the
  * tables the page's charts filter (`addFilter`), while there is one. The bar shows while it has a chip, a button or
  * "Add filter", else the page has no bar for nothing. A click on a chart adds its pills (`WidgetsApi.offerFilters`).
  */
@@ -55,31 +56,24 @@ export const filters: Extension = {
 };
 
 /**
- * The button among `buttons` whose condition the SQL chip `sql` is, and the text in place of its `...`s (`values`, as
- * the viewer typed them, `literalOf` undone): `sql` equals its `queryPart`, or a `queryPart` with `...` with a non-empty
- * text in place of each.
+ * The button among `buttons` that the pill `chip` was made for (`pillButton`: the button's `queryPart`), and the value
+ * written in for its `...` ('' for a button without); `undefined` for a SQL chip and the pill of a field.
  */
-export function buttonOf(sql: string, buttons: readonly FilterButton[]): { button: FilterButton; values: string[] } | undefined {
-  for (const button of buttons) {
-    if (button.queryPart === sql) return { button, values: [] };
-    if (!button.queryPart.includes('...')) continue;
-    const pattern = button.queryPart.split('...').map(escapeRegExp).join('([\\s\\S]+)');
-    const match = new RegExp(`^${pattern}$`).exec(sql);
-    if (match) return { button, values: match.slice(1).map((text) => text.replace(/\\([\s\S])/g, '$1')) };
-  }
-  return undefined;
+export function buttonOf(chip: FilterChip, buttons: readonly FilterButton[]): { button: FilterButton; value: string } | undefined {
+  const made = chip.kind === 'pill' ? pillButton(chip.key) : undefined;
+  const button = made && buttons.find(({ queryPart }) => queryPart === made.button);
+  return button && { button, value: made.value };
 }
 
 /**
- * `value` as the text inside a ClickHouse string literal, `\` and `'` backslash-escaped (as Go's `sql.Quote`): a
- * button's `...` mostly sits in quotes (`path LIKE '...%'`), so `O'Brien` stays one value.
+ * The pill of the filter button with `...` whose page answers at `url` (`page.json`'s `url`, `<page>/button?i=<index>`)
+ * for `value`: the server writes the value in as a string literal and signs it.
  */
-function literalOf(value: string): string {
-  return value.replace(/[\\']/g, '\\$&');
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+async function fetchButtonPill(url: string, value: string): Promise<Pill> {
+  const response = await fetch(`${url}&${new URLSearchParams({ value })}`);
+  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
+  const { key, label } = (await response.json()) as Pill;
+  return { key, label };
 }
 
 /** Which SQL chip is edited: its index in the chips, or `new` for the one the funnel adds. */
@@ -150,8 +144,8 @@ class FilterBar {
   #draw(): void {
     const chips = this.query.filters.chips;
     this.#editor = undefined;
-    // a button's condition shows as the button pressed, not as a chip
-    const ofButton = chips.map((chip) => (chip.kind === 'sql' ? buttonOf(chip.sql, this.#pageButtons) : undefined));
+    // a button's pill shows as the button pressed, not as a chip
+    const ofButton = chips.map((chip) => buttonOf(chip, this.#pageButtons));
     const shown = chips.flatMap((chip, index) =>
       ofButton[index] ? [] : [this.#editing === index && chip.kind === 'sql' ? this.#editorOf(chip, index) : this.#chipOf(chip, index)],
     );
@@ -162,16 +156,25 @@ class FilterBar {
     this.#buttons.hidden = this.#pageButtons.length === 0;
     this.#buttons.replaceChildren(
       ...this.#pageButtons.map((button) => {
-        const matches = ofButton.filter((match) => match?.button === button);
-        const pressed = matches.length > 0;
-        const values = matches.flatMap((match) => match!.values).join(', ');
+        const indices = chips.flatMap((_, index) => (ofButton[index]?.button === button ? [index] : []));
+        const pressed = indices.length > 0;
         const el: HTMLButtonElement = html`<button
           type="button"
           class="d-button"
           title=${button.queryPart}
-          aria-pressed=${String(pressed)}>${button.title}${values ? `: ${values}` : ''}</button>`;
+          aria-pressed=${String(pressed)}>${button.title}</button>`;
         el.addEventListener('click', () => (pressed ? this.#release(button) : void this.#press(button, el)));
-        return el;
+        if (!button.queryPart.includes('...') || !pressed) return el;
+        // a pressed `...` button: its title releases it, each value beside it asks a new one in its chip's place
+        const values = indices.map((index) => {
+          const value: HTMLButtonElement = html`<button
+            type="button"
+            class="d-button d-filter-button__value"
+            title=${`Change the value of ${button.title}`}>${ofButton[index]!.value}</button>`;
+          value.addEventListener('click', () => void this.#press(button, value, index));
+          return value;
+        });
+        return html`<span class="d-filter-button" role="group" aria-label=${button.title}>${el}${values}</span>`;
       }),
     );
   }
@@ -236,20 +239,34 @@ class FilterBar {
   }
 
   /**
-   * Adds `button`'s condition; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for, in an input box
-   * below the button (`el`), written in as `literalOf` it.
+   * Adds `button`'s pill: the one `page.json` signed, or for a button with `...` (`path ILIKE concat(..., '%')`) the
+   * one its page makes of the value the viewer is asked for, in an input box below `el`; with `index`, that pill
+   * replaces the chip there (a new value for a pressed button), the value shown first.
    */
-  async #press(button: FilterButton, el: HTMLElement): Promise<void> {
-    if (!button.queryPart.includes('...')) {
-      this.query.filters.add(button.queryPart);
+  async #press(button: FilterButton, el: HTMLElement, index?: number): Promise<void> {
+    if (!button.url) {
+      if (button.key) this.query.filters.add({ key: button.key, label: button.title });
       return;
     }
-    const value = await this.ui.showInputBox({ title: 'Parameter value', prompt: `${button.title}: ${button.queryPart}`, anchor: el });
-    if (value) this.query.filters.add(button.queryPart.replaceAll('...', () => literalOf(value)));
+    const shown = index === undefined ? undefined : this.query.filters.chips[index];
+    const value = await this.ui.showInputBox({
+      title: 'Parameter value',
+      prompt: `${button.title}: ${button.queryPart}`,
+      value: shown && buttonOf(shown, [button])?.value,
+      anchor: el,
+    });
+    if (!value) return;
+    try {
+      const pill = await fetchButtonPill(button.url, value);
+      if (index === undefined) this.query.filters.add(pill);
+      else if (this.query.filters.chips[index] === shown) this.query.filters.replace(index, { kind: 'pill', ...pill });
+    } catch (error) {
+      console.error(`Filter button ${button.title} failed:`, error);
+    }
   }
 
-  /** Removes every chip that has `button`'s condition, in one change. */
+  /** Removes every pill of `button`, in one change. */
   #release(button: FilterButton): void {
-    this.query.filters.remove((chip) => chip.kind === 'sql' && buttonOf(chip.sql, [button]) !== undefined);
+    this.query.filters.remove((chip) => buttonOf(chip, [button]) !== undefined);
   }
 }

@@ -41,9 +41,9 @@ export interface TimeModel {
 export interface FiltersModel {
   /** The chips, in the order they were added, as the URL holds them (`?f=<key>&sql=status >= 500`). */
   readonly chips: readonly FilterChip[];
-  /** Adds the SQL chip `condition` (a filter button, "Filter: Contains this value" in a table); once, when it is there already. */
+  /** Adds the SQL chip `condition` ("Filter: Contains this value" in a table); once, when it is there already. */
   add(condition: string): void;
-  /** Adds the pill `pill` (as a widget's `/pill` answered it); once, when its key is there already. */
+  /** Adds the pill `pill` (as a widget's `/pill` answered it, or a filter button's); once, when its key is there already. */
   add(pill: Pill): void;
   /** Puts `chip` in place of the chip at `index` (an edit); a SQL chip of only spaces removes it. */
   replace(index: number, chip: FilterChip): void;
@@ -62,7 +62,9 @@ export type FilterChip = PillFilter | SqlFilter;
 
 /**
  * A pill: a condition on a table that the server wrote from a widget's field and signed (`<dataUrl>/pill`); every
- * chart on that table applies it, the others say they ignore it. The client only keeps and sends its key.
+ * chart on that table applies it, the others say they ignore it. Or a filter button's condition, signed the same
+ * (`page.json`'s `key`, or `<page>/button`; `pillButton`), which every query that takes filters applies. The client
+ * only keeps and sends its key.
  */
 export interface Pill {
   /** What the URL holds (`?f=<key>`): the signed pill, its label readable in it (`pillLabel`). */
@@ -89,5 +91,5 @@ export interface ParamsModel {
   readonly onDidChange: Event<void>;
 }
 
-export { QueryHost, formatTime, parseSearch, formatSearch, pillLabel, type QueryState } from './query-impl';
+export { QueryHost, formatTime, parseSearch, formatSearch, pillLabel, pillButton, type QueryState } from './query-impl';
 export { activeQuery, type ActiveQuerySource } from './active-query';

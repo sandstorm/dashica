@@ -57,6 +57,7 @@ GET  /                            the start page (§3.4.3): shell HTML; its page
 GET  /workbench.json               menu groups, each page with its outline (below; the Explore URL with its rebuild); fetched once on boot (the one global endpoint)
 GET  /p/shop                       shell HTML (the same for every page)
 GET  /p/shop/page.json             {kind, title, defaultTime, filterBar, filterButtons, widgets}; actions with step 7+
+GET  /p/shop/button?i=<n>&value=…  the signed pill of the page's filter button <n> for a value (§3.15, step 9b)
 GET  /p/shop/api/<id>/query        widget data (Arrow), what the chart did in X-Dashica-Diagnostics (§3.8)
 GET  /p/shop/api/<id>/debug        query, EXPLAIN
 POST /p/shop/action/<id>           a Go action (§3.9)                                                        ← new
@@ -119,7 +120,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Region | Holds |
 |---|---|
 | Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
-| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles in place, pressed while their filter is set, without a chip of their own (step 8f); "Add filter" after the chips while a chart filters a table (step 8m); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m); the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
 | Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -943,28 +944,26 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
     edit, not per keystroke.
   - **Shown** while there is a chip, the page has buttons, or a chip is being added; on a page with `filterBar` only,
     as today.
-- **A filter button is pressed in place while toggled on** (step 8f, D7): its filter is a plain SQL chip in the
-  model, its text the button's `queryPart` (the `...` filled in as a string literal's text: `\` and `'`
-  backslash-escaped, as Go's `sql.Quote`, so `O'Brien` in `'...%'` stays one value); no new URL key. A pure function in
-  `filters.ts`, `buttonOf(sql, buttons)`, gives the button a SQL chip's text matches: equal to its `queryPart`, or for
-  a `queryPart` with `...` equal with a non-empty text in place of every `...` (`request__host = '...'` matches
-  `request__host = 'app.wetell.de'`, the value `app.wetell.de`, its escapes undone). Such a chip is not drawn in the chip row; the button
-  stays where it is, pressed (`aria-pressed="true"`), its `title` its `queryPart`. A `...` button shows the values
-  after its title (`Host: app.wetell.de`; several chips of it: `Host: a, b`) *(proposed)*. Pressing a pressed button
-  removes every chip that matches it, pressing it otherwise adds its chip (asking for `...` with `showInputBox`). So a
-  link with `?sql=status NOT BETWEEN 200 AND 399` opens with "Errors only" pressed and no chip. A button's filter is
-  not edited in the bar (release and press it again); on a page without that button it is a plain SQL chip
-  *(proposed)*. The SQL chips stay unsigned (D6): with `filters.sqlEnabled` on (§3.15 D16), a `?sql=`
-  link, or a `...` written outside quotes (`duration_ms >= ...`), still runs the viewer's own SQL in every chart's
-  WHERE, also while Explore is off; off, a button's chip is a 400 until the buttons are signed (D17, step 9b).
+- **A filter button is pressed in place while toggled on** (step 8f, D7; signed since step 9b, §3.15 D17): its
+  filter is a signed pill without a table (`filter.NewButton`), its condition the button's `queryPart`, a `...` in it
+  replaced by the value as a string literal (`sql.Quote`) on the server; no new URL key (`f`). A pure function in
+  `filters.ts`, `buttonOf(chip, buttons)`, gives the button a pill was made for: the key's `button` (`pillButton`)
+  equals its `queryPart`; the value is the key's `value`. Such a chip is not drawn in the chip row; the button stays
+  where it is, pressed (`aria-pressed="true"`), its `title` its `queryPart`. A pressed `...` button shows each value
+  beside its title (`Host` `app.wetell.de`, one control) *(proposed)*; a click on a value asks a new one and replaces
+  that chip in place, a click on the title removes every chip of the button. Pressing it otherwise adds its pill
+  (asking for `...` with `showInputBox`). So a link with the key of "Errors only" opens with it pressed and no chip;
+  on a page without that button it is a pill chip, labelled with the button's title (`Path: /api`) *(proposed)*. The
+  SQL chips stay unsigned (D6): with `filters.sqlEnabled` on (§3.15 D16), a `?sql=` link still runs the viewer's own
+  SQL in every chart's WHERE, also while Explore is off.
 - **The table cell menu** ("Filter: Contains this value", the timestamp entries) adds a SQL chip through `add(condition)`
   as before; each entry is now a chip of its own, removable alone. Only with `filters.sqlEnabled` (§3.15 D16).
 - **The Explore view's tab** shows the same chips; how they apply to an edited query is the Perspective concept's
   (`docs/2026-10-30-perspective.md`, "Editable SQL").
 - **Tests:** `query.test.ts` (two `sql` and `f` interleaved keep their order through `parseSearch` / `formatSearch`, a
   single old `sql` is one chip, `?sql=` none, `add(condition)` once, `replace`, `remove`), `filters.test.ts` (a SQL chip
-  from the funnel, editing a SQL and a structured chip, Escape, `buttonOf` with and without `...`, a pressed button
-  has no chip and removes its filter, a `...` button shows its values), Go: `query_state_test.go` (several `sql`, an empty one), `time_range_test.go` (`SqlClause` with
+  from the funnel, editing a SQL and a structured chip, Escape, `buttonOf` of a button's pill, a pressed button
+  has no chip and removes its filter, a `...` button shows its values and takes a new one in place), Go: `query_state_test.go` (several `sql`, an empty one), `time_range_test.go` (`SqlClause` with
   two chips). Playwright: `e2e/filter-chips.spec.ts` (a link with two `sql` shows two chips, the funnel adds one, × on
   one, a filter button toggles in place without a chip).
 
@@ -1437,6 +1436,43 @@ The maintainer decided D16–D18 after D1–D15 were built; D12 (§3.14) is buil
   `dashica` (`workbench.json` says it); vitest: the filter bar off (no funnel, a SQL chip not edited, pills and "Add
   filter" stay), the table's cell menu off.
 
+✅ **Built in 9b (2026-10-31): the filter buttons signed**, with these details and deviations:
+
+- **A button's pill** is a `filter.Pill` without table, field or op, made by `filter.NewButton(title, queryPart,
+  value)`: its condition the `queryPart`, each `...` replaced by `sql.Quote(value)`; its label the title, with
+  `: <value>` for a `...` button; `Button` (the `queryPart`) and `Value` (as typed) in the signed key, by which the
+  page finds the button again (`pillButton`, `buttonOf`) *(proposed: one key format and one URL key `f` for pills
+  and buttons; the button found by its `queryPart`, so the same button on two pages is one, and a key from another
+  page never presses a button that only shares its index)*. `filter.Open` takes a key without op when it has `Button`.
+- **`page.json`** (`dashboard.pageButtons`): a button without `...` carries `key`, its pill signed at registration
+  (a page with buttons needs `filters.secret` to register); one with `...` carries `url`
+  (`<page>/button?i=<index>`), which the client asks with `&value=`. `queryPart` stays, as the button's tooltip and
+  its identity *(proposed)*.
+- **`<page>/button`** (`dashboard.buttonHandler`): `{key, label}`; 404 for no such button, 400 for a button without
+  `...` or an empty value.
+- **Applied** by `filter.Apply` to every query that does not skip filters, a SQL file without `sql.Table` too, each
+  one Where after those of the fields; a query that skips filters names it in its Diagnostics as ignored
+  *(proposed: as it does a pill)*. Speedscope's query now opens and applies the pills too (`serveSpeedscope`), so a
+  button filters it as a SQL chip did *(proposed: also the pills on its table)*.
+- **The `...` inside quotes goes:** the value is a whole literal now, so the dashboards write `request__host = ...`,
+  `path ILIKE concat(..., '%')`, `event_original::String ILIKE concat('%', ..., '%')`; `literalOf` and the client's
+  matching of a SQL chip against a `queryPart` are gone, and a `?sql=` with a button's condition is a plain SQL chip.
+- **A number column against the quoted value** (`duration_ms >= '500'`): the existing ClickHouse test
+  `TestHandleQuery_AQuotedValueMatchesAUInt16Column` shows `=` converts the literal to the column's type; the new
+  `TestHandleQuery_AButtonsQuotedValueComparesAUInt16ColumnAsANumber` checks `>=` (`status >= '1000'` matches neither
+  200 nor 500; as text it would match both). **Open:** written, not run (the sandbox blocks ClickHouse).
+- **The client:** pressing a button without `...` adds `{key, label: title}`; one with asks the value
+  (`showInputBox` below the button) and adds the page's answer; a pressed `...` button is a group of its title
+  (releases it) and a button per value (`d-filter-button__value`: asks a new value, the old one filled in, and
+  `replace`s that chip at its index, unless the chips changed meanwhile). A refused value is logged, nothing added.
+  The buttons work with `filters.sqlEnabled` off.
+- **Tests:** Go `filter` (`NewButton`, its key back through `Open`, `Apply` to a table, another one, a SQL file
+  without table, after the fields, ignored when skipping filters), `dashboard` (`page.json`'s `key` and `url`,
+  `/button`'s pill and refusals), `widget` (a button's pill on a SQL file without table and another table, a tampered
+  pill 400 on Speedscope), the golden contract with a `...` button; vitest: `pillButton`, `buttonOf`, a button's
+  pill pressed and released, a `...` button's value fetched, shown and replaced in place, a refused value, a button
+  with SQL chips off; `e2e/filter-chips.spec.ts` (the button's `f`, a `...` button's value and its change).
+
 ## 4. Alternatives considered
 
 | Alternative | Why rejected |
@@ -1552,7 +1588,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8m ✅ | **D15 ad hoc pills** (§3.8): Go `sql.Values` (a builder query's base: its From and Where, `SELECT toString(<definition>) AS __value … GROUP BY __value ORDER BY __value LIMIT 100`, `positionCaseInsensitive(…, {__search:String}) > 0`; a SQL file's or string's result in a subquery), `httpserver.HandleValues` (JSON array of strings, `ValuesLimit` 100), `<dataUrl>/values?field=…&search=…` (`valuesHandler`: 422 as `/pill`, 400 for an unsigned pill, the time range, SQL chips and the other pills applied); the node's `table` in `page.json` (generator, golden contract); client: `filterableTables` (per table each field once, with the first chart naming it), `addFilter` (table, skipped when there is one; field; `=` / `≠`; value) and `pickValue` (`createQuickPick`, asked again 200 ms after the typing rests, the earlier request aborted), `fetchValues`, `fetchPill` exported from the `widgets` host; "Add filter" after the chips in the filter bar; `e2e/add-filter.spec.ts`. ✅ 2026-10-31 (Go vet and tests green but the ClickHouse-bound ones (sandbox; `TestHandleValues_TheValuesOfAFieldThatContainTheSearch` written, not run); vitest, typecheck, top comments green; Playwright written, not run), deviations: the pills on the asked field (its table) are left out of `/values`, so a value beside one filtered by is still offered; a SQL file's values come from its result (its own LIMIT included), since its field is a column of the result; the typed text is offered first as a value of its own ("as typed"); "Add filter" makes the filter bar show on every page with `filterBar` whose charts filter a table; the table step is skipped for one table *(all proposed)* | filters without a click on a chart |
 | 8n ✅ | **Review fixes of the batch:** `X-Dashica-Diagnostics` in ASCII (`asciiJSON`: non-ASCII as `\u` escapes, so "≠" and umlauts in pill labels survive the browser's Latin-1 reading of headers); the `page.json` test with a ClickHouse manager (nil since 8m, it panicked); a filter button's `...` value written in as a string literal's text (`literalOf`: `\` and `'` escaped, as `sql.Quote`; `buttonOf` undoes it; a replacer function, so `$'` stays text); `golang.org/x/sync` indirect in `go.mod`; one `OP_ICONS` (`widgets` host) for a chart click and "Add filter". ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: CI's `go test` of `dashica-src` runs `./...` (outer repo's `ci/test.gitlab-ci.yml`, edited, not committed here), so `lib/clickhouse`, `lib/alerting`, `lib/dashboard`, `filter`, `widget` and `explore` run there too; `go.mod` keeps its other entries `go mod tidy` would change (certmagic, rigging, goldmark …); the SQL chips stay unsigned (D6): a `?sql=` link or a `...` outside quotes still runs a viewer's own SQL *(all proposed)* | the review's findings fixed |
 | 9a ✅ | **D16 SQL chips behind `filters.sqlEnabled`** (§3.15): `config.FiltersConfig.SqlEnabled` (default false, `FILTERS__SQLENABLED`), `rendering.Dependencies.SqlEnabled`, `workbench.json`'s `sqlEnabled`; `httpserver.ParseQueryState(r, sqlEnabled)` answers a `sql` with `ErrSqlNotEnabled` (400) while it is off, so every reader of the query state refuses it before any query (`TimeRangeHandler` a struct with `SqlEnabled`); the filter bar without funnel and SQL chip editing, the table's cell menu without its SQL entries while it is off. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: also the handlers that never apply a SQL chip (alerts, `/time-range`) refuse one; Speedscope answers an unreadable query state with 400; set the flag in the file or the environment, not both (the file's key wins); the filter buttons fail with 400 while it is off until 9b; the local configs turn it on *(all proposed)* | SQL chips only where configured |
-| 9b | **D17 filter buttons signed** (§3.15): a button's condition signed in `page.json`, a `...` value made into a signed key by `<page>/button`; a pressed `...` button asks a new value and replaces its chip in place | buttons with SQL chips off |
+| 9b ✅ | **D17 filter buttons signed** (§3.15): `filter.NewButton` (a pill without table: the `queryPart`, a `...` as `sql.Quote(value)`, `Button` and `Value` signed), `Apply` puts it into every query that takes filters; `page.json`'s buttons with `key` (signed at registration) or `url` (`<page>/button?i=<index>`, `dashboard.buttonHandler`: `{key, label}`); Speedscope applies the pills; client: `pillButton`, `buttonOf(chip, buttons)` by `queryPart`, a pressed `...` button's values beside it, each asking a new value in its chip's place; `literalOf` gone; outer dashboards' `'...'` as `...` / `concat(..., '%')`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new `>=` check among them, blocked in the sandbox; Playwright written, not run), deviations: one key format and `f` for pills and buttons, the button found by its `queryPart`; `queryPart` stays in `page.json`; a page with buttons needs the secret to register; a query that skips filters names a button as ignored; Speedscope also applies the pills on its table; a pressed `...` button's values as buttons beside its title; a refused value is only logged *(all proposed)* | buttons with SQL chips off |
 | 9c | **D18 pills editable** (§3.15): alias and shown value in the signed key; `=` / `≠` and the value edited through `/pill` of a widget with the pill's table and field, in place | pills edited as in Grafana |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |

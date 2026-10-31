@@ -71,6 +71,9 @@ func (d *Builder) HasSearchBar(value bool) *Builder {
 	return &cloned
 }
 
+// FilterButton adds a button to the filter bar that filters every query that takes filters by `queryPart`
+// ("status >= 500"), as a signed pill (filter.NewButton). A `...` in it is a value the viewer types when pressing it,
+// written in as a string literal: `duration_ms >= ...`, `path ILIKE concat(..., '%')`.
 func (d *Builder) FilterButton(title string, queryPart string) *Builder {
 	cloned := *d
 	cloned.searchBar.FilterButtons = append(cloned.searchBar.FilterButtons, rendering.FilterButton{
@@ -90,12 +93,19 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 	if err != nil {
 		return PageJson{}, fmt.Errorf("mounting widgets: %w", err)
 	}
+	buttons, err := pageButtons(ctx.Deps.FilterSecret, handlerCollector.Path(), d.searchBar.FilterButtons)
+	if err != nil {
+		return PageJson{}, err
+	}
+	if err := handlerCollector.Handle("button", buttonHandler(ctx.Deps.FilterSecret, d.searchBar.FilterButtons)); err != nil {
+		return PageJson{}, fmt.Errorf("registering the filter buttons' handler: %w", err)
+	}
 	page := PageJson{
 		Kind:          "dashboard",
 		Title:         d.title,
 		DefaultTime:   d.defaultTime,
 		FilterBar:     d.searchBar.IsVisible,
-		FilterButtons: append([]rendering.FilterButton{}, d.searchBar.FilterButtons...),
+		FilterButtons: buttons,
 		Widgets:       nodes,
 	}
 	body, err := json.Marshal(page)

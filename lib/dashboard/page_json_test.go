@@ -16,7 +16,9 @@ import (
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
-// serve mounts `d` at "/p/shop" on a fresh mux, as Dashica.RegisterDashboard does.
+var testSecret = []byte("a test secret of at least thirty-two bytes")
+
+// serve mounts `d` at "/p/shop" on a fresh mux, as Dashica.RegisterDashboard does, the pills signed with testSecret.
 func serve(t *testing.T, d Dashboard) *http.ServeMux {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -24,6 +26,7 @@ func serve(t *testing.T, d Dashboard) *http.ServeMux {
 	connections := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
 		ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: connections}, zerolog.Nop()),
+		FilterSecret:            testSecret,
 	}}
 	if _, err := d.CollectHandlers(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)

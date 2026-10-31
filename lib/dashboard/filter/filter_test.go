@@ -1,4 +1,4 @@
-// Tests for TableOf, New, Sign, Open and Apply.
+// Tests for TableOf, New, NewButton, Sign, Open and Apply.
 package filter
 
 import (
@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -174,5 +175,63 @@ func TestApply_WithoutATableNone(t *testing.T) {
 	got, d := Apply(q, table, ok, []Pill{status})
 	if strings.Contains(got.Build(), "500") || !reflect.DeepEqual(d.Ignored, []string{"status = 500"}) {
 		t.Errorf("ignored %v, query %s", d.Ignored, got.Build())
+	}
+}
+
+func TestNewButton_WritesTheValueInAsAStringLiteral(t *testing.T) {
+	errorsOnly, err := NewButton("Errors", "status >= 500", "")
+	if want := (Pill{Condition: "status >= 500", Label: "Errors", Button: "status >= 500"}); err != nil || errorsOnly != want {
+		t.Errorf("without ...: %+v, %v", errorsOnly, err)
+	}
+	path, err := NewButton("Path", "path ILIKE concat(..., '%') OR referer = ...", `it's\`)
+	want := Pill{Condition: `path ILIKE concat('it\'s\\', '%') OR referer = 'it\'s\\'`, Label: `Path: it's\`, Button: "path ILIKE concat(..., '%') OR referer = ...", Value: `it's\`}
+	if err != nil || path != want {
+		t.Errorf("with ...: %+v, %v", path, err)
+	}
+	if _, err := NewButton("Errors", "status >= 500", "1"); err == nil {
+		t.Errorf("a value accepted for a button without ...")
+	}
+	if _, err := NewButton("Path", "path = ...", ""); err == nil {
+		t.Errorf("an empty value accepted")
+	}
+}
+
+func TestSignAndOpen_GiveAButtonsPillBack(t *testing.T) {
+	p, _ := NewButton("Duration", "duration_ms >= ...", "500")
+	key, err := Sign(secret, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := Open(secret, key); err != nil || got != p {
+		t.Errorf("Open: %+v, %v", got, err)
+	}
+}
+
+func TestApply_AButtonsPillToEveryQueryThatTakesFilters(t *testing.T) {
+	errorsOnly, _ := NewButton("Errors", "level = 'error' OR level = 'fatal'", "")
+	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
+	for _, q := range []sql.SqlQueryable{
+		sql.New(sql.From("http_logs")),
+		sql.New(sql.From("full_logs"), sql.OnDatabase("logs")),
+		sql.FromString("SELECT 1 WHERE {{DASHICA_FILTERS}}"),
+	} {
+		table, ok := TableOf(q, databases)
+		got, d := Apply(q, table, ok, []Pill{errorsOnly, status})
+		if !strings.Contains(got.Build(), "(level = 'error' OR level = 'fatal')") || slices.Contains(d.Ignored, "Errors") {
+			t.Errorf("%T lacks the button, ignored %v:\n%s", q, d.Ignored, got.Build())
+		}
+	}
+
+	q := sql.New(sql.From("http_logs"))
+	got, _ := Apply(q, httpLogs, true, []Pill{errorsOnly, status})
+	if want := "    (((status) = '500'))\n    AND (level = 'error' OR level = 'fatal')"; !strings.Contains(got.Build(), want) {
+		t.Errorf("the button not after the fields:\n%s", got.Build())
+	}
+
+	skipping := sql.New(sql.From("http_logs"), sql.SkipFilters())
+	table, ok := TableOf(skipping, databases)
+	got, d := Apply(skipping, table, ok, []Pill{errorsOnly})
+	if strings.Contains(got.Build(), "level") || !reflect.DeepEqual(d.Ignored, []string{"Errors"}) {
+		t.Errorf("skips filters: ignored %v, query %s", d.Ignored, got.Build())
 	}
 }

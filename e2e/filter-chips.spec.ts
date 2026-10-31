@@ -1,18 +1,20 @@
-// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e and 8f): a link's `f` and `sql`
-// show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the charts, the
-// funnel adds a SQL chip, a chip's × removes it from the URL, a filter button toggles in place, without a chip.
+// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f and 9b): a link's `f` and
+// `sql` show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the charts,
+// the funnel adds a SQL chip, a chip's × removes it from the URL, a filter button toggles in place as a signed pill,
+// without a chip; a button with `...` asks its value, shows it beside it and takes a new one in its place.
 //
 // The page defaults to the Sandstorm instance's "/clickhouse/table_sizes": its tables use `FromFileWithoutFilters`,
 // so every chart ignores every pill. Another page: DASHICA_E2E_FILTER_PAGE. The pills are signed by a chart of
 // "/templates/oekokiste-caddy-ingress" (another: DASHICA_E2E_PILL_PAGE). The filter button test runs
-// on "/p_wetell/app" (its button "Errors only"); another page and button: DASHICA_E2E_BUTTON_PAGE,
-// DASHICA_E2E_BUTTON.
+// on "/p_wetell/app" (its buttons "Errors only" and, with `...`, "Path Prefix"); another page and buttons:
+// DASHICA_E2E_BUTTON_PAGE, DASHICA_E2E_BUTTON, DASHICA_E2E_VALUE_BUTTON.
 import {expect, test, type Page} from '@playwright/test';
 
 const PAGE = process.env.DASHICA_E2E_FILTER_PAGE || '/clickhouse/table_sizes';
 const PILL_PAGE = process.env.DASHICA_E2E_PILL_PAGE || '/templates/oekokiste-caddy-ingress';
 const BUTTON_PAGE = process.env.DASHICA_E2E_BUTTON_PAGE || '/p_wetell/app';
 const BUTTON = process.env.DASHICA_E2E_BUTTON || 'Errors only';
+const VALUE_BUTTON = process.env.DASHICA_E2E_VALUE_BUTTON || 'Path Prefix';
 
 /** A widget of `page.json` as far as these tests read it. */
 interface Node {
@@ -120,11 +122,36 @@ test('a filter button toggles in place, pressed while its filter is set, without
     await button.click();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
     await expect(chips).toHaveCount(0);
-    await expect(page).toHaveURL(/[?&]sql=/);
+    await expect(page).toHaveURL(/[?&]f=/);
+    await expect(page).not.toHaveURL(/[?&]sql=/);
 
     await page.reload();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
     await button.click();
     await expect(chips).toHaveCount(0);
-    await expect(page).not.toHaveURL(/[?&]sql=/);
+    await expect(page).not.toHaveURL(/[?&]f=/);
+});
+
+test('a filter button with `...` asks its value, shows it beside it, and a click on it takes a new one', async ({page}) => {
+    await page.goto(BUTTON_PAGE);
+    const bar = page.getByTestId('wb-filter-bar');
+    const button = bar.getByRole('button', {name: VALUE_BUTTON, exact: true});
+    await button.click();
+    const field = page.getByRole('textbox', {name: 'Parameter value'});
+    await field.fill("/it's");
+    await field.press('Enter');
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    const value = bar.getByRole('group', {name: VALUE_BUTTON}).locator('.d-filter-button__value');
+    await expect(value).toHaveText("/it's");
+    await expect(bar.getByTestId('filter-chip')).toHaveCount(0);
+    const first = new URL(page.url()).searchParams.getAll('f');
+    expect(first).toHaveLength(1);
+
+    await value.click();
+    await expect(field).toHaveValue("/it's");
+    await field.fill('/api');
+    await field.press('Enter');
+    await expect(value).toHaveText('/api');
+    await expect.poll(() => new URL(page.url()).searchParams.getAll('f')).not.toEqual(first);
+    expect(new URL(page.url()).searchParams.getAll('f')).toHaveLength(1);
 });
