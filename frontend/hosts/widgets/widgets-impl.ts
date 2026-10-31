@@ -5,7 +5,7 @@ import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { ActiveQuerySource, FilterOp, Pill, QueryApi } from '../query/query';
-import type { MenuAnchor, QuickPickItem, UiApi } from '../ui/ui';
+import type { MenuAnchor, QuickPickIcon, QuickPickItem, UiApi } from '../ui/ui';
 import type { FilterCandidate, PillSource, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
@@ -234,16 +234,22 @@ interface FilterPick extends QuickPickItem, FilterCandidate {
   readonly op: FilterOp;
 }
 
-const FILTER_ICON = { svg: createElement(Filter).outerHTML, label: 'Filter' };
-const EXCLUDE_ICON = { svg: createElement(Minus).outerHTML, label: 'Exclude' };
+/**
+ * The quick pick icon of each op, shared by a chart click (`filterPicks`) and "Add filter": a filter icon to filter by
+ * (`eq`), a minus to exclude (`ne`).
+ */
+export const OP_ICONS: Readonly<Record<FilterOp, QuickPickIcon>> = {
+  eq: { svg: createElement(Filter).outerHTML, label: 'Filter' },
+  ne: { svg: createElement(Minus).outerHTML, label: 'Exclude' },
+};
 
 /** For each candidate in order, "<field> = <value>" to filter by it (a filter icon), then to exclude it (a minus icon). */
 function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
   return candidates.flatMap(({ fieldId, value }) => {
     const label = `${fieldId} = ${value}`;
     return [
-      { label, icon: FILTER_ICON, fieldId, value, op: 'eq' as const },
-      { label, icon: EXCLUDE_ICON, fieldId, value, op: 'ne' as const },
+      { label, icon: OP_ICONS.eq, fieldId, value, op: 'eq' as const },
+      { label, icon: OP_ICONS.ne, fieldId, value, op: 'ne' as const },
     ];
   });
 }

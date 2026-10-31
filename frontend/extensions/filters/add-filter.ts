@@ -1,9 +1,8 @@
 // See addFilter.
-import { Filter, Minus, createElement } from 'lucide';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { FilterOp, QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
-import { fetchPill, type PillSource } from '../../hosts/widgets/widgets';
+import { OP_ICONS, fetchPill, type PillSource } from '../../hosts/widgets/widgets';
 
 /** A table the shown page's charts filter (`page.json`'s `table` of a widget), and the fields they filter it by. */
 export interface FilterableTable {
@@ -38,9 +37,6 @@ export function filterableTables(widgets: readonly WidgetNode[]): FilterableTabl
   return tables;
 }
 
-const FILTER_ICON = { svg: createElement(Filter).outerHTML, label: 'Filter' };
-const EXCLUDE_ICON = { svg: createElement(Minus).outerHTML, label: 'Exclude' };
-
 /**
  * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15): asks in quick
  * picks at `anchor` for one of `tables` (none asked when there is only one), one of its fields, `=` or `≠`, and a value
@@ -60,8 +56,8 @@ export async function addFilter(ui: Pick<UiApi, 'showQuickPick' | 'createQuickPi
   if (!field) return;
   const op = await ui.showQuickPick(
     [
-      { label: `${field.field} = …`, icon: FILTER_ICON, op: 'eq' as FilterOp },
-      { label: `${field.field} ≠ …`, icon: EXCLUDE_ICON, op: 'ne' as FilterOp },
+      { label: `${field.field} = …`, icon: OP_ICONS.eq, op: 'eq' as FilterOp },
+      { label: `${field.field} ≠ …`, icon: OP_ICONS.ne, op: 'ne' as FilterOp },
     ],
     { anchor, title: 'Add filter' },
   );

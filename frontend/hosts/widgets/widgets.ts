@@ -147,5 +147,5 @@ export interface Diagnostics {
   readonly skipped?: string;
 }
 
-export { WidgetsHost, fetchPill, showWidgetError, widgetTitle } from './widgets-impl';
+export { OP_ICONS, WidgetsHost, fetchPill, showWidgetError, widgetTitle } from './widgets-impl';
 export { ChartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';

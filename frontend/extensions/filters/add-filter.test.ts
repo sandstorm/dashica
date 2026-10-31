@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
+import { OP_ICONS } from '../../hosts/widgets/widgets';
 import { addFilter, fetchValues, filterableTables, pickValue } from './add-filter';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default') =>
@@ -89,6 +90,15 @@ describe('addFilter', () => {
     const asked = fetched.find((url) => url.pathname === '/p/shop/api/1/values')!;
     expect([asked.searchParams.get('field'), asked.searchParams.get('search'), asked.searchParams.get('time')]).toEqual(['host', '', '1h']);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');
+  });
+
+  it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
+    void addFilter(quickInput, query, filterableTables([audit]), anchor);
+
+    await pick('action');
+    await vi.waitFor(() => expect(options()).toHaveLength(2));
+    expect(options().map((o) => o.querySelector('[role=img]')?.innerHTML)).toEqual([OP_ICONS.eq.svg, OP_ICONS.ne.svg]);
+    expect(options().map((o) => o.querySelector('[role=img]')?.getAttribute('aria-label'))).toEqual([OP_ICONS.eq.label, OP_ICONS.ne.label]);
   });
 
   it('asks no table when the page has one, and adds nothing on Escape', async () => {
