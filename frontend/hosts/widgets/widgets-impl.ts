@@ -112,8 +112,9 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
     return this.host.render(el, child);
   }
 
-  showMenu(anchor: HTMLElement): void {
-    this.ui.showContextMenu('widget/context', { anchor, title: this.widget.type, context: this, args: [this] });
+  showMenu(menuId: string, anchor: MenuAnchor, context?: object): void {
+    const shown = context ? { widget: this.widget, url: (path: string) => this.url(path), lastResult: this.lastResult, ...context } : this;
+    this.ui.showContextMenu(menuId, { anchor, title: this.widget.type, context: shown, args: [shown] });
   }
 
   addFilter(fieldId: string, op: FilterOp, value: string): void {

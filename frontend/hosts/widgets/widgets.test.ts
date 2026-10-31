@@ -109,13 +109,15 @@ describe('WidgetsHost', () => {
       expect(ctx.url('/speedscope-query')).toMatch(/^\/p\/shop\/api\/1\/speedscope-query\?time=24h$/);
     });
 
-    it('shows the menu widget/context for the widget, with what it queried last', async () => {
+    it('shows a menu for the widget, with what it queried last', async () => {
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
       await ctx.query();
       const anchor = document.body.appendChild(document.createElement('button'));
-      ctx.showMenu(anchor);
-      const [{ menuId, options }] = testbed.menus;
+      ctx.showMenu('widget/context', anchor);
+      ctx.showMenu('shop/rows', { x: 10, y: 20 });
+      const [{ menuId, options }, rows] = testbed.menus;
       expect(menuId).toBe('widget/context');
+      expect(rows).toMatchObject({ menuId: 'shop/rows', options: { anchor: { x: 10, y: 20 }, args: [options.args![0]] } });
       expect(options.title).toBe('timeBar');
       const context = options.args![0] as WidgetMenuContext;
       expect(context.widget).toBe(requests);

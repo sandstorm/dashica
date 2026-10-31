@@ -1,9 +1,10 @@
 import { html } from 'htl';
 import { DataType } from 'apache-arrow';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
-import type { CellComponent, ColumnDefinition, RowComponent } from 'tabulator-tables';
+import type { CellComponent, ColumnComponent, ColumnDefinition, RowComponent } from 'tabulator-tables';
 import { Braces, Copy, Maximize2, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
+import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import './table.css';
 
@@ -456,17 +457,56 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   return {onCellEnter, onCellMove, onCellLeave};
 }
 
+/** Shows the menu `menuId` at `anchor` for `context`, as `WidgetContext.showMenu` does for a widget. */
+export type ShowTableMenu = (menuId: string, anchor: MenuAnchor, context: object) => void;
+
+/** What the menu `table/cell` is shown for: a cell, by its column's name and its value. */
+export interface TableCellMenuContext {
+  readonly column: string;
+  readonly value: unknown;
+  /** Whether the column holds timestamps (a time type, or named `timestamp`). */
+  readonly timestamp: boolean;
+  /** Whether a click on a cell selects (the floating bar then has "Filter by …" / "Exclude …"). */
+  readonly selecting: boolean;
+}
+
+/** What the menu `table/header` is shown for: a column, by its name, and how to size the columns to their rows. */
+export interface TableHeaderMenuContext {
+  readonly column: string;
+  /** Sizes this column to its visible values. */
+  autoSize(): void;
+  /** Sizes every column to its visible values. */
+  autoSizeAll(): void;
+}
+
+// A column's title with its menu button, which shows `table/header` for it (a click on it does not sort)
+function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTableMenu): HTMLElement {
+  const size = (c: ColumnComponent) => c.setWidth(calculateSizeOfColumn(c.getTable().getRows('visible'), c.getField()));
+  const context: TableHeaderMenuContext = {
+    column: column.getField(),
+    autoSize: () => size(column),
+    autoSizeAll: () => column.getTable().getColumns().forEach(size),
+  };
+  const button: HTMLButtonElement = html`<button type="button" class="d-table__header-menu" title="Column menu" aria-label=${`Menu of ${title}`} aria-haspopup="menu"
+    onclick=${(event: MouseEvent) => {
+      event.stopPropagation();
+      showMenu('table/header', button, context);
+    }}>⋮</button>`;
+  return html`<span class="d-table__header-title">${title}${button}</span>`;
+}
+
 /**
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
  * tooltips that can be pinned, and a details panel for the selected rows. With `select`, a click on a cell of a
  * column in `props.categories` selects its value, its column's name the field id; a NULL selects nothing, and a Map,
- * Array or Tuple column (Arrow's map, list, struct) holds no category. A cell's menu "Filter: …" dispatches
- * `dashica-add-filter` with its SQL condition, bubbling up from the cell.
+ * Array or Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows
+ * the menu `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
+ * `TableHeaderMenuContext`); extensions add their entries there (the `table` extension: SQL filters, auto-size).
  */
 export function drawTable(
   queryResult: QueryResult,
   props: TableProps,
-  select?: WidgetContext['select'],
+  { select, showMenu }: { select?: WidgetContext['select']; showMenu?: ShowTableMenu } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
@@ -477,102 +517,7 @@ export function drawTable(
   let selectedRecords: Record<string, any>[] = [];
   let panelFullscreen = false;
 
-  // Build timestamp-specific context menu
-  const timestampContextMenu = (fieldName: string) => [
-    {
-      label: "Filter: Equals this timestamp",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} = '${value}'`
-        }));
-      }
-    },
-    ...timeWindowMenuItems(fieldName)
-  ];
-
-  // The SQL entries of a timestamp's menu that filter to a window around it
-  const timeWindowMenuItems = (fieldName: string) => [
-    {
-      label: "Filter: Time ±5 minutes",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        const dt = new Date(value);
-        const startSec = (dt.getTime() - 5 * 60 * 1000) / 1000;
-        const endSec = (dt.getTime() + 5 * 60 * 1000) / 1000;
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} BETWEEN ${startSec} AND ${endSec}`
-        }));
-      }
-    },
-    {
-      label: "Filter: Time ±1 hour",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        const dt = new Date(value);
-        const startSec = (dt.getTime() - 60 * 60 * 1000) / 1000;
-        const endSec = (dt.getTime() + 60 * 60 * 1000) / 1000;
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} BETWEEN ${startSec} AND ${endSec}`
-        }));
-      }
-    },
-    {
-      label: "Filter: Time ±24 hours",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        const dt = new Date(value);
-        const startSec = (dt.getTime() - 24 * 60 * 60 * 1000) / 1000;
-        const endSec = (dt.getTime() + 24 * 60 * 60 * 1000) / 1000;
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} BETWEEN ${startSec} AND ${endSec}`
-        }));
-      }
-    }
-  ];
-
-  // Build general context menu
-  const generalContextMenu = (fieldName: string) => [
-    {
-      label: "Filter: Equals this value",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} = '${value}'`
-        }));
-      }
-    },
-    {
-      label: "Filter: Not equals this value",
-      action: function(e: any, cell: CellComponent) {
-        const value = cell.getValue();
-        cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-          bubbles: true,
-          detail:`${fieldName} != '${value}'`
-        }));
-      }
-    },
-    containsMenuItem(fieldName)
-  ];
-
-  const containsMenuItem = (fieldName: string) => ({
-    label: "Filter: Contains this value",
-    action: function(e: any, cell: CellComponent) {
-      const value = cell.getValue();
-      cell.getElement().dispatchEvent(new CustomEvent('dashica-add-filter', {
-        bubbles: true,
-        detail:`${fieldName} LIKE '%${value}%'`
-      }));
-    }
-  });
-
-  // With `select`, a click on a cell of a category column selects (see the cellClick handler below); the menus of a
-  // table that selects keep the SQL entries no filter op says
+  // With `select`, a click on a cell of a category column selects (see the cellClick handler below)
   const selecting = select !== undefined;
   const categories = new Set(
     (queryResult?.schema?.fields ?? [])
@@ -584,8 +529,10 @@ export function drawTable(
 
   // Build columns with timestamp formatting
   const columns: ColumnDefinition[] = [];
+  const timestampColumns = new Set<string>();
   queryResult?.schema?.fields?.forEach((field: any) => {
     const isTimestamp = DataType.isTimestamp(field) || field.name === 'timestamp';
+    if (isTimestamp) timestampColumns.add(field.name);
 
     if (isTimestamp) {
       columns.push({
@@ -613,14 +560,12 @@ export function drawTable(
           return el;
         },
         cssClass: selectable(field.name) ? 'd-table__selectable' : undefined,
-        contextMenu: selecting ? timeWindowMenuItems(field.name) : timestampContextMenu(field.name)
       });
     } else {
       columns.push({
         title: field.name,
         field: field.name,
         cssClass: selectable(field.name) ? 'd-table__selectable' : undefined,
-        contextMenu: selecting ? [containsMenuItem(field.name)] : generalContextMenu(field.name)
       });
     }
   });
@@ -734,24 +679,8 @@ export function drawTable(
       headerFilter: "input", // Add filter input to all column headers
       headerFilterPlaceholder: "Filter...",
       tooltip: false, // replaced by custom sticky tooltip (see cellMouseEnter below)
-      headerMenu: [
-        {
-          label: "Auto-size column (based on visible data)",
-          action: function(e, column) {
-            const visibleRows = column.getTable().getRows("visible");
-            column.setWidth(calculateSizeOfColumn(visibleRows, column.getField()));
-          }
-        },
-        {
-          label: "Auto-size all columns (based on visible data)",
-          action: function(e, column) {
-            const visibleRows = column.getTable().getRows("visible");
-            column.getTable().getColumns().forEach(c => {
-              c.setWidth(calculateSizeOfColumn(visibleRows, c.getField()));
-            })
-          }
-        }
-      ]
+      // the column's menu button: the menu `table/header`
+      titleFormatter: showMenu ? (cell) => headerTitle(cell.getValue(), cell.getColumn(), showMenu) : undefined,
     }
   });
 
@@ -759,6 +688,15 @@ export function drawTable(
   tabulatorTable.on("rowSelectionChanged", (data, rows) => {
     selectedRecords = data;
     showSelection();
+  });
+
+  // a right click on a cell: the menu `table/cell`
+  tabulatorTable.on("cellContext", (e: UIEvent, cell: CellComponent) => {
+    if (!showMenu) return;
+    e.preventDefault();
+    const { clientX: x, clientY: y } = e as MouseEvent;
+    const context: TableCellMenuContext = { column: cell.getField(), value: cell.getValue(), timestamp: timestampColumns.has(cell.getField()), selecting };
+    showMenu('table/cell', { x, y }, context);
   });
 
   tabulatorTable.on("cellClick", (e: UIEvent, cell: CellComponent) => {

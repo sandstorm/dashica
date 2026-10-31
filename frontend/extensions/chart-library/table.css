@@ -17,6 +17,21 @@
 }
 
 /* the day after a timestamp's time */
+.d-table__header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* A column header's menu button: the menu `table/header` (see headerTitle in table.ts). */
+.d-table__header-menu {
+  border: 0;
+  padding: 0 0.25rem;
+  background: none;
+  color: var(--color-text-muted, inherit);
+  cursor: pointer;
+}
+
 .d-table__date {
     opacity: 0.6;
     font-size: 0.9em;

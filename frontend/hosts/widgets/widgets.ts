@@ -59,8 +59,12 @@ export interface WidgetContext {
   url(path: string): string;
   /** Renders `child` (a grid's area, a group's widget) into `el`. */
   renderChild(el: HTMLElement, child: WidgetNode): Disposable;
-  /** Pops up the menu `widget/context` at `anchor`; its context is a `WidgetMenuContext`. */
-  showMenu(anchor: HTMLElement): void;
+  /**
+   * Pops up the menu `menuId` at `anchor` (an element, or a point such as a right click's), for this widget: its
+   * context and its entries' argument are the widget's `WidgetMenuContext` with the fields of `context` (a table
+   * cell's column and value). The chart frame's "More" shows `widget/context`, a table's cell `table/cell`.
+   */
+  showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
   /** Adds the structured filter `fieldId` `op` `value` to the page (`fieldId`: a column's alias). */
   addFilter(fieldId: string, op: FilterOp, value: string): void;
   /** Selects `selection` on this widget, in place of any other selection on the page. */

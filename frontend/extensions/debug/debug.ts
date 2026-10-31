@@ -2,7 +2,8 @@ import { html } from 'htl';
 import { instance as viz } from '@viz-js/viz';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { drawTable } from '../chart-library/table';
+import type { MenuAnchor } from '../../hosts/ui/ui';
+import { drawTable, type ShowTableMenu } from '../chart-library/table';
 import './debug.css';
 
 /**
@@ -21,7 +22,9 @@ export const debug: Extension = {
         loading?.abort();
         loading = new AbortController();
         panel.show(true);
-        await showDebug(panel.body, widget, loading.signal);
+        // its result table's menus (`table/cell`, `table/header`)
+        const showMenu = (menuId: string, anchor: MenuAnchor, context: object) => ui.showContextMenu(menuId, { anchor, title: 'Debug', context, args: [context] });
+        await showDebug(panel.body, widget, showMenu, loading.signal);
       }),
     );
     subscriptions.push({ dispose: () => loading?.abort() });
@@ -41,7 +44,7 @@ interface DebugInfo {
 }
 
 /** Fills `el` with what `widget` queried; a failed request shows its error there. */
-async function showDebug(el: HTMLElement, widget: WidgetMenuContext, signal: AbortSignal): Promise<void> {
+async function showDebug(el: HTMLElement, widget: WidgetMenuContext, showMenu: ShowTableMenu, signal: AbortSignal): Promise<void> {
   el.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
   let info: DebugInfo;
   try {
@@ -80,7 +83,7 @@ async function showDebug(el: HTMLElement, widget: WidgetMenuContext, signal: Abo
     ${section('Clickhouse Summary (Legacy)', false, pre(JSON.stringify(widget.lastResult?.clickhouseSummary ?? null, null, 4)))}
   </div>`);
 
-  if (widget.lastResult) results.append(drawTable(widget.lastResult, { height: 400 }));
+  if (widget.lastResult) results.append(drawTable(widget.lastResult, { height: 400 }, { showMenu }));
   else results.textContent = 'The chart has not queried yet.';
   await showPipeline(pipeline, info.explainPipeline);
 }

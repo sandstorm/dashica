@@ -47,11 +47,13 @@ test('a click on a table cell selects its value; "Exclude" adds it as ≠; its m
     const cell = frame.locator(`.tabulator-cell.d-table__selectable[tabulator-field="${COLUMN}"]`).first();
     await expect(cell).toBeVisible();
 
+    // a right click shows the menu table/cell
     await cell.click({button: 'right'});
-    await expect(page.locator('.tabulator-menu-item')).toHaveText(['Filter: Contains this value']);
+    const menu = page.getByRole('menu');
+    await expect(menu.getByRole('menuitem')).toHaveText(['Filter: Contains this value']);
     // a click outside the menu closes it
     await frame.getByText(TABLE, {exact: true}).click();
-    await expect(page.locator('.tabulator-menu-item')).toHaveCount(0);
+    await expect(menu).toHaveCount(0);
 
     await cell.click();
     const floating = page.getByRole('toolbar', {name: 'Selection'});

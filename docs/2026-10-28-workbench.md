@@ -174,7 +174,7 @@ ctx.state                                  // the QueryApi: time / filters / par
 ctx.state.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
-ctx.showMenu(anchor)                       // the menu `widget/context` (Debug, …)
+ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
 ctx.addFilter(fieldId, op, value)          // click-to-filter (§3.8); fieldId: the clicked column's alias
 ctx.select({kind, fieldId, value, anchor}) // the page's one selection (§3.8, step 6.7); ctx.clearSelection()
 ctx.choose(at, candidates)                 // a menu "Select" of candidates; the chosen one is selected (step 6.8)
@@ -491,8 +491,9 @@ its GROUP BY fields, or all its selects for raw rows, without counts and time bu
 list or struct holds no category on the client either. **Deviation:** a SQL-file table has no categories, since its
 output columns are only in its text, so its cells select nothing (open question 8). The 6.6 entries "Filter by …" /
 "Exclude …" leave the cell menu: it keeps "Filter: Contains this value", a timestamp column its "Time ±…" entries.
-`dashica-add-filter` carries only SQL conditions again. Debug's table passes no `select`, selects nothing and keeps
-all its SQL entries. Tests: a click per chart type in its extension's test, through Plot's real pointer (`chart-library/plot-testing.ts`
+Since 2026-10-31 these entries are the `table` extension's in the menu `table/cell` (below, "Menu ids"), their
+commands add to the SQL filter themselves, and `dashica-add-filter` is gone. Debug's table passes no `select`,
+selects nothing and keeps all its SQL entries. Tests: a click per chart type in its extension's test, through Plot's real pointer (`chart-library/plot-testing.ts`
 moves the mouse onto a mark, waits a frame, presses and clicks; it gives jsdom an empty `getBBox` for Plot's tip):
 the candidates in order, also a single one, choosing one and the floating bar, a second click, measures, time
 buckets and NULL never offered (`bar-vertical.test.ts`), a mark's facet, the drag area (`time-bar.test.ts`,
@@ -627,7 +628,13 @@ interface WidgetsApi {
 Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
 expects one. Menu ids: `page/title` (page actions), `widget/context` (a chart's menu: debug), `widget/selection` (the floating bar
 on a chart selection: zoom, filter, show rows, actions), `table/row` (a row's menu),
-`dashboards/entry` (a menu entry: favorite). A menu of the moment needs no
+`dashboards/entry` (a menu entry: favorite), `table/cell` (a table cell's menu: its SQL filters) and `table/header` (a
+column header's menu button: auto-size). **Deviation (2026-10-31):** `table/cell` opens on a right click, as the
+cell's Tabulator menu did before it became a registered menu; Tabulator's own menus are gone. A table shows them through
+`ctx.showMenu(menuId, anchor, context)`: the widget's `WidgetMenuContext` with the cell's (`TableCellMenuContext`:
+column, value, timestamp, selecting) or the header's fields (`TableHeaderMenuContext`: column, `autoSize`,
+`autoSizeAll`); Debug's result table through `ui.showContextMenu` with the cell's or header's alone. The `table`
+extension contributes the entries (commands `table.filter…`, `table.autoSizeColumn(s)`). A menu of the moment needs no
 id (reworked 2026-10-31): `ui.showChoices(entries, {anchor, title})` shows `{label, run}` entries in the same list,
 one menu at a time with the registered ones (no entries leave the open menu, a registered menu without entries closes
 it); a chart's candidates for a selection go through it
