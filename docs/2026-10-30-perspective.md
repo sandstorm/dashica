@@ -42,7 +42,7 @@ connection, read-only. Guiding principle (maintainer): the least machinery that 
 | Step | Where | What |
 |---|---|---|
 | Query | `lib/httpserver/query_new.go`, `QueryHandler.HandleQuery` | builds SQL from the widget's `sql.SqlQueryable`; unless the query says `ShouldSkipFilters()`, appends `filters.SqlClause(timeRange)` as one more WHERE (`timestamp >= … AND timestamp <= …` plus free SQL); rebakes auto buckets; ClickHouse answers in Arrow (`output_format_arrow_compression_method=none`) |
-| Filters | `lib/dashboard/widget/widget_common.go`, `applyFilters` | the page's structured filters (`f`) as the chart interprets them: its own `ApplyFilters`, else `filter.Apply` on its dimensions, which adds a WHERE on the dimension's **definition** (`(replace(customer_project, …)) = {__f0:String}`) or on a column of the base table |
+| Filters | `lib/dashboard/widget/widget_common.go`, `queryHandler` | the page's pills (`f`) on the chart's table (since workbench step 8e: `filter.Apply`, each pill a condition the server wrote and signed, `(replace(customer_project, …)) = 'acme'`, workbench concept §3.8) |
 | Headers | same | `X-Dashica-Resolved-Time-Range`, `X-Dashica-Bucket-Size` (only when the query has an `AutoBucket` field), `X-Dashica-Diagnostics`, `X-Clickhouse-Summary`, `X-Dashica-Alert-If` |
 | Fetch | `frontend/hosts/widgets/widgets-impl.ts`, `fetchQueryResult` | `Arrow.tableFromIPC(response)` into an `apache-arrow` `Table` |
 

@@ -525,17 +525,24 @@ the server made:
 
   ```go
   sql.Field("replace(customer_project, 'customer-', '')").WithAlias("customer").
-      FilterAs(func(value string) string { return "customer = " + sql.Quote("customer-"+value) })
+      FilterAs(func(value string) string { return "customer_project = " + sql.Quote("customer-"+value) })
   ```
 
+  A pill applies to every chart on its table, so its condition must hold on the table: a SQL file's field that is
+  only an output alias (`extract(message, 'reason=([^ ]+)') AS reason`) says its expression with `FilterAs`, else the
+  pill fails the other charts on that table (`UNKNOWN_IDENTIFIER`).
+
   `sql.Quote` writes a ClickHouse string literal: `'…'`, with `\` and `'` escaped by a backslash. A field that cannot
-  filter (a count, a time bucket) answers 422; the widget's props in `page.json` say which of its fields can filter,
-  so the quick pick offers only those.
+  filter (a count, a time bucket, any field of a chart without a table) answers 422; with `FilterAs`, `ne` is
+  `NOT (<its condition>)`. The widget's node in `page.json` says which of its fields can filter, so the quick pick
+  offers only those: `filterable` beside `dataUrl` (the aliases of its dimensions that are categories, when its query
+  has a table and does not skip filters) *(proposed: on the node, not in each type's props, since every chart has it;
+  it replaces the table's `categories` prop)*.
 - **The key** holds the connection, `database.table`, the condition and an HMAC (`crypto/hmac`, SHA-256) over them,
   made with `filters.secret` from `dashica_config`. The secret is **required**: the server refuses to start without
   it. It is never in a checked-in file: the checked-in `*-production.yaml` names the environment variable
   (`FILTERS__SECRET`, as it does for `CLICKHOUSE__DEFAULT__PASSWORD`). The label (the chip's text, `customer = acme`)
-  travels unsigned beside the key. The URL keeps `?f=<key>`, repeatable, in chip order with `sql`.
+  travels beside the key in `/pill`'s answer. The URL keeps `?f=<key>`, repeatable, in chip order with `sql`.
 - **Checked on every request:** a pill whose HMAC does not match (tampered, unsigned, made with another secret)
   fails the request with 400.
 - **A chart applies a pill when its base table is the pill's table** (`sql.From`, with database and connection): the
@@ -544,14 +551,46 @@ the server made:
 - **A SQL file takes pills only when it names its table:** `sql.FromFile("x.sql", sql.Table("default.http_logs"))`.
   Without `sql.Table` it takes none, but still the time range and the SQL chips.
 - **Pills on the same table and field combine:** the `eq` ones OR-ed, the `ne` ones AND-ed; a pill holds one value.
-  *(proposed)* the key also carries the field's alias, signed, so the server knows which pills share a field.
+  *(proposed)* the key also carries the field's alias, signed, so the server knows which pills share a field (built so
+  in 8e).
 - **SQL chips** (`?sql=`) stay as they are (a feature flag later).
 - **What goes:** `filter.Apply`'s rule of the chart's own fields by alias, the base-table columns from `DESCRIBE
   TABLE` (`Client.Columns`, `Manager.Columns`, `filter.Columns`, the cache and its `singleflight`), the values bound
   as `{__f<i>:String}`, the unused `withFilters` interface, the `.Filterable` ideas. `Diagnostics` stays.
 
-**To check** (step 8e, against CI's ClickHouse): a quoted literal compares with the column types the bound `String`
-did (below, checked 2026-10-30 for parameters); `status = '500'` against a `UInt16` column.
+✅ **Built in 8e (2026-10-31)**, with these details and deviations:
+
+- **The key** is `<payload>.<mac>`: the pill as JSON (`connection`, `table`, `field`, `op`, `condition`, `label`) and
+  its HMAC-SHA256 over the payload's text, each in unpadded base64url (`filter.Sign`, `filter.Open`). *(proposed)* The
+  label is inside the signed payload, so the URL needs only `f` and a reloaded page reads each chip's label from its
+  key (`pillLabel` in `query-impl.ts`); nothing reads the label as SQL.
+- **`filters.secret`** (`config.FiltersConfig`) is checked by `dashica.New`, not by `LoadConfig`, so the db tools in
+  `cmd/` and the test server load configs without it; *(proposed)* it must have at least 32 characters
+  (`openssl rand -hex 32`). `rendering.Dependencies.FilterSecret` carries it to the handlers.
+- **A table** is `filter.Table{Connection, Name}`: the query's connection (`OnDatabase`, else `default`) and its
+  `sql.From` / `sql.Table`, a name without database in that connection's database from `dashica_config`
+  (`clickhouse.Manager.Database`), so `full_logs` and `monitoring.full_logs` on Solarwatt are one table. A From that
+  is no plain `[database.]table` (a subquery) is none; `sql.Table` on a builder query has no effect.
+  `sql.FromFile(path, opts...)` takes options as `With` does.
+- **Applying** (`filter.Apply`): the pills on the chart's table, grouped by field and op in the order of their first
+  pill, each group one Where (`eq` OR-ed, `ne` AND-ed); the others named by label in Diagnostics. A query that skips
+  filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
+  answers the first one that does not open with 400, also for the charts it does not apply to).
+- **The client** (8e): a pick in `offerFilters` asks the widget's `/pill` (`WidgetsApi.offerFilters(at, candidates,
+  state, widget)`, the Explore view passes its chart) and adds `{key, label}` (`FiltersModel.add(pill)`); a failed
+  answer adds nothing and goes to the console. A pill chip shows its label and ×; it is not edited (its condition is
+  the server's) and the `=` / `≠` flip goes *(proposed)*. `WidgetContext.addFilter` goes.
+- **The Explore preview** (`lib/explore`) still drops `f`: its widget comes from the request.
+- **Tests:** `sql` (Quote, Condition, FilterAs, TableOf), `filter` (TableOf, New, Sign / Open and every refused
+  key, Apply's grouping and two bases on one table), `widget` (`/pill`, its 422 and 400, pills applied and ignored,
+  a SQL file with `sql.Table`, a tampered pill 400, `filterableFields`), `config` (the secret's length); vitest for the
+  chip model, the filter bar, `offerFilters` asking `/pill` (`widgetTestbed` answers every `/pill`, `pill(…)` gives
+  its chip). Playwright (written, not run): `e2e/filter-chips.spec.ts` signs its pills through a chart's `/pill`, an
+  unsigned `f` fails the charts with 400.
+
+**To check** (against CI's ClickHouse; written as `query_filters_e2e_test.go`, not run in the sandbox): a quoted
+literal compares with the column types the bound `String` did (below, checked 2026-10-30 for parameters):
+`status = '500'` against a `UInt16` column, `'abc'` fails, a value with quotes stays one literal.
 
 **History (6.3 – 7b, replaced by step 8e):** until 8e a filter was `{id, op, value}` (`?f=status:eq:500`), its value
 bound as a ClickHouse parameter, and each chart interpreted the id: one of its own fields by alias, else a column of
@@ -768,7 +807,7 @@ anchor is then the drag area). A click without moving starts no time selection, 
 alert's chart (`alertDetail`, `drawTimeBars` without `choose`) selects nothing. The table: `drawTable(result, props, select?)`; with `select`, a click
 on a cell of a category column (Tabulator's `cellClick`) selects `{fieldId: the column's name, value: String(cell),
 anchor: the cell}`, a NULL nothing, and the category columns carry `d-table__selectable`. A table's props carry
-`categories` (step 6.9, its `computeProps`): the aliases of its own fields (`dimensions()`) that are categories, so
+`categories` (step 6.9, its `computeProps`; since 8e the node's `filterable`, §3.8): the aliases of its own fields (`dimensions()`) that are categories, so
 its GROUP BY fields, or all its selects for raw rows, without counts and time buckets. A column Arrow types as map,
 list or struct holds no category on the client either. **Deviation:** a SQL-file table has no categories, since its
 output columns are only in its text, so its cells select nothing (open question 8). The 6.6 entries "Filter by …" /
@@ -1118,21 +1157,18 @@ type withQuery interface {
 
 func (b *TimeBar) Query() sql.SqlQueryable { return b.sql }
 
-// withFilters is a chart that interprets the request's filters itself (§3.8); every other chart gets filter.Apply
-// (sketch of 6.3; withFilters, Columns, Apply and the bound Condition go with step 8e, §3.8)
-type withFilters interface {
-	ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
-}
-
-// lib/dashboard/filter — new, pure: what a chart did with the filters, and the default way to do it
+// lib/dashboard/filter — pure: the pills (§3.8, step 8e) and what a chart did with them
 type Diagnostics struct {
-	Ignored []string `json:"ignored,omitempty"` // filter ids the chart does not interpret, in URL order
+	Ignored []string `json:"ignored,omitempty"` // labels of the pills the chart does not apply, in URL order
 	Skipped string   `json:"skipped,omitempty"` // non-empty: the chart did not run, and why
 }
-type Filter struct{ ID, Op, Value string }                                   // `f=host:eq:a`; QueryState.Filters
-type Columns func(ctx context.Context, server, table string) ([]string, error) // DESCRIBE TABLE, cached
-func Apply(ctx context.Context, q sql.SqlQueryable, fields []sql.SqlField, filters []Filter, columns Columns) (sql.SqlQueryable, Diagnostics, error)
-func Condition(i int, f Filter, expression string) string                      // `(status) = {__f0:String}`
+type Table struct{ Connection, Name string }                                    // "default", "default.http_logs"
+type Pill struct{ Table; Field, Op, Condition, Label string }                    // what a key holds
+func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table, bool)
+func New(table Table, field sql.SqlField, op, value string) (Pill, error)      // sql.Condition; ErrCannotFilter
+func Sign(secret []byte, p Pill) (string, error)                                // `?f=<key>`
+func Open(secret []byte, key string) (Pill, error)                              // refuses a key not signed so
+func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQueryable, Diagnostics)
 
 // a grid: its areas sorted by name, so the ids stay the same from one start to the next
 func (g *Grid) Children() iter.Seq2[string, WidgetDefinition] { return g.areas.all() }
@@ -1178,11 +1214,11 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 |---|---|
 | `dashica.go` | `GET /workbench.json` (§3.2): the groups as `RegisterDashboardGroup` starts them, each page's menu entry with `widget.Outline(page.Widgets)` of the `PageJson` its `CollectHandlers` returns |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
-| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; charts implement `Query()`, optionally `ApplyFilters`; `DataHandler(deps, w)` |
-| `lib/dashboard/filter` | new, pure: `Diagnostics`, the default helper `Apply` (own fields by alias, then base-table columns; SQL files: own output columns), its column source a function value |
+| `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; charts implement `Query()`; `DataHandler(deps, w)`, a chart's `/pill` and its node's `filterable` (8e) |
+| `lib/dashboard/filter` | new, pure: `Diagnostics`; since 8e the pills: `TableOf`, `New`, `Sign`, `Open`, `Apply` (§3.8) |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns; `SearchBarOption` becomes `page.json` fields |
-| `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; the query handler asks the chart for its filtered query and Diagnostics, binds every filter's value (`__f<i>`) and writes `X-Dashica-Diagnostics`; a skipped chart runs no query |
-| `lib/clickhouse` | `DESCRIBE TABLE` columns, cached per server, database and table until restart (goes with 8e) |
+| `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once (`f`: the pills' keys, checked by the chart's handler); the query handler takes the chart's query with its pills and Diagnostics and writes `X-Dashica-Diagnostics`; a skipped chart runs no query |
+| `lib/clickhouse` | `Manager.Database` (a connection's database, for a pill's table); the `DESCRIBE TABLE` columns and their cache went with 8e |
 | (tabs, §3.4.1) | no Go change: an Explore tab is its source page's URL with `#explore=<id>`, served by the same shell and `page.json` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
 | deleted | `lib/components/**` (templ), Alpine, dockview, `lib/explore` + `frontend/explore` (rebuilt later, §6) |
@@ -1400,7 +1436,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8b ✅ | **D2 active widget** (§3.4.4, §3.4.5): `widgets.active` is the widget itself (`RenderedWidget`: `status` + `onDidChangeStatus`, `records` + `onDidChangeRecords`; the impl class `WidgetInstance` is its renderer's context too), `onDidChangeActive` only on another widget or tab or its removal; `ActiveWidget` and its copies gone, the host's `statusChanged` / `recordsChanged` gone; Debug follows the active widget's status, Details its records (resubscribed on `onDidChangeActive`); Details' draw guard gone (only records or the widget redraw it); tests: `fakeWidget` in `widgets-testing.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright not run, the e2e specs see no API and stay), deviations: the type is named `RenderedWidget`, events carry no value (read `status` / `records`); with records a widget is activated before its records' event fires; a removed widget's late `selectRecords` is ignored; Debug keeps the guard for an aborted query putting back the status it asked for *(all proposed)* | Debug and Details as before |
 | 8c ✅ | **D3 + D4 quick input, click to filter** (§3.8, §3.11): `ui.showQuickPick(items, {title, placeholder, anchor})` (typing narrows, fuzzy by label else description, headings only with their items) and `ui.showInputBox({title, prompt, placeholder, value, anchor})`, both and `createQuickPick` (`anchor`) at a point or below an element, else at the top in the middle (search everywhere stays there); items with an icon (`{svg, label}`) and `checked`, separators without a label as lines; the fuzzy matcher moved to `frontend/core/fuzzy`; `showContextMenu` draws every registered menu in it (`context-menu.ts` builds the items, the old menu list and its CSS gone); a filter button's `...` asked with `showInputBox` below the button instead of `prompt()`; a click on a mark, a table cell or an Explore group row: `offerFilters` (Filter / Exclude per candidate, the pill at once); `showChoices`, the floating bar, the selection model and `widget/selection` deleted; `selectOnClick` renamed `filterOnClick`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: `=` in both labels, the icon (and its accessible name) tells filter from exclude; no new right-click menus (only `table/cell` opens on one, as before); a menu's command runs synchronously as the box closes (`QuickInput.pickOne`), `showQuickPick`'s promise after it *(all proposed)* | click to filter in one step |
 | 8d ✅ | **D5 layout** (§3.4): one top bar (`WindowLayout.topBar`, `registerBarItem('top', …)`: `left` items, the tab bar, `center` / `right` items; `Bar` takes the tab bar as its fixed middle), the title bar gone; the global menu's "…" (`workbench/global`, hidden while empty) and the Dashica icon (`ChartColumn`) before the tabs, "+" after them (`TabBar.onDidAdd`: "/" in a new tab); `ui.registerRailButton` (a rail button running a command, its tooltip with the key), search everywhere's first in the left rail (its field and `search-everywhere.css` gone); every side panel under a header (name in caps, "…" showing `panel/<id>` with "Hide", `workbench.view.<id>.hide`); a panel button's tooltip already named its name and key (since the layout's port), now shared by panel and command buttons; `e2e/top-bar.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: "Hide" in every panel menu so "…" is never empty; the global "…" hidden until 8i gives it entries; "+" opens "/"; the icon is lucide's, not a logo; tooltips stay the native `title` *(all proposed)* | the new top row |
-| 8e | **D6 signed pills:** `<dataUrl>/pill` (422 for fields that cannot filter), `.FilterAs`, `sql.Quote`, `sql.Table`; the key (connection, table, condition, HMAC-SHA-256 with `filters.secret`, required at start); a chart applies the pills of its base table; 400 for a tampered pill; `filter.Apply`'s rules, `DESCRIBE` and its cache, bound `__f<i>`, `withFilters` removed; filterable fields in `page.json` props; generator and golden contract regenerated (§3.8) | filters as signed pills |
+| 8e ✅ | **D6 signed pills** (§3.8): `sql.Quote`, `sql.Condition`, `.FilterAs`, `sql.Table` (`sql.FromFile(path, opts...)`), `sql.TableOf`; `filter.TableOf` / `New` / `Sign` / `Open` / `Apply` (key `<payload>.<mac>`, HMAC-SHA256 with `filters.secret`, checked at start by `dashica.New`); `<dataUrl>/pill` (`{key, label}`, 422 for a field that cannot filter, 400 for another op); the pills of the chart's table into its WHERE, `eq` OR-ed and `ne` AND-ed per field; 400 for a pill that does not open; the node's `filterable` in `page.json` (generator, golden contract); deleted: `filter.Filter` / `Condition` / `Param` / `Columns`, the own-field and `DESCRIBE` rules, `clickhouse` `columns.go` and its cache, bound `__f<i>`, `withFilters`, the table's `categories` prop, `WidgetContext.addFilter`, the chip's op flip; client: a pick asks `/pill`, chips `{kind: 'pill', key, label}`; outer dashboards: `sql.Table` on the single-table SQL files, `FilterAs` on their computed fields. ✅ 2026-10-31 (Go vet and tests green but the ClickHouse-bound ones (sandbox); vitest, typecheck, top comments green; Playwright written, not run), deviations: the label inside the signed payload; `filterable` on the node, not in the props; the secret at least 32 characters, checked by `New` only; a pill chip is not edited *(all proposed)* | filters as signed pills |
 | 8f | **D7 filter buttons:** pressed while active, no duplicate chip | buttons as toggles in place |
 | 8g | **D8 + D9 Explore off, Explore SQL:** with `explore.enabled` false no Explore extension, the handlers answer 404 before any query, "Explore" greyed in the global menu; `xsql` → `exploreSql`; the editor shows placeholders, parameters listed beside it and sent on Run; `inline_parameters.go` removed (Perspective §4.8) | Explore with placeholders |
 | 8h | **D11 schema view:** the left side panel "Schema" (connection › database › table, the table structured as DataGrip), one cached query set per connection, refreshable (Perspective §4.8) | the schema of every connection |

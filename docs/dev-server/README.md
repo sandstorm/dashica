@@ -58,7 +58,8 @@ cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
 ```
 
-2. **Edit `dashica_config.yaml`** with your ClickHouse connection details.
+2. **Edit `dashica_config.yaml`** with your ClickHouse connection details, and set `filters.secret` (signs the
+   page's filter pills; the server does not start without it): `openssl rand -hex 32`.
 
 3. **Load sample data** (optional):
 
