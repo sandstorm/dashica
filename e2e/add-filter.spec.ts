@@ -29,7 +29,8 @@ test('"Add filter" adds a pill on a value the field’s chart offers', async ({p
 
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
-    await expect(chips.first()).toHaveText(`${field} = ${value === '(empty)' ? '' : value}`);
+    // the chip shows an empty value as the box does, "(empty)", so that it can be clicked to change it
+    await expect(chips.first()).toHaveText(`${field} = ${value}`);
     await expect(page).toHaveURL(/[?&]f=/);
 });
 

@@ -73,6 +73,19 @@ export interface Pill {
   readonly label: string;
 }
 
+/** What a field's pill filters (`pillField`): the rows of `table` where `field` shows `value` (`eq`) or does not (`ne`). */
+export interface PillField {
+  /** The ClickHouse connection of `table` (`default`). */
+  readonly connection: string;
+  /** With its database: `default.http_logs`. */
+  readonly table: string;
+  /** The alias of the field (`host`). */
+  readonly field: string;
+  readonly op: FilterOp;
+  /** As the field shows it (`acme`); '' for an empty one. */
+  readonly value: string;
+}
+
 export interface PillFilter extends Pill {
   readonly kind: 'pill';
 }
@@ -91,5 +104,5 @@ export interface ParamsModel {
   readonly onDidChange: Event<void>;
 }
 
-export { QueryHost, formatTime, parseSearch, formatSearch, pillLabel, pillButton, type QueryState } from './query-impl';
+export { QueryHost, formatTime, parseSearch, formatSearch, pillLabel, pillButton, pillField, type QueryState } from './query-impl';
 export { activeQuery, type ActiveQuerySource } from './active-query';

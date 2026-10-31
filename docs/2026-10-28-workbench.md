@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15). Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -607,7 +607,7 @@ the server made:
 - **The client** (8e): a pick in `offerFilters` asks the widget's `/pill` (`WidgetsApi.offerFilters(at, candidates,
   state, widget)`, the Explore view passes its chart) and adds `{key, label}` (`FiltersModel.add(pill)`); a failed
   answer adds nothing and goes to the console. A pill chip shows its label and ×; it is not edited (its condition is
-  the server's) and the `=` / `≠` flip goes *(proposed)*. `WidgetContext.addFilter` goes.
+  the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
 - **The Explore preview** (`lib/explore`) still drops `f`: its widget comes from the request.
 - **Tests:** `sql` (Quote, Condition, FilterAs, TableOf), `filter` (TableOf, New, Sign / Open and every refused
   key, Apply's grouping and two bases on one table), `widget` (`/pill`, its 422 and 400, pills applied and ignored,
@@ -1473,6 +1473,33 @@ The maintainer decided D16–D18 after D1–D15 were built; D12 (§3.14) is buil
   pill pressed and released, a `...` button's value fetched, shown and replaced in place, a refused value, a button
   with SQL chips off; `e2e/filter-chips.spec.ts` (the button's `f`, a `...` button's value and its change).
 
+✅ **Built in 9c (2026-10-31): the pills editable**, with these details and deviations:
+
+- **The key:** a field's pill carries its shown value as `Value` (`filter.New`), beside `Table` and `Field` (the
+  alias), all signed, so a changed value is refused as a changed condition is *(proposed: the one `Value` of the
+  buttons' pills, for a field's pill the value shown, for a button's the value written in)*. `/pill`, `/values` and
+  `Apply` are unchanged.
+- **The client:** `pillField(key)` reads `{connection, table, field, op, value}` from the payload (`undefined` for a
+  button's pill and a key without a field); `fieldSource(tables, field)` is the first chart of the page's
+  `filterableTables` with that connection, table and field. A pill with one shows as its field, its operator and its
+  value, the last two buttons: the operator asks the chart's `/pill` for the other op with the same value, the value
+  opens `pickValue` (the quick pick of "Add filter", the chart's lazy `/values`, the typed text offered) below it and
+  asks `/pill` with the same op. The answer `replace`s the chip at its index, so it keeps its place among the others;
+  pills combined on one field stay chips of their own, each edited alone. An empty value shows "(empty)", as the
+  quick pick does *(proposed: so it can be clicked)*; the quick pick starts empty, not with the value *(proposed: as
+  "Add filter")*.
+- **Not editable:** a pill no chart of the page makes (no `fieldSource`: another page's table, a field the page does
+  not show) is its label and ×, its tooltip "No chart of this page filters <table> by <field>, so it can only be
+  removed"; a button's pill outside its page stays as 9b left it.
+- **Refused or late:** a refused `/pill` is logged and the chip kept; an answer that comes back after another chip
+  took the place (`chips[index]` is no longer the chip edited) is dropped *(proposed)*.
+- **Tests:** Go `filter` (`New` carries the value; a changed value in a key is refused), `widget` (`/pill`'s key
+  with field and value); vitest: `pillField`, `fieldSource`, the filter bar (the parts of a field's pill, the operator
+  switched and the value changed in place via `/values` and `/pill`, nothing on cancel, a refusal or a chip changed
+  meanwhile, one no chart makes only removed with its tooltip); Playwright (written, not run):
+  `e2e/filter-chips.spec.ts` (operator and value edited in place on the page whose charts sign the pills),
+  `e2e/add-filter.spec.ts` (an empty value's chip shows "(empty)").
+
 ## 4. Alternatives considered
 
 | Alternative | Why rejected |
@@ -1589,7 +1616,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8n ✅ | **Review fixes of the batch:** `X-Dashica-Diagnostics` in ASCII (`asciiJSON`: non-ASCII as `\u` escapes, so "≠" and umlauts in pill labels survive the browser's Latin-1 reading of headers); the `page.json` test with a ClickHouse manager (nil since 8m, it panicked); a filter button's `...` value written in as a string literal's text (`literalOf`: `\` and `'` escaped, as `sql.Quote`; `buttonOf` undoes it; a replacer function, so `$'` stays text); `golang.org/x/sync` indirect in `go.mod`; one `OP_ICONS` (`widgets` host) for a chart click and "Add filter". ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: CI's `go test` of `dashica-src` runs `./...` (outer repo's `ci/test.gitlab-ci.yml`, edited, not committed here), so `lib/clickhouse`, `lib/alerting`, `lib/dashboard`, `filter`, `widget` and `explore` run there too; `go.mod` keeps its other entries `go mod tidy` would change (certmagic, rigging, goldmark …); the SQL chips stay unsigned (D6): a `?sql=` link or a `...` outside quotes still runs a viewer's own SQL *(all proposed)* | the review's findings fixed |
 | 9a ✅ | **D16 SQL chips behind `filters.sqlEnabled`** (§3.15): `config.FiltersConfig.SqlEnabled` (default false, `FILTERS__SQLENABLED`), `rendering.Dependencies.SqlEnabled`, `workbench.json`'s `sqlEnabled`; `httpserver.ParseQueryState(r, sqlEnabled)` answers a `sql` with `ErrSqlNotEnabled` (400) while it is off, so every reader of the query state refuses it before any query (`TimeRangeHandler` a struct with `SqlEnabled`); the filter bar without funnel and SQL chip editing, the table's cell menu without its SQL entries while it is off. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: also the handlers that never apply a SQL chip (alerts, `/time-range`) refuse one; Speedscope answers an unreadable query state with 400; set the flag in the file or the environment, not both (the file's key wins); the filter buttons fail with 400 while it is off until 9b; the local configs turn it on *(all proposed)* | SQL chips only where configured |
 | 9b ✅ | **D17 filter buttons signed** (§3.15): `filter.NewButton` (a pill without table: the `queryPart`, a `...` as `sql.Quote(value)`, `Button` and `Value` signed), `Apply` puts it into every query that takes filters; `page.json`'s buttons with `key` (signed at registration) or `url` (`<page>/button?i=<index>`, `dashboard.buttonHandler`: `{key, label}`); Speedscope applies the pills; client: `pillButton`, `buttonOf(chip, buttons)` by `queryPart`, a pressed `...` button's values beside it, each asking a new value in its chip's place; `literalOf` gone; outer dashboards' `'...'` as `...` / `concat(..., '%')`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new `>=` check among them, blocked in the sandbox; Playwright written, not run), deviations: one key format and `f` for pills and buttons, the button found by its `queryPart`; `queryPart` stays in `page.json`; a page with buttons needs the secret to register; a query that skips filters names a button as ignored; Speedscope also applies the pills on its table; a pressed `...` button's values as buttons beside its title; a refused value is only logged *(all proposed)* | buttons with SQL chips off |
-| 9c | **D18 pills editable** (§3.15): alias and shown value in the signed key; `=` / `≠` and the value edited through `/pill` of a widget with the pill's table and field, in place | pills edited as in Grafana |
+| 9c ✅ | **D18 pills editable** (§3.15): the shown value in the signed key (`Pill.Value`, the alias was in `Field` already); client: `pillField(key)`, `fieldSource(tables, field)`; a field's pill as field, operator and value, the operator switching `=` / `≠` and the value asked in "Add filter"'s quick pick (`pickValue`, the chart's `/values`), each made again through that chart's `/pill` and `replace`d at its index; a pill no chart of the page makes only removed, its tooltip saying why. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: `Value` serves pills and buttons alike; an empty value shows "(empty)"; the value's quick pick starts empty, not with the value; an edit that came back while another chip took the place is dropped; a refused edit is only logged *(all proposed)* | pills edited as in Grafana |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

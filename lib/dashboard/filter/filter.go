@@ -64,7 +64,9 @@ type Pill struct {
 	// ("duration_ms >= ..."), by which the page finds its button; empty for a field's pill. A button's pill has no
 	// table, field or op.
 	Button string `json:"button,omitempty"`
-	// Value is the value written in for the button's `...` ("500"), as typed; empty for a button without.
+	// Value is the value the field shows ("acme"), by which the filter bar edits the pill (a new op or value asks the
+	// field's chart for a new one); for a button, the value written in for its `...` ("500"), as typed, empty for one
+	// without.
 	Value string `json:"value,omitempty"`
 }
 
@@ -73,7 +75,8 @@ var ErrCannotFilter = errors.New("cannot filter")
 
 // New is the pill on `table` of the rows where `field` shows `value` (`op` `eq`) or does not (`ne`): its condition as
 // sql.Condition writes it (the field's FilterAs, else its definition compared with the quoted value), labelled with
-// the field's alias. ErrCannotFilter for a field that cannot filter.
+// the field's alias; the alias and `value` in it too, so the filter bar can make it again with another op or value.
+// ErrCannotFilter for a field that cannot filter.
 func New(table Table, field sql.SqlField, op, value string) (Pill, error) {
 	if op != "eq" && op != "ne" {
 		return Pill{}, fmt.Errorf("op %q: want eq or ne", op)
@@ -86,7 +89,7 @@ func New(table Table, field sql.SqlField, op, value string) (Pill, error) {
 	if op == "ne" {
 		sign = " ≠ "
 	}
-	return Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Label: field.Alias() + sign + value}, nil
+	return Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Label: field.Alias() + sign + value, Value: value}, nil
 }
 
 // NewButton is the pill of the filter button `title` with the condition `queryPart`: `queryPart` itself, or for a

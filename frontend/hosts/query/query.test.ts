@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Tests for QueryHost: the state from and into a query string (parseSearch, formatSearch), the filter chips,
 // what each change asks of the widgets, auto refresh paused while hidden or not shown; what a pill's key says of itself
-// (pillLabel, pillButton).
+// (pillLabel, pillButton, pillField).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryHost, formatSearch, formatTime, parseSearch, pillButton, pillLabel } from './query';
+import { QueryHost, formatSearch, formatTime, parseSearch, pillButton, pillField, pillLabel } from './query';
 
 let query: QueryHost;
 let refreshes: number;
@@ -383,5 +383,24 @@ describe('pillLabel and pillButton', () => {
   it('read no button from the pill of a field, and the key itself as the label of one without a payload', () => {
     expect(pillButton(keyOf('host = a'))).toBeUndefined();
     expect([pillLabel('status:eq:500'), pillButton('status:eq:500'), pillButton('!!.mac')]).toEqual(['status:eq:500', undefined, undefined]);
+  });
+});
+
+describe('pillField', () => {
+  const host = { connection: 'default', table: 'default.http_logs', field: 'host', op: 'ne', value: "O'Brien" };
+
+  it("reads the table, field, op and shown value of a field's pill, an empty value when the key has none", () => {
+    expect(pillField(keyOf("host ≠ O'Brien", host))).toEqual(host);
+    expect(pillField(keyOf('host = ', { ...host, op: 'eq', value: undefined }))).toEqual({ ...host, op: 'eq', value: '' });
+  });
+
+  it("reads none from a button's pill, a key without a field or op, or one without a payload", () => {
+    const button = { connection: '', table: '', field: '', op: '', button: 'status >= 500' };
+    expect([pillField(keyOf('Errors', button)), pillField(keyOf('host = a')), pillField(keyOf('host', { ...host, op: 'like' })), pillField('status:eq:500')]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
   });
 });

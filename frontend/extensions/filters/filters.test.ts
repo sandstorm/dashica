@@ -2,8 +2,9 @@
 // Tests for filters.ts: the funnel button and the filter bar per page, the chips (pills and SQL, added, SQL ones
 // edited, removed), the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
 // button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
-// place, "Add filter" while a chart filters a table; with SQL filters off (filters.sqlEnabled), no funnel and a SQL
-// chip only removed, the buttons as before.
+// place, "Add filter" while a chart filters a table; a field's pill edited in place, its operator switched and its
+// value asked anew, each made again by a chart of the page, one no chart makes only removed; with SQL filters off
+// (filters.sqlEnabled), no funnel and a SQL chip only removed, the buttons and the pills as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
@@ -109,7 +110,7 @@ const funnel = () => topBar.querySelector<HTMLButtonElement>('button[aria-label=
 const editor = () => bar.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-testid=filter-chip-editor] textarea, [data-testid=filter-chip-editor] input');
 const chips = () => [...bar.querySelectorAll<HTMLElement>('[data-testid=filter-chip]')];
 const chipText = (chip: HTMLElement) =>
-  ['label', 'value']
+  ['label', 'field', 'op', 'value']
     .map((part) => chip.querySelector(`.d-filter-chip__${part}`)?.textContent ?? '')
     .filter((text) => text !== '')
     .join(' ');
@@ -265,11 +266,11 @@ describe('filters', () => {
     expect(query.filters.chips).toEqual([chipOf('host = a')]);
   });
 
-  it('does not edit a pill: its condition is the server’s', () => {
+  it('does not edit a pill without a field: its condition is the server’s', () => {
     query.filters.add(pill('host = a'));
     chips()[0].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
     expect(editor()).toBeNull();
-    expect(chips()[0].querySelector('.d-filter-chip__op, .d-filter-chip__label')).toBeNull();
+    expect(chips()[0].querySelector('.d-filter-chip__op, .d-filter-chip__label, button.d-filter-chip__value')).toBeNull();
     expect(chips()[0].classList).toContain('d-filter-chip--pill');
   });
 
@@ -337,6 +338,109 @@ describe('filters', () => {
     show(undefined);
     expect(bar.children.length).toBe(0);
     expect(topBar.children.length).toBe(0);
+  });
+});
+
+describe('filters, a field’s pill edited', () => {
+  const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+  /** The pill of host `op` `value` on http_logs, as `/p/shop/api/1/pill` answers it, and its chip. */
+  const hostPill = (op: 'eq' | 'ne', value: string) => {
+    const label = `host ${op === 'eq' ? '=' : '≠'} ${value}`;
+    return { key: keyOf(label, { connection: 'default', table: 'default.http_logs', field: 'host', op, value }), label };
+  };
+  const hostChip = (op: 'eq' | 'ne', value: string) => ({ kind: 'pill', ...hostPill(op, value) });
+  /** What the value's quick pick is given, and what it answers next. */
+  let valueBox: { title?: string; anchor?: unknown; items?: { label: string }[] } | undefined;
+  let picked: string | undefined;
+  const op = (chip: HTMLElement) => chip.querySelector<HTMLButtonElement>('.d-filter-chip__op')!;
+  const value = (chip: HTMLElement) => chip.querySelector<HTMLButtonElement>('button.d-filter-chip__value')!;
+
+  beforeEach(() => {
+    valueBox = undefined;
+    picked = undefined;
+    (ui as Record<string, unknown>).createQuickPick = () => {
+      const accepted: (() => void)[] = [];
+      const hidden: (() => void)[] = [];
+      const box = {
+        value: '',
+        selectedItems: [] as { value: string }[],
+        onDidChangeValue: () => ({ dispose() {} }),
+        onDidAccept: (f: () => void) => accepted.push(f),
+        onDidHide: (f: () => void) => hidden.push(f),
+        show: () => {
+          valueBox = box as typeof valueBox;
+          setTimeout(() => {
+            if (picked !== undefined) box.selectedItems = [{ value: picked }];
+            accepted.forEach((f) => f());
+          });
+        },
+        hide: () => hidden.forEach((f) => f()),
+        dispose: () => {},
+      };
+      return box;
+    };
+    vi.stubGlobal('fetch', async (url: string) => {
+      fetched.push(url);
+      const args = new URL(url, 'http://x').searchParams;
+      if (url.includes('/values')) return new Response(JSON.stringify(['b', 'c']));
+      return new Response(JSON.stringify(hostPill(args.get('op') as 'eq' | 'ne', args.get('value')!)));
+    });
+    activate(true);
+    show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
+  });
+
+  it('shows its field, operator and value, each part on its own', () => {
+    query.load({ search: `?f=${hostPill('ne', 'a').key}` });
+    expect(chips().map(chipText)).toEqual(['host ≠ a']);
+    expect([op(chips()[0]).title, value(chips()[0]).title]).toEqual(['Switch to host =', 'Change the value of host']);
+  });
+
+  it('switches the operator on a click, the pill made again by the chart and put in the chip’s place', async () => {
+    query.load({ search: `?f=${keyOf('path = /a')}&f=${hostPill('eq', 'a').key}&sql=b` });
+    op(chips()[1]).click();
+    await vi.waitFor(() => expect(query.filters.chips).toEqual([chipOf('path = /a'), hostChip('ne', 'a'), { kind: 'sql', sql: 'b' }]));
+    expect(fetched).toEqual(['/p/shop/api/1/pill?field=host&op=ne&value=a']);
+  });
+
+  it('asks a new value in the quick pick of "Add filter" below the value, from the chart’s /values, and replaces the chip in place', async () => {
+    query.load({ search: `?f=${hostPill('ne', 'a').key}&f=${hostPill('ne', 'z').key}` });
+    picked = 'b';
+    const clicked = value(chips()[0]);
+    clicked.click();
+    await vi.waitFor(() => expect(query.filters.chips).toEqual([hostChip('ne', 'b'), hostChip('ne', 'z')]));
+    expect([valueBox?.title, valueBox?.anchor]).toEqual(['host ≠', clicked]);
+    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/1\/values\?.*field=host&search=$/);
+    expect(fetched.at(-1)).toBe('/p/shop/api/1/pill?field=host&op=ne&value=b');
+  });
+
+  it('keeps the chip when no value is chosen, when the chart refuses, or when that chip changed meanwhile', async () => {
+    query.load({ search: `?f=${hostPill('eq', 'a').key}` });
+    value(chips()[0]).click();
+    await vi.waitFor(() => expect(valueBox).toBeDefined());
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(fetched.some((url) => url.includes('/pill'))).toBe(false);
+
+    op(chips()[0]).click();
+    query.filters.replace(0, hostChip('eq', 'q') as FilterChip);
+    await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(query.filters.chips).toEqual([hostChip('eq', 'q')]);
+    query.filters.replace(0, hostChip('eq', 'a') as FilterChip);
+
+    vi.stubGlobal('fetch', async () => new Response('"host" cannot filter this chart\'s table', { status: 422 }));
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    op(chips()[0]).click();
+    await vi.waitFor(() => expect(logged).toHaveBeenCalled());
+    expect(query.filters.chips[0]).toEqual(hostChip('eq', 'a'));
+    logged.mockRestore();
+  });
+
+  it('only removes a pill no chart of the page makes, saying why', () => {
+    query.load({ search: `?f=${hostPill('eq', 'a').key}` });
+    show({ ...shop, filterButtons: [], widgets: [] });
+    expect([op(chips()[0]), value(chips()[0])]).toEqual([null, null]);
+    expect(chips().map(chipText)).toEqual(['host = a']);
+    expect(chips()[0].title).toBe('host = a\nNo chart of this page filters default.http_logs by host, so it can only be removed');
   });
 });
 

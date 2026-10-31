@@ -1,6 +1,6 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, TimeModel } from './query';
+import type { FilterChip, FiltersModel, ParamsModel, Pill, PillField, QueryApi, TimeModel } from './query';
 
 /**
  * The `QueryApi` of one tab, holding the state of a query string (the tab's URL's): `load` takes the state from one,
@@ -324,6 +324,18 @@ export function pillButton(key: string): { readonly button: string; readonly val
   const { button, value } = payloadOf(key);
   if (typeof button !== 'string' || !button) return undefined;
   return { button, value: typeof value === 'string' ? value : '' };
+}
+
+/**
+ * The field a pill's key filters by, as its chart made it (`<dataUrl>/pill`): its table, the field's alias, the op and
+ * the value the field shows, by which the filter bar makes it again with another op or value; `undefined` for a
+ * button's pill and a key without a field.
+ */
+export function pillField(key: string): PillField | undefined {
+  const { connection, table, field, op, value, button } = payloadOf(key);
+  if (button || typeof connection !== 'string' || typeof table !== 'string' || typeof field !== 'string' || !field) return undefined;
+  if (op !== 'eq' && op !== 'ne') return undefined;
+  return { connection, table, field, op, value: typeof value === 'string' ? value : '' };
 }
 
 /** The payload of a pill's key, as JSON (`Sign`); empty for a key without one. */

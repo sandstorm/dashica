@@ -70,7 +70,7 @@ func debug(t *testing.T, chart withQuery, keys ...string) debugged {
 	return got
 }
 
-func TestPill_IsTheFieldsConditionSignedAndLabelled(t *testing.T) {
+func TestPill_IsTheFieldsConditionSignedAndLabelledWithItsFieldAndValue(t *testing.T) {
 	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.JsonExtractString("attrs", "host")).Y(sql.Count())
 
 	rec := askPath(bar, "/pill?field=host&op=ne&value=it's")
@@ -80,7 +80,7 @@ func TestPill_IsTheFieldsConditionSignedAndLabelled(t *testing.T) {
 	if rec.Code != http.StatusOK || err != nil || body.Label != "host ≠ it's" {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}
-	want := filter.Pill{Table: filter.Table{Connection: "default", Name: "default.http_logs"}, Field: "host", Op: "ne", Condition: `(JSONExtractString(attrs, 'host')) != 'it\'s'`, Label: "host ≠ it's"}
+	want := filter.Pill{Table: filter.Table{Connection: "default", Name: "default.http_logs"}, Field: "host", Op: "ne", Condition: `(JSONExtractString(attrs, 'host')) != 'it\'s'`, Label: "host ≠ it's", Value: "it's"}
 	if pill != want {
 		t.Errorf("pill %+v", pill)
 	}

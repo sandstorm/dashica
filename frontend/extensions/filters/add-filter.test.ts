@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
-// Tests for add-filter.ts: the page's filterable tables (filterableTables), "add filter" through table, field,
-// operator and value to the pill of the field's chart (addFilter), the value's quick pick asking the server as the
-// text changes (pickValue), and the request of /values (fetchValues).
+// Tests for add-filter.ts: the page's filterable tables (filterableTables), the chart that makes a pill again
+// (fieldSource), "add filter" through table, field, operator and value to the pill of the field's chart (addFilter),
+// the value's quick pick asking the server as the text changes (pickValue), and the request of /values (fetchValues).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
 import { OP_ICONS } from '../../hosts/widgets/widgets';
-import { addFilter, fetchValues, filterableTables, pickValue } from './add-filter';
+import { addFilter, fetchValues, fieldSource, filterableTables, pickValue } from './add-filter';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default') =>
   ({ type: 'barVertical', props: {}, dataUrl, filterable, table, connection }) as unknown as WidgetNode;
@@ -71,6 +71,20 @@ describe('filterableTables', () => {
       ['default', 'default.http_logs', ['host@/p/shop/api/1', 'status@/p/shop/api/1', 'path@/p/shop/api/2']],
       ['logs', 'audit', ['action@/p/shop/api/3']],
     ]);
+  });
+});
+
+describe('fieldSource', () => {
+  const tables = filterableTables([byHost, grid]);
+
+  it('is the first chart naming the field on the table of that connection', () => {
+    expect(fieldSource(tables, { connection: 'default', table: 'default.http_logs', field: 'path' })).toBe(byPath);
+    expect(fieldSource(tables, { connection: 'default', table: 'default.http_logs', field: 'host' })).toBe(byHost);
+  });
+
+  it('is none for a field no chart filters by, or the same table on another connection', () => {
+    expect(fieldSource(tables, { connection: 'default', table: 'default.http_logs', field: 'action' })).toBeUndefined();
+    expect(fieldSource(tables, { connection: 'logs', table: 'default.http_logs', field: 'host' })).toBeUndefined();
   });
 });
 

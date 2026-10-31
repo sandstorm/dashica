@@ -1,6 +1,6 @@
 // See addFilter.
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { FilterOp, QueryApi } from '../../hosts/query/query';
+import type { FilterOp, PillField, QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
 import { OP_ICONS, fetchPill, type PillSource } from '../../hosts/widgets/widgets';
 
@@ -35,6 +35,15 @@ export function filterableTables(widgets: readonly WidgetNode[]): FilterableTabl
   };
   widgets.forEach(visit);
   return tables;
+}
+
+/**
+ * The chart of `tables` that makes pills of `field` on `table` of `connection` (a pill's `pillField`), so that the
+ * filter bar can make one again with another op or value; `undefined` when no chart of the page filters that table by
+ * that field.
+ */
+export function fieldSource(tables: readonly FilterableTable[], { connection, table, field }: Pick<PillField, 'connection' | 'table' | 'field'>): PillSource | undefined {
+  return tables.find((t) => t.connection === connection && t.table === table)?.fields.find((f) => f.field === field)?.widget;
 }
 
 /**

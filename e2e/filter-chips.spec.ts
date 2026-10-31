@@ -1,7 +1,8 @@
-// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f and 9b): a link's `f` and
-// `sql` show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the charts,
-// the funnel adds a SQL chip, a chip's × removes it from the URL, a filter button toggles in place as a signed pill,
-// without a chip; a button with `...` asks its value, shows it beside it and takes a new one in its place.
+// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b and 9c): a link's `f`
+// and `sql` show as chips in their order, a chart whose query ignores a pill says so, an unsigned pill fails the
+// charts, the funnel adds a SQL chip, a chip's × removes it from the URL, a pill's operator and value are edited in
+// place on a page whose charts filter its table, a filter button toggles in place as a signed pill, without a chip; a
+// button with `...` asks its value, shows it beside it and takes a new one in its place.
 //
 // The page defaults to the Sandstorm instance's "/clickhouse/table_sizes": its tables use `FromFileWithoutFilters`,
 // so every chart ignores every pill. Another page: DASHICA_E2E_FILTER_PAGE. The pills are signed by a chart of
@@ -73,6 +74,28 @@ test('an exclude shows ≠; back brings a removed chip back', async ({page}) => 
     await expect(chips).toHaveCount(1);
     await page.goBack();
     await expect(chips).toHaveCount(2);
+});
+
+test('a pill’s operator switches and its value changes in place, each a new signed pill', async ({page}) => {
+    const first = await signedPill(page, 'eq', 'system');
+    const second = await signedPill(page, 'ne', 'a:b');
+    await page.goto(`${PILL_PAGE}?f=${encodeURIComponent(first.key)}&f=${encodeURIComponent(second.key)}`);
+    const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
+    await expect(chips).toHaveCount(2);
+
+    await chips.nth(0).locator('.d-filter-chip__op').click();
+    await expect(chips.nth(0)).toContainText('≠');
+    await expect(chips.nth(0)).toContainText('system');
+    await expect(chips.nth(1)).toHaveText(second.label);
+    await expect.poll(() => new URL(page.url()).searchParams.getAll('f')[0]).not.toBe(first.key);
+
+    await chips.nth(0).locator('button.d-filter-chip__value').click();
+    await page.keyboard.type('it’s typed');
+    const box = page.locator('.d-workbench__quick-pick');
+    await box.getByRole('option').filter({hasText: 'it’s typed'}).first().click();
+    await expect(chips.nth(0)).toContainText('it’s typed');
+    await expect(chips.nth(1)).toHaveText(second.label);
+    expect(new URL(page.url()).searchParams.getAll('f')).toHaveLength(2);
 });
 
 test('a pill not signed by the server fails the charts with 400', async ({page}) => {

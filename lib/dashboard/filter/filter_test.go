@@ -55,7 +55,7 @@ func TestTableOf_NamesTheTableWithItsDatabaseOnItsConnection(t *testing.T) {
 
 func TestNew_WritesTheFieldsConditionAndLabel(t *testing.T) {
 	host := pill(t, httpLogs, sql.JsonExtractString("attrs", "host"), "ne", "it's")
-	want := Pill{Table: httpLogs, Field: "host", Op: "ne", Condition: `(JSONExtractString(attrs, 'host')) != 'it\'s'`, Label: "host ≠ it's"}
+	want := Pill{Table: httpLogs, Field: "host", Op: "ne", Condition: `(JSONExtractString(attrs, 'host')) != 'it\'s'`, Label: "host ≠ it's", Value: "it's"}
 	if host != want {
 		t.Errorf("got %+v", host)
 	}
@@ -93,10 +93,18 @@ func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
 	p.Condition = "1 = 1) OR (1 = 1"
 	b, _ = json.Marshal(p)
 	tampered := base64.RawURLEncoding.EncodeToString(b) + "." + signature
+	// the shown value changed (the filter bar edits by it), the mac kept
+	var shown Pill
+	b, _ = base64.RawURLEncoding.DecodeString(payload)
+	_ = json.Unmarshal(b, &shown)
+	shown.Value = "200"
+	b, _ = json.Marshal(shown)
+	tamperedValue := base64.RawURLEncoding.EncodeToString(b) + "." + signature
 
 	otherSecret, _ := Sign([]byte("another secret of at least thirty-two bytes"), p)
 	for name, k := range map[string]string{
 		"tampered":         tampered,
+		"tampered value":   tamperedValue,
 		"unsigned":         payload,
 		"another secret":   otherSecret,
 		"bad mac":          payload + ".x",

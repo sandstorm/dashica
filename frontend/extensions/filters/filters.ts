@@ -3,15 +3,19 @@ import { Filter, ListFilterPlus, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { pillButton, type FilterChip, type Pill, type QueryApi, type SqlFilter } from '../../hosts/query/query';
+import { pillButton, pillField, type FilterChip, type FilterOp, type Pill, type PillField, type PillFilter, type QueryApi, type SqlFilter } from '../../hosts/query/query';
 import type { UiApi } from '../../hosts/ui/ui';
-import { addFilter, filterableTables, type FilterableTable } from './add-filter';
+import { fetchPill, type PillSource } from '../../hosts/widgets/widgets';
+import { addFilter, fetchValues, fieldSource, filterableTables, pickValue, type FilterableTable } from './add-filter';
 import './filters.css';
 
 /**
  * The filters of a page that has them (`page.json`'s `filterBar`): the filter bar shows one chip per filter, a pill
  * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
- * SQL chip's text edits it, a pill is not edited (its condition is the server's). The funnel button in the top bar adds
+ * SQL chip's text edits it. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
+ * switches `=` / `≠`, one on its value asks a new one (as "Add filter" does); each edit asks a chart of the page on the
+ * pill's table with that field (`fieldSource`) for the pill again and puts it in the chip's place. A pill no chart of
+ * the page makes, and a button's pill outside its page, can only be removed. The funnel button in the top bar adds
  * a SQL chip. Both only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a
  * SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
  * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
@@ -75,6 +79,9 @@ async function fetchButtonPill(url: string, value: string): Promise<Pill> {
   const { key, label } = (await response.json()) as Pill;
   return { key, label };
 }
+
+/** How a pill's chip shows its operator. */
+const OP_SIGNS: Readonly<Record<FilterOp, string>> = { eq: '=', ne: '≠' };
 
 /** Which SQL chip is edited: its index in the chips, or `new` for the one the funnel adds. */
 type Editing = number | 'new' | undefined;
@@ -180,11 +187,19 @@ class FilterBar {
   }
 
   #chipOf(chip: FilterChip, index: number): HTMLElement {
+    const made = chip.kind === 'pill' ? pillField(chip.key) : undefined;
+    const source = made && fieldSource(this.#tables, made);
+    if (chip.kind === 'pill' && made && source) return this.#pillOf(chip, index, made, source);
     const edit = chip.kind === 'sql' && this.sqlEnabled ? () => this.#edit(index) : undefined;
     const label = chip.kind === 'sql' ? 'SQL:' : '';
     const value = chip.kind === 'sql' ? chip.sql.replace(/\s+/g, ' ') : chip.label;
     const whole = chip.kind === 'sql' ? chip.sql : chip.label;
-    const title = chip.kind === 'sql' && !this.sqlEnabled ? `${whole}\nSQL filters are not enabled (filters.sqlEnabled)` : whole;
+    const title =
+      chip.kind === 'sql' && !this.sqlEnabled
+        ? `${whole}\nSQL filters are not enabled (filters.sqlEnabled)`
+        : made
+          ? `${whole}\nNo chart of this page filters ${made.table} by ${made.field}, so it can only be removed`
+          : whole;
     return html`<span class=${chip.kind === 'pill' ? 'd-filter-chip d-filter-chip--pill' : 'd-filter-chip'} data-testid="filter-chip" title=${title}>
       ${label ? html`<span class="d-filter-chip__label" onclick=${edit}>${label}</span>` : ''}
       <span class="d-filter-chip__value" onclick=${edit}>${value}</span>
@@ -195,6 +210,55 @@ class FilterBar {
         aria-label=${`Remove ${whole}`}
         onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
     </span>`;
+  }
+
+  /**
+   * The field's pill `chip` at `index` (`made`, its field), editable: its field, its operator (a click switches it)
+   * and its value (a click asks a new one), each edit made by `source`.
+   */
+  #pillOf(chip: PillFilter, index: number, made: PillField, source: PillSource): HTMLElement {
+    const other: FilterOp = made.op === 'eq' ? 'ne' : 'eq';
+    const value: HTMLButtonElement = html`<button
+      type="button"
+      class="d-filter-chip__value"
+      title=${`Change the value of ${made.field}`}>${made.value === '' ? '(empty)' : made.value}</button>`;
+    value.addEventListener('click', () => void this.#changeValue(chip, index, made, source, value));
+    return html`<span class="d-filter-chip d-filter-chip--pill" data-testid="filter-chip" title=${chip.label}>
+      <span class="d-filter-chip__field">${made.field}</span>
+      <button
+        type="button"
+        class="d-filter-chip__op"
+        title=${`Switch to ${made.field} ${OP_SIGNS[other]}`}
+        onclick=${() => void this.#remake(chip, index, source, { ...made, op: other })}>${OP_SIGNS[made.op]}</button>
+      ${value}
+      <button
+        type="button"
+        class="d-filter-chip__remove"
+        title=${`Remove ${chip.label}`}
+        aria-label=${`Remove ${chip.label}`}
+        onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
+    </span>`;
+  }
+
+  /** Asks a new value for the field's pill `chip` in "Add filter"'s quick pick below `el`, and makes the pill again. */
+  async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
+    const value = await pickValue(this.ui, el, `${made.field} ${OP_SIGNS[made.op]}`, (search, signal) =>
+      fetchValues(source.dataUrl, made.field, search, this.query.requestParams(), signal),
+    );
+    if (value !== undefined) await this.#remake(chip, index, source, { ...made, value });
+  }
+
+  /**
+   * Asks `source` (`<dataUrl>/pill`) for the pill of `field` and puts it in the place of `chip` at `index`, unless
+   * another chip is there meanwhile; a refused one is logged, the chip kept.
+   */
+  async #remake(chip: PillFilter, index: number, source: PillSource, { field, op, value }: PillField): Promise<void> {
+    try {
+      const pill = await fetchPill(source.dataUrl, { fieldId: field, op, value });
+      if (this.query.filters.chips[index] === chip) this.query.filters.replace(index, { kind: 'pill', ...pill });
+    } catch (error) {
+      console.error(`Filter ${field} ${OP_SIGNS[op]} ${value} failed:`, error);
+    }
   }
 
   /**
