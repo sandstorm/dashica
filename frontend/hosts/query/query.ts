@@ -2,14 +2,15 @@ import type { Event } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
 
 /**
- * The state every query of a tab's page depends on: its time range and auto refresh, its filters, the values of its
- * form widgets. Each tab has its own, in the tab's URL (`?time=1h&f=<key>&sql=…&wp=…&refresh=30`, `f` and `sql` one per chip), so a link
- * opens the page as it was shared; the browser's back button goes to the state before. What an extension keeps in the
- * URL it registers (`registerState`), for every tab. Widgets query again on `onDidRequestRefresh` and send
- * `requestParams()` along; extensions get the active tab's (`activeQuery`).
+ * The state every query of a tab's page depends on, kept in the tab's URL: each tab has its own, so a link opens the
+ * page as it was shared, and the browser's back button goes to the state before. The host knows no key of its own;
+ * each extension registers what it keeps (`registerState`, for every tab): the time range (`time-range`, `?time=1h`),
+ * the auto refresh (`refresh`, `?refresh=30`), the filter chips (`filters`, `?f=<key>&sql=…`), the dashboard's params
+ * (`dashboardPage`, `?wp=…`). Others read a state by its id (`state`), never by importing its extension. Widgets
+ * query again on `onDidRequestRefresh` and send `requestParams()` along; extensions get the active tab's
+ * (`activeQuery`).
  */
 export interface QueryApi {
-  readonly params: ParamsModel;
   /**
    * Keeps the state `id` in the URL's keys `spec.keys` of every tab until disposed; one registration per id, and a key
    * in one state only. Gives its value here (to an extension: the active tab's).
@@ -20,16 +21,13 @@ export interface QueryApi {
    * while none is registered.
    */
   state<T>(id: string): QueryState<T> | undefined;
-  /**
-   * Fires when the widgets should query again: the time, the filter, a param or a registered state they read changed,
-   * or `refresh` was called.
-   */
+  /** Fires when the widgets should query again: a state the data handlers read changed, or `refresh` was called. */
   readonly onDidRequestRefresh: Event<void>;
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
   refresh(): void;
   /**
-   * What a data handler reads from the query string: the keys of the page's URL (`time`, `range`, `sql`, `f`, `wp`), with
-   * `time` also when it is the page's default.
+   * What the data handlers read: each registered state's `request` entries, in the order registered (`time`, `f`,
+   * `sql`, `wp`), `time` also when it is the page's default.
    */
   requestParams(): URLSearchParams;
 }
@@ -64,13 +62,5 @@ export interface QueryStateSpec<T> {
 /** Entries of a query string, in order (`[['f', '<key>'], ['sql', 'a > 1']]`). */
 export type QueryEntries = readonly (readonly [string, string])[];
 
-/** The values of the page's form widgets by name, sent to ClickHouse as query parameters (`{path:String}`). */
-export interface ParamsModel {
-  readonly values: Readonly<Record<string, string>>;
-  get(name: string): string | undefined;
-  set(name: string, value: string): void;
-  readonly onDidChange: Event<void>;
-}
-
-export { QueryHost, QueryStates, parseSearch, formatSearch, type SearchState } from './query-impl';
+export { QueryHost, QueryStates } from './query-impl';
 export { activeQuery, type ActiveQuerySource } from './active-query';

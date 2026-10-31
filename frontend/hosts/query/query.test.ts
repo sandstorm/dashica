@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// Tests for QueryHost: the params from and into a query string (parseSearch, formatSearch); the states extensions
-// register (registerState): read from the URL, written into it, sent, shared by the tabs.
+// Tests for QueryHost: the states extensions register (registerState) read from the URL, written into it after a pause
+// with its other keys kept, sent, asking for a refresh, shared by the tabs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryHost, QueryStates, formatSearch, parseSearch, type QueryStateSpec } from './query';
+import { QueryHost, QueryStates, type QueryStateSpec } from './query';
 
 let query: QueryHost;
 let refreshes: number;
@@ -26,27 +26,6 @@ afterEach(() => {
 /** The keys of the query string given last. */
 const urlParams = () => Object.fromEntries(new URLSearchParams(searches.at(-1) ?? ''));
 
-describe('params', () => {
-  it('takes them from the URL, none for a broken wp, and sends them', () => {
-    query.load({ search: '?wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D' });
-    expect(query.params.values).toEqual({ path: '^/api' });
-    expect(refreshes).toBe(1);
-    query.params.set('path', '/x');
-    expect(refreshes).toBe(2);
-    expect(JSON.parse(query.requestParams().get('wp')!)).toEqual({ path: '/x' });
-    query.load({ search: '?wp=%5B1%5D' });
-    expect(query.params.values).toEqual({});
-  });
-
-  it('gives the query string after a pause', () => {
-    query.load();
-    query.params.set('path', 'x');
-    expect(searches).toEqual([]);
-    vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ wp: '{"path":"x"}' });
-  });
-});
-
 /** A state kept in `?colors=red,blue`, none by default; `sent`: the handlers read it. */
 function colorsSpec(sent: boolean): QueryStateSpec<readonly string[]> {
   return {
@@ -57,7 +36,7 @@ function colorsSpec(sent: boolean): QueryStateSpec<readonly string[]> {
   };
 }
 
-describe('registered states', () => {
+describe('QueryHost', () => {
   it('reads a state from the URL, the default for a missing key, again after each load', () => {
     const colors = query.registerState('colors', colorsSpec(false));
     expect(colors.get()).toEqual([]);
@@ -158,17 +137,5 @@ describe('registered states', () => {
     colors.dispose();
     expect(query.state('colors')).toBeUndefined();
     expect(query.requestParams().has('colors')).toBe(false);
-  });
-});
-
-describe('parseSearch and formatSearch', () => {
-  it('read the params of a query string, none for what it lacks', () => {
-    expect(parseSearch('?time=3h&wp=%7B%22path%22%3A%22x%22%7D')).toEqual({ params: { path: 'x' } });
-    expect(parseSearch('')).toEqual({ params: {} });
-  });
-
-  it('write them back, keeping the other keys', () => {
-    expect(formatSearch(parseSearch('?wp=%7B%22a%22%3A%221%22%7D'), '?tab=x&wp=1')).toBe('?tab=x&wp=%7B%22a%22%3A%221%22%7D');
-    expect(formatSearch(parseSearch(''), '?wp=1')).toBe('');
   });
 });

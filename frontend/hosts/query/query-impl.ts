@@ -1,8 +1,8 @@
 // See QueryApi in query.ts.
-import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import { Disposable } from '../../core/disposable/disposable';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
-import type { ParamsModel, QueryApi, QueryEntries, QueryState, QueryStateSpec } from './query';
+import type { QueryApi, QueryEntries, QueryState, QueryStateSpec } from './query';
 
 /**
  * The states registered for every tab (`QueryApi.registerState`), in the order registered: the tabs' query hosts share
@@ -31,11 +31,11 @@ export class QueryStates {
 }
 
 /**
- * The `QueryApi` of one tab, holding the state of a query string (the tab's URL's): `load` takes the state from one,
- * `onDidChangeSearch` gives the query string of the state after a change, which the tab puts into its URL.
+ * The `QueryApi` of one tab, holding the registered states' values of a query string (the tab's URL's): `load` takes
+ * them from one, `onDidChangeSearch` gives the query string after a change, which the tab puts into its URL. It knows
+ * no key of its own: a key no state registered stays in the query string as it is.
  */
 export class QueryHost implements QueryApi {
-  readonly params: ParamsState;
   readonly #onDidRequestRefresh = new EventEmitter<void>();
   readonly onDidRequestRefresh = this.#onDidRequestRefresh.event;
   readonly #onDidChangeSearch = new EventEmitter<string>();
@@ -46,31 +46,22 @@ export class QueryHost implements QueryApi {
   #searchWrite: ReturnType<typeof setTimeout> | undefined;
   /** The query string that holds the state, as last loaded or given by `onDidChangeSearch`; its other keys stay. */
   #search = '';
-  /** The registered states' values read or set here, by id; a state not read since the last load is not in it. */
+  /** The registered states' values read or set here, by id; a value not read since the last load is parsed when read. */
   readonly #values = new Map<string, HeldState>();
 
   /** `states`: the registered states, all tabs'. */
-  constructor(private readonly states = new QueryStates()) {
-    const changed = () => {
-      this.#writeSearchSoon();
-      this.refresh();
-    };
-    this.params = new ParamsState(changed);
-  }
+  constructor(private readonly states = new QueryStates()) {}
 
   /**
    * Takes the state from `search` (`?time=1h&f=<key>`), for `page` about to be shown or after the browser's back and
-   * forward; what it lacks is the default, which may be the page's (its `defaultTime`). Fires every model's and read
-   * state's `onDidChange` and one `onDidRequestRefresh`.
+   * forward; what it lacks is the default, which may be the page's (its `defaultTime`). Fires each read state's
+   * `onDidChange` and one `onDidRequestRefresh`.
    */
   load({ search = '', page }: { search?: string; page?: PageJson } = {}): void {
     clearTimeout(this.#searchWrite);
     this.#page = page;
-    const state = parseSearch(search);
     this.#search = search;
-    this.params.load(state.params);
     for (const held of this.#values.values()) held.known = false;
-    this.params.fire();
     for (const held of this.#values.values()) held.changed.fire();
     this.refresh();
   }
@@ -101,7 +92,6 @@ export class QueryHost implements QueryApi {
     for (const [id, spec] of this.states.entries()) {
       if (spec.request) for (const [key, value] of spec.request(this.#get(id))) request.append(key, value);
     }
-    if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
     return request;
   }
 
@@ -110,7 +100,6 @@ export class QueryHost implements QueryApi {
     this.#onDidRequestRefresh.dispose();
     this.#onDidChangeSearch.dispose();
     for (const held of this.#values.values()) held.changed.dispose();
-    this.params.dispose();
   }
 
   /** The value of the registered state `id`. */
@@ -138,12 +127,12 @@ export class QueryHost implements QueryApi {
     if (spec.request) this.refresh();
   }
 
-  /** The query string `formatSearch` writes, then each registered state's entries (`value`: its value) in place of its keys. */
-  #formatSearch(state: SearchState, value: (id: string) => unknown): string {
-    const url = new URLSearchParams(formatSearch(state, this.#search));
+  /** The query string with each registered state's entries (`value`: its value) in place of its keys, the others kept. */
+  #formatSearch(value: (id: string, spec: QueryStateSpec<unknown>) => unknown): string {
+    const url = new URLSearchParams(this.#search);
     const states = this.states.entries();
     for (const [, spec] of states) for (const key of spec.keys) url.delete(key);
-    for (const [id, spec] of states) for (const [key, entry] of spec.format(value(id), this.#page)) url.append(key, entry);
+    for (const [id, spec] of states) for (const [key, entry] of spec.format(value(id, spec), this.#page)) url.append(key, entry);
     const text = url.toString();
     return text ? `?${text}` : '';
   }
@@ -152,13 +141,10 @@ export class QueryHost implements QueryApi {
   #writeSearchSoon(): void {
     clearTimeout(this.#searchWrite);
     this.#searchWrite = setTimeout(() => {
-      const state: SearchState = {
-        params: this.params.values,
-      };
-      const search = this.#formatSearch(state, (id) => this.#get(id));
+      const search = this.#formatSearch((id) => this.#get(id));
       // as the query string before is written, so a state as loaded gives no change
       const loaded = new URLSearchParams(this.#search);
-      if (search === this.#formatSearch(parseSearch(this.#search), (id) => this.states.get(id)!.parse(loaded, this.#page))) return;
+      if (search === this.#formatSearch((_, spec) => spec.parse(loaded, this.#page))) return;
       this.#search = search;
       this.#onDidChangeSearch.fire(search);
     }, SEARCH_WRITE_DELAY_MS);
@@ -178,66 +164,5 @@ function sameEntries(a: QueryEntries, b: QueryEntries): boolean {
   return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && value === b[i][1]);
 }
 
-/** What a query string (`?wp=…`) says about the params. */
-export interface SearchState {
-  readonly params: Readonly<Record<string, string>>;
-}
-
-/** The params `search` holds; a `wp` that is no JSON object of strings is none. */
-export function parseSearch(search: string): SearchState {
-  const url = new URLSearchParams(search);
-  return {
-    params: parseParams(url.get('wp')),
-  };
-}
-
-/** The query string of `state` (`?wp=…`, '' for none), its other keys taken from `search`; no param is left out. */
-export function formatSearch(state: SearchState, search = ''): string {
-  const url = new URLSearchParams(search);
-  if (Object.keys(state.params).length > 0) url.set('wp', JSON.stringify(state.params));
-  else url.delete('wp');
-  const text = url.toString();
-  return text ? `?${text}` : '';
-}
-
 /** Typing into a text input changes the query string once, after a pause. */
 const SEARCH_WRITE_DELAY_MS = 200;
-
-class Model extends EventEmitter<void> {
-  readonly onDidChange = this.event;
-}
-
-class ParamsState extends Model implements ParamsModel {
-  values: Readonly<Record<string, string>> = {};
-
-  constructor(private readonly changed: () => void) {
-    super();
-  }
-
-  load(values: Readonly<Record<string, string>>): void {
-    this.values = values;
-  }
-
-  get(name: string): string | undefined {
-    return this.values[name];
-  }
-
-  set(name: string, value: string): void {
-    if (this.values[name] === value) return;
-    this.values = { ...this.values, [name]: value };
-    this.fire();
-    this.changed();
-  }
-}
-
-/** The params of the URL's `wp`: a JSON object of strings; anything else is none. */
-function parseParams(text: string | null): Record<string, string> {
-  try {
-    const parsed: unknown = JSON.parse(text ?? '{}');
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
-  } catch {
-    return {};
-  }
-}
-

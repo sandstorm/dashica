@@ -4,6 +4,7 @@ import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { WidgetsApi } from '../../hosts/widgets/widgets';
+import { PARAMS_STATE, paramsState } from '../widget-library/params-state';
 import './dashboard-page.css';
 
 /**
@@ -11,12 +12,15 @@ import './dashboard-page.css';
  * apart, each rendered by the extension of its widget type. Only markdown is prose; the rest keeps its own type sizes.
  * A link to a chart (`/p/shop#w=3`, the id in its `dataUrl`) opens the groups around it, scrolls it into view and
  * highlights it for a moment: once rendered, and on each change of its tab's hash. The widgets query with the tab's
- * query state.
+ * query state, which holds the dashboard's params (`params`, `?wp=…`), the values of its form widgets.
  */
 export const dashboardPage: Extension = {
   id: 'dashboardPage',
-  activate: ({ page, widgets, subscriptions }) =>
-    subscriptions.push(page.registerPageRenderer('dashboard', (el, shown, context) => renderDashboard(el, shown, context, widgets))),
+  activate: ({ page, query, widgets, subscriptions }) =>
+    subscriptions.push(
+      query.registerState(PARAMS_STATE, paramsState),
+      page.registerPageRenderer('dashboard', (el, shown, context) => renderDashboard(el, shown, context, widgets)),
+    ),
 };
 
 function renderDashboard(el: HTMLElement, page: PageJson, context: PageContext, widgets: WidgetsApi): Disposable {

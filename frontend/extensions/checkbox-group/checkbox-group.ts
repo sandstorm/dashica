@@ -2,11 +2,12 @@ import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import { paramsOf, withParam } from '../widget-library/params-state';
 
 /**
  * The widget type `checkboxGroup`: a row of checkboxes, one per option, whose checked options are the page's param
- * `name` as a JSON array (`["GET","POST"]`), for a query like `countSubstrings({methods:String}, method) > 0`. A page
- * opened without the param starts with the group's defaults.
+ * `name` (`paramsOf`) as a JSON array (`["GET","POST"]`), for a query like
+ * `countSubstrings({methods:String}, method) > 0`. A page opened without the param starts with the group's defaults.
  */
 export const checkboxGroup: Extension = {
   id: 'checkboxGroup',
@@ -15,21 +16,22 @@ export const checkboxGroup: Extension = {
 
 function renderCheckboxGroup(el: HTMLElement, widget: WidgetOf<'checkboxGroup'>, ctx: WidgetContext): Disposable {
   const name = widget.props.name ?? '';
-  const params = ctx.state.params;
+  const params = paramsOf(ctx.state);
+  const set = (value: string) => params.set(withParam(params.get(), name, value));
   // set before the charts query, so they see the defaults
-  if (params.get(name) === undefined) params.set(name, JSON.stringify(widget.props.defaults ?? []));
+  if (params.get()[name] === undefined) set(JSON.stringify(widget.props.defaults ?? []));
 
   const checkboxes = (widget.props.options ?? []).map((option) => {
     const checkbox: HTMLInputElement = html`<input type="checkbox" class="d-checkbox">`;
     checkbox.addEventListener('change', () => {
-      const checked = checkedOptions(params.get(name)).filter((o) => o !== option);
+      const checked = checkedOptions(params.get()[name]).filter((o) => o !== option);
       if (checkbox.checked) checked.push(option);
-      params.set(name, JSON.stringify(checked));
+      set(JSON.stringify(checked));
     });
     return { option, checkbox };
   });
   const showChecked = () => {
-    const checked = checkedOptions(params.get(name));
+    const checked = checkedOptions(params.get()[name]);
     for (const { option, checkbox } of checkboxes) checkbox.checked = checked.includes(option);
   };
   showChecked();

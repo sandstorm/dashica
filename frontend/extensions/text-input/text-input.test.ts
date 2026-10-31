@@ -1,17 +1,24 @@
 // @vitest-environment jsdom
-// Tests for text-input.ts: the empty param, typing into it, the caret.
+// Tests for text-input.ts: the empty param, typing into it, the caret, the error without the page params.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { PARAMS_STATE, paramsState, withParam, type Params } from '../widget-library/params-state';
 import { textInput } from './text-input';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  testbed.query.registerState(PARAMS_STATE, paramsState);
   testbed.activate(textInput);
 });
 
 afterEach(() => testbed.dispose());
+
+/** The page params, as the dashboardPage extension keeps them. */
+const params = () => testbed.query.state<Params>(PARAMS_STATE)!;
+const param = (name: string) => params().get()[name];
+const setParam = (name: string, value: string) => params().set(withParam(params().get(), name, value));
 
 function type(input: HTMLInputElement, text: string): void {
   input.value = text;
@@ -21,7 +28,7 @@ function type(input: HTMLInputElement, text: string): void {
 describe('textInput', () => {
   it('sets its param empty when the page has none, so a query has it', () => {
     testbed.render({ type: 'textInput', props: { name: 'path', label: 'Path' } });
-    expect(testbed.query.params.get('path')).toBe('');
+    expect(param('path')).toBe('');
   });
 
   it('writes what is typed into its param', () => {
@@ -29,17 +36,25 @@ describe('textInput', () => {
     const input = el.querySelector('input')!;
     expect(input.placeholder).toBe('/api/');
     type(input, '/api/orders');
-    expect(testbed.query.params.get('path')).toBe('/api/orders');
+    expect(param('path')).toBe('/api/orders');
   });
 
   it('with prependCaret, stores the text with a leading ^ and shows it without', () => {
-    testbed.query.params.set('path', '^/api/');
+    setParam('path', '^/api/');
     const { el } = testbed.render({ type: 'textInput', props: { name: 'path', prependCaret: true } });
     const input = el.querySelector('input')!;
     expect(input.value).toBe('/api/');
     type(input, '/checkout');
-    expect(testbed.query.params.get('path')).toBe('^/checkout');
+    expect(param('path')).toBe('^/checkout');
     type(input, '');
-    expect(testbed.query.params.get('path')).toBe('');
+    expect(param('path')).toBe('');
+  });
+
+  it('shows why it cannot render without the extension that keeps the page params', () => {
+    testbed.dispose();
+    testbed = widgetTestbed();
+    testbed.activate(textInput);
+    const { el } = testbed.render({ type: 'textInput', props: { name: 'path' } });
+    expect(el.textContent).toContain('No extension keeps the page params (the query state params)');
   });
 });

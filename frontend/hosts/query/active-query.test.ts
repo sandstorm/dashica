@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for activeQuery in active-query.ts: reads and calls go to the active tab's query state, its events forward,
-// a switch of tabs fires the models' and the registered states' changes once and no refresh.
+// a switch of tabs fires the registered states' changes once and no refresh.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import { QueryHost, QueryStates, activeQuery, type QueryState, type QueryStateSpec } from './query';
@@ -34,7 +34,6 @@ beforeEach(() => {
   checkout.load({ search: '?colors=blue' });
   events = [];
   colors.onDidChange(() => events.push(`colors ${colors.get()}`));
-  query.params.onDidChange(() => events.push('params'));
   query.onDidRequestRefresh(() => events.push('refresh'));
 });
 
@@ -53,9 +52,7 @@ describe('activeQuery', () => {
   it('reads and changes the active tab’s state', () => {
     expect(colors.get()).toBe('red');
     colors.set('green');
-    query.params.set('path', '/x');
     expect(shop.state('colors')?.get()).toBe('green');
-    expect(shop.params.values).toEqual({ path: '/x' });
     expect(query.requestParams().get('colors')).toBe('green');
     expect(checkout.state('colors')?.get()).toBe('blue');
   });
@@ -66,13 +63,13 @@ describe('activeQuery', () => {
     expect(events).toEqual(['colors green', 'refresh']);
   });
 
-  it('fires each model’s change once on a switch, no refresh, then follows the tab shown', () => {
+  it('fires each state’s change once on a switch, no refresh, then follows the tab shown', () => {
     switchTo(checkout);
-    expect(events).toEqual(['params', 'colors blue']);
+    expect(events).toEqual(['colors blue']);
     events = [];
     shop.state<string>('colors')!.set('green');
-    checkout.params.set('path', '/x');
-    expect(events).toEqual(['params', 'refresh']);
+    checkout.state<string>('colors')!.set('white');
+    expect(events).toEqual(['colors white', 'refresh']);
     colors.set('black');
     expect(checkout.state('colors')?.get()).toBe('black');
     expect(shop.state('colors')?.get()).toBe('green');

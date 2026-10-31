@@ -3,17 +3,24 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
+import { PARAMS_STATE, paramsState, withParam, type Params } from '../widget-library/params-state';
 import { speedscopeLink } from './speedscope-link';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  testbed.query.registerState(PARAMS_STATE, paramsState);
   testbed.query.registerState(TIME_STATE, timeState);
   testbed.activate(speedscopeLink);
 });
 
 afterEach(() => testbed.dispose());
+
+/** The page params, as the dashboardPage extension keeps them. */
+const params = () => testbed.query.state<Params>(PARAMS_STATE)!;
+const param = (name: string) => params().get()[name];
+const setParam = (name: string, value: string) => params().set(withParam(params().get(), name, value));
 
 /** The profile URL the link hands to the viewer. */
 function profileUrl(link: HTMLAnchorElement): URL {
@@ -24,7 +31,7 @@ function profileUrl(link: HTMLAnchorElement): URL {
 
 describe('speedscopeLink', () => {
   it('links the viewer to its query with the page’s time range and params', () => {
-    testbed.query.params.set('path', '^/api/');
+    setParam('path', '^/api/');
     const { el } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
     const link = el.querySelector('a')!;
     expect(link.textContent).toBe('Open Speedscope');

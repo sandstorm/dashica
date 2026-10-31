@@ -9,6 +9,7 @@ import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { collapsible } from '../collapsible/collapsible';
 import { markdown } from '../markdown/markdown';
 import { schemaTable } from '../schema-table/schema-table';
+import { PARAMS_STATE, type Params } from '../widget-library/params-state';
 import { dashboardPage } from './dashboard-page';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -59,7 +60,8 @@ beforeEach(() => {
 async function start(url: string): Promise<PageHost> {
   history.replaceState(null, '', url);
   page = new PageHost(window, { menu: [], explore: false, sqlEnabled: false, connections: [] }, content, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
-  dashboardPage.activate({ page, widgets: testbed.widgets, subscriptions: [] } as never);
+  // the active tab's query state registers for every tab, as `activeQuery` does
+  dashboardPage.activate({ page, query: page.activeQuery, widgets: testbed.widgets, subscriptions: [] } as never);
   await page.start();
   return page;
 }
@@ -90,6 +92,12 @@ describe('dashboardPage', () => {
     testbed.serveText('/p/stats/page.json', JSON.stringify({ ...shop, widgets: [{ type: 'stats', props: {}, dataUrl: '/p/stats/api/1' }] }));
     const shown = await start('/p/stats');
     expect(states).toEqual([shown.activeQuery]);
+  });
+
+  it('keeps the dashboard’s params in its tabs’ URLs, sent with every query', async () => {
+    const shown = await start('/p/shop?wp=%7B%22path%22%3A%22%2Fapi%22%7D');
+    expect(shown.activeQuery.state<Params>(PARAMS_STATE)?.get()).toEqual({ path: '/api' });
+    expect(shown.activeQuery.requestParams().get('wp')).toBe('{"path":"/api"}');
   });
 
   it('takes the widgets down with the page', async () => {

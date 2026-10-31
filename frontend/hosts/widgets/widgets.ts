@@ -78,7 +78,10 @@ export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: Wid
 
 /** What a widget's renderer gets to work with. */
 export interface WidgetContext {
-  /** The time range, filter and params of the widget's tab; `state.onDidRequestRefresh`: query again. */
+  /**
+   * The query state of the widget's tab: the states the extensions registered (`state('time')`), what the handlers read
+   * of them (`requestParams`); `state.onDidRequestRefresh`: query again.
+   */
   readonly state: QueryApi;
   /**
    * The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's
