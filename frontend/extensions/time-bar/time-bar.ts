@@ -1,6 +1,7 @@
 import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { ChartFrame, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import type { WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import { ChartFrame } from '../chart-library/chart-frame';
 import { offerFiltersOf } from '../chart-library/filter-on-click';
 import { drawTimeBars } from '../chart-library/time-bars';
 

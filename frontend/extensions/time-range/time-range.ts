@@ -1,7 +1,8 @@
 import { html } from 'htl';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement } from 'lucide';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import { formatTime, type QueryApi } from '../../hosts/query/query';
+import type { QueryApi } from '../../hosts/query/query';
+import { formatTime } from '../time-library/format-time';
 import './time-range.css';
 
 /**

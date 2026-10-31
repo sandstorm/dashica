@@ -1,6 +1,7 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeBarProps } from '../../generated/zz_generated.dashica';
-import type { DrawOptions, QueryResult } from '../../hosts/widgets/widgets';
+import type { QueryResult } from '../../hosts/widgets/widgets';
+import type { DrawOptions } from './chart-frame';
 import { SchemaAnalyzer } from './schema';
 import { filterOnClick, type OfferFilters } from './filter-on-click';
 import { timeBrush } from './time-brush';

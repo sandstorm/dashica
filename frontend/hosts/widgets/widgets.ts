@@ -9,7 +9,7 @@ import type { MenuAnchor } from '../ui/ui';
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
  * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
  * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu. Charts put
- * themselves into one `ChartFrame` (title, spinner, error, menu button).
+ * themselves into the chart library's `ChartFrame` (title, spinner, error, menu button).
  * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
  * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
  * and the widget itself tells its status with its own event: Debug follows it. What only one widget type has (a
@@ -129,5 +129,4 @@ export interface Diagnostics {
   readonly skipped?: string;
 }
 
-export { WidgetsHost, showWidgetError, widgetTitle } from './widgets-impl';
-export { ChartFrame, type ChartFrameOptions, type DrawOptions } from './chart-frame/chart-frame';
+export { WidgetsHost } from './widgets-impl';

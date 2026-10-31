@@ -7,6 +7,7 @@ import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { FilterCandidate } from '../../hosts/widgets/widgets';
+import { widgetTitle } from '../widget-library/widget-title';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';
 import {
   connectionRowsRequest,
@@ -107,8 +108,7 @@ export function renderExploreView(el: HTMLElement, options: ExploreViewOptions):
 
 /** What the view calls `widget`: its title, else its type; a blank Explore (`undefined`) is "Explore". */
 export function chartTitle(widget: WidgetNode | undefined): string {
-  if (widget === undefined) return 'Explore';
-  return 'title' in widget.props && widget.props.title ? widget.props.title : widget.type;
+  return widget === undefined ? 'Explore' : widgetTitle(widget);
 }
 
 /**

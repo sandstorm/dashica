@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -443,15 +443,18 @@ Hosts keep only mechanism.
 
 What several extensions need for drawing lives in a library folder `frontend/extensions/<name>-library/`: stateless
 helpers, no `Extension`, no state of its own at module level (what it builds may keep the state of the drawn element,
-a table's search box). Extensions may import a `-library` folder. `chart-library` holds the column check
+a table's search box). Extensions may import a `-library` folder; hosts never do. `chart-library` holds the chart
+frame (`ChartFrame`, §3.6), the column check
 (`SchemaAnalyzer`), the time selection of the time charts (`timeBrush`: for now a drag sets the page's time range,
-through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and the table (`drawTable`: the widget type `table`, the Debug panel).
+through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and the table (`drawTable`: the widget type `table`, the Debug panel). `widget-library` holds `widgetTitle` (a widget's
+title, else its type), `time-library` `formatTime` (an end of a custom range, as `query.time.setCustom` takes it)
+(9h, §3.15 D22).
 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
-| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4); a click to filter is the `filters` extension's command `filters.offer` (§3.8, 9f) |
+| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status; a click to filter is the `filters` extension's command `filters.offer` (§3.8, 9f); the chart frame is `chart-library`'s (9h) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -488,7 +491,7 @@ ctx.showMenu(menuId, anchor)               // any menu for this widget (its cont
 - **Each widget composes itself; the host does not wrap.** Mandatory mechanism sits in `ctx` (`ctx.query()` tracks
   status, so the status bar and Debug work for every widget). The visual chart frame (render once visible, observe
   size, spinner, error, the chart's Diagnostics §3.8 as "ignores host" or "skipped: …", menu button) is **one optional
-  helper**, `new ChartFrame(el, ctx, { draw })`; charts use it in one line, containers and markdown don't.
+  helper**, `new ChartFrame(el, ctx, { draw })` (`chart-library`, since 9h); charts use it in one line, containers and markdown don't.
 - **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write `query.params`.
 
 ### 3.7 Query state and one request format
@@ -1396,9 +1399,9 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9g)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9h)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1439,6 +1442,13 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `{kind: 'pill', key}` or `{kind: 'sql', sql}`, and only writes it to and reads it from the URL (`f`, `sql`); it
   stores and derives no label (`Pill` is `{key}`; `fetchPill` and a button's pill give the key only, the label the
   server answers beside it is not kept).
+- **D22 The chart frame and the shared helpers into extension libraries (9h, decided after 9g):** `ChartFrame`
+  leaves the `widgets` host for `extensions/chart-library/chart-frame.ts` (beside `filterOnClick` and `drawTable`);
+  the host keeps rendering widgets, the active widget and its status. The small helpers move out of the hosts by
+  their users: `widgetTitle` (Debug, Details, the Explore view) to `extensions/widget-library/widget-title.ts`,
+  `formatTime` (the time picker, `ChartFrame`'s dragged range) to `extensions/time-library/format-time.ts`
+  *(proposed)*. `showWidgetError` stays in the `widgets` host, unexported: only the host shows an error in place
+  of a widget (a type without renderer, a renderer that throws) *(proposed)*.
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1653,6 +1663,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9e ✅ | **D19 records by command** (§3.4.5, §3.15): `records`, `onDidChangeRecords` (`RenderedWidget`) and `selectRecords` (`WidgetContext`) removed from the `widgets` host, and with them the activation by records; the table's renderer keeps its ticked rows and runs `details.showRecords` with `{ widget, records }` on each change, and with none when a new answer or its removal clears ticked rows; `drawTable`'s `selectRecords` is its own callback type; Details keeps what the command gave it (no `widgets` any more), counts it, pops it out; `fakeWidget` without records; tests: table (the command's calls, the press making it active), Details (by command, another table's clear leaves the records); `e2e/record-details.spec.ts`: Details keeps the records when another chart becomes active. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the command's argument is `{ widget: WidgetNode, records }`, the `WidgetNode` the records' identity; a clear from another widget than the shown one leaves Details as it is; another active widget or tab leaves Details as it is; without `details` the command's failure goes to the console *(all proposed)* | a table's ticked rows in Details as before; they stay when another chart becomes active |
 | 9f ✅ | **D20 filter UI is the filters extension's; charts run filters.offer** (§3.8, §3.15): `WidgetsApi.offerFilters`, `WidgetContext.offerFilters`, `filterPicks`, `OP_ICONS`, `fetchPill` and the host's `showQuickPick` leave the `widgets` host; `extensions/filters/offer.ts` (`offerFilters(ui, query, at, candidates, source)`, `OP_ICONS`, `fetchPill`), registered as `filters.offer` on the extension's `ui` and `query` (the tab shown); `chart-library/filter-on-click.ts`: `OfferFilters` (the callback `filterOnClick` and `drawTable` are given) and `offerFiltersOf(commands, { dataUrl, filterable })`, which the renderers of `timeBar`, `timeLine`, `barVertical`, `barHorizontal`, `timeHeatmapOrdinal`, `table` and the Explore view use (they get `commands` from their extension's context); `widgetTestbed` registers a recording `filters.offer` (`offers`) in place of the extension, `choices` / `candidates` / `choose` / `pill` and its `/pill` answer gone; the host's tests moved to `extensions/filters/offer.test.ts`, the renderers' tests check the command's arguments, `filters.test.ts` the registered command. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: one helper `offerFiltersOf` names the command for all seven places instead of seven `executeCommand` calls; the candidates are filtered by `filterable` in the extension, as before in the host; without `filters` the unknown command goes to the console, as `details.showRecords` does; `filters.offer` resolves when the pick is done *(all proposed)* | the click's quick pick as before, owned by `filters` |
 | 9g ✅ | **D21 a pill's key read by the filters extension** (§3.15): `pillLabel`, `pillButton`, `pillField` and `PillField` move from `hosts/query/query-impl.ts` / `query.ts` to `extensions/filters/pill-key.ts`; the `query` host's chips are opaque (`{kind: 'pill', key}` / `{kind: 'sql', sql}`, `Pill` only `{key}`), `parseChip` and `filters.add` keep no label; the filter bar reads each chip's label from its key; `fetchPill` and `fetchButtonPill` give the key only; the key tests moved from `query.test.ts` to `pill-key.test.ts`, the chip expectations of the other tests lost their `label`. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `Pill` stays the type `filters.add` takes, now `{key}`; the server's `/pill` and `/button` answers keep their `label`, which the client ignores *(all proposed)* | chips as keys in the query host, read by `filters` |
+| 9h ✅ | **D22 chart frame and shared helpers into extension libraries** (§3.5, §3.15): `ChartFrame` (`chart-frame.ts` / `.css`) moves from `hosts/widgets/chart-frame/` to `extensions/chart-library/`, `widgets.ts` no longer exports it, `ChartFrameOptions` or `DrawOptions`; `widgetTitle` moves to `extensions/widget-library/widget-title.ts` (Debug, Details, and the Explore view's `chartTitle` on it instead of its own copy), `formatTime` to `extensions/time-library/format-time.ts` (the time picker, `ChartFrame`); all imports follow; the `ChartFrame` tests moved from `widgets.test.ts` to `chart-library/chart-frame.test.ts`, new tests for `widgetTitle` and `formatTime`, the query host's custom-range test sets local times as text. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: two library folders by the helpers' users (`widget-library`, `time-library`) instead of one; `showWidgetError` stays in the `widgets` host, unexported (only the host uses it); `.d-widget-error` stays in `widgets.css`, also used by `ChartFrame` *(all proposed)* | charts as before; the `widgets` host only renders and tracks the active widget |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

@@ -192,13 +192,8 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   }
 }
 
-/** A widget's title (`props.title`), else its type (`timeBar`). */
-export function widgetTitle(widget: WidgetNode): string {
-  return 'title' in widget.props && widget.props.title ? widget.props.title : widget.type;
-}
-
 /** Shows `error` in `el` in place of the widget: its message and the widget's type. */
-export function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
+function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
   const message = error instanceof Error ? error.message : String(error);
   const shown = el.ownerDocument.createElement('div');
   shown.className = 'd-widget-error';

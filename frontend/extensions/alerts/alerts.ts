@@ -1,7 +1,8 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeBarProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { drawTimeBars } from '../chart-library/time-bars';
 
 /**

@@ -2,7 +2,8 @@ import * as Plot from '@observablehq/plot';
 import type { BarHorizontalProps } from '../../generated/zz_generated.dashica';
 import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { ChartFrame, type DrawOptions, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
 
 /**

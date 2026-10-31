@@ -3,9 +3,10 @@ import { instance as viz } from '@viz-js/viz';
 import { Bug, SquareArrowOutUpRight, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import { widgetTitle, type RenderedWidget } from '../../hosts/widgets/widgets';
+import type { RenderedWidget } from '../../hosts/widgets/widgets';
 import { createView, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
+import { widgetTitle } from '../widget-library/widget-title';
 import './debug.css';
 
 /**

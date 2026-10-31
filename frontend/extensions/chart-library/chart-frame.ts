@@ -1,9 +1,9 @@
-// See WidgetsApi in ../widgets.ts.
+// See ChartFrame in chart-frame.ts.
 import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
-import type { Disposable } from '../../../core/disposable/disposable';
-import { formatTime } from '../../query/query';
-import type { Diagnostics, QueryResult, WidgetContext } from '../widgets';
+import type { Disposable } from '../../core/disposable/disposable';
+import type { Diagnostics, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
+import { formatTime } from '../time-library/format-time';
 import './chart-frame.css';
 
 export interface ChartFrameOptions {

@@ -1,7 +1,8 @@
 import { html } from 'htl';
 import type { StatsProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { ChartFrame, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
+import { ChartFrame } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import './stats.css';
 

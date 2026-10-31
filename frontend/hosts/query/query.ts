@@ -31,7 +31,7 @@ export interface TimeModel {
   setRange(range: string): void;
   /**
    * Sets the range to `custom`, each end a time as the server reads it: `2026-10-29 10:00` (a selection on a time
-   * chart, `formatTime`) or relative to now, `now-6h` (the time picker).
+   * chart, `time-library/formatTime`) or relative to now, `now-6h` (the time picker).
    */
   setCustom(from: string, to: string): void;
   setAutoRefresh(seconds: number | undefined): void;
@@ -92,5 +92,5 @@ export interface ParamsModel {
   readonly onDidChange: Event<void>;
 }
 
-export { QueryHost, formatTime, parseSearch, formatSearch, type QueryState } from './query-impl';
+export { QueryHost, parseSearch, formatSearch, type QueryState } from './query-impl';
 export { activeQuery, type ActiveQuerySource } from './active-query';

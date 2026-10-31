@@ -4,8 +4,9 @@ import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import { createView } from '../../hosts/ui/ui';
-import { widgetTitle, type WidgetRecord } from '../../hosts/widgets/widgets';
+import type { WidgetRecord } from '../../hosts/widgets/widgets';
 import { tryPrettyJson } from '../chart-library/table';
+import { widgetTitle } from '../widget-library/widget-title';
 import './details.css';
 
 /**
