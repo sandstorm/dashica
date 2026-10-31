@@ -1,4 +1,4 @@
-// Tests for initialView in mapping.ts: each widget type's config on its result, rows without grouping, the notes.
+// Tests for initialView in mapping.ts: each widget type's config on its result, the rows of an edited query, the notes.
 import { describe, expect, it } from 'vitest';
 import type { SqlFieldProps, WidgetNode } from '../../generated/zz_generated.dashica';
 import { initialView, type RowsShape } from './mapping';
@@ -63,9 +63,14 @@ describe('initialView', () => {
     expect(initialView(chart({ type: 'table', props: {} }), result(['timestamp', 'message'])).config).toMatchObject({ plugin: 'Datagrid', group_by: [], columns: ['timestamp', 'message'] });
   });
 
-  it('shows rows without grouping as a grid of all their columns', () => {
-    const view = initialView(chart({ type: 'timeBar', props: { x: time, y: count, fill: status } }), { kind: 'ungrouped', columns: ['timestamp', 'status', 'host'] });
+  it('shows the rows of an edited query as a grid of all their columns when they lack a column of the chart', () => {
+    const view = initialView(chart({ type: 'timeBar', props: { x: time, y: count, fill: status } }), { kind: 'edited', columns: ['timestamp', 'status', 'host'] });
     expect(view.config).toMatchObject({ plugin: 'Datagrid', group_by: [], split_by: [], columns: ['timestamp', 'status', 'host'], aggregates: {} });
     expect(view.notes).toEqual([]);
+  });
+
+  it('rebuilds the chart on the rows of an edited query that have its columns', () => {
+    const view = initialView(chart({ type: 'timeBar', props: { x: time, y: count, fill: status } }), { kind: 'edited', columns: [time.alias, status.alias, count.alias, 'host'] });
+    expect(view.config).toMatchObject({ plugin: 'Y Bar', group_by: [time.alias], split_by: [status.alias], columns: [count.alias] });
   });
 });

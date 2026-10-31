@@ -7,11 +7,13 @@ import './explore-view.css';
 /**
  * The Explore view: "Open in Explore view" in a chart's menu (`widget/context`, charts with a `rowsUrl`) opens a new
  * tab with the chart's result in `<perspective-viewer>`, its config rebuilt from the chart's props, while the tab's
- * time range and filters keep working on it; "Remove grouping" shows the chart's original rows instead where the
- * server allows it (Explore enabled, a builder query). The tab is the page kind `explore`, named in its hash: its URL
- * is the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's
- * query state and a link or a reload opens it again; Back shows the tab before, "Close" closes the tab. A click on a
- * group row's value selects it (`widget/selection`: "Filter by …"). Perspective loads on first use (`loadPerspective`).
+ * time range and filters keep working on it. With Explore enabled, "SQL" shows the chart's SQL as it runs, its
+ * values written in; the viewer edits it and runs it (`#explore=3&xsql=…`), and the page's time range and filters no
+ * longer apply until "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
+ * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
+ * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab. A click on a
+ * group row's value of the chart's result selects it (`widget/selection`: "Filter by …"). Perspective loads on first
+ * use (`loadPerspective`).
  */
 export const exploreView: Extension = {
   id: 'exploreView',
@@ -29,6 +31,9 @@ export const exploreView: Extension = {
           query: context.query,
           state: globalState,
           perspective: () => loadPerspective(el.ownerDocument, PERSPECTIVE_URL),
+          hash: () => context.hash,
+          onDidChangeHash: context.onDidChangeHash,
+          navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
           select: (selection) => widgets.select({ kind: 'category', widgetId: id, ...selection }),
         });

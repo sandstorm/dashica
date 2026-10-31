@@ -66,13 +66,9 @@ type prepared struct {
 // prepare is `queryObj` filtered by `state` as HandleQuery, HandleRows and HandleDebug send it: its window and SQL
 // filter unless it skips filters, the form values and every filter's value bound.
 func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (prepared, error) {
-	serverId := queryObj.Database()
-	if serverId == "" {
-		serverId = "default"
-	}
-	client, err := qh.ClickhouseClientManager.GetClient(serverId)
+	client, err := qh.client(queryObj)
 	if err != nil {
-		return prepared{}, fmt.Errorf("get clickhouse client: %w", err)
+		return prepared{}, err
 	}
 	p := prepared{client: client, opts: clickhouse.DefaultQueryOptions()}
 	p.opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates (which is used in date picker by browser)
@@ -95,6 +91,37 @@ func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (pre
 		return prepared{}, fmt.Errorf("building SQL query: %w", err)
 	}
 	return p, nil
+}
+
+// client is the ClickHouse client of `queryObj`'s connection (its Database, else "default").
+func (qh QueryHandler) client(queryObj sql.SqlQueryable) (*clickhouse.Client, error) {
+	serverId := queryObj.Database()
+	if serverId == "" {
+		serverId = "default"
+	}
+	client, err := qh.ClickhouseClientManager.GetClient(serverId)
+	if err != nil {
+		return nil, fmt.Errorf("get clickhouse client: %w", err)
+	}
+	return client, nil
+}
+
+// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, its parameters
+// written in as literals (clickhouse.InlineParameters), as text/plain: the Explore view's editor starts from it. Its
+// window is resolved at the server's now, as for HandleQuery. A skipped chart answers 204.
+func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	WriteDiagnostics(w, diagnostics)
+	if diagnostics.Skipped != "" {
+		w.WriteHeader(http.StatusNoContent)
+		return nil
+	}
+	p, err := qh.prepare(queryObj, state)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, err = io.WriteString(w, clickhouse.InlineParameters(p.query, p.opts.Parameters))
+	return err
 }
 
 // writeHeaders tells the client the window (so that charts also show the full range if they have no data at

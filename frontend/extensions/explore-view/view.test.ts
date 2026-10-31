@@ -1,13 +1,25 @@
 // @vitest-environment jsdom
 // Tests for renderExploreView in view.ts, Perspective faked at its module boundary: the rows with the page's query
-// state, their description, the config from the chart or kept per chart, Reset, a refresh, "Remove grouping", a click
-// on a group row.
+// state, their description, the config from the chart or kept per chart, Reset, a refresh, the SQL editor (following
+// the chart, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a click on a group row.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import type { ViewerConfig } from './mapping';
-import { persistable, renderExploreView, type ChartWithRows, stateKey, type Perspective, type PerspectiveTable, type PerspectiveViewer, type ViewSelection } from './view';
+import {
+  editedSql,
+  persistable,
+  renderExploreView,
+  type ChartWithRows,
+  stateKey,
+  withEditedSql,
+  type Perspective,
+  type PerspectiveTable,
+  type PerspectiveViewer,
+  type ViewSelection,
+} from './view';
 
 const widget = {
   type: 'timeBar',
@@ -79,11 +91,21 @@ let requests: string[];
 let closed: number;
 let selected: ViewSelection[];
 let answer: (url: URL) => Response;
+/** The tab's hash, as Run and Reset navigate it. */
+let hash: string;
+let hashChanged: EventEmitter<void>;
+let navigations: string[];
 
-const rowsResponse = (body = 'rows-1', headers: Record<string, string> = {}) => new Response(body, { headers: { 'X-Dashica-Grouping': 'removable', ...headers } });
-/** The server's answer: the chart's result, or without grouping its rows, at most 3. */
-const serve = (result: string, ungrouped = 'raw-1') => (url: URL) =>
-  url.searchParams.get('grouping') === 'none' ? rowsResponse(ungrouped, { 'X-Dashica-Rows-Limit': '3' }) : rowsResponse(result);
+const rowsResponse = (body = 'rows-1', headers: Record<string, string> = {}) => new Response(body, { headers: { 'X-Dashica-Sql': 'editable', ...headers } });
+/**
+ * The server's answer: at /sql the chart's SQL, its time range written in (`… time=1h`); at /rows the chart's result,
+ * or an edited query's rows (`edited:<text>`), at most 3.
+ */
+const serve = (result: string) => (url: URL) => {
+  if (url.pathname.endsWith('/sql')) return new Response(`SELECT time=${url.searchParams.get('time')}`);
+  const edited = url.searchParams.get('xsql');
+  return edited === null ? rowsResponse(result) : rowsResponse(`edited:${edited}`, { 'X-Dashica-Rows-Limit': '3' });
+};
 
 beforeEach(() => {
   query = new QueryHost(window);
@@ -98,6 +120,9 @@ beforeEach(() => {
   closed = 0;
   selected = [];
   answer = serve('rows-1');
+  hash = '#explore=3';
+  hashChanged = new EventEmitter<void>();
+  navigations = [];
   vi.stubGlobal('fetch', async (url: string) => {
     requests.push(url);
     return answer(new URL(url, location.origin));
@@ -113,8 +138,30 @@ afterEach(() => {
 });
 
 function open(): void {
-  view = renderExploreView(el, { widget, query, state, perspective: async () => perspective, close: () => closed++, select: (selection) => selected.push(selection) });
+  view = renderExploreView(el, {
+    widget,
+    query,
+    state,
+    perspective: async () => perspective,
+    hash: () => hash,
+    onDidChangeHash: hashChanged.event,
+    navigate: (to) => {
+      navigations.push(to);
+      hash = to;
+      hashChanged.fire();
+    },
+    close: () => closed++,
+    select: (selection) => selected.push(selection),
+  });
 }
+
+const find = <T extends HTMLElement>(testId: string) => el.querySelector<T>(`[data-testid="${testId}"]`)!;
+const sqlText = () => find<HTMLTextAreaElement>('explore-view-sql-text');
+/** Types `text` into the SQL editor. */
+const type = (text: string) => {
+  sqlText().value = text;
+  sqlText().dispatchEvent(new Event('input'));
+};
 
 /** Lets the fetches and Perspective's promises settle. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -220,47 +267,139 @@ describe('renderExploreView', () => {
     expect([...el.querySelectorAll('.d-explore-view__notes li')].map((li) => li.textContent)).toEqual(['`fill` (`status`) is not a column of the chart’s result']);
   });
 
-  it('shows the rows without grouping on "Remove grouping", in a new viewer, and the chart’s result again', async () => {
+  it('opens the SQL editor with the chart’s SQL as the server writes it for the page’s state, and again on a refresh', async () => {
     open();
     await settle();
-    const ungroup = el.querySelector<HTMLButtonElement>('[data-testid="explore-view-ungroup"]')!;
-    expect(ungroup.hidden).toBe(false);
-    schema = { timestamp: 'datetime', status: 'integer', host: 'string' };
-    ungroup.click();
+    const button = find<HTMLButtonElement>('explore-view-sql');
+    expect(button.hidden).toBe(false);
+    expect(find('explore-view-sql-panel').hidden).toBe(true);
+    button.click();
     await settle();
-    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa&grouping=none');
-    expect(ungroup.getAttribute('aria-pressed')).toBe('true');
-    expect(tables.map(({ data, deleted }) => ({ data, deleted }))).toEqual([
-      { data: 'rows-1', deleted: true },
-      { data: 'raw-1', deleted: false },
-    ]);
-    expect(viewersMade).toBe(2);
-    expect(el.querySelectorAll('.d-explore-view__viewer')).toHaveLength(1);
-    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: ['timestamp', 'status', 'host'] })]);
-    expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('the newest 3 rows (limit)');
-    ungroup.click();
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(requests.at(-1)).toBe('/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa');
+    expect(sqlText().value).toBe('SELECT time=1h');
+    query.time.setRange('3h');
     await settle();
-    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa');
-    expect(ungroup.getAttribute('aria-pressed')).toBe('false');
-    expect(tables.at(-1)!.data).toBe('rows-1');
+    expect(sqlText().value).toBe('SELECT time=3h');
+    expect(find('explore-view-edited').hidden).toBe(true);
   });
 
-  it('keeps the viewer’s config of the rows without grouping apart from the result’s', async () => {
+  it('offers no SQL editor when the server does not allow it (Explore not enabled)', async () => {
+    answer = () => new Response('rows-1');
+    open();
+    await settle();
+    expect(find<HTMLButtonElement>('explore-view-sql').hidden).toBe(true);
+  });
+
+  it('runs the edited SQL through the tab’s hash: its rows in a new viewer, the note, the limit; Reset goes back', async () => {
+    open();
+    await settle();
+    find<HTMLButtonElement>('explore-view-sql').click();
+    await settle();
+    schema = { timestamp: 'datetime', status: 'integer', host: 'string' };
+    type('SELECT * FROM http_logs');
+    find<HTMLButtonElement>('explore-view-run').click();
+    await settle();
+    expect(navigations).toEqual(['#explore=3&xsql=SELECT+*+FROM+http_logs']);
+    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?xsql=SELECT+*+FROM+http_logs');
+    expect(tables.map(({ data, deleted }) => ({ data, deleted }))).toEqual([
+      { data: 'rows-1', deleted: true },
+      { data: 'edited:SELECT * FROM http_logs', deleted: false },
+    ]);
+    expect(viewersMade).toBe(2);
+    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: ['timestamp', 'status', 'host'] })]);
+    expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
+    expect(find('explore-view-edited').hidden).toBe(false);
+    expect(find('explore-view-edited').textContent).toContain('the page’s time range and filters do not apply');
+
+    find<HTMLButtonElement>('explore-view-sql-reset').click();
+    await settle();
+    expect(navigations.at(-1)).toBe('#explore=3');
+    expect(requests.slice(-2).sort()).toEqual(['/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa', '/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa']);
+    expect(tables.at(-1)!.data).toBe('rows-1');
+    expect(sqlText().value).toBe('SELECT time=1h');
+    expect(find('explore-view-edited').hidden).toBe(true);
+  });
+
+  it('opens with the edited SQL of the tab’s hash (a reload, a link): its rows, the editor open; the page’s state does not change them', async () => {
+    hash = withEditedSql('#explore=3', 'SELECT 1');
+    open();
+    await settle();
+    expect(requests).toEqual(['/p/shop/api/3/rows?xsql=SELECT+1']);
+    expect(find('explore-view-sql-panel').hidden).toBe(false);
+    expect(sqlText().value).toBe('SELECT 1');
+    query.time.setRange('3h');
+    await settle();
+    expect(requests.at(-1)).toBe('/p/shop/api/3/rows?xsql=SELECT+1');
+  });
+
+  it('follows the chart again when Run gets the chart’s SQL unchanged', async () => {
+    open();
+    await settle();
+    find<HTMLButtonElement>('explore-view-sql').click();
+    await settle();
+    find<HTMLButtonElement>('explore-view-run').click();
+    expect(navigations).toEqual(['#explore=3']);
+  });
+
+  it('runs with Cmd/Ctrl+Enter in the editor', async () => {
+    open();
+    await settle();
+    find<HTMLButtonElement>('explore-view-sql').click();
+    await settle();
+    type('SELECT 2');
+    sqlText().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
+    expect(editedSql(hash)).toBe('SELECT 2');
+  });
+
+  it('keeps a draft over a refresh, saying it was not run', async () => {
+    open();
+    await settle();
+    find<HTMLButtonElement>('explore-view-sql').click();
+    await settle();
+    expect(find('explore-view-sql-note').textContent).toBe('');
+    type('SELECT draft');
+    expect(find('explore-view-sql-note').textContent).toBe('not run');
+    query.time.setRange('3h');
+    await settle();
+    expect(sqlText().value).toBe('SELECT draft');
+    expect(find('explore-view-sql-note').textContent).toBe('not run');
+  });
+
+  it('shows the error of an edited query in place of the viewer, the editor keeping its text', async () => {
+    answer = (url) =>
+      url.searchParams.has('xsql') ? new Response('Code: 62. DB::Exception: Syntax error', { status: 500 }) : serve('rows-1')(url);
+    open();
+    await settle();
+    find<HTMLButtonElement>('explore-view-sql').click();
+    await settle();
+    type('SELEC 1');
+    find<HTMLButtonElement>('explore-view-run').click();
+    await settle();
+    expect(el.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 62. DB::Exception: Syntax error');
+    expect(sqlText().value).toBe('SELEC 1');
+    expect(find('explore-view-sql-panel').hidden).toBe(false);
+  });
+
+  it('shows an error of the chart’s SQL below the editor', async () => {
+    answer = (url) => (url.pathname.endsWith('/sql') ? new Response('Explore is not enabled', { status: 404 }) : serve('rows-1')(url));
+    open();
+    await settle();
+    find<HTMLButtonElement>('explore-view-sql').click();
+    await settle();
+    expect(find('explore-view-sql-panel').querySelector('.d-notice--error')!.textContent).toBe('404 Explore is not enabled');
+  });
+
+  it('keeps the viewer’s config of an edited query’s rows apart from the result’s', async () => {
     stored.set(stateKey(widget), { plugin: 'Y Line' });
     stored.set(stateKey(widget, true), { plugin: 'Datagrid', group_by: ['host'] });
     open();
     await settle();
     expect(viewer.restored).toEqual([{ plugin: 'Y Line' }]);
-    el.querySelector<HTMLButtonElement>('[data-testid="explore-view-ungroup"]')!.click();
+    hash = withEditedSql(hash, 'SELECT 1');
+    hashChanged.fire();
     await settle();
     expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'] }]);
-  });
-
-  it('offers no "Remove grouping" when the server does not serve the rows without grouping', async () => {
-    answer = () => new Response('rows-1');
-    open();
-    await settle();
-    expect(el.querySelector<HTMLButtonElement>('[data-testid="explore-view-ungroup"]')!.hidden).toBe(true);
   });
 
   it('shows the chart’s Diagnostics: the filters it ignores, a skipped chart', async () => {
@@ -279,7 +418,7 @@ describe('renderExploreView', () => {
     answer = () => new Response('Code: 47. Unknown identifier host', { status: 500 });
     open();
     await settle();
-    expect(el.querySelector('.d-notice--error')!.textContent).toBe('500 Code: 47. Unknown identifier host');
+    expect(el.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 47. Unknown identifier host');
   });
 
   it('selects the deepest group value of a clicked row on a column of the rows, no time', async () => {
@@ -293,11 +432,10 @@ describe('renderExploreView', () => {
     expect(selected[0].anchor.isConnected).toBe(true);
   });
 
-  it('selects nothing from the rows without grouping, whose raw values the chart’s dimensions would not match', async () => {
+  it('selects nothing from an edited query’s rows, whose columns the page’s filters do not reach', async () => {
+    hash = withEditedSql(hash, 'SELECT customer_project FROM http_logs');
+    schema = { customer_project: 'string' };
     open();
-    await settle();
-    schema = { timestamp: 'datetime', customer_project: 'string' };
-    el.querySelector<HTMLButtonElement>('[data-testid="explore-view-ungroup"]')!.click();
     await settle();
     viewer.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter: [['customer_project', '==', 'sandstorm.shop']] } } }));
     expect(selected).toEqual([]);
@@ -316,6 +454,15 @@ describe('renderExploreView', () => {
     await settle();
     expect(tables[0].deleted).toBe(true);
     expect(el.children).toHaveLength(0);
+  });
+});
+
+describe('editedSql and withEditedSql', () => {
+  it('read and write the edited SQL of the tab’s hash, keeping its other keys', () => {
+    expect(editedSql('#explore=3')).toBeUndefined();
+    const edited = withEditedSql('#explore=3', "SELECT * FROM t WHERE a = 'x&y' # z");
+    expect(editedSql(edited)).toBe("SELECT * FROM t WHERE a = 'x&y' # z");
+    expect(withEditedSql(edited, undefined)).toBe('#explore=3');
   });
 });
 

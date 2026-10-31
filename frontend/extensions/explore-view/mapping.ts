@@ -16,8 +16,8 @@ export interface ViewerConfig {
 
 /** The rows the view shows, as far as the mapping needs them. */
 export interface RowsShape {
-  /** `result`: the chart's result, its columns the chart's aliases; `ungrouped`: its rows without grouping. */
-  readonly kind: 'result' | 'ungrouped';
+  /** `result`: the chart's result, its columns the chart's aliases; `edited`: the rows of the SQL the viewer edited. */
+  readonly kind: 'result' | 'edited';
   /** The rows' column names. */
   readonly columns: readonly string[];
 }
@@ -31,12 +31,18 @@ export interface InitialView {
 /**
  * The viewer config that rebuilds `widget`'s chart on its result: its plugin, the dimensions as `group_by` /
  * `split_by` and the measure as `columns`, each by its alias (a column of the result), a count summed, any other
- * measure its last value. A dimension the result lacks is left out, with a note. Rows without grouping start as a
- * datagrid of all their columns.
+ * measure its last value. A dimension the result lacks is left out, with a note. The rows of an edited query get that
+ * config when they have every column it names, else a datagrid of all their columns.
  */
 export function initialView(widget: WidgetNode, rows: RowsShape): InitialView {
+  const chart = chartView(widget, rows);
+  if (rows.kind === 'edited' && chart.notes.length > 0) return new ViewBuilder(rows).build();
+  return chart;
+}
+
+/** The config that rebuilds `widget`'s chart on `rows`, with a note per column it lacks. */
+function chartView(widget: WidgetNode, rows: RowsShape): InitialView {
   const view = new ViewBuilder(rows);
-  if (rows.kind === 'ungrouped') return view.build();
   switch (widget.type) {
     case 'timeBar':
     case 'barVertical':

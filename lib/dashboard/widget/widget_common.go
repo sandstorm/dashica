@@ -38,7 +38,8 @@ type withProps interface {
 }
 
 // withQuery is a chart: Mount serves the query it runs, with its own selects and limits, at "/query" (the data,
-// Arrow) and "/debug" (the query, EXPLAIN), and for the Explore view at "/rows" (also without its grouping).
+// Arrow) and "/debug" (the query, EXPLAIN), and for the Explore view at "/rows" and "/sql" (the query as text, which
+// the viewer edits).
 type withQuery interface {
 	Query() sql.SqlQueryable
 }
@@ -82,11 +83,11 @@ type withExplicitId interface {
 type Node struct {
 	Type  string          `json:"type"`
 	Props json.RawMessage `json:"props"`
-	// DataURL is where its handler answers ("/p/shop/api/3": /query, /debug and /rows below it); empty for a widget
-	// without data.
+	// DataURL is where its handler answers ("/p/shop/api/3": /query, /debug, /rows and /sql below it); empty for a
+	// widget without data.
 	DataURL string `json:"dataUrl,omitempty"`
-	// RowsURL is where the Explore view's rows of it answer ("/p/shop/api/3/rows": its result, `?grouping=none`
-	// without grouping); empty for a widget without a query.
+	// RowsURL is where the Explore view's rows of it answer ("/p/shop/api/3/rows": its result, `?xsql=` an edited
+	// query); empty for a widget without a query.
 	RowsURL string `json:"rowsUrl,omitempty"`
 	// Children by name: a grid's areas; a collapsible group's widgets as "0", "1", ….
 	Children map[string]Node `json:"children,omitempty"`
@@ -226,11 +227,12 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 	return nil
 }
 
-// queryHandler serves the query of `chart`: /query (the data, Arrow), /debug (the query, EXPLAIN) and /rows (the
-// Explore view's rows in plain Arrow types, HandleRows: the chart's result, with `?grouping=none` without grouping,
-// sql.Ungrouped, at most exploreRowLimit, X-Dashica-Rows-Limit; gated by grouping on deps.ExploreEnabled), each with
-// the request's filters as the chart interprets them (applyFilters, base-table columns from `columns`); a request whose
-// query state cannot be read is a 400.
+// queryHandler serves the query of `chart`: /query (the data, Arrow), /debug (the query, EXPLAIN), /rows (the
+// Explore view's rows in plain Arrow types, HandleRows: the chart's result; with `?xsql=<text>` the query the viewer
+// edited, HandleEditedRows, at most exploreRowLimit rows) and /sql (the chart's query with its parameters written in,
+// HandleSql), each with the request's filters as the chart interprets them (applyFilters, base-table columns from
+// `columns`); a request whose query state cannot be read is a 400. /sql and `xsql` are behind the Explore gate
+// (editable on deps.ExploreEnabled).
 func queryHandler(deps rendering.Dependencies, chart withQuery, columns filter.Columns) http.Handler {
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: deps.ClickhouseClientManager,
@@ -253,46 +255,43 @@ func queryHandler(deps rendering.Dependencies, chart withQuery, columns filter.C
 			httpError(w, handle(filtered, state, diagnostics, w, r))
 		}
 	}
+	rows := serve(qh.HandleRows)
 	mux := http.NewServeMux()
 	mux.Handle("/query", serve(qh.HandleQuery))
 	mux.Handle("/debug", serve(qh.HandleDebug))
-	mux.Handle("/rows", grouping(deps.ExploreEnabled, query, serve(func(q sql.SqlQueryable, state httpserver.QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
-		if withoutGrouping(r) {
-			without, ok := sql.Ungrouped(q, exploreRowLimit)
-			if !ok {
-				return fmt.Errorf("rows without grouping: the filtered query is a %T", q)
-			}
-			q = without
-			w.Header().Set("X-Dashica-Rows-Limit", strconv.Itoa(exploreRowLimit))
+	mux.Handle("/rows", editable(deps.ExploreEnabled, edited, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if edited(r) {
+			httpError(w, qh.HandleEditedRows(query, r.URL.Query().Get("xsql"), exploreRowLimit, w, r))
+			return
 		}
-		return qh.HandleRows(q, state, diagnostics, w, r)
+		rows(w, r)
 	})))
+	mux.Handle("/sql", editable(deps.ExploreEnabled, always, serve(qh.HandleSql)))
 	return mux
 }
 
-// exploreRowLimit is the number of rows /rows?grouping=none answers at most, the newest.
+// exploreRowLimit is the number of rows an edited query (/rows?xsql=) answers at most.
 const exploreRowLimit = 100_000
 
-// withoutGrouping: the request asks for the rows without the chart's grouping (`?grouping=none`).
-func withoutGrouping(r *http.Request) bool {
-	return r.URL.Query().Get("grouping") == "none"
+// edited: the request asks for the rows of the query the viewer edited (`?xsql=<text>`).
+func edited(r *http.Request) bool {
+	return r.URL.Query().Has("xsql")
 }
 
-// grouping is `rows` (/rows: the chart's result, without grouping when withoutGrouping) behind the Explore gate: the
-// rows without grouping only when `explore` and `query` is a builder query (sql.Ungrouped), else 404 before any query;
-// each answer of a chart that has them says `X-Dashica-Grouping: removable`.
-func grouping(explore bool, query sql.SqlQueryable, rows http.Handler) http.HandlerFunc {
-	_, builder := query.(*sql.SqlQuery)
-	removable := explore && builder
+func always(*http.Request) bool { return true }
+
+// editable is `handler` behind the Explore gate: with `explore` each answer says `X-Dashica-Sql: editable` (the
+// view offers its SQL editor); without, a request that `needs` it is a 404 before any query.
+func editable(explore bool, needs func(*http.Request) bool, handler http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if withoutGrouping(r) && !removable {
-			http.Error(w, "rows without grouping: Explore is not enabled (explore.enabled), or the chart's query is a SQL file", http.StatusNotFound)
+		if !explore && needs(r) {
+			http.Error(w, "Explore is not enabled (explore.enabled)", http.StatusNotFound)
 			return
 		}
-		if removable {
-			w.Header().Set("X-Dashica-Grouping", "removable")
+		if explore {
+			w.Header().Set("X-Dashica-Sql", "editable")
 		}
-		rows.ServeHTTP(w, r)
+		handler.ServeHTTP(w, r)
 	}
 }
 

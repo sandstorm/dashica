@@ -1,5 +1,5 @@
-/* See explore-view.ts: the Explore view filling its tab, its bar, notes and the viewer filling the rest; the viewer's
-   --psp-* variables taken from the tokens, so light and dark apply. */
+/* See explore-view.ts: the Explore view filling its tab, its bar, the SQL editor, notes and the viewer filling the
+   rest; the viewer's --psp-* variables taken from the tokens, so light and dark apply. */
 /* in the page's element, which grows with its content: a basis of 0 keeps the viewer as tall as the tab */
 .d-explore-view__host {
   flex: 1 1 0;
@@ -42,6 +42,37 @@
   display: flex;
   gap: var(--space-2);
   margin-left: auto;
+}
+
+/* the SQL editor below the bar: its text, Run with "not run" beside it, an error of the chart's SQL */
+.d-explore-view__sql {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.d-explore-view__sql-text {
+  resize: vertical;
+}
+
+.d-explore-view__sql-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* while the SQL is edited: the page's time range and filters do not apply */
+.d-explore-view__edited {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-2) var(--space-3);
+}
+
+.d-explore-view__edited[hidden] {
+  display: none;
 }
 
 .d-explore-view__notes {

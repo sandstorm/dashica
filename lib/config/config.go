@@ -36,8 +36,9 @@ type Config struct {
 
 // ExploreConfig is what the Explore view may show beyond what the charts show.
 type ExploreConfig struct {
-	// Enabled: every viewer may see a builder chart's rows without its grouping, the raw rows of its table
-	// ("Remove grouping"); off by default, since they may hold personal data the chart aggregates away.
+	// Enabled: every viewer may edit a chart's SQL in the Explore view and run it, read-only, on the chart's
+	// ClickHouse connection, raw rows included; off by default, since they may hold personal data the chart
+	// aggregates away.
 	Enabled bool `koanf:"enabled"`
 }
 

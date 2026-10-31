@@ -1,4 +1,4 @@
-// Tests for QueryHandler.HandleRows without ClickHouse: a skipped chart.
+// Tests for QueryHandler.HandleRows without ClickHouse: a skipped chart; the LIMIT around an edited query.
 package httpserver
 
 import (
@@ -22,5 +22,13 @@ func TestHandleRows_ASkippedChartAnswers204WithoutClickHouse(t *testing.T) {
 	}
 	if rec.Code != http.StatusNoContent || rec.Header().Get("X-Dashica-Diagnostics") != `{"skipped":"pick a host first"}` {
 		t.Errorf("status %d, headers %v", rec.Code, rec.Header())
+	}
+}
+
+func TestLimited_IsALimitAroundTheTextOnLinesOfItsOwn(t *testing.T) {
+	got := limited("SELECT 1 SETTINGS max_result_rows = 0 -- all", 1000)
+
+	if want := "SELECT * FROM (\nSELECT 1 SETTINGS max_result_rows = 0 -- all\n) LIMIT 1000"; got != want {
+		t.Errorf("limited =\n%s\nwant\n%s", got, want)
 	}
 }
