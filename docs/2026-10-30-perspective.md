@@ -4,7 +4,7 @@ Status: **draft (2026-10-30); simplified (2026-10-31, after the maintainer's not
 `spike/perspective`, not yet run in a browser: see §8. Decided 2026-10-31: the view shows the chart's materialized SQL
 in an editor, and an edited query runs as it is written; this replaces "Remove grouping" (§4.7). Decided 2026-10-31
 as well (§4.8, workbench §3.14 D8–D13): placeholders instead of literals, `exploreSql`, Explore off means off (✅ built
-2026-10-31, step 8g); planned: a global "Explore" without a chart, a Schema view, CodeMirror.**
+2026-10-31, step 8g; the Schema view in step 8h); planned: a global "Explore" without a chart, CodeMirror.**
 
 Builds on the workbench concept (`docs/2026-10-28-workbench.md`: §3.8 selections, §6 "Explore rebuilt", "drill to
 detail", "Perspective instead of the Tabulator table").
@@ -380,7 +380,7 @@ only the greyed "Explore". Playwright (`e2e/explore-view.spec.ts`, skipped while
 editor open with `{__from}` listed, delete the `GROUP BY`, Run (more rows, the note, `exploreSql` and `param___from`
 in the URL), reload (still edited), Reset.
 
-### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, the rest planned)
+### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, the rest planned)
 
 The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each step rewrites what it changes above.
 
@@ -402,11 +402,17 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an empty editor, run on
   a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts as the edited rows);
   "Start from chart…" fills the editor from one of the shown page's charts.
-- **D11 Schema view (step 8h):** a left side panel "Schema": a tree connection › database › table, the shown page's
-  connections first, the others below. A table opens structured as DataGrip shows it: columns with type, default and
-  comment; engine, ORDER BY, PARTITION BY, primary key, TTL, skip indices. One cached query set per connection on
-  `system.tables`, `system.columns` and `system.data_skipping_indices`, refreshable from the view. The same data feeds
-  the editor's autocomplete (D12).
+- **D11 Schema view (step 8h, ✅ 2026-10-31):** a left side panel "Schema": a tree connection › database › table, the
+  shown page's connections first, the others below. A table opens structured as DataGrip shows it: columns with type,
+  default and comment; engine, ORDER BY, PARTITION BY, primary key, TTL, skip indices. One cached query set per
+  connection on `system.tables`, `system.columns` and `system.data_skipping_indices`, refreshable from the view. The
+  same data feeds the editor's autocomplete (D12). Built as: `GET /schema.json?connection=<name>` answers
+  `clickhouse.Schema` (`{databases: [{name, tables: [{name, engine, sortingKey, partitionKey, primaryKey, ttl, comment,
+  columns, skipIndices}]}]}`, generated into the TS types), kept on the connection's client until `&refresh=1`; the
+  TTL is cut from `engine_full` (system.tables has no TTL column); the connections come from `workbench.json`'s
+  `connections`, a page's from its nodes' `connection`. The view and `/schema.json` are part of Explore: without
+  `explore.enabled` there is no panel and the handler answers 404 *(proposed)*. Every database the user sees is
+  listed, `system` included; a table opens in place in the tree; "Refresh" is in the panel's "…" *(proposed)*.
 - **D12 SQL editor (step 8j):** CodeMirror 6, `@codemirror/lang-sql` with a ClickHouse dialect (`SQLDialect.define`),
   its `schema` option fed by the Schema data; loaded only when Explore opens (with the Perspective bundle). Replaces
   the `<textarea>` of §4.7.
@@ -479,7 +485,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
 5. (With the Explore rebuild) the widget builder joins the view.
 6. **The batch of 2026-10-31** (§4.8; workbench steps): ✅ 8g D8 + D9 (Explore off, `exploreSql`, placeholders;
    2026-10-31: vitest, typecheck, top comments, `go vet` and the Go tests without ClickHouse green; the ClickHouse
-   tests and Playwright written, not run, deviations in §4.8); planned, not built: 8h D11 (Schema view), 8i D10
+   tests and Playwright written, not run, deviations in §4.8); ✅ 8h D11 (Schema view, 2026-10-31, the same checks,
+   deviations in §4.8); planned, not built: 8i D10
    (global "…" menu, blank Explore), 8j D12 (CodeMirror), 8k D13 (settings panel, Reset asks).
 
 ## 7. Open questions
