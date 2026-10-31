@@ -121,7 +121,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Region | Holds |
 |---|---|
 | Top bar | one row over the content only (between the sides, step 9i), always visible: the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the time range and refresh (the filter funnel went in step 9o, D26) (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
-| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m) or `filters.sqlEnabled` is on, its last entry "SQL condition…" under "Advanced" adding a SQL chip (step 9o, §3.15 D26; the funnel button in the top bar of step 7b is gone) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m; since 9p reads one, its columns and computed fields, §3.15 D27) or `filters.sqlEnabled` is on, its last entry "SQL condition…" under "Advanced" adding a SQL chip (step 9o, §3.15 D26; the funnel button in the top bar of step 7b is gone) |
 | Rails | from the window's top to the status bar, as their panels (step 9i): at the left rail's start the global menu's "…" (menu `workbench/global`, `UiHost.railStart`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i); a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first after the "…"; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the ticked rows a table gave it by command, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -602,11 +602,14 @@ the server made:
   pill fails the other charts on that table (`UNKNOWN_IDENTIFIER`).
 
   `sql.Quote` writes a ClickHouse string literal: `'…'`, with `\` and `'` escaped by a backslash. A field that cannot
-  filter (a count, a time bucket, any field of a chart without a table) answers 422; with `FilterAs` the condition
+  filter (a count, a time bucket, a constant such as a fixed colour (since 9p, §3.15 D27), any field of a chart
+  without a table) answers 422; with `FilterAs` the condition
   writes the op itself (until 9k `ne` was `NOT (<its condition>)`). The widget's node in `page.json` says which of its fields can filter, so the quick pick
   offers only those: `filterable` beside `dataUrl` (the aliases of its dimensions that are categories, when its query
   has a table and does not skip filters) *(proposed: on the node, not in each type's props, since every chart has it;
-  it replaces the table's `categories` prop)*.
+  it replaces the table's `categories` prop)*. Since 9p (§3.15 D27) a column of the chart's table makes a pill too
+  (`/pill?column=<name>`, checked against the schema), and `computed` names the filterable fields that are more than
+  a column.
 - **The key** is `<payload>.<mac>` (`filter.Sign`): the payload the pill as JSON (`filter.Pill`: the connection,
   `database.table`, the field's alias, the op, the condition, the label, the shown value and the field's type; a
   button's pill its condition, label, button and value instead of table, field and op), the mac an HMAC
@@ -668,8 +671,9 @@ the server made:
 filters):
 
 - **The node names its table:** `table` beside `filterable` in `page.json` (`default.http_logs`, as `filter.Table`
-  names it), set when the node has filterable fields; with its `connection` it groups the page's fields by table
-  (`filterableTables`: each field once, served by the first chart naming it).
+  names it), set when the node has filterable fields (since 9p whenever its query has a table, §3.15 D27); with its
+  `connection` it groups the page's fields by table (`filterableTables`: each field once, served by the first chart
+  naming it; since 9p the table's columns from its first chart's `/columns`).
 - **The filter bar's "Add filter"** after the chips, while a chart of the page filters a table (so the bar shows on
   such a page even without chips or buttons *(proposed)*): quick picks below the button for the table (skipped when
   there is one *(proposed)*), the field, `=` or `≠` (since 9k the ops of the field's type, §3.15 D25), then the value;
@@ -1445,7 +1449,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 
 ### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1527,6 +1531,37 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   on every page with `filterBar`, and with it the filter bar, also without a filterable chart (then "SQL condition…" is
   its only entry), so that a SQL chip can be added on any such page; the input box is one line (no Shift+Enter, as the
   chip's textarea has).
+- **D27 Table columns and computed fields; no constants (9p, decided 2026-10-31; maintainer, on "Add filter"'s field
+  list of `mv_oekokiste_shop` with `'darkred'`, `orange` and `darkorange` in it: "missing fields from schema of
+  table… maybe this needs grouping like 'table fields' and 'computed fields' … and static things like 'darkred' should
+  never appear here"):**
+  - **A constant never filters:** a field whose definition is a lone SQL string or number literal (`'darkred'`,
+    `'#D73027'`, `42`; a fixed colour of a Fill) holds no categories (`sql.IsCategory`), so it is in no `filterable`,
+    neither in "Add filter" nor in a click's quick pick, and `/pill` answers 422. So is a SQL file's or string's
+    column it selects as a literal (`'darkred' AS color`, `sql.IsConstantColumn`, which reads the text with a regular
+    expression rather than parsing it *(proposed)*; a literal in any of its SELECTs counts *(proposed)*).
+  - **The field step in two groups:** "Table columns", every column of the table as the server's cached schema of
+    the chart's connection has it (the Schema view's `Client.Schema`, D11), with its type, from
+    `<dataUrl>/columns` (`{columns: [{name, type, …}]}`, the resolved time range in its header for a time's default;
+    not behind `explore.enabled`: it is only the chart's own table), asked of the table's first chart; then
+    "Computed fields", the charts' fields that are more than a column, each alias once. `page.json` names them per
+    chart (`computed` beside `filterable`): an expression, a `FilterAs`, a renamed column (`sql.Field("customer_project").WithAlias("instance")`) and every field of a SQL file
+    (a column of its result, not of the table) *(proposed)*; a builder query's field that is just a column
+    (`sql.ColumnOf`) appears once, under the columns. Without the schema (a failed `/columns`, its message beside
+    the heading) the columns are the charts' plain fields, each made by its chart *(proposed)*.
+  - **A column's pill is signed by the server too:** `<dataUrl>/pill?column=<name>&…` (and `/values`, `/type`) takes
+    a column of the chart's base table, checked against the cached schema (never the client's word), its name quoted
+    as an identifier (`sql.QuoteIdentifier`, `` (`host`) = 'shop-1' ``, `sql.ColumnField`); 422 for a column the table
+    lacks. The ops of D25 come from the column's type in the schema (the client asks no `/type` for it; the key's
+    `type` is the schema's, not the client's). The key carries `column: true` *(proposed: a separate parameter and
+    flag, so a computed field and a column of the same name never mix up)*, so the filter bar edits it through any
+    chart on its table (the table's first one), else it is only removed ("No chart of this page reads …"). A
+    column's values come from the chart's query when it is a builder query (its From and Where), else from the table
+    itself (`SELECT … FROM <table>` with the time range and pills), as a SQL file's result need not have the column
+    *(proposed)*. A table missing from the schema is taken as `default.<name>` when its name has no database
+    *(proposed)*.
+  - **The node names its table** whenever its query has one and takes filters, also without filterable fields (a
+    stats or a time line), so "Add filter" offers the columns of every table the page reads *(proposed)*.
 - **D34 Free text in headers percent-encoded (9u, decided 2026-10-31):** a header Dashica writes with free text
   (`X-Dashica-Diagnostics`, `X-Dashica-Column-Types`) is its JSON through Go's `url.PathEscape`; every reader runs
   `decodeURIComponent` before `JSON.parse` (`fetchQueryResult` in the `widgets` host, `fetchRows` in `explore-view`).
@@ -1833,6 +1868,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9v ✅ | **D35 the config injected, not copied flags** (§3.15): `rendering.Dependencies.Config` (`*config.Config`, read only) replaces `ExploreEnabled`, `FilterSecret` and `SqlEnabled`; `QueryHandler`, `SchemaHandler` and `ConnectionRowsHandler` get `Config` as a field, `TimeRangeHandler` no field; `httpserver.ParseQueryState(r)` only reads the request; `QueryState.SqlClause(timeRange, cfg.Filters)` answers SQL chips with `ErrSqlNotEnabled` (400) while `filters.sqlEnabled` is off, so `/query`, `/debug`, `/rows`, `/sql`, `/values`, `/type` and Speedscope refuse them and `/time-range` and the alert widgets take them; `newDashicaImpl` takes the config from `deps.Config`; the unused `queryAlertsHandler`, `queryAlertChartHandler` and `debugCalculateAlertsHandler` deleted. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: the check is a parameter of `SqlClause` (the one place a chip goes into a WHERE) rather than a separate call at each handler; a chart's `/sql` with Explore off is a 404 before the SQL-chip 400 *(both proposed)* | one source of the settings |
 | 9w ✅ | **D36 typed query keys** (§3.7, §3.15): `queryKey<T>(urlKeys, { parse, format, sentToServer })` in `hosts/query/query.ts`; `QueryApi.get` / `set` / `onDidChange(key, listener)` in `QueryHost` and `activeQuery`; `QueryKeys` (the keys used, in first-use order, shared by the tabs, a URL key in one key only) replaces `QueryStates`; `TIME`, `REFRESH`, `FILTERS`, `PARAMS` replace `timeState` / `TIME_STATE`, `refreshState` / `REFRESH_STATE`, `chipsState` / `FILTERS_STATE`, `paramsState` / `PARAMS_STATE` / `paramsOf`; `registerState`, `state<T>(id)` and the registrations' dispose gone; `WidgetContext.state` → `ctx.query`, the data fetch `ctx.query()` → `ctx.runQuery()`; every use and test migrated (`time-range`, `refresh`, `filters` with `offer` / `add-filter`, `ChartFrame`, the form widgets, Speedscope, `dashboardPage` without a registration). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `ctx.runQuery()`; `queryKey`'s first argument the URL key(s); `sentToServer` a function for `TIME`; a key is sent once used; the params error gone *(all proposed)* | `query.get(TIME)` |
 | 9o ✅ | **D26 no funnel; "SQL condition…" in "Add filter"** (§3.8, §3.15): `FilterBar.toggle` (the funnel, `ui.registerBarItem('top', …)`) and the `new` SQL chip in edit mode are gone; `addFilter(ui, query, tables, anchor, sqlEnabled)` ends its first quick pick with a separator "Advanced" and "SQL condition…" while `sqlEnabled`, which asks the condition in `showInputBox` and adds a SQL chip (`addSqlCondition`); "Add filter" shows while a chart filters a table or `sqlEnabled`. Files: `frontend/extensions/filters/{filters,add-filter}.ts` (+ tests), `e2e/{filter-chips,add-filter,top-bar}.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the step's id is 9o, as 9l was taken by a bugfix; with the flag on, the filter bar shows on every page with `filterBar`; the input box is one line *(all proposed)* | SQL typed only as the advanced way of "Add filter" |
+| 9p ✅ | **D27 table columns and computed fields; no constants** (§3.8, §3.15): Go `sql.IsCategory` false for a lone literal, `sql.IsConstantColumn` (a SQL file's `'darkred' AS color`), `sql.ColumnOf`, `sql.ColumnField`, `sql.QuoteIdentifier`; `clickhouse.Schema.Columns`; `filter.Pill.Column` (signed); `widget`: `filterableFields(deps, chart)` without constants (the file read with `deps.FileSystem`), `filterBy` (`field=` or `column=`, the column checked against `Client.Schema`), `tableColumns`, `<dataUrl>/columns` (`columnsHandler`, not behind Explore), `/pill`, `/values`, `/type` taking `column`, `httpError` 422 for `ErrCannotFilter`; `Node.Computed` (`computed` in `page.json`, generator, golden contract) and `Node.Table` for every chart with a table; client: `FilterableTable.widget`, `FilterableField.computed`, `fieldItems` ("Table columns" from `fetchColumns`, "Computed fields"), `FieldRef` / `fieldParam` (`offer.ts`), `fetchValues` / `fetchType` / `fetchPill` by `FieldRef`, `pillField`'s `column`, `fieldSource` of a column the table's first chart; tests: Go (`sql`, `clickhouse`, `widget`; `columns_e2e_test.go` against ClickHouse), vitest (`add-filter`, `filters`, `pill-key`), `e2e/add-filter.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new `/columns` and column `/pill` checks among them, blocked in the sandbox; Playwright written, not run), deviations: the step's id is 9p, as 9n was taken by a concept bugfix; a separate `column` parameter and a signed `column` flag; the constant column of a SQL file found by a regular expression, a literal in any SELECT; every SQL file field computed; a column's values over the plain table for a SQL file chart; the plain fields as columns without the schema; `table` on every chart with a table; a table name without database looked up in `default` *(all proposed)* | every column of the table, no `'darkred'` |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

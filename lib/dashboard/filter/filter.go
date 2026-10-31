@@ -52,8 +52,13 @@ func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table
 // no table. Its key (Sign) carries all of it, signed.
 type Pill struct {
 	Table
-	// Field is the alias of the field it filters by ("customer"); the pills on one table and field combine (Apply).
+	// Field is the alias of the field it filters by ("customer"), or with Column the column's name; the pills on one
+	// table and field combine (Apply).
 	Field string `json:"field"`
+	// Column is set for a pill on a column of the table ("Add filter"'s table columns, docs/2026-10-28-workbench.md
+	// §3.15 D27), which any chart on the table makes again, else a chart's field's, which a chart with that field
+	// makes.
+	Column bool `json:"column,omitempty"`
 	// Op is how the field compares with Value (sql.Op: `eq`, `ne`, `lt`, `le`, `gt`, `ge`).
 	Op sql.Op `json:"op"`
 	// Condition is what goes into the WHERE of a chart on Table (`customer_project = 'customer-acme'`).

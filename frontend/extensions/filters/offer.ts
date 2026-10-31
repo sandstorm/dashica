@@ -54,12 +54,31 @@ function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
 }
 
 /**
- * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, "Add filter", an edited chip), its key
- * (the chip reads its label from it, `pillLabel`), the field's `type` in it when known (for the ops of its edits);
- * rejects with the server's message (a field that cannot filter: 422).
+ * What a pill filters by (docs/2026-10-28-workbench.md §3.15 D27): a chart's field by its alias, or with `column` a
+ * column of the chart's table by its name.
  */
-export async function fetchPill(dataUrl: string, { fieldId, op, value, type }: FilterCandidate & { readonly op: FilterOp }): Promise<Pill> {
-  const response = await fetch(`${dataUrl}/pill?${new URLSearchParams({ field: fieldId, op, value, ...(type ? { type } : {}) })}`);
+export interface FieldRef {
+  readonly field: string;
+  readonly column?: boolean;
+}
+
+/** `ref` as `/pill`, `/values` and `/type` take it: `field=<alias>`, or `column=<name>` for a column. */
+export function fieldParam(ref: FieldRef): [string, string] {
+  return [ref.column ? 'column' : 'field', ref.field];
+}
+
+/**
+ * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, "Add filter", an edited chip), its key
+ * (the chip reads its label from it, `pillLabel`), the field's `type` in it when known (for the ops of its edits); with
+ * `column` the pill on that column of the chart's table (`fieldParam`, §3.15 D27), its type the server's schema's.
+ * Rejects with the server's message (a field that cannot filter: 422).
+ */
+export async function fetchPill(
+  dataUrl: string,
+  { fieldId, column, op, value, type }: FilterCandidate & { readonly op: FilterOp; readonly column?: boolean },
+): Promise<Pill> {
+  const asked = new URLSearchParams([fieldParam({ field: fieldId, column }), ['op', op], ['value', value], ...(type ? [['type', type]] : [])]);
+  const response = await fetch(`${dataUrl}/pill?${asked}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   const { key } = (await response.json()) as Pill;
   return { key };

@@ -1,6 +1,6 @@
 // Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields), a
-// filter button's among them, the values it offers for them (valuesHandler), the table its node names and the pills
-// of Speedscope's query.
+// filter button's among them, the values it offers for them (valuesHandler), its table's columns (columnsHandler)
+// without a schema, the table and computed fields its node names and the pills of Speedscope's query.
 package widget
 
 import (
@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
@@ -22,13 +23,16 @@ import (
 
 var testSecret = []byte("a test secret of at least thirty-two bytes")
 
+// testFiles are the SQL files of the test charts: colors.sql selects a constant colour beside its hosts.
+var testFiles = fstest.MapFS{"colors.sql": {Data: []byte("SELECT host, 'darkred' AS color, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")}}
+
 // testDeps are the dependencies of a chart's handler on a ClickHouse that is unreachable (the EXPLAINs of /debug fail
-// and stay unchecked), its connection "default" on the database "default", the pills signed with testSecret, SQL chips
-// and Explore off.
+// and stay unchecked, so does its schema), its connection "default" on the database "default", the pills signed with
+// testSecret, SQL chips and Explore off, its SQL files testFiles.
 func testDeps() rendering.Dependencies {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	cfg := &config.Config{ClickHouse: unreachable, Filters: config.FiltersConfig{Secret: string(testSecret)}}
-	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
+	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FileSystem: testFiles}
 }
 
 // askPath is the answer of `chart`'s handler to `path` (with its query string).
@@ -110,6 +114,8 @@ func TestPill_ARangeOpCarriesTheTypeTheClientNamed(t *testing.T) {
 func TestPill_AFieldThatCannotFilterIs422(t *testing.T) {
 	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
+	colour := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count()).Fill(sql.Field("'darkred'").WithAlias("darkred"))
+	colours := NewBarVertical(sql.FromFile("colors.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt")).Fill(sql.NewFieldAlias("color"))
 	for name, tt := range map[string]struct {
 		chart withQuery
 		field string
@@ -118,6 +124,8 @@ func TestPill_AFieldThatCannotFilterIs422(t *testing.T) {
 		"a time bucket":              {bar, "time"},
 		"no field of it":             {bar, "path"},
 		"a SQL file without a table": {noTable, "host"},
+		"a constant":                 {colour, "darkred"},
+		"a SQL file's constant":      {colours, "color"},
 	} {
 		if rec := askPath(tt.chart, "/pill?op=eq&value=1&field="+tt.field); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
@@ -255,7 +263,7 @@ func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
 	logs := sql.New(sql.From("http_logs"))
 	aliases := func(chart withQuery) []string {
 		var out []string
-		for _, f := range filterableFields(chart) {
+		for _, f := range filterableFields(testDeps(), chart) {
 			out = append(out, f.Alias())
 		}
 		return out
@@ -269,6 +277,12 @@ func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
 		"skips filters":       {NewBarVertical(sql.New(sql.From("http_logs"), sql.SkipFilters())).X(sql.Field("path")).Y(sql.Count()), nil},
 		"SQL file":            {NewBarVertical(sql.FromFile("x.sql")).X(sql.NewFieldAlias("path")).Y(sql.NewFieldAlias("cnt")), nil},
 		"SQL file with Table": {NewBarVertical(sql.FromFile("x.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("path")).Y(sql.NewFieldAlias("cnt")), []string{"path"}},
+		"a constant fill":     {NewBarVertical(logs).X(sql.Field("path")).Y(sql.Count()).Fill(sql.Field("'#D73027'").WithAlias("darkred")), []string{"path"}},
+		"an unnamed constant": {NewBarVertical(logs).X(sql.Field("path")).Y(sql.Count()).Fill(sql.Field("'darkred'")), []string{"path"}},
+		"a SQL file's constant": {
+			NewBarVertical(sql.FromFile("colors.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt")).Fill(sql.NewFieldAlias("color")),
+			[]string{"host"},
+		},
 	}
 	for name, tt := range tests {
 		if got := aliases(tt.chart); !slices.Equal(got, tt.want) {
@@ -307,15 +321,55 @@ func TestValues_AFieldThatCannotFilterIs422AnUnsignedPill400(t *testing.T) {
 	}
 }
 
-func TestMount_AChartWithFilterableFieldsNamesItsTable(t *testing.T) {
+func TestMount_AChartWithATableNamesIt(t *testing.T) {
 	_, _, _, page := mountPage(t,
 		NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count()),
 		NewBarVertical(sql.New(sql.From("audit"), sql.OnDatabase("logs"))).X(sql.Field("action")).Y(sql.Count()),
 		NewStats(sql.New(sql.From("payments"))),
+		NewStats(sql.New(sql.From("payments"), sql.SkipFilters())),
 		pathEcho{},
 	)
 
-	if got := []string{page[0].Table, page[1].Table, page[2].Table, page[3].Table}; !slices.Equal(got, []string{"default.http_logs", "audit", "", ""}) {
+	if got := []string{page[0].Table, page[1].Table, page[2].Table, page[3].Table, page[4].Table}; !slices.Equal(got, []string{"default.http_logs", "audit", "default.payments", "", ""}) {
 		t.Errorf("tables %q", got)
+	}
+}
+
+func TestMount_TheComputedFieldsAreThoseThatAreMoreThanAColumn(t *testing.T) {
+	_, _, _, page := mountPage(t,
+		NewBarVertical(sql.New(sql.From("http_logs"))).
+			X(sql.Field("replaceOne(customer_project, 'oekokiste.', '')").WithAlias("instance")).
+			Y(sql.Count()).
+			Fill(sql.Field("host_name")),
+		NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).
+			Fill(sql.Field("customer_project").WithAlias("project")),
+		NewBarVertical(sql.FromFile("colors.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt")).Fill(sql.NewFieldAlias("color")),
+	)
+
+	for i, want := range []struct{ filterable, computed []string }{
+		{[]string{"instance", "host_name"}, []string{"instance"}},
+		{[]string{"project"}, []string{"project"}},
+		{[]string{"host"}, []string{"host"}},
+	} {
+		if !slices.Equal(page[i].Filterable, want.filterable) || !slices.Equal(page[i].Computed, want.computed) {
+			t.Errorf("chart %d: filterable %q, computed %q", i, page[i].Filterable, page[i].Computed)
+		}
+	}
+}
+
+func TestColumns_AChartWithoutATableIs422TheSchemaAskedOtherwise(t *testing.T) {
+	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
+	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
+	for _, path := range []string{"/columns?time=1h", "/pill?op=eq&value=1&column=host", "/values?time=1h&column=host", "/type?time=1h&column=host"} {
+		if rec := askPath(noTable, path); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("no table, %s: %d %s", path, rec.Code, rec.Body)
+		}
+		// the ClickHouse of testDeps is unreachable, so is its schema: the column is never taken on the client's word
+		if rec := askPath(bar, path); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "system.tables") {
+			t.Errorf("a table, %s: %d %s", path, rec.Code, rec.Body)
+		}
+	}
+	if rec := askPath(bar, "/columns"); rec.Code != http.StatusBadRequest {
+		t.Errorf("no time range: %d %s", rec.Code, rec.Body)
 	}
 }

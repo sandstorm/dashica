@@ -1,4 +1,5 @@
-// Tests for what pills need of a query and its fields: TableOf, IsCategory, Condition and Quote.
+// Tests for what pills need of a query and its fields: TableOf, IsCategory, IsConstantColumn, ColumnOf, ColumnField,
+// Condition, Quote and QuoteIdentifier.
 package sql
 
 import "testing"
@@ -54,6 +55,76 @@ func TestIsCategory_EveryFieldButCountsAndTimeBuckets(t *testing.T) {
 		if IsCategory(f) {
 			t.Errorf("%s is a time bucket", f.Definition())
 		}
+	}
+}
+
+func TestIsCategory_AConstantIsNone(t *testing.T) {
+	for _, f := range []SqlField{Field("'darkred'"), Field("'#D73027'").WithAlias("darkred"), Field("'it\\'s'"), Field("42"), Field(" -0.5 "), Field("1e3")} {
+		if IsCategory(f) {
+			t.Errorf("%s is a constant", f.Definition())
+		}
+		if _, ok := Condition(f, OpEq, "darkred"); ok {
+			t.Errorf("%s makes no condition", f.Definition())
+		}
+	}
+	for _, f := range []SqlField{Field("concat('shop-', host)"), Field("'a' || host"), Field("status = 500"), Field("x42")} {
+		if !IsCategory(f) {
+			t.Errorf("%s is no constant", f.Definition())
+		}
+	}
+}
+
+func TestIsConstantColumn_ALiteralSelectedAsTheColumn(t *testing.T) {
+	text := `SELECT
+    'OK'                                           as status,
+    'forestgreen'                                  as color,
+    replaceOne(customer_project, 'oekokiste.', '') as instance,
+    count(*)                                       as counter,
+    42 AS ` + "`answer`" + `,
+    CAST('1' AS String) AS one
+FROM mv_oekokiste_shop
+WHERE {{DASHICA_FILTERS}}
+UNION ALL
+SELECT 'error' as status, 'darkred' as color, …`
+	for column, want := range map[string]bool{"status": true, "color": true, "answer": true, "instance": false, "counter": false, "String": false, "one": false, "col": false} {
+		if got := IsConstantColumn(text, column); got != want {
+			t.Errorf("%s: got %v", column, got)
+		}
+	}
+}
+
+func TestColumnOf_APlainNameAsItsOwnAlias(t *testing.T) {
+	if name, ok := ColumnOf(Field("host_name")); !ok || name != "host_name" {
+		t.Errorf("plain: %q %v", name, ok)
+	}
+	for _, f := range []SqlField{
+		Field("customer_project").WithAlias("instance"),
+		Field("replaceOne(customer_project, 'oekokiste.', '')"),
+		Field("status").FilterAs(func(op Op, value string) string { return op.Compare("status", value) }),
+		Field("'darkred'"),
+		Enum("level"),
+		Count(),
+		Timestamp15Min(),
+		AutoBucket("timestamp"),
+	} {
+		if name, ok := ColumnOf(f); ok {
+			t.Errorf("%s is no plain column, got %q", f.Definition(), name)
+		}
+	}
+}
+
+func TestColumnField_ComparesTheQuotedColumn(t *testing.T) {
+	if got, ok := Condition(ColumnField("event.type"), OpNe, "it's"); !ok || got != "(`event.type`) != 'it\\'s'" {
+		t.Errorf("got %q %v", got, ok)
+	}
+	if got := ColumnField("host").Alias(); got != "host" {
+		t.Errorf("alias %q", got)
+	}
+}
+
+func TestQuoteIdentifier_EscapesBackticksAndBackslashes(t *testing.T) {
+	if got := QuoteIdentifier("a`b\\c"); got != "`a\\`b\\\\c`" {
+		t.Errorf("got %s", got)
 	}
 }
 

@@ -68,3 +68,16 @@ func TestManager_ConnectionsAreTheConfiguredNamesSorted(t *testing.T) {
 	m := NewManager(&config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}, "logs": {}}}, zerolog.Nop())
 	require.Equal(t, []string{"alert_storage", "default", "logs"}, m.Connections())
 }
+
+func TestSchemaColumns_TheColumnsOfOneTable(t *testing.T) {
+	schema := assembleSchema(
+		[]schemaTableRow{{Database: "default", Name: "http_logs"}, {Database: "logs", Name: "http_logs"}},
+		[]schemaColumnRow{{Database: "default", Table: "http_logs", Name: "host", Type: "String"}, {Database: "logs", Table: "http_logs", Name: "path", Type: "String"}},
+		nil,
+	)
+	columns, ok := schema.Columns("logs", "http_logs")
+	require.True(t, ok)
+	require.Equal(t, []SchemaColumn{{Name: "path", Type: "String"}}, columns)
+	_, ok = schema.Columns("default", "missing")
+	require.False(t, ok)
+}

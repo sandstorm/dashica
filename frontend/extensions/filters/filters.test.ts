@@ -4,7 +4,8 @@
 // button's value asked for in an input box, made a pill by its page and shown beside it, a new value in its chip's
 // place, "Add filter" while a chart filters a table or SQL chips are taken, its "SQL condition…" adding a SQL chip; a
 // field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
-// input box), each made again by a chart of the page, one no chart makes only removed; with SQL filters off
+// input box), each made again by a chart of the page (a column's by the table's first chart), one no chart makes only
+// removed; with SQL filters off
 // (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; a chart
 // click's `filters.offer` adding the pill chosen to the tab shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -324,7 +325,8 @@ describe('filters', () => {
     expect(bar.children.length).toBe(1);
     expect(bar.querySelector('.d-filter-bar__chips')!.lastElementChild).toBe(add());
     add()!.click();
-    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['host', '— Advanced', 'SQL condition…'], anchor: add() }]));
+    // the fetch of this test answers no columns: the chart's plain field stands in for them
+    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['— Table columns', 'host', '— Advanced', 'SQL condition…'], anchor: add() }]));
   });
 
   it('is gone on a page without filters', () => {
@@ -462,6 +464,24 @@ describe('filters, a field’s pill edited', () => {
     expect(chips().map(chipText)).toEqual(['host = a']);
     expect(chips()[0].title).toBe('host = a\nNo chart of this page filters default.http_logs by host, so it can only be removed');
   });
+
+  it('edits a column’s pill through the table’s first chart, by `column`, also without a chart naming it', async () => {
+    const user = { connection: 'default', table: 'default.http_logs', field: 'user', column: true, op: 'eq', value: 'a', type: 'String' };
+    const stats = { type: 'stats', props: {}, dataUrl: '/p/shop/api/7', table: 'default.http_logs', connection: 'default' };
+    show({ ...shop, filterButtons: [], widgets: [stats, byHost] as PageJson['widgets'] });
+    query.load({ search: `?f=${keyOf('user = a', user)}` });
+    pickedValue = 'b';
+    value(chips()[0]).click();
+    await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
+    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/7\/values\?.*column=user&search=$/);
+    expect(fetched.at(-1)).toBe('/p/shop/api/7/pill?column=user&op=eq&value=b&type=String');
+  });
+
+  it('only removes a column’s pill on a page without its table, saying why', () => {
+    const user = { connection: 'default', table: 'default.audit', field: 'user', column: true, op: 'eq', value: 'a' };
+    query.load({ search: `?f=${keyOf('user = a', user)}` });
+    expect(chips()[0].title).toBe('user = a\nNo chart of this page reads default.audit, so it can only be removed');
+  });
 });
 
 describe('filters with SQL filters off', () => {
@@ -479,7 +499,7 @@ describe('filters with SQL filters off', () => {
     const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
     show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
     add()!.click();
-    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['host'], anchor: add() }]));
+    await vi.waitFor(() => expect(picks).toEqual([{ labels: ['— Table columns', 'host'], anchor: add() }]));
   });
 
   it('shows a link’s SQL chip, not edited, saying why; its × removes it', () => {

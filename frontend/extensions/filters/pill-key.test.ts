@@ -1,5 +1,5 @@
 // Tests for what a pill's key says of itself: its label (pillLabel), the filter button it was made for (pillButton),
-// the field it filters by (pillField).
+// the field or column it filters by (pillField).
 import { describe, expect, it } from 'vitest';
 import { pillButton, pillField, pillLabel } from './pill-key';
 
@@ -33,6 +33,12 @@ describe('pillField', () => {
   it('reads a range op and the type the pill was made with', () => {
     const since = { ...host, field: 'timestamp', op: 'ge', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' };
     expect(pillField(keyOf('timestamp ≥ 2026-10-31T10:00:00.000Z', since))).toEqual(since);
+  });
+
+  it('reads whether it is a column’s pill', () => {
+    const user = { ...host, field: 'user', column: true };
+    expect(pillField(keyOf("user ≠ O'Brien", user))).toEqual(user);
+    expect(pillField(keyOf("host ≠ O'Brien", { ...host, column: 'yes' }))).toEqual(host);
   });
 
   it('reads none from a key without a value, signed before pills carried it', () => {

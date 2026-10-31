@@ -2,6 +2,7 @@ package sql
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -135,15 +136,46 @@ func Enum(field string) SqlField {
 
 // IsCategory is whether `f` holds categories a chart can be filtered by: a column, an Enum or an expression
 // (`JSONExtractString(attrs, 'host')`); a count is a measure, a time bucket (Timestamp15Min, TimestampField,
-// AutoBucket) a time axis.
+// AutoBucket) a time axis, a constant (`sql.Field("'darkred'")`, a fixed colour of a Fill) the same on every row.
 func IsCategory(f SqlField) bool {
 	switch field := f.(type) {
 	case autoBucketField:
 		return false
 	case *fieldImpl:
-		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0
+		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0 && !literal.MatchString(field.definition)
 	}
 	return true
+}
+
+// literal is a lone SQL string or number literal: `'darkred'`, `'#D73027'`, `42`, `-0.5`.
+var literal = regexp.MustCompile(`^\s*(?:'(?:[^'\\]|\\.)*'|-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\s*$`)
+
+// IsConstantColumn is whether `sqlText` (a SQL file's or string's query) selects a lone literal as the column
+// `column` of its result (`'darkred' AS color`), in one of its SELECTs: a fixed colour or label, which filters
+// nothing (docs/2026-10-28-workbench.md §3.15 D27). It reads the text, it does not parse it.
+func IsConstantColumn(sqlText, column string) bool {
+	constant := regexp.MustCompile(`(?i)(?:^|[\s,])(?:'(?:[^'\\]|\\.)*'|-?[0-9]+(?:\.[0-9]+)?)\s+AS\s+` + "`?" + regexp.QuoteMeta(column) + "`?" + `(?:[\s,]|$)`)
+	return constant.MatchString(sqlText)
+}
+
+// ColumnOf is the column of its table `f` is (`sql.Field("host_name")`): a plain name, its own alias, without
+// FilterAs; false for an expression, a field renamed with WithAlias, a count, a time bucket, a constant. "Add filter"
+// lists such a field among its table's columns (§3.15 D27).
+func ColumnOf(f SqlField) (string, bool) {
+	own, ok := f.(*fieldImpl)
+	if !ok || own.filterAs != nil || own.alias != own.definition || !IsCategory(f) || !identifier.MatchString(own.definition) {
+		return "", false
+	}
+	return own.definition, true
+}
+
+// identifier is a plain column name.
+var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// ColumnField is the field of the column `name` of a table, its name quoted (QuoteIdentifier) and its alias: the
+// field of a pill on a table's column (§3.15 D27), whose condition is "(`host`) = 'shop-1'".
+func ColumnField(name string) SqlField {
+	return Field(QuoteIdentifier(name)).WithAlias(name)
 }
 
 // Condition is the WHERE condition of a pill on `f` (docs/2026-10-28-workbench.md §3.8, §3.15 D25): the rows where
@@ -163,4 +195,10 @@ func Condition(f SqlField, op Op, value string) (string, bool) {
 // (`it's` is `'it\'s'`), so it never ends the literal.
 func Quote(value string) string {
 	return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(value) + "'"
+}
+
+// QuoteIdentifier is `name` as a ClickHouse identifier: in backticks, each `\` and backtick escaped with a backslash,
+// so a column name from the schema never ends it.
+func QuoteIdentifier(name string) string {
+	return "`" + strings.NewReplacer(`\`, `\\`, "`", "\\`").Replace(name) + "`"
 }

@@ -7,8 +7,10 @@ export interface PillField {
   readonly connection: string;
   /** With its database: `default.http_logs`. */
   readonly table: string;
-  /** The alias of the field (`host`). */
+  /** The alias of the field (`host`), or with `column` the column's name. */
   readonly field: string;
+  /** Set for a pill on a column of `table` (docs/2026-10-28-workbench.md §3.15 D27), which any chart on it makes. */
+  readonly column?: true;
   readonly op: FilterOp;
   /** As the field shows it (`acme`, a time as ISO 8601); '' for an empty one. */
   readonly value: string;
@@ -37,16 +39,17 @@ export function pillButton(key: string): { readonly button: string; readonly val
 }
 
 /**
- * The field a pill's key filters by, as its chart made it (`<dataUrl>/pill`): its table, the field's alias, the op and
- * the value the field shows, by which the filter bar makes it again with another op or value; `undefined` for a
+ * The field a pill's key filters by, as its chart made it (`<dataUrl>/pill`): its table, the field's alias (or a
+ * column's name, `column`), the op and the value the field shows, by which the filter bar makes it again with another
+ * op or value; `undefined` for a
  * button's pill, a key without a field, and one without a value (signed before pills carried it, so it cannot be made
  * again: an empty value is `""`).
  */
 export function pillField(key: string): PillField | undefined {
-  const { connection, table, field, op, value, type, button } = payloadOf(key);
+  const { connection, table, field, column, op, value, type, button } = payloadOf(key);
   if (button || typeof connection !== 'string' || typeof table !== 'string' || typeof field !== 'string' || !field) return undefined;
   if (!FILTER_OPS.includes(op as FilterOp) || typeof value !== 'string') return undefined;
-  return { connection, table, field, op: op as FilterOp, value, ...(typeof type === 'string' && type ? { type } : {}) };
+  return { connection, table, field, ...(column === true ? { column } : {}), op: op as FilterOp, value, ...(typeof type === 'string' && type ? { type } : {}) };
 }
 
 /** The payload of a pill's key, as JSON (`Sign`); empty for a key without one. */

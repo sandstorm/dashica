@@ -13,6 +13,22 @@ type Schema struct {
 	Databases []SchemaDatabase `json:"databases"`
 }
 
+// Columns are the columns of the table `table` in the database `database` ("default", "http_logs"), in their order;
+// false for a table the schema does not have.
+func (s Schema) Columns(database, table string) ([]SchemaColumn, bool) {
+	for _, db := range s.Databases {
+		if db.Name != database {
+			continue
+		}
+		for _, t := range db.Tables {
+			if t.Name == table {
+				return t.Columns, true
+			}
+		}
+	}
+	return nil, false
+}
+
 // SchemaDatabase is a database of a connection ("default", "system") with its tables.
 type SchemaDatabase struct {
 	Name   string        `json:"name"`

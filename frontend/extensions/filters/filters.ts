@@ -19,15 +19,17 @@ import './filters.css';
  * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
  * SQL chip's text edits it. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
  * offers the ops of its type (`opsOf`: `=` / `≠`, for a number or a time also `<` `≤` `>` `≥`), one on its value asks
- * a new one (as "Add filter" does); each edit asks a chart of the page on the pill's table with that field
- * (`fieldSource`) for the pill again and puts it in the chip's place. A pill no chart of the page makes, and a
+ * a new one (as "Add filter" does); each edit asks a chart of the page on the pill's table with that field, for a
+ * column's pill any chart on it (`fieldSource`), for the pill again and puts it in the chip's place. A pill no chart
+ * of the page makes, and a
  * button's pill outside its page, can only be removed. "Add filter"'s advanced entry "SQL condition…" adds a SQL chip
  * (§3.15 D26). Both only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a
  * SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
  * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
  * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
- * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on one of the
- * tables the page's charts filter (`addFilter`), shown while there is one or SQL chips are taken. The bar shows while it has a chip, a button or
+ * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on a column
+ * or a computed field of one of the tables the page's charts read (`addFilter`), shown while there is one or SQL chips
+ * are taken. The bar shows while it has a chip, a button or
  * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
  * runs the command `filters.offer` (`(at, candidates, { dataUrl, filterable })`): its quick pick adds the pill chosen to
  * the tab shown (`offerFilters`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
@@ -102,7 +104,7 @@ class FilterBar {
   readonly #add: HTMLButtonElement = html`<button
     type="button"
     class="d-button d-button--ghost"
-    title="Add a filter on a field of the page's charts">${createElement(ListFilterPlus, { width: 16, height: 16 })}Add filter</button>`;
+    title="Add a filter on a column or field of the page's tables">${createElement(ListFilterPlus, { width: 16, height: 16 })}Add filter</button>`;
   readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}</div>`;
   #pageButtons: readonly FilterButton[] = [];
   #tables: readonly FilterableTable[] = [];
@@ -120,11 +122,11 @@ class FilterBar {
     private readonly sqlEnabled: boolean,
     private readonly onDidChangeWanted: () => void,
   ) {
-    if (sqlEnabled) this.#add.title = "Add a filter on a field of the page's charts, or a SQL condition";
+    if (sqlEnabled) this.#add.title = "Add a filter on a column or field of the page's tables, or a SQL condition";
     this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.sqlEnabled));
   }
 
-  /** Whether "Add filter" has something to offer: a table the page's charts filter, or a SQL condition. */
+  /** Whether "Add filter" has something to offer: a table the page's charts read, or a SQL condition. */
   get #adds(): boolean {
     return this.#tables.length > 0 || this.sqlEnabled;
   }
@@ -203,7 +205,7 @@ class FilterBar {
       chip.kind === 'sql' && !this.sqlEnabled
         ? `${whole}\nSQL filters are not enabled (filters.sqlEnabled)`
         : made
-          ? `${whole}\nNo chart of this page filters ${made.table} by ${made.field}, so it can only be removed`
+          ? `${whole}\n${made.column ? `No chart of this page reads ${made.table}` : `No chart of this page filters ${made.table} by ${made.field}`}, so it can only be removed`
           : whole;
     return html`<span class=${chip.kind === 'pill' ? 'd-filter-chip d-filter-chip--pill' : 'd-filter-chip'} data-testid="filter-chip" title=${title}>
       ${label ? html`<span class="d-filter-chip__label" onclick=${edit}>${label}</span>` : ''}
@@ -267,7 +269,7 @@ class FilterBar {
       `${made.field} ${OP_SIGNS[made.op]}`,
       made.op,
       { type: made.type },
-      (search, signal) => fetchValues(source.dataUrl, made.field, search, this.query.requestParams(), signal),
+      (search, signal) => fetchValues(source.dataUrl, made, search, this.query.requestParams(), signal),
       made.value,
     );
     if (value !== undefined) await this.#remake(chip, index, source, { ...made, value });
@@ -277,9 +279,9 @@ class FilterBar {
    * Asks `source` (`<dataUrl>/pill`) for the pill of `field` and puts it in the place of `chip` at `index`, unless
    * another chip is there meanwhile; a refused one is logged, the chip kept.
    */
-  async #remake(chip: PillFilter, index: number, source: PillSource, { field, op, value, type }: PillField): Promise<void> {
+  async #remake(chip: PillFilter, index: number, source: PillSource, { field, column, op, value, type }: PillField): Promise<void> {
     try {
-      const pill = await fetchPill(source.dataUrl, { fieldId: field, op, value, type });
+      const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value, type });
       if (this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
     } catch (error) {
       console.error(`Filter ${field} ${OP_SIGNS[op]} ${value} failed:`, error);

@@ -117,6 +117,7 @@ export const page = {
           },
           "dataUrl": "/p/shop/api/2",
           "rowsUrl": "/p/shop/api/2/rows",
+          "table": "http_logs",
           "connection": "default"
         }
       }
@@ -210,6 +211,9 @@ export const page = {
           "filterable": [
             "status"
           ],
+          "computed": [
+            "status"
+          ],
           "table": "http_logs",
           "connection": "default"
         },
@@ -218,6 +222,7 @@ export const page = {
           "props": {},
           "dataUrl": "/p/shop/api/shop_stats",
           "rowsUrl": "/p/shop/api/shop_stats/rows",
+          "table": "http_logs",
           "connection": "default"
         },
         "5": {
@@ -229,6 +234,7 @@ export const page = {
           },
           "dataUrl": "/p/shop/api/7",
           "rowsUrl": "/p/shop/api/7/rows",
+          "table": "http_logs",
           "connection": "default"
         }
       }

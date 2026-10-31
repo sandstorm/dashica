@@ -109,7 +109,7 @@ func TestTable_FiltersByItsCategoryColumns(t *testing.T) {
 		"none of a SQL file":                    {sqlFile, nil},
 	} {
 		var got []string
-		for _, field := range filterableFields(tc.table) {
+		for _, field := range filterableFields(testDeps(), tc.table) {
 			got = append(got, field.Alias())
 		}
 		if !slices.Equal(got, tc.want) {
