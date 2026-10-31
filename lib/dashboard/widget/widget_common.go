@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
-	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
@@ -95,9 +94,10 @@ type Node struct {
 	// column, any field of a SQL file: sql.ColumnOf): "add filter" lists them as computed fields, the others among
 	// the table's columns (docs/2026-10-28-workbench.md §3.15 D27).
 	Computed []string `json:"computed,omitempty"`
-	// Table is the table its pills are on, with its database ("default.http_logs", filter.Table), when its query has
-	// one and takes filters: the filter bar's "add filter" offers the page's columns (`<dataUrl>/columns`) and fields
-	// by table (`<dataUrl>/values`).
+	// Table is the table its pills are on as their keys name it (filter.ShortName: "http_logs" on a connection to
+	// `default`, "monitoring.full_logs" else), when its query has one and takes filters: the filter bar's "add
+	// filter" offers the page's columns (`<dataUrl>/columns`) and fields by table (`<dataUrl>/values`), and finds the
+	// chart that edits a pill by it.
 	Table string `json:"table,omitempty"`
 	// Connection is the ClickHouse connection its query runs on (sql.ConnectionOf: "default", "logs"); empty for a
 	// widget without a query. The Schema view shows a page's connections first.
@@ -149,7 +149,7 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 				}
 			}
 			if table, ok := tableOf(ctx.Deps, chart.Query()); ok {
-				node.Table = table.Name
+				node.Table = filter.ShortName(table, ctx.Deps.ClickhouseClientManager.Database)
 			}
 		}
 	}
@@ -273,7 +273,7 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 				httpError(w, err)
 				return
 			}
-			pills, err := openPills(deps.Config.Filters, state.Pills)
+			pills, err := openPills(deps, state.Pills)
 			if err != nil {
 				httpError(w, err)
 				return
@@ -324,7 +324,7 @@ func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 			httpError(w, err)
 			return
 		}
-		pills, err := openPills(deps.Config.Filters, state.Pills)
+		pills, err := openPills(deps, state.Pills)
 		if err != nil {
 			httpError(w, err)
 			return
@@ -370,14 +370,13 @@ func columnsHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFu
 	}
 }
 
-// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge[&type=<ClickHouse type>]`
-// with the pill (filter.New) of the chart's filterable field `field` on its table, as JSON `{key, label}`: its key
-// signed with filters.secret (filter.Sign), its label the chip's text; `type`, the field's type as the client
-// learned it (`/values`, the chart's column types), goes into the key for the filter bar's ops. With `column=<name>`
-// in place of `field` the pill on that column of its table (filterBy: checked against the schema, its type the
-// schema's, the key's Column set). 422 for a field that cannot filter (none of filterableFields: a count, a time
-// bucket, a constant, any field of a chart without a table) and a column its table does not have, 400 for a request
-// without `value` or with another op.
+// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge` with the pill (filter.New)
+// of the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with filters.secret
+// (filter.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that column of its
+// table (filterBy: checked against the schema); a field that is just a column (columnOf) makes that column's pill too,
+// so its key is as short as one from "Add filter" (docs/2026-10-28-workbench.md §3.15 D29). 422 for a field that
+// cannot filter (none of filterableFields: a count, a time bucket, a constant, any field of a chart without a table)
+// and a column its table does not have, 400 for a request without `value` or with another op.
 func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		args := r.URL.Query()
@@ -391,17 +390,16 @@ func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc 
 			httpError(w, err)
 			return
 		}
-		columnType := args.Get("type")
-		if target.column {
-			columnType = target.columnType
+		field := target.field
+		if name, plain := columnOf(chart, field); plain && !target.column {
+			field = sql.ColumnField(name)
 		}
-		pill, err := filter.New(table, target.field, op, args.Get("value"), columnType)
+		pill, err := filter.New(table, field, op, args.Get("value"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
-		pill.Column = target.column
-		key, err := filter.Sign([]byte(deps.Config.Filters.Secret), pill)
+		key, err := filter.Sign([]byte(deps.Config.Filters.Secret), pill, deps.ClickhouseClientManager.Database)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -453,9 +451,8 @@ func columnOf(chart withQuery, field sql.SqlField) (string, bool) {
 // filterTarget is what a request filters a chart by (filterBy).
 type filterTarget struct {
 	field sql.SqlField
-	// column is set for a column of the chart's table; columnType is then its type from the schema.
-	column     bool
-	columnType string
+	// column is set for a column of the chart's table.
+	column bool
 	// query is the query whose rows have the field: the values of /values and /type are asked over it.
 	query sql.SqlQueryable
 }
@@ -494,7 +491,7 @@ func filterBy(r *http.Request, deps rendering.Dependencies, chart withQuery) (fi
 	if _, builder := query.(*sql.SqlQuery); !builder {
 		query = sql.New(sql.From(table.Name), sql.OnDatabase(table.Connection))
 	}
-	return table, filterTarget{field: sql.ColumnField(name), column: true, columnType: columns[i].Type, query: query}, nil
+	return table, filterTarget{field: sql.ColumnField(name), column: true, query: query}, nil
 }
 
 // tableColumns are the columns of `table` in the schema of its connection (clickhouse.Client.Schema, asked once and
@@ -526,12 +523,12 @@ func tableOf(deps rendering.Dependencies, query sql.SqlQueryable) (filter.Table,
 	return filter.TableOf(query, deps.ClickhouseClientManager.Database)
 }
 
-// openPills are the pills of `keys` (filter.Open); a QueryStateError (400) for the first one not signed with
-// `filters`' secret (filters.secret).
-func openPills(filters config.FiltersConfig, keys []string) ([]filter.Pill, error) {
+// openPills are the pills of `keys` (filter.Open, a table without database in its connection's from dashica_config);
+// a QueryStateError (400) for the first one not signed with filters.secret.
+func openPills(deps rendering.Dependencies, keys []string) ([]filter.Pill, error) {
 	pills := make([]filter.Pill, 0, len(keys))
 	for _, key := range keys {
-		pill, err := filter.Open([]byte(filters.Secret), key)
+		pill, err := filter.Open([]byte(deps.Config.Filters.Secret), key, deps.ClickhouseClientManager.Database)
 		if err != nil {
 			return nil, &httpserver.QueryStateError{Reason: err.Error()}
 		}

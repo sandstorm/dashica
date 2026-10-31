@@ -50,7 +50,7 @@ export const page = {
     {
       "title": "Errors",
       "queryPart": "status \u003e= 500",
-      "key": "eyJjb25uZWN0aW9uIjoiIiwidGFibGUiOiIiLCJmaWVsZCI6IiIsIm9wIjoiIiwiY29uZGl0aW9uIjoic3RhdHVzIFx1MDAzZT0gNTAwIiwibGFiZWwiOiJFcnJvcnMiLCJidXR0b24iOiJzdGF0dXMgXHUwMDNlPSA1MDAiLCJ2YWx1ZSI6IiJ9.JKwIBQlHaGpsDAjlBB-JXNcjXzrUwE4wFhVZ3JPbyvs"
+      "key": "@status \u003e= 500~l3j-OfYF0XVzJrJOFYVqtw"
     },
     {
       "title": "Path",

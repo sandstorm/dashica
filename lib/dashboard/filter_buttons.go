@@ -23,7 +23,7 @@ func pageButtons(secret []byte, pagePath string, buttons []rendering.FilterButto
 		}
 		pill, err := filter.NewButton(button.Title, button.QueryPart, "")
 		if err == nil {
-			button.Key, err = filter.Sign(secret, pill)
+			button.Key, err = filter.Sign(secret, pill, nil)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("filter button %q: %w", button.Title, err)
@@ -54,7 +54,7 @@ func buttonHandler(secret []byte, buttons []rendering.FilterButton) http.Handler
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		key, err := filter.Sign(secret, pill)
+		key, err := filter.Sign(secret, pill, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

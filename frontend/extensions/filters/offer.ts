@@ -69,15 +69,15 @@ export function fieldParam(ref: FieldRef): [string, string] {
 
 /**
  * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, "Add filter", an edited chip), its key
- * (the chip reads its label from it, `pillLabel`), the field's `type` in it when known (for the ops of its edits); with
- * `column` the pill on that column of the chart's table (`fieldParam`, §3.15 D27), its type the server's schema's.
+ * (the chip reads its label from it, `pillLabel`); with `column` the pill on that column of the chart's table
+ * (`fieldParam`, §3.15 D27).
  * Rejects with the server's message (a field that cannot filter: 422).
  */
 export async function fetchPill(
   dataUrl: string,
-  { fieldId, column, op, value, type }: FilterCandidate & { readonly op: FilterOp; readonly column?: boolean },
+  { fieldId, column, op, value }: Pick<FilterCandidate, 'fieldId' | 'value'> & { readonly op: FilterOp; readonly column?: boolean },
 ): Promise<Pill> {
-  const asked = new URLSearchParams([fieldParam({ field: fieldId, column }), ['op', op], ['value', value], ...(type ? [['type', type]] : [])]);
+  const asked = new URLSearchParams([fieldParam({ field: fieldId, column }), ['op', op], ['value', value]]);
   const response = await fetch(`${dataUrl}/pill?${asked}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   const { key } = (await response.json()) as Pill;

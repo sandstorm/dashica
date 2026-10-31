@@ -59,5 +59,5 @@ test('a click on a table cell offers its value; "Exclude" adds it as ≠; its me
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('≠');
     // the URL holds the pill's signed key, `<payload>.<mac>`
-    await expect(page).toHaveURL(/[?&]f=[\w-]+\.[\w-]+/);
+    await expect(page).toHaveURL(/[?&]f=[^&]+(~|%7E)[\w-]{22}(&|$)/);
 });

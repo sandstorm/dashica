@@ -24,8 +24,8 @@ func TestPageJson_AButtonWithoutValueCarriesItsPillSignedOneWithItsUrl(t *testin
 		t.Fatalf("page.json: %v\n%s", err, rec.Body)
 	}
 	errors, path := page.FilterButtons[0], page.FilterButtons[1]
-	pill, err := filter.Open(testSecret, errors.Key)
-	if want := (filter.Pill{Condition: "status >= 500", Label: "Errors", Button: "status >= 500"}); err != nil || pill != want || errors.Url != "" {
+	pill, err := filter.Open(testSecret, errors.Key, nil)
+	if want := (filter.Pill{Condition: "status >= 500", Label: "status >= 500", Button: "status >= 500"}); err != nil || pill != want || errors.Url != "" {
 		t.Errorf("Errors: %+v, its pill %+v, %v", errors, pill, err)
 	}
 	if path.Key != "" || path.Url != "/p/shop/button?i=1" || path.QueryPart != "path ILIKE concat(..., '%')" {
@@ -40,8 +40,8 @@ func TestButtonHandler_GivesThePillOfAValueWrittenInAsALiteral(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); rec.Code != http.StatusOK || err != nil {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
-	pill, err := filter.Open(testSecret, body.Key)
-	want := filter.Pill{Condition: `path ILIKE concat('it\'s', '%')`, Label: "Path: it's", Button: "path ILIKE concat(..., '%')", Value: "it's"}
+	pill, err := filter.Open(testSecret, body.Key, nil)
+	want := filter.Pill{Condition: `path ILIKE concat('it\'s', '%')`, Label: `path ILIKE concat('it\'s', '%')`, Button: "path ILIKE concat(..., '%')", Value: "it's"}
 	if err != nil || pill != want || body.Label != "Path: it's" {
 		t.Errorf("%+v %q, %v", pill, body.Label, err)
 	}

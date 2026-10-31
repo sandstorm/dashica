@@ -41,7 +41,7 @@ func queryStatusRowsBy(t *testing.T, field string, op sql.Op, value string) (*ht
 		t.Fatalf("ParseQueryState: %v", err)
 	}
 	table, ok := filter.TableOf(statusRows, func(string) string { return "default" })
-	pill, err := filter.New(table, sql.Field(field), op, value, "")
+	pill, err := filter.New(table, sql.Field(field), op, value)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

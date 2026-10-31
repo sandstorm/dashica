@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j; D25 (pill ops by the field's type) done as 9k. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j; D25 (pill ops by the field's type) done as 9k; D29 (a readable, short pill key) done as 9q. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -588,7 +588,8 @@ the server made:
 
 - **The widget's field makes the pill, on the server.** Filtering from a widget's data (a chart mark, a table cell,
   the filter bar's "add filter", §3.14 D4, D15) asks that widget: `GET <dataUrl>/pill?field=<alias>&value=<shown
-  value>&op=eq|ne|lt|le|gt|ge[&type=<ClickHouse type>]` → `{key, label}` (the four range ops since 9k, §3.15 D25).
+  value>&op=eq|ne|lt|le|gt|ge` → `{key, label}` (the four range ops since 9k, §3.15 D25; the `type` parameter of 9k
+  gone since 9q, D29).
   The field's condition is by default `(<field expression>) <op> <quoted value>` (`=`, `!=`, `<`, `<=`, `>`, `>=`,
   `sql.Op.Compare`); a computed field says its own, for the op it is given:
 
@@ -610,13 +611,14 @@ the server made:
   it replaces the table's `categories` prop)*. Since 9p (§3.15 D27) a column of the chart's table makes a pill too
   (`/pill?column=<name>`, checked against the schema), and `computed` names the filterable fields that are more than
   a column.
-- **The key** is `<payload>.<mac>` (`filter.Sign`): the payload the pill as JSON (`filter.Pill`: the connection,
-  `database.table`, the field's alias, the op, the condition, the label, the shown value and the field's type; a
-  button's pill its condition, label, button and value instead of table, field and op), the mac an HMAC
-  (`crypto/hmac`, SHA-256) over it, made with `filters.secret` from `dashica_config`, each in unpadded base64url. So
-  the label (the chip's text, `customer = acme`) is signed too: the client reads it, and the field, op, value and type
-  it edits a pill by, from the key's payload (`pillLabel`, `pillField`; since 9c, 9g, 9k), not from the `label` that
-  `/pill` still answers beside the key. The secret is **required**: the server refuses to start without it. It is
+- **The key** (since 9q, §3.15 D29; before, `<payload>.<mac>` with the pill as base64url JSON, ~330 characters) is
+  readable and short (`filter.Sign`): `<table>.<field><op><value>[~<condition>]~<mac>`, e.g.
+  `mv_oekokiste_shop.shopAction=driver-locate~(action) = 'driver-locate'~kq3V…` or, for a column,
+  `mv_oekokiste_shop.host=web-1~Zp8x…`; a button's `@<queryPart>[~<value>]~<mac>`. The mac is an HMAC
+  (`crypto/hmac`, SHA-256) over everything before it, made with `filters.secret` from `dashica_config`, truncated to
+  128 bits, in unpadded base64url (22 characters). No label is in it: the chip shows `field op value`, which the
+  client reads, with the field, op and value it edits a pill by, from the key (`pillLabel`, `pillField`), not from
+  the `label` that `/pill` still answers beside the key. The secret is **required**: the server refuses to start without it. It is
   never in a checked-in file: the checked-in `*-production.yaml` names the environment variable (`FILTERS__SECRET`,
   as it does for `CLICKHOUSE__DEFAULT__PASSWORD`). The URL keeps `?f=<key>`, repeatable, in chip order with `sql`.
 - **Checked on every request:** a pill whose HMAC does not match (tampered, unsigned, made with another secret)
@@ -637,9 +639,9 @@ the server made:
 
 ✅ **Built in 8e (2026-10-31)**, with these details and deviations:
 
-- **The key** is `<payload>.<mac>`: the pill as JSON (`connection`, `table`, `field`, `op`, `condition`, `label`) and
+- **The key** was `<payload>.<mac>` until 9q (§3.15 D29): the pill as JSON (`connection`, `table`, `field`, `op`, `condition`, `label`) and
   its HMAC-SHA256 over the payload's text, each in unpadded base64url (`filter.Sign`, `filter.Open`). *(proposed)* The
-  label is inside the signed payload, so the URL needs only `f` and a reloaded page reads each chip's label from its
+  label was inside the signed payload, so the URL needs only `f` and a reloaded page reads each chip's label from its
   key (`pillLabel`, since 9g in the `filters` extension's `pill-key.ts`, §3.15 D21); nothing reads the label as SQL.
 - **`filters.secret`** (`config.FiltersConfig`) is checked by `dashica.New`, not by `LoadConfig`, so the db tools in
   `cmd/` and the test server load configs without it; *(proposed)* it must have at least 32 characters
@@ -1449,7 +1451,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 
 ### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1553,8 +1555,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
     a column of the chart's base table, checked against the cached schema (never the client's word), its name quoted
     as an identifier (`sql.QuoteIdentifier`, `` (`host`) = 'shop-1' ``, `sql.ColumnField`); 422 for a column the table
     lacks. The ops of D25 come from the column's type in the schema (the client asks no `/type` for it; the key's
-    `type` is the schema's, not the client's). The key carries `column: true` *(proposed: a separate parameter and
-    flag, so a computed field and a column of the same name never mix up)*, so the filter bar edits it through any
+    `type` was the schema's, not the client's, until 9q). The key carries `column: true` *(proposed: a separate parameter and
+    flag, so a computed field and a column of the same name never mix up; since 9q a key without a condition, D29)*, so the filter bar edits it through any
     chart on its table (the table's first one), else it is only removed ("No chart of this page reads …"). A
     column's values come from the chart's query when it is a builder query (its From and Where), else from the table
     itself (`SELECT … FROM <table>` with the time range and pills), as a SQL file's result need not have the column
@@ -1562,6 +1564,33 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
     *(proposed)*.
   - **The node names its table** whenever its query has one and takes filters, also without filterable fields (a
     stats or a time line), so "Add filter" offers the columns of every table the page reads *(proposed)*.
+- **D29 A readable, short pill key (9q, decided 2026-10-31; maintainer: the signed key in `f` is "far too long",
+  ~330 characters):** still signed, still in `f` (repeatable), now `<table>.<field><op><value>[~<condition>]~<mac>`
+  (`filter.Sign`, `filter.Open`):
+  - **The table** is `[<connection>:][<database>.]<name>`: the connection left out when it is `default`, the database
+    when it is the connection's from `dashica_config` (`filter.ShortName`), e.g. `logs:full_logs` on Solarwatt's
+    `monitoring` connection, `system.one` on `default` *(proposed: `:` after the connection)*. `page.json`'s `table`
+    names a chart's table the same way, so the client matches a key's table to the page's charts as it is.
+  - **The op** is its ClickHouse operator: `=`, `!=`, `<`, `<=`, `>`, `>=` (`sql.Op.Operator`).
+  - **The condition** is carried only when it is not the column's own, `` (`<field>`) <op> <quoted value> ``
+    (`sql.ColumnField`); `Open` writes that one for a key without. A key without a condition is a column's pill
+    (`Pill.Column`, before a flag in the payload). A click on a builder field that is just a column (`sql.ColumnOf`:
+    `sql.Field("host")`) makes that column's pill, `` (`host`) = 'web-1' ``, as "Add filter" does, so its key is the
+    short one too *(proposed)*; an expression or a `FilterAs` carries its condition.
+  - **A button's key** is `@<queryPart>[~<value>]~<mac>` (`@duration_ms >= ...~500~…`): its `queryPart` as text,
+    not its index, as a button's pill applies on every page and an index is only the defining page's *(proposed)*;
+    `Open` writes its condition again (`NewButton`). Its label is its condition: the title is not in the key, so a
+    button's chip on a page without that button shows `duration_ms >= ...: 500` *(proposed)*.
+  - **No label and no type:** the chip shows `field op value`. The field's type (D25's ops of a pill's edit) is asked
+    of the editing chart (`<dataUrl>/type`) when its operator or value is clicked; `/pill` takes no `type` any more
+    *(proposed: the format has no place for it, one request per edit)*.
+  - **The mac** is HMAC-SHA256 over everything before it (without its `~`), its first 128 bits, unpadded base64url:
+    22 characters.
+  - **Unambiguous with any text:** `%` and the separators a part could hold are percent-encoded in it (`~` in every
+    part; `:`, `.`, `=`, `!`, `<`, `>` and `@` in a connection, database, table or field name; a value's leading `=`,
+    so `<` with `=5` is not `<=` with `5`), read back with `url.PathUnescape` / `decodeURIComponent`. The URL encodes
+    the key again on top (`URLSearchParams`).
+  - **Old keys stop working** (a 400, as an unsigned key), no migration.
 - **D34 Free text in headers percent-encoded (9u, decided 2026-10-31):** a header Dashica writes with free text
   (`X-Dashica-Diagnostics`, `X-Dashica-Column-Types`) is its JSON through Go's `url.PathEscape`; every reader runs
   `decodeURIComponent` before `JSON.parse` (`fetchQueryResult` in the `widgets` host, `fetchRows` in `explore-view`).
@@ -1591,7 +1620,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   as a parameter, the outer dashboards' ten `FilterAs` written as `op.Compare("<expression>", value)`)*; `filter.New(table,
   field, op, value, type)`, the label `<alias> <sign> <value>`; `Apply` ORs only the `eq` pills of a field, every other
   op's are AND-ed *(proposed: `ts ≥ a` and `ts ≥ b` both hold)*.
-- **The type in the key:** `Pill.Type` (`type`, omitted when empty) is the field's ClickHouse type as the client
+- **The type in the key (until 9q; since then the key carries no type and the filter bar asks the chart's `/type`
+  when a pill is edited, §3.15 D29):** `Pill.Type` (`type`, omitted when empty) is the field's ClickHouse type as the client
   learned it from the server, sent to `/pill` as `type` and signed into the key, so a reloaded pill's op button offers
   its type's ops without a query *(proposed: the server never reads it as SQL and does not check it against the op;
   any op is valid SQL on any field)*. A pill without one (a link from before 9k, a click on a column the answer named
@@ -1709,7 +1739,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   alias), all signed, so a changed value is refused as a changed condition is *(proposed: the one `Value` of the
   buttons' pills, for a field's pill the value shown, for a button's the value written in)*. `/pill`, `/values` and
   `Apply` are unchanged.
-- **The client:** `pillField(key)` reads `{connection, table, field, op, value}` from the payload (`undefined` for a
+- **The client:** `pillField(key)` reads `{connection, table, field, op, value}` from the payload (since 9q from the
+  readable key, §3.15 D29) (`undefined` for a
   button's pill, a key without a field, and one without `value`: a pill signed before 9c, which cannot be made again,
   so it is only removable, its tooltip its label *(proposed)*; `Value` has no `omitempty`, so an empty value is in
   the key as `""`, 9c fix); `fieldSource(tables, field)` is the first chart of the page's
@@ -1869,6 +1900,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9w ✅ | **D36 typed query keys** (§3.7, §3.15): `queryKey<T>(urlKeys, { parse, format, sentToServer })` in `hosts/query/query.ts`; `QueryApi.get` / `set` / `onDidChange(key, listener)` in `QueryHost` and `activeQuery`; `QueryKeys` (the keys used, in first-use order, shared by the tabs, a URL key in one key only) replaces `QueryStates`; `TIME`, `REFRESH`, `FILTERS`, `PARAMS` replace `timeState` / `TIME_STATE`, `refreshState` / `REFRESH_STATE`, `chipsState` / `FILTERS_STATE`, `paramsState` / `PARAMS_STATE` / `paramsOf`; `registerState`, `state<T>(id)` and the registrations' dispose gone; `WidgetContext.state` → `ctx.query`, the data fetch `ctx.query()` → `ctx.runQuery()`; every use and test migrated (`time-range`, `refresh`, `filters` with `offer` / `add-filter`, `ChartFrame`, the form widgets, Speedscope, `dashboardPage` without a registration). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `ctx.runQuery()`; `queryKey`'s first argument the URL key(s); `sentToServer` a function for `TIME`; a key is sent once used; the params error gone *(all proposed)* | `query.get(TIME)` |
 | 9o ✅ | **D26 no funnel; "SQL condition…" in "Add filter"** (§3.8, §3.15): `FilterBar.toggle` (the funnel, `ui.registerBarItem('top', …)`) and the `new` SQL chip in edit mode are gone; `addFilter(ui, query, tables, anchor, sqlEnabled)` ends its first quick pick with a separator "Advanced" and "SQL condition…" while `sqlEnabled`, which asks the condition in `showInputBox` and adds a SQL chip (`addSqlCondition`); "Add filter" shows while a chart filters a table or `sqlEnabled`. Files: `frontend/extensions/filters/{filters,add-filter}.ts` (+ tests), `e2e/{filter-chips,add-filter,top-bar}.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the step's id is 9o, as 9l was taken by a bugfix; with the flag on, the filter bar shows on every page with `filterBar`; the input box is one line *(all proposed)* | SQL typed only as the advanced way of "Add filter" |
 | 9p ✅ | **D27 table columns and computed fields; no constants** (§3.8, §3.15): Go `sql.IsCategory` false for a lone literal, `sql.IsConstantColumn` (a SQL file's `'darkred' AS color`), `sql.ColumnOf`, `sql.ColumnField`, `sql.QuoteIdentifier`; `clickhouse.Schema.Columns`; `filter.Pill.Column` (signed); `widget`: `filterableFields(deps, chart)` without constants (the file read with `deps.FileSystem`), `filterBy` (`field=` or `column=`, the column checked against `Client.Schema`), `tableColumns`, `<dataUrl>/columns` (`columnsHandler`, not behind Explore), `/pill`, `/values`, `/type` taking `column`, `httpError` 422 for `ErrCannotFilter`; `Node.Computed` (`computed` in `page.json`, generator, golden contract) and `Node.Table` for every chart with a table; client: `FilterableTable.widget`, `FilterableField.computed`, `fieldItems` ("Table columns" from `fetchColumns`, "Computed fields"), `FieldRef` / `fieldParam` (`offer.ts`), `fetchValues` / `fetchType` / `fetchPill` by `FieldRef`, `pillField`'s `column`, `fieldSource` of a column the table's first chart; tests: Go (`sql`, `clickhouse`, `widget`; `columns_e2e_test.go` against ClickHouse), vitest (`add-filter`, `filters`, `pill-key`), `e2e/add-filter.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new `/columns` and column `/pill` checks among them, blocked in the sandbox; Playwright written, not run), deviations: the step's id is 9p, as 9n was taken by a concept bugfix; a separate `column` parameter and a signed `column` flag; the constant column of a SQL file found by a regular expression, a literal in any SELECT; every SQL file field computed; a column's values over the plain table for a SQL file chart; the plain fields as columns without the schema; `table` on every chart with a table; a table name without database looked up in `default` *(all proposed)* | every column of the table, no `'darkred'` |
+| 9q ✅ | **D29 a readable, short pill key** (§3.8, §3.15): Go `filter.Sign(secret, pill, database)` / `Open(secret, key, database)` write and read `[<connection>:][<database>.]<table>.<field><op><value>[~<condition>]~<mac>` and `@<queryPart>[~<value>]~<mac>` (percent-encoded separators, HMAC-SHA256 truncated to 128 bits, 22 characters of base64url), `filter.ShortName`, `sql.Op.Operator`; `Pill` without `Type` and JSON tags, its `Label` made from the rest, `Column` for a key without condition; `filter.New` without type; `/pill` without `type`, a click on a field that is just a column making the column's pill; `page.json`'s `table` as the key names it; client: `pillField`, `pillButton`, `pillLabel` read the new key, the filter bar asks `/type` when a pill's op or value is edited, `fetchPill` sends no type; e2e specs check the key's form and a hand-changed key's 400. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: step id 9q (9p was taken); `conn:` for the connection; a plain builder field's pill is the column's; a button by its `queryPart`, labelled with its condition off its page; no type in the key, `/type` asked per edit *(all proposed)* | `f` of ~50 characters, readable |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

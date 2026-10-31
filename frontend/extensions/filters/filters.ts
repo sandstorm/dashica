@@ -7,7 +7,7 @@ import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor, UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
-import { addFilter, askValue, fetchValues, fieldSource, filterableTables, type FilterableTable } from './add-filter';
+import { addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type FilterableTable } from './add-filter';
 import { fetchPill, offerFilters } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
@@ -249,18 +249,20 @@ class FilterBar {
   }
 
   /**
-   * Asks a new op for the field's pill `chip` in a quick pick below `el`, the ops of its type (`opsOf`, the one it has
-   * checked), and makes the pill again with it.
+   * Asks a new op for the field's pill `chip` in a quick pick below `el`, the ops of its type (`opsOf`, the type from
+   * `source`'s `/type`, the key carries none; the one it has checked), and makes the pill again with it.
    */
   async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
-    const items = opsOf(made.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op }));
+    const known = await this.#typeOf(made, source);
+    const items = opsOf(known?.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op }));
     const picked = await this.ui.showQuickPick(items, { anchor: el, title: `Operator of ${made.field}` });
     if (picked && picked.op !== made.op) await this.#remake(chip, index, source, { ...made, op: picked.op });
   }
 
   /**
    * Asks a new value for the field's pill `chip` below `el` as "Add filter" does (`askValue`: a time in an input box,
-   * its value filled in; anything else in the quick pick of the chart's values), and makes the pill again.
+   * its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s `/type`),
+   * and makes the pill again.
    */
   async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
     const value = await askValue(
@@ -268,20 +270,25 @@ class FilterBar {
       el,
       `${made.field} ${OP_SIGNS[made.op]}`,
       made.op,
-      { type: made.type },
+      await this.#typeOf(made, source),
       (search, signal) => fetchValues(source.dataUrl, made, search, this.query.requestParams(), signal),
       made.value,
     );
     if (value !== undefined) await this.#remake(chip, index, source, { ...made, value });
   }
 
+  /** The type of the pill's field as `source` answers it (`fetchType`); `undefined` when it fails (= and ≠). */
+  #typeOf(made: PillField, source: PillSource): Promise<Awaited<ReturnType<typeof fetchType>> | undefined> {
+    return fetchType(source.dataUrl, made, this.query.requestParams()).catch(() => undefined);
+  }
+
   /**
    * Asks `source` (`<dataUrl>/pill`) for the pill of `field` and puts it in the place of `chip` at `index`, unless
    * another chip is there meanwhile; a refused one is logged, the chip kept.
    */
-  async #remake(chip: PillFilter, index: number, source: PillSource, { field, column, op, value, type }: PillField): Promise<void> {
+  async #remake(chip: PillFilter, index: number, source: PillSource, { field, column, op, value }: PillField): Promise<void> {
     try {
-      const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value, type });
+      const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value });
       if (this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
     } catch (error) {
       console.error(`Filter ${field} ${OP_SIGNS[op]} ${value} failed:`, error);

@@ -87,11 +87,11 @@ func TestSql_IsTheChartsQueryWithItsFiltersAndItsParameters(t *testing.T) {
 	}{
 		"a builder chart": {
 			chart: byStatusChart(),
-			want:  []string{"http_logs", "(status) = 'it''s'", "AND (path LIKE '/api%')", "GROUP BY"},
+			want:  []string{"http_logs", "(`status`) = 'it''s'", "AND (path LIKE '/api%')", "GROUP BY"},
 		},
 		"a SQL file chart": {
 			chart: NewBarVertical(sql.FromFile("by_status.sql", sql.Table("http_logs"))).X(sql.Field("status")).Y(sql.Count()),
-			want:  []string{"FROM http_logs WHERE", "(status) = 'it''s'", "AND (path LIKE '/api%')", "GROUP BY status"},
+			want:  []string{"FROM http_logs WHERE", "(`status`) = 'it''s'", "AND (path LIKE '/api%')", "GROUP BY status"},
 		},
 	}
 	for name, tt := range tests {

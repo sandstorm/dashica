@@ -68,7 +68,7 @@ describe('offerFilters', () => {
     expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
   });
 
-  it('offers ≥ and ≤ a time first, then the other ops of its type, and sends the type along', async () => {
+  it('offers ≥ and ≤ a time first, then the other ops of its type', async () => {
     const at = '2026-10-31T10:00:00.000Z';
     const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'timestamp', value: at, type: 'DateTime' }], { ...source, filterable: ['timestamp'] });
     expect(choices()).toEqual([
@@ -83,7 +83,7 @@ describe('offerFilters', () => {
     await done;
 
     expect(query.get(FILTERS)).toEqual([pill('timestamp', 'le', at)]);
-    expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'timestamp', op: 'le', value: at, type: 'DateTime' });
+    expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'timestamp', op: 'le', value: at });
   });
 
   it('offers only the fields the widget filters by, and nothing without one', async () => {

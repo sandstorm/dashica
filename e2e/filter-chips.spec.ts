@@ -106,6 +106,14 @@ test('a pill not signed by the server fails the charts with 400', async ({page})
     expect((await answered).status()).toBe(400);
 });
 
+test('a pill’s key is readable: table, field, op and value, then a 22 character mac; one changed by hand is a 400', async ({page}) => {
+    const pill = await signedPill(page, 'eq', 'system');
+    expect(pill.key).toMatch(/^[^~]+\.[^~.]+=system(~[^~]+)?~[\w-]{22}$/);
+    const answered = page.waitForResponse((response) => response.url().includes('/query?') && response.url().includes('f='));
+    await page.goto(`${PAGE}?f=${encodeURIComponent(pill.key.replace('=system', '=default'))}`);
+    expect((await answered).status()).toBe(400);
+});
+
 test('a link with two `sql` shows two SQL chips; "Add filter"’s "SQL condition…" adds one; × removes one', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
     test.skip(!workbench.sqlEnabled, 'SQL chips are off (filters.sqlEnabled)');

@@ -77,7 +77,7 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 		return err
 	}
 	maps.Copy(opts.Parameters, state.Params)
-	pills, err := openPills(deps.Config.Filters, state.Pills)
+	pills, err := openPills(deps, state.Pills)
 	if err != nil {
 		return err
 	}

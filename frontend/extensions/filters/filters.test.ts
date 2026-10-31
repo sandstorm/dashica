@@ -31,21 +31,30 @@ let picked: string | undefined;
 /** The commands the extension registered, by id. */
 let commands: Map<string, (...args: any[]) => unknown>;
 
+/** The ClickHouse operator a key writes for each sign a label shows. */
+const OPERATORS: Record<string, string> = { '=': '=', '≠': '!=', '<': '<', '≤': '<=', '>': '>', '≥': '>=' };
+
 /**
- * A pill's key as the server signs it (`<payload>.<mac>`, the payload base64url JSON) with `label` and `payload`; its
- * mac is none.
+ * A field's pill key as the server writes it (lib/dashboard/filter, `Sign`) for the chip `label` (`host = a`) on
+ * `table`, its condition `x` (a computed field's) or none for a `column`; its mac none.
  */
-function keyOf(label: string, payload: object = {}): string {
-  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label, ...payload }));
-  return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
+function keyOf(label: string, { table = 'http_logs', column = false } = {}): string {
+  const [field, sign, ...value] = label.split(' ');
+  return `${table}.${field}${OPERATORS[sign!]}${value.join(' ')}${column ? '' : '~x'}~mac`;
 }
+
+/** A filter button's pill key as the server writes it for `button` and `value` ('' for none), `%` percent-encoded. */
+const buttonKey = (button: string, value = '') => `@${button.replaceAll('%', '%25')}${value ? `~${value}` : ''}~mac`;
+
+/** `key` as a URL's `f`. */
+const f = (key: string) => `f=${encodeURIComponent(key)}`;
 
 const PATH = "path ILIKE concat(..., '%')";
 /** The pill of the button Path for `value`, as `/p/shop/button` answers it, and its chip. */
-const pathPill = (value: string) => ({ key: keyOf(`Path: ${value}`, { button: PATH, value }), label: `Path: ${value}` });
+const pathPill = (value: string) => ({ key: buttonKey(PATH, value), label: `Path: ${value}` });
 const pathChip = (value: string) => ({ kind: 'pill', key: pathPill(value).key });
 
-const errorsKey = keyOf('Errors', { button: 'status >= 500' });
+const errorsKey = buttonKey('status >= 500');
 const shop: PageJson = {
   kind: 'dashboard',
   title: 'Shop',
@@ -165,7 +174,7 @@ describe('filters', () => {
   });
 
   it('keeps the chips of other filters in their order, a button’s pill among them', () => {
-    query.load({ search: `?sql=a&f=${errorsKey}&f=${keyOf('host = a')}` });
+    query.load({ search: `?sql=a&${f(errorsKey)}&${f(keyOf('host = a'))}` });
     expect(chips().map(chipText)).toEqual(['SQL: a', 'host = a']);
     chips()[1].querySelector<HTMLButtonElement>('button[aria-label="Remove host = a"]')!.click();
     expect(held()).toEqual([
@@ -175,9 +184,9 @@ describe('filters', () => {
   });
 
   it('shows a button’s pill as a chip on a page without that button', () => {
-    query.load({ search: `?f=${errorsKey}` });
+    query.load({ search: `?${f(errorsKey)}` });
     show({ ...shop, title: 'Checkout', filterButtons: [] });
-    expect(chips().map(chipText)).toEqual(['Errors']);
+    expect(chips().map(chipText)).toEqual(['status >= 500']);
   });
 
   it('does not take a SQL chip of the same condition for the button', () => {
@@ -186,7 +195,7 @@ describe('filters', () => {
   });
 
   it('removes the chip of a pressed button when it is pressed again', () => {
-    query.load({ search: `?f=${errorsKey}&f=${keyOf('host = a')}` });
+    query.load({ search: `?${f(errorsKey)}&${f(keyOf('host = a'))}` });
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
     button('Errors').click();
     expect(held()).toEqual([chipOf('host = a')]);
@@ -194,7 +203,7 @@ describe('filters', () => {
   });
 
   it('removes every chip of a released `...` button in one change: one history entry', () => {
-    query.load({ search: `?f=${pathPill('/a').key}&f=${keyOf('host = a')}&f=${pathPill('/b').key}` });
+    query.load({ search: `?${f(pathPill('/a').key)}&${f(keyOf('host = a'))}&${f(pathPill('/b').key)}` });
     let changes = 0;
     query.onDidChange(FILTERS, () => changes++);
     expect(values('Path').map((b) => b.textContent)).toEqual(['/a', '/b']);
@@ -219,7 +228,7 @@ describe('filters', () => {
   });
 
   it('asks a new value for a pressed `...` button on a click on its value, the old one shown, and puts its pill in the chip’s place', async () => {
-    query.load({ search: `?f=${keyOf('host = a')}&f=${pathPill('/a').key}&f=${keyOf('host = b')}` });
+    query.load({ search: `?${f(keyOf('host = a'))}&${f(pathPill('/a').key)}&${f(keyOf('host = b'))}` });
     answer = '/b';
     const value = values('Path')[0];
     value.click();
@@ -264,7 +273,7 @@ describe('filters', () => {
   });
 
   it('edits a SQL chip in place: Enter or leaving the field applies, Escape cancels, an empty text removes it', () => {
-    query.load({ search: `?f=${keyOf('host = a')}&sql=status+%3E%3D+400` });
+    query.load({ search: `?${f(keyOf('host = a'))}&sql=status+%3E%3D+400` });
     chips()[1].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
     expect(editor()!.value).toBe('status >= 400');
     type('status >= 500');
@@ -302,7 +311,7 @@ describe('filters', () => {
   });
 
   it('shows the chips of a link’s filters in their order', () => {
-    query.load({ search: `?sql=duration+%3E+2000&f=${keyOf('host ≠ a')}&sql=b` });
+    query.load({ search: `?sql=duration+%3E+2000&${f(keyOf('host ≠ a'))}&sql=b` });
     show(shop);
     expect(chips().map(chipText)).toEqual(['SQL: duration > 2000', 'host ≠ a', 'SQL: b']);
   });
@@ -318,7 +327,7 @@ describe('filters', () => {
   });
 
   it('shows "Add filter" after the chips while a chart filters a table, which asks for a field of it below the button', async () => {
-    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'http_logs', connection: 'default' };
     show({ ...shop, title: 'Checkout', filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
     addSql('a');
 
@@ -343,11 +352,11 @@ describe('filters', () => {
 });
 
 describe('filters, a field’s pill edited', () => {
-  const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+  const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'http_logs', connection: 'default' };
   /** The pill of host `op` `value` on http_logs, as `/p/shop/api/1/pill` answers it, and its chip. */
   const hostPill = (op: 'eq' | 'ne', value: string) => {
     const label = `host ${op === 'eq' ? '=' : '≠'} ${value}`;
-    return { key: keyOf(label, { connection: 'default', table: 'default.http_logs', field: 'host', op, value }), label };
+    return { key: keyOf(label), label };
   };
   const hostChip = (op: 'eq' | 'ne', value: string) => ({ kind: 'pill', key: hostPill(op, value).key });
   /** What the value's quick pick is given, and what it answers next. */
@@ -384,6 +393,7 @@ describe('filters, a field’s pill edited', () => {
       fetched.push(url);
       const args = new URL(url, 'http://x').searchParams;
       if (url.includes('/values')) return new Response(JSON.stringify({ type: 'String', values: ['b', 'c'] }));
+      if (url.includes('/type')) return new Response(JSON.stringify({ type: args.get('field') === 'timestamp' ? 'DateTime' : 'String', values: [] }));
       return new Response(JSON.stringify(hostPill(args.get('op') as 'eq' | 'ne', args.get('value')!)));
     });
     activate(true);
@@ -391,27 +401,29 @@ describe('filters, a field’s pill edited', () => {
   });
 
   it('shows its field, operator and value, each part on its own', () => {
-    query.load({ search: `?f=${hostPill('ne', 'a').key}` });
+    query.load({ search: `?${f(hostPill('ne', 'a').key)}` });
     expect(chips().map(chipText)).toEqual(['host ≠ a']);
     expect([op(chips()[0]).title, value(chips()[0]).title]).toEqual(['Change the operator of host', 'Change the value of host']);
   });
 
   it('offers the ops of its type below the operator, and puts the pill made again with the one chosen in the chip’s place', async () => {
-    query.load({ search: `?f=${keyOf('path = /a')}&f=${hostPill('eq', 'a').key}&sql=b` });
+    query.load({ search: `?${f(keyOf('path = /a'))}&${f(hostPill('eq', 'a').key)}&sql=b` });
     picked = 'host ≠ a';
-    op(chips()[1]).click();
-    expect(picks).toEqual([{ labels: ['host = a', 'host ≠ a'], anchor: op(chips()[1]) }]);
+    const clicked = op(chips()[1]);
+    clicked.click();
     await vi.waitFor(() => expect(held()).toEqual([chipOf('path = /a'), hostChip('ne', 'a'), { kind: 'sql', sql: 'b' }]));
-    expect(fetched).toEqual(['/p/shop/api/1/pill?field=host&op=ne&value=a']);
+    expect(picks).toEqual([{ labels: ['host = a', 'host ≠ a'], anchor: clicked }]);
+    expect(fetched.filter((url) => url.includes('/pill'))).toEqual(['/p/shop/api/1/pill?field=host&op=ne&value=a']);
   });
 
-  it('offers a time’s ops, asks its new value in an input box with the value in it, and sends the type along', async () => {
+  it('offers a time’s ops, its type asked of the chart, and asks its new value in an input box with the value in it', async () => {
     const at = '2026-10-31T10:00:00.000Z';
-    const since = { connection: 'default', table: 'default.http_logs', field: 'timestamp', op: 'ge', value: at, type: 'DateTime' };
     show({ ...shop, filterButtons: [], widgets: [{ ...byHost, filterable: ['timestamp'] }] as PageJson['widgets'] });
-    query.load({ search: `?f=${keyOf(`timestamp ≥ ${at}`, since)}` });
+    query.load({ search: `?${f(keyOf(`timestamp ≥ ${at}`))}` });
     expect(chips().map(chipText)).toEqual([`timestamp ≥ ${at}`]);
     op(chips()[0]).click();
+    await vi.waitFor(() => expect(picks.length).toBe(1));
+    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/1\/type\?.*field=timestamp$/);
     expect(picks[0].labels).toEqual([`timestamp ≥ ${at}`, `timestamp ≤ ${at}`, `timestamp > ${at}`, `timestamp < ${at}`, `timestamp = ${at}`, `timestamp ≠ ${at}`]);
 
     answer = '2026-10-31T09:00:00Z';
@@ -420,22 +432,22 @@ describe('filters, a field’s pill edited', () => {
     await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
     expect(asked).toEqual([expect.objectContaining({ title: 'timestamp ≥', value: at, anchor: clicked })]);
     expect(fetched.filter((url) => url.includes('/values'))).toEqual([]);
-    expect(fetched.at(-1)).toBe(`/p/shop/api/1/pill?field=timestamp&op=ge&value=${encodeURIComponent(answer).replace(/%20/g, '+')}&type=DateTime`);
+    expect(fetched.at(-1)).toBe(`/p/shop/api/1/pill?field=timestamp&op=ge&value=${encodeURIComponent(answer).replace(/%20/g, '+')}`);
   });
 
   it('asks a new value in the quick pick of "Add filter" below the value, from the chart’s /values, and replaces the chip in place', async () => {
-    query.load({ search: `?f=${hostPill('ne', 'a').key}&f=${hostPill('ne', 'z').key}` });
+    query.load({ search: `?${f(hostPill('ne', 'a').key)}&${f(hostPill('ne', 'z').key)}` });
     pickedValue = 'b';
     const clicked = value(chips()[0]);
     clicked.click();
     await vi.waitFor(() => expect(held()).toEqual([hostChip('ne', 'b'), hostChip('ne', 'z')]));
     expect([valueBox?.title, valueBox?.anchor]).toEqual(['host ≠', clicked]);
-    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/1\/values\?.*field=host&search=$/);
+    expect(fetched.find((url) => url.includes('/values'))).toMatch(/^\/p\/shop\/api\/1\/values\?.*field=host&search=$/);
     expect(fetched.at(-1)).toBe('/p/shop/api/1/pill?field=host&op=ne&value=b');
   });
 
   it('keeps the chip when no value is chosen, when the chart refuses, or when that chip changed meanwhile', async () => {
-    query.load({ search: `?f=${hostPill('eq', 'a').key}` });
+    query.load({ search: `?${f(hostPill('eq', 'a').key)}` });
     value(chips()[0]).click();
     await vi.waitFor(() => expect(valueBox).toBeDefined());
     await new Promise((resolve) => setTimeout(resolve));
@@ -458,29 +470,27 @@ describe('filters, a field’s pill edited', () => {
   });
 
   it('only removes a pill no chart of the page makes, saying why', () => {
-    query.load({ search: `?f=${hostPill('eq', 'a').key}` });
+    query.load({ search: `?${f(hostPill('eq', 'a').key)}` });
     show({ ...shop, filterButtons: [], widgets: [] });
     expect([op(chips()[0]), value(chips()[0])]).toEqual([null, null]);
     expect(chips().map(chipText)).toEqual(['host = a']);
-    expect(chips()[0].title).toBe('host = a\nNo chart of this page filters default.http_logs by host, so it can only be removed');
+    expect(chips()[0].title).toBe('host = a\nNo chart of this page filters http_logs by host, so it can only be removed');
   });
 
   it('edits a column’s pill through the table’s first chart, by `column`, also without a chart naming it', async () => {
-    const user = { connection: 'default', table: 'default.http_logs', field: 'user', column: true, op: 'eq', value: 'a', type: 'String' };
-    const stats = { type: 'stats', props: {}, dataUrl: '/p/shop/api/7', table: 'default.http_logs', connection: 'default' };
+    const stats = { type: 'stats', props: {}, dataUrl: '/p/shop/api/7', table: 'http_logs', connection: 'default' };
     show({ ...shop, filterButtons: [], widgets: [stats, byHost] as PageJson['widgets'] });
-    query.load({ search: `?f=${keyOf('user = a', user)}` });
+    query.load({ search: `?${f(keyOf('user = a', { column: true }))}` });
     pickedValue = 'b';
     value(chips()[0]).click();
     await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
-    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/7\/values\?.*column=user&search=$/);
-    expect(fetched.at(-1)).toBe('/p/shop/api/7/pill?column=user&op=eq&value=b&type=String');
+    expect(fetched.find((url) => url.includes('/values'))).toMatch(/^\/p\/shop\/api\/7\/values\?.*column=user&search=$/);
+    expect(fetched.at(-1)).toBe('/p/shop/api/7/pill?column=user&op=eq&value=b');
   });
 
   it('only removes a column’s pill on a page without its table, saying why', () => {
-    const user = { connection: 'default', table: 'default.audit', field: 'user', column: true, op: 'eq', value: 'a' };
-    query.load({ search: `?f=${keyOf('user = a', user)}` });
-    expect(chips()[0].title).toBe('user = a\nNo chart of this page reads default.audit, so it can only be removed');
+    query.load({ search: `?${f(keyOf('user = a', { table: 'audit', column: true }))}` });
+    expect(chips()[0].title).toBe('user = a\nNo chart of this page reads audit, so it can only be removed');
   });
 });
 
@@ -496,7 +506,7 @@ describe('filters with SQL filters off', () => {
     expect(topBar.children.length).toBe(0);
     show({ ...shop, filterButtons: [] });
     expect([add(), bar.children.length]).toEqual([undefined, 0]);
-    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'http_logs', connection: 'default' };
     show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
     add()!.click();
     await vi.waitFor(() => expect(picks).toEqual([{ labels: ['— Table columns', 'host'], anchor: add() }]));
@@ -521,7 +531,7 @@ describe('filters with SQL filters off', () => {
   });
 
   it('still shows the pills and "Add filter"', () => {
-    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'default.http_logs', connection: 'default' };
+    const byHost = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'http_logs', connection: 'default' };
     show({ ...shop, filterButtons: [], widgets: [byHost] as PageJson['widgets'] });
     addPill(pill('host = a'));
     expect(chips().map(chipText)).toEqual(['host = a']);

@@ -35,6 +35,11 @@ func (op Op) Sign() string {
 	return opSigns[op].shown
 }
 
+// Operator is the ClickHouse operator of `op` (`=`, `!=`, `<=`), as a pill's key writes it too (filter.Sign).
+func (op Op) Operator() string {
+	return opSigns[op].sql
+}
+
 // Compare is the condition that `expression` compares by `op` with `value` as a string literal (Quote):
 // `OpGe.Compare("duration_ms", "500")` is `duration_ms >= '500'`. ClickHouse converts the literal to the
 // expression's type (a number, a DateTime) before comparing.

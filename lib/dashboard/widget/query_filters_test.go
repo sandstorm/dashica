@@ -86,7 +86,7 @@ func TestPill_IsTheFieldsConditionSignedAndLabelledWithItsFieldAndValue(t *testi
 	rec := askPath(bar, "/pill?field=host&op=ne&value=it's")
 	var body struct{ Key, Label string }
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	pill, err := filter.Open(testSecret, body.Key)
+	pill, err := filter.Open(testSecret, body.Key, testDeps().ClickhouseClientManager.Database)
 	if rec.Code != http.StatusOK || err != nil || body.Label != "host ≠ it's" {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}
@@ -96,18 +96,21 @@ func TestPill_IsTheFieldsConditionSignedAndLabelledWithItsFieldAndValue(t *testi
 	}
 }
 
-func TestPill_ARangeOpCarriesTheTypeTheClientNamed(t *testing.T) {
+func TestPill_AFieldThatIsJustAColumnMakesTheColumnsPill(t *testing.T) {
 	table := NewTable(sql.New(sql.From("http_logs"), sql.Select(sql.Field("timestamp")), sql.Select(sql.Field("status"))))
 
-	rec := askPath(table, "/pill?"+url.Values{"field": {"timestamp"}, "op": {"ge"}, "value": {"2026-10-31T10:00:00.000Z"}, "type": {"DateTime64(3)"}}.Encode())
+	rec := askPath(table, "/pill?"+url.Values{"field": {"timestamp"}, "op": {"ge"}, "value": {"2026-10-31T10:00:00.000Z"}}.Encode())
 	var body struct{ Key, Label string }
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	pill, err := filter.Open(testSecret, body.Key)
+	pill, err := filter.Open(testSecret, body.Key, testDeps().ClickhouseClientManager.Database)
 	if rec.Code != http.StatusOK || err != nil || body.Label != "timestamp ≥ 2026-10-31T10:00:00.000Z" {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}
-	if pill.Condition != "(timestamp) >= '2026-10-31T10:00:00.000Z'" || pill.Op != sql.OpGe || pill.Type != "DateTime64(3)" {
+	if pill.Condition != "(`timestamp`) >= '2026-10-31T10:00:00.000Z'" || pill.Op != sql.OpGe || !pill.Column {
 		t.Errorf("pill %+v", pill)
+	}
+	if want := "http_logs.timestamp>=2026-10-31T10:00:00.000Z~"; !strings.HasPrefix(body.Key, want) || len(body.Key) != len(want)+22 {
+		t.Errorf("key %q, want %q and the mac", body.Key, want)
 	}
 }
 
@@ -213,7 +216,7 @@ func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 
 func TestQueryHandler_AButtonsPillAppliesWithoutATable(t *testing.T) {
 	button, _ := filter.NewButton("Duration", "duration_ms >= ...", "500")
-	key, _ := filter.Sign(testSecret, button)
+	key, _ := filter.Sign(testSecret, button, nil)
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
 	other := NewBarVertical(sql.New(sql.From("caddy_logs"))).X(sql.Field("upstream")).Y(sql.Count())
 	for name, chart := range map[string]withQuery{"a SQL file without a table": noTable, "a chart on another table": other} {
@@ -330,7 +333,7 @@ func TestMount_AChartWithATableNamesIt(t *testing.T) {
 		pathEcho{},
 	)
 
-	if got := []string{page[0].Table, page[1].Table, page[2].Table, page[3].Table, page[4].Table}; !slices.Equal(got, []string{"default.http_logs", "audit", "default.payments", "", ""}) {
+	if got := []string{page[0].Table, page[1].Table, page[2].Table, page[3].Table, page[4].Table}; !slices.Equal(got, []string{"http_logs", "audit", "payments", "", ""}) {
 		t.Errorf("tables %q", got)
 	}
 }

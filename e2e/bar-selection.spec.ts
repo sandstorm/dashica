@@ -38,7 +38,7 @@ test('a click on a bar offers to filter by its category or exclude it; "Filter" 
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('=');
     // the URL holds the pill's signed key, `<payload>.<mac>`
-    await expect(page).toHaveURL(/[?&]f=[\w-]+\.[\w-]+/);
+    await expect(page).toHaveURL(/[?&]f=[^&]+(~|%7E)[\w-]{22}(&|$)/);
 });
 
 test('"Exclude" adds the category as ≠', async ({page}) => {

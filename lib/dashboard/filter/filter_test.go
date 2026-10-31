@@ -1,9 +1,8 @@
-// Tests for TableOf, New, NewButton, Sign, Open and Apply.
+// Tests for TableOf, New, NewButton, Sign, Open, ShortName and Apply.
 package filter
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"slices"
@@ -24,7 +23,7 @@ var httpLogs = Table{Connection: "default", Name: "default.http_logs"}
 
 func pill(t *testing.T, table Table, field sql.SqlField, op sql.Op, value string) Pill {
 	t.Helper()
-	p, err := New(table, field, op, value, "")
+	p, err := New(table, field, op, value)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -59,86 +58,114 @@ func TestNew_WritesTheFieldsConditionAndLabel(t *testing.T) {
 	if host != want {
 		t.Errorf("got %+v", host)
 	}
-	if _, err := New(httpLogs, sql.Count(), "eq", "1", ""); !errors.Is(err, ErrCannotFilter) {
+	if _, err := New(httpLogs, sql.Count(), "eq", "1"); !errors.Is(err, ErrCannotFilter) {
 		t.Errorf("count: %v", err)
 	}
-	if _, err := New(httpLogs, sql.Field("status"), "like", "5", ""); err == nil {
+	if _, err := New(httpLogs, sql.Field("status"), "like", "5"); err == nil {
 		t.Errorf("op like accepted")
 	}
-	since, err := New(httpLogs, sql.Field("timestamp"), "ge", "2026-10-31T10:00:00.000Z", "DateTime64(3)")
+	since, err := New(httpLogs, sql.Field("timestamp"), "ge", "2026-10-31T10:00:00.000Z")
 	want = Pill{Table: httpLogs, Field: "timestamp", Op: "ge", Condition: "(timestamp) >= '2026-10-31T10:00:00.000Z'",
-		Label: "timestamp ≥ 2026-10-31T10:00:00.000Z", Value: "2026-10-31T10:00:00.000Z", Type: "DateTime64(3)"}
+		Label: "timestamp ≥ 2026-10-31T10:00:00.000Z", Value: "2026-10-31T10:00:00.000Z"}
 	if err != nil || since != want {
 		t.Errorf("ge: %+v, %v", since, err)
 	}
 }
 
-func TestSignAndOpen_GiveThePillBack(t *testing.T) {
-	p, _ := New(httpLogs, sql.Field("status"), "le", "500", "UInt16")
-	key, err := Sign(secret, p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.ContainsAny(key, "+/=&? ") {
-		t.Errorf("key %q is not URL-safe", key)
-	}
-	got, err := Open(secret, key)
-	if err != nil || got != p {
-		t.Errorf("Open: %+v, %v", got, err)
+func TestNew_AColumnsPillIsAColumn(t *testing.T) {
+	got := pill(t, httpLogs, sql.ColumnField("host"), "eq", "web-1")
+	want := Pill{Table: httpLogs, Field: "host", Column: true, Op: "eq", Condition: "(`host`) = 'web-1'", Label: "host = web-1", Value: "web-1"}
+	if got != want {
+		t.Errorf("got %+v", got)
 	}
 }
 
-func TestSign_PutsAnEmptyValueIntoTheKey(t *testing.T) {
-	key, err := Sign(secret, pill(t, httpLogs, sql.Field("host"), "eq", ""))
+// signed is the key of `p` and its part before the mac, checking the mac is 22 characters of base64url.
+func signed(t *testing.T, p Pill) (key, head string) {
+	t.Helper()
+	key, err := Sign(secret, p, databases)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, _, _ := strings.Cut(key, ".")
-	b, _ := base64.RawURLEncoding.DecodeString(payload)
-	var fields map[string]any
-	if err := json.Unmarshal(b, &fields); err != nil || fields["value"] != "" {
-		t.Errorf("payload %s: want \"value\": \"\"", b)
+	i := strings.LastIndex(key, "~")
+	if mac := key[i+1:]; len(mac) != 22 || strings.ContainsAny(mac, "+/=") {
+		t.Errorf("mac %q of %q: want 22 characters of base64url", mac, key)
+	}
+	return key, key[:i]
+}
+
+func TestSign_WritesAReadableKey(t *testing.T) {
+	customer := sql.Field("replace(customer_project, 'customer-', '')").WithAlias("customer").
+		FilterAs(func(op sql.Op, value string) string { return op.Compare("customer_project", "customer-"+value) })
+	for want, p := range map[string]Pill{
+		"http_logs.host=web-1":  pill(t, httpLogs, sql.ColumnField("host"), "eq", "web-1"),
+		"http_logs.status<=500": pill(t, httpLogs, sql.ColumnField("status"), "le", "500"),
+		"http_logs.customer!=acme~customer_project != 'customer-acme'": pill(t, httpLogs, customer, "ne", "acme"),
+		"system.one.dummy>1":            pill(t, Table{"default", "system.one"}, sql.ColumnField("dummy"), "gt", "1"),
+		"logs:full_logs.host>=a":        pill(t, Table{"logs", "monitoring.full_logs"}, sql.ColumnField("host"), "ge", "a"),
+		"logs:default.full_logs.host<a": pill(t, Table{"logs", "default.full_logs"}, sql.ColumnField("host"), "lt", "a"),
+	} {
+		if _, head := signed(t, p); head != want {
+			t.Errorf("key %q, want %q", head, want)
+		}
+	}
+}
+
+func TestSignAndOpen_GiveThePillBack(t *testing.T) {
+	path := sql.Field("path").WithAlias("a.path=x")
+	for name, p := range map[string]Pill{
+		"a column":                      pill(t, httpLogs, sql.ColumnField("host"), "eq", "web-1"),
+		"an expression":                 pill(t, httpLogs, sql.JsonExtractString("attrs", "host"), "ne", "it's ~ 50%"),
+		"a value with separators":       pill(t, httpLogs, sql.ColumnField("host"), "eq", "a~b.c=d!e<f>g@h:i%7E"),
+		"a value starting with =":       pill(t, httpLogs, sql.ColumnField("status"), "lt", "=5"),
+		"an empty value":                pill(t, httpLogs, sql.ColumnField("host"), "eq", ""),
+		"a field with separators":       pill(t, httpLogs, path, "eq", "/"),
+		"another connection":            pill(t, Table{"logs", "monitoring.full_logs"}, sql.ColumnField("host"), "ge", "a"),
+		"another database":              pill(t, Table{"logs", "default.full_logs"}, sql.ColumnField("host"), "le", "a"),
+		"a connection without database": pill(t, Table{"other", "http_logs"}, sql.ColumnField("host"), "gt", "a"),
+		"a connection with separators":  pill(t, Table{"a:b.c", "x.y"}, sql.ColumnField("host"), "eq", "a"),
+	} {
+		key, _ := signed(t, p)
+		if got, err := Open(secret, key, databases); err != nil || got != p {
+			t.Errorf("%s: Open(%q): %+v, %v, want %+v", name, key, got, err, p)
+		}
 	}
 }
 
 func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
-	key, _ := Sign(secret, pill(t, httpLogs, sql.Field("status"), "eq", "500"))
-	payload, signature, _ := strings.Cut(key, ".")
-
-	// the condition changed on its way, the mac kept
-	var p Pill
-	b, _ := base64.RawURLEncoding.DecodeString(payload)
-	_ = json.Unmarshal(b, &p)
-	p.Condition = "1 = 1) OR (1 = 1"
-	b, _ = json.Marshal(p)
-	tampered := base64.RawURLEncoding.EncodeToString(b) + "." + signature
-	// the shown value changed (the filter bar edits by it), the mac kept
-	var shown Pill
-	b, _ = base64.RawURLEncoding.DecodeString(payload)
-	_ = json.Unmarshal(b, &shown)
-	shown.Value = "200"
-	b, _ = json.Marshal(shown)
-	tamperedValue := base64.RawURLEncoding.EncodeToString(b) + "." + signature
-
-	otherSecret, _ := Sign([]byte("another secret of at least thirty-two bytes"), p)
+	p := pill(t, httpLogs, sql.ColumnField("status"), "eq", "500")
+	key, head := signed(t, p)
+	mac := key[len(head)+1:]
+	otherSecret, _ := Sign([]byte("another secret of at least thirty-two bytes"), p, databases)
 	for name, k := range map[string]string{
-		"tampered":         tampered,
-		"tampered value":   tamperedValue,
-		"unsigned":         payload,
-		"another secret":   otherSecret,
-		"bad mac":          payload + ".x",
-		"empty":            "",
-		"the old filter f": "status:eq:500",
+		"the value changed":       "http_logs.status=200~" + mac,
+		"a condition added":       head + "~1 = 1~" + mac,
+		"another op":              "http_logs.status!=500~" + mac,
+		"unsigned":                head,
+		"another secret":          otherSecret,
+		"bad mac":                 head + "~x",
+		"empty":                   "",
+		"the old filter f":        "status:eq:500",
+		"a key before 2026-10-31": "eyJjb25uZWN0aW9uIjoiZGVmYXVsdCJ9.eyJ4IjoxfQ",
 	} {
-		if _, err := Open(secret, k); err == nil {
+		if _, err := Open(secret, k, databases); err == nil {
 			t.Errorf("%s: opened", name)
 		}
 	}
-	if _, err := Open(nil, key); err == nil {
+	if _, err := Open(nil, key, databases); err == nil {
 		t.Errorf("opened without a secret")
 	}
-	if _, err := Sign(nil, p); err == nil {
+	if _, err := Sign(nil, p, databases); err == nil {
 		t.Errorf("signed without a secret")
+	}
+}
+
+func TestOpen_RefusesASignedKeyItCannotRead(t *testing.T) {
+	for _, head := range []string{"http_logs.host", "host=a", "http_logs.=a", "a~b~c", "@status >= ...", "@status >= 500~1", "http_logs.host=%zz", "a.b.c.host=1"} {
+		key := head + "~" + base64.RawURLEncoding.EncodeToString(mac(secret, head))
+		if p, err := Open(secret, key, databases); err == nil {
+			t.Errorf("%q: opened as %+v", head, p)
+		}
 	}
 }
 
@@ -228,15 +255,29 @@ func TestNewButton_WritesTheValueInAsAStringLiteral(t *testing.T) {
 	}
 }
 
-func TestSignAndOpen_GiveAButtonsPillBack(t *testing.T) {
-	p, _ := NewButton("Duration", "duration_ms >= ...", "500")
-	key, err := Sign(secret, p)
+func TestSignAndOpen_GiveAButtonsPillBackLabelledWithItsCondition(t *testing.T) {
+	for want, p := range map[string]Pill{
+		"@duration_ms >= ...~500":    must(NewButton("Duration", "duration_ms >= ...", "500")),
+		"@status >= 500":             must(NewButton("Errors", "status >= 500", "")),
+		"@path = ... %7E 1~a%7Eb%25": must(NewButton("Path", "path = ... ~ 1", "a~b%")),
+	} {
+		key, err := Sign(secret, p, nil)
+		if head := key[:strings.LastIndex(key, "~")]; err != nil || head != want {
+			t.Errorf("key %q, %v, want %q", key, err, want)
+		}
+		got, err := Open(secret, key, databases)
+		p.Label = p.Condition
+		if err != nil || got != p {
+			t.Errorf("Open(%q): %+v, %v, want %+v", key, got, err, p)
+		}
+	}
+}
+
+func must(p Pill, err error) Pill {
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-	if got, err := Open(secret, key); err != nil || got != p {
-		t.Errorf("Open: %+v, %v", got, err)
-	}
+	return p
 }
 
 func TestApply_AButtonsPillToEveryQueryThatTakesFilters(t *testing.T) {
@@ -265,5 +306,19 @@ func TestApply_AButtonsPillToEveryQueryThatTakesFilters(t *testing.T) {
 	got, d := Apply(skipping, table, ok, []Pill{errorsOnly})
 	if strings.Contains(got.Build(), "level") || !reflect.DeepEqual(d.Ignored, []string{"Errors"}) {
 		t.Errorf("skips filters: ignored %v, query %s", d.Ignored, got.Build())
+	}
+}
+
+func TestShortName_DropsTheConnectionsDatabase(t *testing.T) {
+	for want, table := range map[string]Table{
+		"http_logs":            httpLogs,
+		"system.one":           {"default", "system.one"},
+		"full_logs":            {"logs", "monitoring.full_logs"},
+		"default.full_logs":    {"logs", "default.full_logs"},
+		"default.http_logs_v2": {"other", "default.http_logs_v2"},
+	} {
+		if got := ShortName(table, databases); got != want {
+			t.Errorf("%+v: %q, want %q", table, got, want)
+		}
 	}
 }

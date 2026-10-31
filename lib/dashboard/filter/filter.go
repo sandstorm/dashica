@@ -8,9 +8,9 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -28,8 +28,8 @@ type Diagnostics struct {
 // Table is a table as pills name it: its ClickHouse connection and its name with the database ("default",
 // "monitoring.full_logs"), so that `full_logs` and `monitoring.full_logs` on a connection to `monitoring` are one.
 type Table struct {
-	Connection string `json:"connection"`
-	Name       string `json:"table"`
+	Connection string
+	Name       string
 }
 
 // TableOf is the Table whose pills `q` takes (sql.TableOf: a builder query's From, a SQL file's sql.Table) on its
@@ -49,47 +49,44 @@ func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table
 
 // Pill is a filter on a table: the rows where a field compares by an op with a value (`customer = acme`, `timestamp ≥
 // 2026-10-31T10:00:00.000Z`), as the condition the server wrote for it; or a filter button's condition (Button), on
-// no table. Its key (Sign) carries all of it, signed.
+// no table. Its key (Sign) carries it, signed.
 type Pill struct {
 	Table
 	// Field is the alias of the field it filters by ("customer"), or with Column the column's name; the pills on one
 	// table and field combine (Apply).
-	Field string `json:"field"`
-	// Column is set for a pill on a column of the table ("Add filter"'s table columns, docs/2026-10-28-workbench.md
-	// §3.15 D27), which any chart on the table makes again, else a chart's field's, which a chart with that field
-	// makes.
-	Column bool `json:"column,omitempty"`
+	Field string
+	// Column is set for a pill on a column of the table, whose Condition is the column's own (`(`host`) = 'web-1'`,
+	// sql.ColumnField; "Add filter"'s table columns and a click on a field that is just a column,
+	// docs/2026-10-28-workbench.md §3.15 D27, D29), which any chart on the table makes again; else a chart's field's,
+	// which a chart with that field makes. Its key carries no condition.
+	Column bool
 	// Op is how the field compares with Value (sql.Op: `eq`, `ne`, `lt`, `le`, `gt`, `ge`).
-	Op sql.Op `json:"op"`
+	Op sql.Op
 	// Condition is what goes into the WHERE of a chart on Table (`customer_project = 'customer-acme'`).
-	Condition string `json:"condition"`
-	// Label is the chip's text: "customer = acme", "customer ≠ acme", "duration_ms ≥ 500"; a button's title, with its
-	// value after a colon ("Duration >= … ms: 500").
-	Label string `json:"label"`
+	Condition string
+	// Label is the chip's text, made from the rest and not in the key: "customer = acme", "customer ≠ acme",
+	// "duration_ms ≥ 500"; a button's its condition (`duration_ms >= '500'`; NewButton: its title, with its value
+	// after a colon, "Duration >= … ms: 500").
+	Label string
 	// Button is the condition of the filter button the pill was made for, as the dashboard declares it
 	// ("duration_ms >= ..."), by which the page finds its button; empty for a field's pill. A button's pill has no
 	// table, field or op.
-	Button string `json:"button,omitempty"`
+	Button string
 	// Value is the value the field shows ("acme"), by which the filter bar edits the pill (a new op or value asks the
-	// field's chart for a new one), always in the key, empty ones too, so a key signed before pills carried it
-	// (without "value") reads as not editable; for a button, the value written in for its `...` ("500"), as typed,
-	// empty for one without.
-	Value string `json:"value"`
-	// Type is the field's ClickHouse type as the client learned it from the server (`/values`, a chart's column types:
-	// "DateTime64(3)", "LowCardinality(String)"), by which the filter bar offers the ops it allows; empty when unknown,
-	// and for a button. Nothing reads it as SQL.
-	Type string `json:"type,omitempty"`
+	// field's chart for a new one); for a button, the value written in for its `...` ("500"), as typed, empty for one
+	// without.
+	Value string
 }
 
 // ErrCannotFilter: the field holds no categories (a count, a time bucket), so it makes no pill.
 var ErrCannotFilter = errors.New("cannot filter")
 
 // New is the pill on `table` of the rows where `field` compares by `op` with `value`: its condition as sql.Condition
-// writes it (the field's FilterAs, else its definition compared with the quoted value), labelled with the field's
-// alias and the op's sign ("duration_ms ≥ 500"); the alias, `value` and the field's ClickHouse type `columnType` (as
-// the client names it, '' when unknown) in it too, so the filter bar can make it again with another op or value.
-// ErrCannotFilter for a field that cannot filter.
-func New(table Table, field sql.SqlField, op sql.Op, value, columnType string) (Pill, error) {
+// writes it (the field's FilterAs, else its definition compared with the quoted value), a Column when that is the
+// condition of the column the alias names (sql.ColumnField); labelled with the field's alias and the op's sign
+// ("duration_ms ≥ 500"); the alias and `value` in it too, so the filter bar can make it again with another op or
+// value. ErrCannotFilter for a field that cannot filter.
+func New(table Table, field sql.SqlField, op sql.Op, value string) (Pill, error) {
 	if !op.Valid() {
 		return Pill{}, fmt.Errorf("op %q: want eq, ne, lt, le, gt or ge", op)
 	}
@@ -97,8 +94,21 @@ func New(table Table, field sql.SqlField, op sql.Op, value, columnType string) (
 	if !ok {
 		return Pill{}, ErrCannotFilter
 	}
-	label := field.Alias() + " " + op.Sign() + " " + value
-	return Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Label: label, Value: value, Type: columnType}, nil
+	p := Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Value: value}
+	p.Column = condition == columnCondition(p)
+	p.Label = fieldLabel(p)
+	return p, nil
+}
+
+// columnCondition is the condition of a pill on the column `p.Field` (sql.ColumnField): what Open writes for a key
+// without one.
+func columnCondition(p Pill) string {
+	condition, _ := sql.Condition(sql.ColumnField(p.Field), p.Op, p.Value)
+	return condition
+}
+
+func fieldLabel(p Pill) string {
+	return p.Field + " " + p.Op.Sign() + " " + p.Value
 }
 
 // NewButton is the pill of the filter button `title` with the condition `queryPart`: `queryPart` itself, or for a
@@ -119,46 +129,204 @@ func NewButton(title, queryPart, value string) (Pill, error) {
 	return Pill{Condition: condition, Label: title + ": " + value, Button: queryPart, Value: value}, nil
 }
 
-// Sign is the key of `p`, what the URL holds (`?f=<key>`): `<payload>.<mac>`, the payload `p` as JSON and the mac its
-// HMAC-SHA256 with `secret` (filters.secret), each in unpadded base64url. The client reads the label from the payload.
-func Sign(secret []byte, p Pill) (string, error) {
+// Sign is the key of `p`, what the URL holds (`?f=<key>`, docs/2026-10-28-workbench.md §3.15 D29), readable and short:
+//
+//	<table>.<field><op><value>[~<condition>]~<mac>    mv_oekokiste_shop.host=web-1~Zp8x…
+//	@<button>[~<value>]~<mac>                         @duration_ms >= ...~500~kq3V…
+//
+// The table is `[<connection>:][<database>.]<name>`, the connection left out when it is "default" and the database
+// when it is the connection's (`database`, dashica_config; nil only for a button's pill); the op its ClickHouse
+// operator (`=`, `!=`, `<`, `<=`, `>`, `>=`); the condition only when it is not the column's own (a Column's). The mac
+// is the HMAC-SHA256 with `secret` (filters.secret) of everything before it, its first 128 bits in unpadded base64url.
+// `%` and each separator a part could hold are percent-encoded in it (`~` everywhere; `:`, `.`, `=`, `!`, `<`, `>`
+// and `@` in a name; a value's leading `=`), so each part reads back as it was.
+func Sign(secret []byte, p Pill, database func(connection string) string) (string, error) {
 	if len(secret) == 0 {
 		return "", errors.New("filters.secret is not set")
 	}
-	b, err := json.Marshal(p)
-	if err != nil {
-		return "", err
+	var head string
+	if p.Button != "" {
+		head = "@" + escape(p.Button, "~")
+		if p.Value != "" {
+			head += "~" + escape(p.Value, "~")
+		}
+	} else {
+		head = tableKey(p.Table, database) + "." + escape(p.Field, nameSeparators) + p.Op.Operator() + escapeValue(p.Value)
+		if p.Condition != columnCondition(p) {
+			head += "~" + escape(p.Condition, "~")
+		}
 	}
-	payload := base64.RawURLEncoding.EncodeToString(b)
-	return payload + "." + base64.RawURLEncoding.EncodeToString(mac(secret, payload)), nil
+	return head + "~" + base64.RawURLEncoding.EncodeToString(mac(secret, head)), nil
 }
 
-// Open is the pill of `key` (Sign), when its mac is the one `secret` gives; else an error: a key changed on its way, one
-// written by hand, one signed with another secret.
-func Open(secret []byte, key string) (Pill, error) {
+// Open is the pill of `key` (Sign), when its mac is the one `secret` gives, its table's name with the database
+// `database` names for its connection when the key has none; else an error: a key changed on its way, one written by
+// hand, one signed with another secret.
+func Open(secret []byte, key string, database func(connection string) string) (Pill, error) {
 	if len(secret) == 0 {
 		return Pill{}, errors.New("filters.secret is not set")
 	}
-	payload, signature, ok := strings.Cut(key, ".")
-	got, err := base64.RawURLEncoding.DecodeString(signature)
-	if !ok || err != nil || !hmac.Equal(got, mac(secret, payload)) {
+	i := strings.LastIndex(key, "~")
+	if i < 0 {
 		return Pill{}, fmt.Errorf("pill %q: not signed by this server", shorten(key))
 	}
-	b, err := base64.RawURLEncoding.DecodeString(payload)
-	var p Pill
-	if err == nil {
-		err = json.Unmarshal(b, &p)
+	head := key[:i]
+	got, err := base64.RawURLEncoding.DecodeString(key[i+1:])
+	if err != nil || !hmac.Equal(got, mac(secret, head)) {
+		return Pill{}, fmt.Errorf("pill %q: not signed by this server", shorten(key))
 	}
-	if err != nil || p.Condition == "" || (p.Button == "" && !p.Op.Valid()) {
+	p, err := read(head, database)
+	if err != nil {
 		return Pill{}, fmt.Errorf("pill %q: unreadable", shorten(key))
 	}
 	return p, nil
 }
 
-func mac(secret []byte, payload string) []byte {
+// nameSeparators are the separators a name in a key escapes.
+const nameSeparators = "~:.=!<>@"
+
+// ops are the ops by their ClickHouse operator, the two-character ones first, as read reads them.
+var ops = []sql.Op{sql.OpNe, sql.OpLe, sql.OpGe, sql.OpEq, sql.OpLt, sql.OpGt}
+
+// read is the pill of a key's `head` (Sign: all before the mac).
+func read(head string, database func(connection string) string) (Pill, error) {
+	parts := strings.Split(head, "~")
+	if len(parts) > 2 {
+		return Pill{}, errors.New("too many parts")
+	}
+	for i := range parts {
+		var err error
+		if i > 0 || strings.HasPrefix(head, "@") {
+			if parts[i], err = url.PathUnescape(parts[i]); err != nil {
+				return Pill{}, err
+			}
+		}
+	}
+	if button, ok := strings.CutPrefix(parts[0], "@"); ok {
+		value := ""
+		if len(parts) == 2 {
+			value = parts[1]
+		}
+		p, err := NewButton("", button, value)
+		if err != nil {
+			return Pill{}, err
+		}
+		p.Label = p.Condition
+		return p, nil
+	}
+	at := strings.IndexAny(parts[0], "=!<>")
+	if at < 0 {
+		return Pill{}, errors.New("no op")
+	}
+	i := slices.IndexFunc(ops, func(op sql.Op) bool { return strings.HasPrefix(parts[0][at:], op.Operator()) })
+	if i < 0 {
+		return Pill{}, errors.New("no op")
+	}
+	names, value := parts[0][:at], parts[0][at+len(ops[i].Operator()):]
+	dot := strings.LastIndex(names, ".")
+	if dot < 0 {
+		return Pill{}, errors.New("no field")
+	}
+	table, err := readTable(names[:dot], database)
+	if err != nil {
+		return Pill{}, err
+	}
+	p := Pill{Table: table, Op: ops[i]}
+	if p.Field, err = url.PathUnescape(names[dot+1:]); err != nil {
+		return Pill{}, err
+	}
+	if p.Value, err = url.PathUnescape(value); err != nil {
+		return Pill{}, err
+	}
+	p.Condition, p.Column = columnCondition(p), true
+	if len(parts) == 2 {
+		p.Condition, p.Column = parts[1], false
+	}
+	if p.Field == "" || p.Condition == "" {
+		return Pill{}, errors.New("no field")
+	}
+	p.Label = fieldLabel(p)
+	return p, nil
+}
+
+// tableKey is `t` as a key names it (Sign).
+func tableKey(t Table, database func(connection string) string) string {
+	key := ""
+	if t.Connection != "default" {
+		key = escape(t.Connection, nameSeparators) + ":"
+	}
+	db, name, ok := strings.Cut(ShortName(t, database), ".")
+	if !ok {
+		return key + escape(db, nameSeparators)
+	}
+	return key + escape(db, nameSeparators) + "." + escape(name, nameSeparators)
+}
+
+// readTable is the table a key names (tableKey).
+func readTable(key string, database func(connection string) string) (Table, error) {
+	t := Table{Connection: "default"}
+	if connection, rest, ok := strings.Cut(key, ":"); ok {
+		t.Connection, key = connection, rest
+	}
+	parts := strings.Split(key, ".")
+	if len(parts) > 2 || key == "" {
+		return Table{}, errors.New("no table")
+	}
+	var err error
+	if t.Connection, err = url.PathUnescape(t.Connection); err != nil {
+		return Table{}, err
+	}
+	for i := range parts {
+		if parts[i], err = url.PathUnescape(parts[i]); err != nil {
+			return Table{}, err
+		}
+	}
+	t.Name = strings.Join(parts, ".")
+	if db := database(t.Connection); len(parts) == 1 && db != "" {
+		t.Name = db + "." + t.Name
+	}
+	return t, nil
+}
+
+// ShortName is the name of `t` as a key and page.json name it: without its database when that is the one `database`
+// names for its connection (`http_logs` for `default.http_logs` on a connection to `default`), else with it.
+func ShortName(t Table, database func(connection string) string) string {
+	if db := database(t.Connection); db != "" {
+		if name, ok := strings.CutPrefix(t.Name, db+"."); ok {
+			return name
+		}
+	}
+	return t.Name
+}
+
+// escape is `s` with `%` and each byte of `separators` percent-encoded (`~` as `%7E`).
+func escape(s, separators string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c == '%' || strings.IndexByte(separators, c) >= 0 {
+			fmt.Fprintf(&b, "%%%02X", c)
+		} else {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// escapeValue is a value as a key holds it after its op: `~` and a leading `=` percent-encoded too, so that `<` with
+// `=5` does not read as `<=` with `5`.
+func escapeValue(value string) string {
+	escaped := escape(value, "~")
+	if strings.HasPrefix(escaped, "=") {
+		return "%3D" + escaped[1:]
+	}
+	return escaped
+}
+
+// mac is the HMAC-SHA256 of `head` with `secret`, its first 128 bits.
+func mac(secret []byte, head string) []byte {
 	h := hmac.New(sha256.New, secret)
-	h.Write([]byte(payload))
-	return h.Sum(nil)
+	h.Write([]byte(head))
+	return h.Sum(nil)[:16]
 }
 
 // shorten is a key as an error names it: its first 24 characters.

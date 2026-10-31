@@ -45,17 +45,17 @@ func TestColumns_TheColumnsOfTheChartsTableFromTheSchema(t *testing.T) {
 	}
 }
 
-func TestPill_AColumnOfTheTableIsSignedWithItsSchemaType(t *testing.T) {
+func TestPill_AColumnOfTheTableIsSigned(t *testing.T) {
 	one := NewStats(sql.New(sql.From("system.one")))
 
-	rec := askClickHouse(t, one, "/pill?column=dummy&op=ne&value=1&type=String")
+	rec := askClickHouse(t, one, "/pill?column=dummy&op=ne&value=1")
 	var body struct{ Key string }
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	pill, err := filter.Open(testSecret, body.Key)
+	pill, err := filter.Open(testSecret, body.Key, testDeps().ClickhouseClientManager.Database)
 	if rec.Code != http.StatusOK || err != nil {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}
-	want := filter.Pill{Table: filter.Table{Connection: "default", Name: "system.one"}, Field: "dummy", Column: true, Op: "ne", Condition: "(`dummy`) != '1'", Label: "dummy ≠ 1", Value: "1", Type: "UInt8"}
+	want := filter.Pill{Table: filter.Table{Connection: "default", Name: "system.one"}, Field: "dummy", Column: true, Op: "ne", Condition: "(`dummy`) != '1'", Label: "dummy ≠ 1", Value: "1"}
 	if pill != want {
 		t.Errorf("pill %+v", pill)
 	}

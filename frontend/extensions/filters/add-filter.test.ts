@@ -156,7 +156,7 @@ describe('addFilter', () => {
       ['/p/shop/api/1/values', 'host', '', '1h'],
     ]);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');
-    expect(fetched.at(-1)!.searchParams.get('type')).toBe('String');
+    expect(fetched.at(-1)!.searchParams.has('type')).toBe(false);
   });
 
   it('groups the fields into the table’s columns, from the schema, and the computed fields, each once', async () => {
@@ -196,7 +196,7 @@ describe('addFilter', () => {
     expect(query.get(FILTERS)).toEqual([{ kind: 'pill', key: 'key:column user:eq:bob' }]);
     expect(fetched.map((url) => url.pathname)).toEqual(['/p/shop/api/1/columns', '/p/shop/api/1/values', '/p/shop/api/1/pill']);
     expect(fetched[1].searchParams.get('column')).toBe('user');
-    expect(fetched[2].searchParams.get('type')).toBe('String');
+    expect(fetched[2].searchParams.has('type')).toBe(false);
   });
 
   it('offers a time’s operators, ≥ and ≤ first, and asks its value in an input box at the time range’s edge', async () => {
@@ -212,7 +212,7 @@ describe('addFilter', () => {
     await done;
 
     expect(query.get(FILTERS)).toEqual([{ kind: 'pill', key: 'key:column timestamp:le:2026-10-31T09:30:00Z' }]);
-    expect(fetched.at(-1)!.searchParams.get('type')).toBe('DateTime');
+    expect(fetched.at(-1)!.searchParams.has('type')).toBe(false);
     // a time's values are never asked
     expect(fetched.filter((url) => url.pathname.endsWith('/values'))).toEqual([]);
   });

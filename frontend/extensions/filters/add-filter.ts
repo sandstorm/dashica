@@ -67,7 +67,7 @@ export function fieldSource(
  * asks in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its columns or
  * computed fields (`fieldItems`), an op of its type (`opsOf`; a column's type from the schema, a field's from its
  * chart's `/type` in `query`'s state, asked once the field is chosen, which reads no values, so a time's are never
- * asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`, with the type), added to the
+ * asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
  * chips of `query`. While `sqlEnabled` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
  * under "Advanced" (its only entry while no chart filters a table), which asks the condition in an input box
  * (`addSqlCondition`). Escape at any step adds nothing; a failed `/pill` goes to the console.
@@ -112,7 +112,7 @@ export async function addFilter(
   );
   if (value === undefined) return;
   try {
-    const { key } = await fetchPill(widget.dataUrl, { fieldId: ref.field, column: ref.column, op: op.op, value, type: first?.type });
+    const { key } = await fetchPill(widget.dataUrl, { fieldId: ref.field, column: ref.column, op: op.op, value });
     query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
   } catch (error) {
     console.error(`Filter ${ref.field} ${sign} ${value} failed:`, error);
