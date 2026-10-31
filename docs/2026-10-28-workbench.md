@@ -297,7 +297,8 @@ the rule between groups and the guide line); Debug's sections (step 7e, §3.4.4)
   its panel's content, and a registry would keep view elements alive beside it.
 - **Collapsed state:** kept in the owner's memento (`state`) under `views.<id>.collapsed`, read whenever the view is
   drawn; Dashboards keeps it in `globalState`, across visits *(proposed)*. `collapsed` is the state before the viewer
-  chose one.
+  chose one. Without `state` the view keeps it in its element only, and a view drawn anew starts as `collapsed` says
+  (Details' record views) *(proposed)*.
 - **Keyboard:** the title is a `<button aria-expanded aria-controls>` inside an `<h2>` (Enter / Space toggle);
   ArrowLeft closes, ArrowRight opens *(proposed)*. The actions sit beside the heading, never inside the button.
 - **Favorites in their order:** the stored `globalState` `favorites` is the order shown; a new favorite goes last. A
@@ -376,7 +377,8 @@ a category for the floating bar (§3.8), unchanged; the two never mix.
 - **Details is a left side panel** (rail button "Details", a list-checks icon, after "Debug"): the active widget's
   title, then a view (§3.4.2) per record ("Record 1", …), its fields one below the other as `renderRecordDetails` had
   them (a JSON value pretty-printed, a value of several lines as it is, others as text; built with `htl`, so escaped);
-  the views' collapsed state in the extension's `workspaceState` under the record's place *(proposed)*. Drawn only while
+  each view starts open and its collapsed state is not kept: stored by the record's place, closing "Record 1" of one
+  table closed "Record 1" of every other table and of the next selection *(proposed)*. Drawn only while
   shown, anew when the active widget or its records change (not on its status). Without records: "Tick rows of a table
   to see them here." The table's search term is no longer highlighted in the details *(proposed)*.
 - **Status bar:** a second item, of the `details` extension: "2 records selected", hidden while none; a click opens
@@ -1278,6 +1280,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7e.1 ✅ | **review fix: overlapping queries** (§3.4.4): a per-widget count of `query()` calls; only the latest sets the status and `lastResult`, an aborted latest one puts back the last answer's status (not the one seen at its start, which may be an earlier call's `loading`). Before, an aborted query's late rejection put an old "done" over the newer query's `loading`, and Debug asked `/debug` twice. ✅ 2026-10-31 (vitest: two overlapping queries, the first aborted) | a refresh during a load shows "querying…" |
 | 7e.2 ✅ | **review fix: Debug and records** (§3.4.4): Debug remembers the status it asked `/debug` for and asks again only for another widget or another status, so ticking rows (which fires `onDidChangeActive`, step 7f) no longer refetches and redraws it (scroll, the Result table, the pipeline graph kept). ✅ 2026-10-31 (vitest) | ticking rows keeps Debug as it is |
 | 7f ✅ | **selected records** (§3.4.5): `ctx.selectRecords`, `ActiveWidget.records` (`WidgetRecord`), told by `onDidChangeActive`; the table's ticked rows, its checkbox column only with `selectRecords`, cleared on each draw; the in-table details panel (full screen, close) and its CSS removed; the `details` extension: the left side panel "Details" (a view per record, `renderRecordDetails`' formatting as `drawRecord`), the status bar's "N records selected"; `widgetTitle` moved from Debug into the `widgets` host; `e2e/record-details.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: records in the order ticked; a redraw (also another width) drops them; Debug's result table has no checkboxes; collapsed state per record place in `workspaceState`; the search highlight leaves the details *(all proposed)* | a table's ticked rows in Details and the status bar |
+| 7f.1 ✅ | **review fix: Details' record views** (§3.4.2, §3.4.5): `createView`'s `state` is optional (without it nothing is kept); Details passes none, so every record view starts open instead of taking the state stored under `record.<index>` from another table or selection. ✅ 2026-10-31 (vitest) | closing a record of one table leaves the others open |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

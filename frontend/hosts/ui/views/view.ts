@@ -8,7 +8,8 @@ import './view.css';
  * the header opens and closes; several stand one below the other and scroll with the panel, each header staying at
  * the top while its body scrolls past. The title is a button: Enter / Space toggles it, ArrowLeft closes it,
  * ArrowRight opens it (`aria-expanded`). Whether the viewer closed it is kept in `options.state` under
- * `views.<id>.collapsed`, so a view drawn anew (the panel's content redrawn) is as the viewer left it.
+ * `views.<id>.collapsed`, so a view drawn anew (the panel's content redrawn) is as the viewer left it; without `state`
+ * it is kept by this element only, and a view drawn anew starts as `collapsed` says.
  */
 export function createView(options: ViewOptions): HTMLElement {
   const { id, title, description, actions = [], state, body } = options;
@@ -21,7 +22,7 @@ export function createView(options: ViewOptions): HTMLElement {
   };
   const choose = (collapsed: boolean) => {
     set(collapsed);
-    void state.update(key, collapsed);
+    void state?.update(key, collapsed);
   };
   const onkeydown = (event: KeyboardEvent) => {
     const collapsed = ({ ArrowLeft: true, ArrowRight: false } as Record<string, boolean>)[event.key];
@@ -42,7 +43,7 @@ export function createView(options: ViewOptions): HTMLElement {
     </div>
     ${bodyEl}
   </section>`;
-  const stored = state.get<unknown>(key);
+  const stored = state?.get<unknown>(key);
   set(typeof stored === 'boolean' ? stored : (options.collapsed ?? false));
   return view;
 }
@@ -58,8 +59,11 @@ export interface ViewOptions {
   readonly actions?: readonly HTMLElement[];
   /** Closed until the viewer opens it; default open. */
   readonly collapsed?: boolean;
-  /** Keeps whether the viewer closed it: the extension's `globalState` (across visits) or `workspaceState`. */
-  readonly state: Memento;
+  /**
+   * Keeps whether the viewer closed it: the extension's `globalState` (across visits) or `workspaceState`; without
+   * one it is not kept.
+   */
+  readonly state?: Memento;
   /** What the view shows when open. */
   readonly body: Node | readonly Node[];
 }

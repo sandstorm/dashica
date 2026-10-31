@@ -2,7 +2,7 @@
 // Tests for details.ts: the panel following the active widget's selected records, a view per record, the status bar.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
+import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { ActiveWidget, WidgetRecord } from '../../hosts/widgets/widgets';
 import { details, drawRecord, recordsSelected } from './details';
 
@@ -13,8 +13,6 @@ let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
 let active: ActiveWidget | undefined;
 
-const memento: Memento = { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento;
-
 beforeEach(() => {
   body = document.body.appendChild(document.createElement('div'));
   panel = { visible: false, shown: 0 };
@@ -23,7 +21,6 @@ beforeEach(() => {
   active = undefined;
   const context = {
     subscriptions: [],
-    workspaceState: memento,
     ui: {
       registerSidePanel: () => ({
         body,
@@ -104,6 +101,17 @@ describe('details', () => {
     active = undefined;
     activeChanged.fire();
     expect(body.textContent).toContain('Tick rows of a table to see them here.');
+  });
+
+  it('opens every record view anew: a view closed on one selection leaves the next one open', () => {
+    showPanel();
+    active = table([{ path: '/api' }]);
+    activeChanged.fire();
+    body.querySelector<HTMLButtonElement>('.d-view__toggle')!.click();
+    expect(body.querySelector<HTMLElement>('.d-view__body')!.hidden).toBe(true);
+    active = table([{ host: 'web-1' }], 'Hosts');
+    activeChanged.fire();
+    expect(body.querySelector<HTMLElement>('.d-view__body')!.hidden).toBe(false);
   });
 
   it('draws nothing while hidden, and what is selected once shown', () => {

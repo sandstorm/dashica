@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for createView: the header as a button that opens and closes the body (click, ArrowLeft / ArrowRight), the
-// description while closed, the actions, and the state kept in the memento for the view drawn anew.
+// description while closed, the actions, and the state kept in the memento for the view drawn anew, or not kept.
 import { afterEach, describe, expect, it } from 'vitest';
 import { StorageMemento } from '../../extension-host/extension-host';
 import { createView, type ViewOptions } from './view';
@@ -62,6 +62,14 @@ describe('createView', () => {
     expect(body(draw({ id: 'group.Shop' })).hidden).toBe(true);
     expect(body(draw({ id: 'favorites' })).hidden).toBe(false);
     expect(JSON.parse(localStorage.getItem('dashica:global:test:views.group.Shop.collapsed')!)).toBe(true);
+  });
+
+  it('keeps nothing without a memento: drawn anew, it starts as it says', () => {
+    const view = draw({ state: undefined, collapsed: false });
+    toggle(view).click();
+    expect(body(view).hidden).toBe(true);
+    expect(body(draw({ state: undefined, collapsed: false })).hidden).toBe(false);
+    expect(localStorage.length).toBe(0);
   });
 
   it('shows its description after the title and its actions at the header end', () => {
