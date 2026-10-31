@@ -2,7 +2,7 @@ import type { Event } from '../../core/event-emitter/event-emitter';
 
 /**
  * The state every query of a tab's page depends on: its time range and auto refresh, its filters, the values of its
- * form widgets. Each tab has its own, in the tab's URL (`?time=1h&f=host:eq:a&sql=…&wp=…&refresh=30`), so a link
+ * form widgets. Each tab has its own, in the tab's URL (`?time=1h&f=host:eq:a&sql=…&wp=…&refresh=30`, `f` and `sql` one per chip), so a link
  * opens the page as it was shared; the browser's back button goes to the state before. Widgets query again on
  * `onDidRequestRefresh` and send `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
@@ -39,18 +39,17 @@ export interface TimeModel {
 }
 
 export interface FiltersModel {
-  /** The SQL condition every query of the page adds to its WHERE (`status >= 500 AND path LIKE '/api%'`); '' for none. */
-  readonly sql: string;
-  /** The structured filters, in the order they were added; in the URL each is one `f` (`?f=host:ne:a`). */
-  readonly fields: readonly FieldFilter[];
-  setSql(sql: string): void;
-  /** Adds `condition` to the SQL filter with AND (a filter button, "Filter: Equals this value" in a table). */
+  /** The chips, in the order they were added, as the URL holds them (`?f=host:ne:a&sql=status >= 500`). */
+  readonly chips: readonly FilterChip[];
+  /** Adds the SQL chip `condition` (a filter button, "Filter: Contains this value" in a table); once, when it is there already. */
   add(condition: string): void;
-  /** Adds the structured filter `fieldId` `op` `value` (a clicked column's alias); once, when it is there already. */
+  /** Adds the structured chip `fieldId` `op` `value` (a clicked column's alias); once, when it is there already. */
   add(fieldId: string, op: FilterOp, value: string): void;
-  /** Removes the structured filter at `index` of `fields`. */
-  remove(index: number): void;
-  /** Removes every structured filter; the SQL filter stays. */
+  /** Puts `chip` in place of the chip at `index` (an edit); a SQL chip of only spaces removes it. */
+  replace(index: number, chip: FilterChip): void;
+  /** Removes the chip at index `which` of `chips`, or every chip `which` holds for (a released filter button's), in one change. */
+  remove(which: number | ((chip: FilterChip) => boolean)): void;
+  /** Removes every chip. */
   clear(): void;
   readonly onDidChange: Event<void>;
 }
@@ -58,12 +57,22 @@ export interface FiltersModel {
 /** `eq`: the field equals `value` (Filter by …); `ne`: it differs (Exclude …). */
 export type FilterOp = 'eq' | 'ne';
 
+/** A chip of the filter bar: a structured filter (`?f=`), or a SQL condition every query of the page adds to its WHERE (`?sql=`). */
+export type FilterChip = FieldFilter | SqlFilter;
+
 /** A structured filter: each chart's query compares what it means by `fieldId` with `value`, bound as a parameter. */
 export interface FieldFilter {
+  readonly kind: 'field';
   /** The alias of the column the viewer clicked (`host`); a chart that does not know it says so (`ignored`). */
   readonly fieldId: string;
   readonly op: FilterOp;
   readonly value: string;
+}
+
+/** A SQL condition (`duration > 2000`); several AND together, each in its own parentheses. */
+export interface SqlFilter {
+  readonly kind: 'sql';
+  readonly sql: string;
 }
 
 /** The values of the page's form widgets by name, sent to ClickHouse as query parameters (`{path:String}`). */

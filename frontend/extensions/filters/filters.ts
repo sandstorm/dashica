@@ -3,17 +3,18 @@ import { Filter, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { FilterOp, QueryApi } from '../../hosts/query/query';
+import type { FilterChip, FilterOp, QueryApi } from '../../hosts/query/query';
 import type { Selection } from '../../hosts/widgets/widgets';
 import './filters.css';
 
 /**
- * The filters of a page that has them (`page.json`'s `filterBar`): a funnel button in the title bar, marked while there
- * is a SQL filter, opens the SQL filter every query of the page adds to its WHERE (open by itself while there is one).
- * The filter bar shows one chip per structured filter ("host = a", × removes it), the page's filter buttons, each
- * adding its condition to the SQL filter (`status >= 500`; a `...` in it is asked for), and the open SQL filter; it
- * shows while it has one of them, else the page has no bar for nothing. On a chart's selected category, the floating
- * bar `widget/selection` offers "Filter by" and "Exclude", which add it as a structured filter and end the selection.
+ * The filters of a page that has them (`page.json`'s `filterBar`): the filter bar shows one chip per filter, structured
+ * ("host = a") or SQL ("SQL: duration > 2000"), each removed with its × and edited with a click on its text. The funnel
+ * button in the title bar adds a SQL chip. The page's filter buttons are toggles: pressed while a SQL chip has their
+ * condition (`status >= 500`; a `...` in it is asked for), which is then labelled with the button's title. The bar
+ * shows while it has a chip or a button, else the page has no bar for nothing. On a chart's selected category, the
+ * floating bar `widget/selection` offers "Filter by" and "Exclude", which add it as a structured chip and end the
+ * selection.
  */
 export const filters: Extension = {
   id: 'filters',
@@ -36,23 +37,20 @@ export const filters: Extension = {
         bar.dispose();
         bar = undefined;
       }
+      filterBar.focusEditor();
     };
     const filterBar = new FilterBar(query, showBar);
     const showForPage = () => {
       button?.dispose();
       button = undefined;
-      if (page.current?.filterBar) {
-        filterBar.showButtons(page.current.filterButtons);
-        button = ui.registerBarItem('title', filterBar.toggle, { alignment: 'right', priority: 40 });
-      }
-      filterBar.showFields();
+      filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : []);
+      if (page.current?.filterBar) button = ui.registerBarItem('title', filterBar.toggle, { alignment: 'right', priority: 40 });
       showBar();
     };
     subscriptions.push(page.onDidChangePage(showForPage));
     subscriptions.push(
       query.filters.onDidChange(() => {
-        filterBar.showSql();
-        filterBar.showFields();
+        filterBar.show();
         showBar();
       }),
     );
@@ -62,100 +60,199 @@ export const filters: Extension = {
 };
 
 /**
- * The funnel button (`toggle`) and the filter bar's content (`el`); `showButtons` takes the page's buttons, `showSql`
- * the SQL filter of `query`, `showFields` its structured filters, each labelled by its id.
- * `onDidChangeWanted` is called when the SQL filter opens or closes.
+ * The button among `buttons` whose condition the SQL chip `sql` is, and the text in place of its `...`s (`values`):
+ * `sql` equals its `queryPart`, or a `queryPart` with `...` with a non-empty text in place of each.
+ */
+export function buttonOf(sql: string, buttons: readonly FilterButton[]): { button: FilterButton; values: string[] } | undefined {
+  for (const button of buttons) {
+    if (button.queryPart === sql) return { button, values: [] };
+    if (!button.queryPart.includes('...')) continue;
+    const pattern = button.queryPart.split('...').map(escapeRegExp).join('([\\s\\S]+)');
+    const match = new RegExp(`^${pattern}$`).exec(sql);
+    if (match) return { button, values: match.slice(1) };
+  }
+  return undefined;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Which chip is edited: its index in the chips, or `new` for the SQL chip the funnel adds. */
+type Editing = number | 'new' | undefined;
+
+/**
+ * The funnel button (`toggle`) and the filter bar's content (`el`): the chips of `query` and the page's buttons
+ * (`setButtons`); `show` draws them again. `onDidChangeWanted` is called when an edit starts (the funnel's new SQL chip
+ * among them) or ends without a change of the chips.
  */
 class FilterBar {
   readonly #chips: HTMLElement = html`<div class="d-filter-bar__chips" hidden></div>`;
-  readonly #buttons: HTMLElement = html`<div class="d-filter-bar__buttons"></div>`;
-  readonly #active: HTMLElement = html`<span class="d-badge d-badge--dot d-filter-bar__dot" aria-hidden="true"></span>`;
+  readonly #buttons: HTMLElement = html`<div class="d-filter-bar__buttons" hidden></div>`;
   readonly toggle: HTMLButtonElement = html`<button
     type="button"
-    class="d-button d-button--ghost d-button--icon d-filter-bar__toggle"
-    title="Filters"
-    aria-label="Filters"
-    aria-expanded="false">${createElement(Filter, { width: 16, height: 16 })}${this.#active}</button>`;
-  readonly #sql: HTMLTextAreaElement = html`<textarea
-    class="d-field d-field--full d-field--mono"
-    placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
-    rows="2"
-    hidden></textarea>`;
-  readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}${this.#sql}</div>`;
-  #hasButtons = false;
+    class="d-button d-button--ghost d-button--icon"
+    title="Add a SQL filter"
+    aria-label="Filters">${createElement(Filter, { width: 16, height: 16 })}</button>`;
+  readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}</div>`;
+  #pageButtons: readonly FilterButton[] = [];
+  #editing: Editing;
+  /** The field of the chip being edited, focused once it is in the document. */
+  #editor: HTMLElement | undefined;
 
   constructor(
     private readonly query: QueryApi,
     private readonly onDidChangeWanted: () => void,
   ) {
-    this.toggle.addEventListener('click', () => {
-      this.#setOpen(this.#sql.hidden);
-      if (!this.#sql.hidden) this.#sql.focus();
-    });
-    this.#sql.addEventListener('input', () => query.filters.setSql(this.#sql.value));
-    this.showSql();
+    this.toggle.addEventListener('click', () => this.#edit('new'));
   }
 
-  /** Whether the filter bar has something to show: a structured filter, the page's buttons, or the open SQL filter. */
+  /** Whether the filter bar has something to show: a chip, the page's buttons, or the SQL chip being added. */
   get wanted(): boolean {
-    return this.query.filters.fields.length > 0 || this.#hasButtons || !this.#sql.hidden;
+    return this.query.filters.chips.length > 0 || this.#pageButtons.length > 0 || this.#editing === 'new';
   }
 
-  showButtons(buttons: readonly FilterButton[]): void {
-    this.#hasButtons = buttons.length > 0;
-    this.#buttons.hidden = !this.#hasButtons;
+  setButtons(buttons: readonly FilterButton[]): void {
+    this.#pageButtons = buttons;
+    this.#editing = undefined;
+    this.show();
+  }
+
+  /** Draws the chips and the buttons; an edit of a chip ends, the model changed under it. */
+  show(): void {
+    if (this.#editing !== 'new') this.#editing = undefined;
+    this.#draw();
+  }
+
+  /** Focuses the field of the chip being edited, once the bar is in the document. */
+  focusEditor(): void {
+    if (this.#editor?.isConnected) this.#editor.focus();
+    this.#editor = undefined;
+  }
+
+  #draw(): void {
+    const chips = this.query.filters.chips;
+    this.#editor = undefined;
+    const shown = chips.map((chip, index) => (this.#editing === index ? this.#editorOf(chip, index) : this.#chipOf(chip, index)));
+    if (this.#editing === 'new') shown.push(this.#editorOf({ kind: 'sql', sql: '' }, 'new'));
+    this.#chips.hidden = shown.length === 0;
+    this.#chips.replaceChildren(...shown);
+    this.#buttons.hidden = this.#pageButtons.length === 0;
     this.#buttons.replaceChildren(
-      ...buttons.map((button) => {
-        const el: HTMLButtonElement = html`<button type="button" class="d-button">${button.title}</button>`;
-        el.addEventListener('click', () => this.#add(button.queryPart));
+      ...this.#pageButtons.map((button) => {
+        const pressed = chips.some((chip) => chip.kind === 'sql' && buttonOf(chip.sql, [button]) !== undefined);
+        const el: HTMLButtonElement = html`<button type="button" class="d-button" aria-pressed=${String(pressed)}>${button.title}</button>`;
+        el.addEventListener('click', () => (pressed ? this.#release(button) : this.#press(button)));
         return el;
       }),
     );
   }
 
-  showFields(): void {
-    const fields = this.query.filters.fields;
-    this.#chips.hidden = fields.length === 0;
-    this.#chips.replaceChildren(
-      ...fields.map(({ fieldId, op, value }, index) => {
-        const sign = op === 'eq' ? '=' : '≠';
-        const shown = `${fieldId} ${sign} ${value}`;
-        return html`<span class="d-filter-chip" data-testid="filter-chip">
-          <span class="d-filter-chip__label">${fieldId}</span>
-          <span class="d-filter-chip__op">${sign}</span>
-          <span class="d-filter-chip__value">${value}</span>
-          <button
-            type="button"
-            class="d-filter-chip__remove"
-            title=${`Remove ${shown}`}
-            aria-label=${`Remove ${shown}`}
-            onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
-        </span>`;
-      }),
-    );
+  #chipOf(chip: FilterChip, index: number): HTMLElement {
+    const edit = () => this.#edit(index);
+    let label: string;
+    let op: Element | string = '';
+    let value: string;
+    let whole: string;
+    if (chip.kind === 'sql') {
+      const pressed = buttonOf(chip.sql, this.#pageButtons);
+      label = pressed ? pressed.button.title + (pressed.values.length > 0 ? ':' : '') : 'SQL:';
+      value = pressed ? pressed.values.join(', ') : chip.sql.replace(/\s+/g, ' ');
+      whole = chip.sql;
+    } else {
+      const sign = chip.op === 'eq' ? '=' : '≠';
+      label = chip.fieldId;
+      op = html`<button
+        type="button"
+        class="d-filter-chip__op"
+        title=${chip.op === 'eq' ? 'Change to ≠' : 'Change to ='}
+        onclick=${() => this.query.filters.replace(index, { ...chip, op: chip.op === 'eq' ? 'ne' : 'eq' })}>${sign}</button>`;
+      value = chip.value;
+      whole = `${chip.fieldId} ${sign} ${chip.value}`;
+    }
+    return html`<span class="d-filter-chip" data-testid="filter-chip" title=${whole}>
+      <span class="d-filter-chip__label" onclick=${edit}>${label}</span>
+      ${op}
+      <span class="d-filter-chip__value" onclick=${edit}>${value}</span>
+      <button
+        type="button"
+        class="d-filter-chip__remove"
+        title=${`Remove ${whole}`}
+        aria-label=${`Remove ${whole}`}
+        onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
+    </span>`;
   }
 
-  showSql(): void {
-    const sql = this.query.filters.sql;
-    // while typing, the field has it already; setting it would move the cursor to the end
-    if (this.#sql.value !== sql) this.#sql.value = sql;
-    this.#active.hidden = sql === '';
-    if (sql !== '' && this.#sql.hidden) this.#setOpen(true);
+  /**
+   * The chip `chip` at `index` in edit mode: a SQL chip's text in a textarea (Shift+Enter a new line), a structured
+   * chip's value in an input, its `=` / `≠` flipping the op. Enter or leaving the field applies, Escape cancels.
+   */
+  #editorOf(chip: FilterChip, index: number | 'new'): HTMLElement {
+    let op = chip.kind === 'field' ? chip.op : 'eq';
+    const field: HTMLInputElement | HTMLTextAreaElement =
+      chip.kind === 'sql'
+        ? html`<textarea
+            class="d-field d-field--full d-field--mono"
+            placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
+            aria-label="SQL filter"
+            rows="2"></textarea>`
+        : html`<input class="d-field d-field--mono" aria-label=${`Value of ${chip.fieldId}`} />`;
+    field.value = chip.kind === 'sql' ? chip.sql : chip.value;
+    const done = (apply: boolean) => {
+      if (this.#editing !== index) return;
+      this.#editing = undefined;
+      const before = this.query.filters.chips;
+      if (apply && index === 'new') this.query.filters.add(field.value);
+      else if (apply && typeof index === 'number')
+        this.query.filters.replace(index, chip.kind === 'sql' ? { kind: 'sql', sql: field.value } : { ...chip, op, value: field.value });
+      // the chips did not change (cancelled, empty, the same again), so no `onDidChange` draws them
+      if (this.query.filters.chips === before) {
+        this.#draw();
+        this.onDidChangeWanted();
+      }
+    };
+    field.addEventListener('keydown', (event) => {
+      const key = (event as KeyboardEvent).key;
+      if (key === 'Escape') done(false);
+      else if (key === 'Enter' && !(event as KeyboardEvent).shiftKey) {
+        event.preventDefault();
+        done(true);
+      }
+    });
+    field.addEventListener('blur', () => done(true));
+    this.#editor = field;
+    if (chip.kind === 'sql') return html`<span class="d-filter-chip d-filter-chip--editing" data-testid="filter-chip-editor">${field}</span>`;
+    const sign: HTMLButtonElement = html`<button type="button" class="d-filter-chip__op" title="Change the op">${op === 'eq' ? '=' : '≠'}</button>`;
+    // keeps the focus in the field, so the click does not apply the edit
+    sign.addEventListener('mousedown', (event) => event.preventDefault());
+    sign.addEventListener('click', () => {
+      op = op === 'eq' ? 'ne' : 'eq';
+      sign.textContent = op === 'eq' ? '=' : '≠';
+    });
+    return html`<span class="d-filter-chip" data-testid="filter-chip-editor">
+      <span class="d-filter-chip__label">${chip.fieldId}</span>
+      ${sign}${field}
+    </span>`;
   }
 
-  #setOpen(open: boolean): void {
-    this.#sql.hidden = !open;
-    this.toggle.setAttribute('aria-expanded', String(open));
+  #edit(editing: Editing): void {
+    this.#editing = editing;
+    this.#draw();
     this.onDidChangeWanted();
   }
 
-  /** Adds `condition`; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for. */
-  #add(condition: string): void {
-    if (!condition.includes('...')) {
-      this.query.filters.add(condition);
+  /** Adds `button`'s condition; a `...` in it (`path LIKE '...%'`) is the value the viewer is asked for. */
+  #press(button: FilterButton): void {
+    if (!button.queryPart.includes('...')) {
+      this.query.filters.add(button.queryPart);
       return;
     }
     const value = prompt('Parameter value');
-    if (value) this.query.filters.add(condition.replaceAll('...', value));
+    if (value) this.query.filters.add(button.queryPart.replaceAll('...', value));
+  }
+
+  /** Removes every chip that has `button`'s condition, in one change. */
+  #release(button: FilterButton): void {
+    this.query.filters.remove((chip) => chip.kind === 'sql' && buttonOf(chip.sql, [button]) !== undefined);
   }
 }

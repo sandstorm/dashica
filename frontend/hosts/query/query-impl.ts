@@ -1,6 +1,6 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { FieldFilter, FilterOp, FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
+import type { FieldFilter, FilterChip, FilterOp, FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
 
 /**
  * The `QueryApi` of one tab, holding the state of a query string (the tab's URL's): `load` takes the state from one,
@@ -57,7 +57,7 @@ export class QueryHost implements QueryApi {
     // as `formatSearch` writes it, so an unchanged state gives no change
     this.#search = formatSearch(state, this.#defaultTime, search);
     this.time.load(state.range, state.custom, state.autoRefresh);
-    this.filters.load(state.sql, state.fields);
+    this.filters.load(state.chips);
     this.params.load(state.params);
     this.#restartAutoRefresh();
     this.time.fire();
@@ -83,8 +83,7 @@ export class QueryHost implements QueryApi {
   requestParams(): URLSearchParams {
     const request = new URLSearchParams({ time: this.time.range });
     if (this.time.range === 'custom') request.set('range', this.time.custom);
-    if (this.filters.sql) request.set('sql', this.filters.sql);
-    for (const filter of this.filters.fields) request.append('f', formatFieldFilter(filter));
+    appendChips(request, this.filters.chips);
     if (Object.keys(this.params.values).length > 0) request.set('wp', JSON.stringify(this.params.values));
     return request;
   }
@@ -131,8 +130,7 @@ export class QueryHost implements QueryApi {
         range: this.time.range,
         custom: this.time.custom,
         autoRefresh: this.time.autoRefresh,
-        sql: this.filters.sql,
-        fields: this.filters.fields,
+        chips: this.filters.chips,
         params: this.params.values,
       };
       const search = formatSearch(state, this.#defaultTime, this.#search);
@@ -149,14 +147,15 @@ export interface QueryState {
   /** The custom range; '' unless `range` is `custom`. */
   readonly custom: string;
   readonly autoRefresh: number | undefined;
-  readonly sql: string;
-  readonly fields: readonly FieldFilter[];
+  /** The filter chips, in the order of their `f` and `sql`. */
+  readonly chips: readonly FilterChip[];
   readonly params: Readonly<Record<string, string>>;
 }
 
 /**
- * The state `search` holds; what it lacks is the default (`defaultTime` for the range). An `f` the server would refuse
- * (not `<id>:eq:<value>` or `<id>:ne:<value>`) and a `wp` that is no JSON object of strings are left out.
+ * The state `search` holds; what it lacks is the default (`defaultTime` for the range). Each `f` and `sql` is one chip,
+ * in their order; an `f` the server would refuse (not `<id>:eq:<value>` or `<id>:ne:<value>`), an `sql` of only spaces
+ * and a `wp` that is no JSON object of strings are left out.
  */
 export function parseSearch(search: string, defaultTime = DEFAULT_TIME): QueryState {
   const url = new URLSearchParams(search);
@@ -166,8 +165,7 @@ export function parseSearch(search: string, defaultTime = DEFAULT_TIME): QuerySt
     range,
     custom: range === 'custom' ? (url.get('range') ?? '') : '',
     autoRefresh: refresh > 0 ? refresh : undefined,
-    sql: url.get('sql') ?? '',
-    fields: url.getAll('f').map(parseFieldFilter).filter((filter) => filter !== undefined),
+    chips: [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),
     params: parseParams(url.get('wp')),
   };
 }
@@ -184,10 +182,9 @@ export function formatSearch(state: QueryState, defaultTime: string, search = ''
   else url.delete('range');
   if (state.autoRefresh) url.set('refresh', String(state.autoRefresh));
   else url.delete('refresh');
-  if (state.sql) url.set('sql', state.sql);
-  else url.delete('sql');
+  url.delete('sql');
   url.delete('f');
-  for (const filter of state.fields) url.append('f', formatFieldFilter(filter));
+  appendChips(url, state.chips);
   if (Object.keys(state.params).length > 0) url.set('wp', JSON.stringify(state.params));
   else url.delete('wp');
   const text = url.toString();
@@ -197,7 +194,7 @@ export function formatSearch(state: QueryState, defaultTime: string, search = ''
 /** The time range of a page that declares none. */
 const DEFAULT_TIME = '24h';
 
-/** Typing into the SQL filter or a text input changes the query string once, after a pause. */
+/** Typing into a text input changes the query string once, after a pause. */
 const SEARCH_WRITE_DELAY_MS = 200;
 
 class Model extends EventEmitter<void> {
@@ -244,51 +241,69 @@ class TimeState extends Model implements TimeModel {
 }
 
 class FiltersState extends Model implements FiltersModel {
-  sql = '';
-  fields: readonly FieldFilter[] = [];
+  chips: readonly FilterChip[] = [];
 
   constructor(private readonly changed: () => void) {
     super();
   }
 
-  load(sql: string, fields: readonly FieldFilter[]): void {
-    this.sql = sql;
-    this.fields = fields;
-  }
-
-  setSql(sql: string): void {
-    if (sql === this.sql) return;
-    this.sql = sql;
-    this.fire();
-    this.changed();
+  load(chips: readonly FilterChip[]): void {
+    this.chips = chips;
   }
 
   add(condition: string): void;
   add(fieldId: string, op: FilterOp, value: string): void;
   add(conditionOrFieldId: string, op?: FilterOp, value?: string): void {
-    if (op === undefined || value === undefined) {
-      this.setSql(this.sql ? `${this.sql} \nAND ${conditionOrFieldId}` : conditionOrFieldId);
-      return;
-    }
-    const added: FieldFilter = { fieldId: conditionOrFieldId, op, value };
-    if (this.fields.some((filter) => filter.fieldId === added.fieldId && filter.op === op && filter.value === value)) return;
-    this.#setFields([...this.fields, added]);
+    const added: FilterChip =
+      op === undefined || value === undefined ? { kind: 'sql', sql: conditionOrFieldId } : { kind: 'field', fieldId: conditionOrFieldId, op, value };
+    if (isEmpty(added) || this.chips.some((chip) => sameChip(chip, added))) return;
+    this.#setChips([...this.chips, added]);
   }
 
-  remove(index: number): void {
-    if (index < 0 || index >= this.fields.length) return;
-    this.#setFields(this.fields.filter((_, i) => i !== index));
+  replace(index: number, chip: FilterChip): void {
+    if (index < 0 || index >= this.chips.length || sameChip(this.chips[index], chip)) return;
+    this.#setChips(isEmpty(chip) ? this.chips.filter((_, i) => i !== index) : this.chips.map((old, i) => (i === index ? chip : old)));
+  }
+
+  remove(which: number | ((chip: FilterChip) => boolean)): void {
+    const kept = this.chips.filter((chip, i) => (typeof which === 'number' ? i !== which : !which(chip)));
+    if (kept.length < this.chips.length) this.#setChips(kept);
   }
 
   clear(): void {
-    if (this.fields.length > 0) this.#setFields([]);
+    if (this.chips.length > 0) this.#setChips([]);
   }
 
-  #setFields(fields: readonly FieldFilter[]): void {
-    this.fields = fields;
+  #setChips(chips: readonly FilterChip[]): void {
+    this.chips = chips;
     this.fire();
     this.changed();
   }
+}
+
+function sameChip(a: FilterChip, b: FilterChip): boolean {
+  if (a.kind === 'sql') return b.kind === 'sql' && a.sql === b.sql;
+  return b.kind === 'field' && a.fieldId === b.fieldId && a.op === b.op && a.value === b.value;
+}
+
+/** A SQL chip of only spaces: it filters nothing, the server leaves it out. */
+function isEmpty(chip: FilterChip): boolean {
+  return chip.kind === 'sql' && chip.sql.trim() === '';
+}
+
+/** Appends each of `chips` to `url` in order, an `f` or an `sql`. */
+function appendChips(url: URLSearchParams, chips: readonly FilterChip[]): void {
+  for (const chip of chips) {
+    if (chip.kind === 'sql') url.append('sql', chip.sql);
+    else url.append('f', formatFieldFilter(chip));
+  }
+}
+
+/** The chip of the URL's entry `key`=`value`; `undefined` for another key, an unreadable `f`, an `sql` of only spaces. */
+function parseChip(key: string, value: string): FilterChip | undefined {
+  if (key === 'f') return parseFieldFilter(value);
+  if (key === 'sql' && value.trim() !== '') return { kind: 'sql', sql: value };
+  return undefined;
 }
 
 /** `host:ne:a` as the server reads an `f`: the value is everything after the second colon. */
@@ -300,7 +315,7 @@ function formatFieldFilter({ fieldId, op, value }: FieldFilter): string {
 function parseFieldFilter(text: string): FieldFilter | undefined {
   const [fieldId, op, ...value] = text.split(':');
   if (!fieldId || (op !== 'eq' && op !== 'ne') || value.length === 0) return undefined;
-  return { fieldId, op, value: value.join(':') };
+  return { kind: 'field', fieldId, op, value: value.join(':') };
 }
 
 class ParamsState extends Model implements ParamsModel {

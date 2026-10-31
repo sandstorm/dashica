@@ -82,12 +82,12 @@ func newTimeRange(from, to time.Time) *querying.TimeRange {
 	return &querying.TimeRange{From: &fromMs, To: &toMs}
 }
 
-// SqlClause is the condition the query state adds to a query's WHERE: the window `timeRange` (TimeClause) and the
-// SQL filter, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500)`.
+// SqlClause is the condition the query state adds to a query's WHERE: the window `timeRange` (TimeClause) and each
+// SQL chip in its own parentheses, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500) AND (a OR b)`.
 func (s QueryState) SqlClause(timeRange *querying.TimeRange) string {
 	clause := TimeClause(timeRange)
-	if s.Sql != "" {
-		clause += " AND (" + s.Sql + ")"
+	for _, chip := range s.Sql {
+		clause += " AND (" + chip + ")"
 	}
 	return clause
 }

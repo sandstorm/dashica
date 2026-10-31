@@ -120,7 +120,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 |---|---|
 | Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
 | Tab bar | above the filter bar: a tab per open page, the active one selected, × to close (§3.4.1) |
-| Filter bar | above the content, between the side panels, only while it has something to show: active filters as removable chips, the page's filter buttons as toggles, the SQL filter (opened from the funnel button in the title bar) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the title bar adds a SQL chip (step 7b, §3.8) |
 | Left side panel | "Dashboards" (menu groups, favorites, search); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Bottom panel | Debug (query, EXPLAIN); later row details |
@@ -345,7 +345,7 @@ ctx.choose(at, candidates)                 // a menu "Select" of candidates; the
 | Model | Holds | URL | Scope |
 |---|---|---|---|
 | `time` | time range, auto refresh | `?time=1h` | per page; default declared in Go (`.DefaultTimeRange("168h")`, a Go duration as the presets send it; fallback `24h`); navigation opens the target with its own default (as Grafana) |
-| `filters` | structured filters, a time-window filter, free SQL | `?f=…&tw=…&sql=…` | per page |
+| `filters` | one list of chips: structured filters and SQL chips (step 7b, §3.8); later a time-window filter | `?f=…&sql=…&tw=…`, `f` and `sql` each repeatable, in chip order | per page |
 | `params` | values of form widgets | `?wp=…` | per page |
 | `cursor` | hovered timestamp | — (ephemeral) | synchronized crosshair across all time charts |
 
@@ -409,7 +409,8 @@ The URL carries ids, ops and values (`?f=status:eq:500&f=host:ne:a`; the value i
 **values are bound as ClickHouse parameters** (`{__f0:String}`, beside `__from` / `__to`), never quoted into SQL. The
 expression a value is compared with comes only from Go: a chart's own field definitions or a real column of its base
 table. No per-backend quoting code, no injection through filters, and no client SQL except the free SQL chip
-(`?sql=…`). Filter buttons stay SQL, written in Go, shown as toggles in the filter bar.
+(`?sql=…`). Filter buttons stay SQL, written in Go; since step 7b a pressed button shows as a SQL chip ("The SQL
+filter is a chip", the end of this section).
 
 ✅ Checked 2026-10-30 on ClickHouse 25.9 (`clickhouse local`): a `String` parameter compared with `UInt16`,
 `Nullable(UInt16)`, `Float64`, `DateTime` and `LowCardinality(String)` columns converts and matches (`=`, `!=`, also
@@ -657,6 +658,96 @@ its drag area, a table cell, the cell menu). **Open:** the
 ordinal heatmap's y-axis labels and a table's header do not select; a click that ends a text selection in a table cell
 also selects the cell.
 
+**The SQL filter is a chip** (decided 2026-10-31, step 7b; maintainer: "the pills for filtering and the SQL filter
+still existing do not nicely fit together; two things for the same concept"). The filter bar holds **one list of
+chips**: structured ones (`status = 500`, `host ≠ b`) and SQL ones (`SQL: duration > 2000`). Every chip is removed
+(×) and edited the same way, several SQL chips AND together, and the free SQL textarea that every query adds to its
+WHERE is gone. What exists today, and what changes:
+
+| Today | Where | Becomes |
+|---|---|---|
+| one `?sql=` (`url.get('sql')`), one string in `FiltersModel.sql`, typed live into a textarea under the funnel | `frontend/hosts/query/query-impl.ts` (`FiltersState`, `parseSearch`, `formatSearch`, `requestParams`), `frontend/extensions/filters/filters.ts` (`FilterBar`) | one `?sql=` per SQL chip, repeatable; a SQL chip is applied on Enter, not per keystroke |
+| `add(condition)` appends `\nAND <condition>` to that string (filter buttons, the table cell menu's "Contains" and "Time ±…") | `query-impl.ts`, `filters.ts`, `frontend/extensions/table/table.ts` | `add(condition)` adds one SQL chip (once: the same text again is no change); the callers stay as they are |
+| a filter button adds its `queryPart` to the SQL string (asking for `...`), nothing shows it was pressed | `filters.ts` (`showButtons`, `#add`); `dashboard.Builder.FilterButton`, `rendering.FilterButton` | a toggle: pressed while a SQL chip matches it, its chip labelled with its title |
+| `QueryState.Sql string` (`query.Get("sql")`); `SqlClause` adds `AND (<sql>)` after the window | `lib/httpserver/query_state.go`, `lib/httpserver/time_range.go` | `QueryState.Sql []string`; `SqlClause` adds `AND (<sql>)` per chip |
+
+Unchanged: how Go applies the result. `SqlClause` is still the one condition `prepare` adds as `sql.Where` (so a SQL
+file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, alerts read only `time`, Debug's
+`filterClause` shows it, `SkipFilters()` / `FromFileWithoutFilters` skip it. No contract change: `page.json`'s
+`filterButtons` (`{title, queryPart}`) stay, nothing is regenerated.
+
+- **URL:** structured chips as today (`?f=status:eq:500`), each SQL chip one `sql` (`?sql=duration > 2000&sql=level !=
+  'info'`). The query string keeps the chips' order across both keys (`URLSearchParams` keeps the order of its
+  entries): `parseSearch` reads its entries in order, `formatSearch` deletes `f` and `sql` and appends every chip in
+  order, `requestParams()` sends them so. **Today's URLs keep working:** a single `?sql=` is one SQL chip with that text,
+  also one written by the old appending (`a \nAND b` is one chip). An empty `sql` (`?sql=`) is no chip.
+- **Chip model, a value** (`frontend/hosts/query/query.ts`; `FieldFilter` gets its `kind`):
+
+  ```ts
+  /** A chip of the filter bar: a structured filter (`?f=`), or a SQL condition every query of the page adds to its WHERE (`?sql=`). */
+  export type FilterChip =
+    | { readonly kind: 'field'; readonly fieldId: string; readonly op: FilterOp; readonly value: string }
+    | { readonly kind: 'sql'; readonly sql: string };
+
+  export interface FiltersModel {
+    /** The chips, in the order they were added, as the URL holds them. */
+    readonly chips: readonly FilterChip[];
+    /** Adds a SQL chip `condition` (a filter button, a table cell's "Contains"); once. */
+    add(condition: string): void;
+    /** Adds the structured chip `fieldId` `op` `value`; once. */
+    add(fieldId: string, op: FilterOp, value: string): void;
+    /** Puts `chip` in place of the chip at `index` (an edit); a SQL chip of only spaces removes it. */
+    replace(index: number, chip: FilterChip): void;
+    remove(index: number): void;
+    /** Removes every chip. */
+    clear(): void;
+    readonly onDidChange: Event<void>;
+  }
+  ```
+
+  `sql`, `setSql` and `fields` go (their callers are `query-impl.ts`, `active-query.ts`, `filters.ts`; `widgets-impl.ts`
+  and `table.ts` call `add` only). `QueryState` (TS) has `chips` in place of `sql` and `fields`.
+- **How Go applies several SQL chips:** `ParseQueryState` reads `query["sql"]`, leaving out empty ones, into `Sql
+  []string` in URL order. `SqlClause(timeRange)` is the window and then ` AND (<chip>)` per chip:
+  `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (duration > 2000) AND (level != 'info')`. Each chip in its own
+  parentheses, so a chip `a OR b` stays one condition. One request with several `sql` changes nothing else: one WHERE,
+  one `{{DASHICA_FILTERS}}`, the structured chips bound as `{__f<i>:String}` as before. The trust model stays (free SQL
+  from every authenticated user, §6 "Permissions").
+- **The filter bar** (`FilterBar` in `filters.ts`): one row of chips in the model's order, then the page's buttons.
+  A structured chip shows `id`, `=` / `≠`, value; a SQL chip shows `SQL:` and its text on one line (cut with an
+  ellipsis, the whole text in its `title`). × removes a chip (`remove(index)`).
+  - **Adding:** the funnel in the title bar opens a new, empty SQL chip in edit mode at the end of the chips; Enter
+    adds it (`add(text)`), Escape or an empty text drops it. The funnel's dot (marked while a SQL filter was set) goes:
+    the chips show what is set. (proposed)
+  - **Editing, the same for every chip** (proposed): a click on a chip's text puts it in edit mode in its place, one
+    chip at a time. A SQL chip edits its text in a textarea (`d-field--mono`, Shift+Enter a new line); a structured
+    chip edits its value in an input, and a click on its `=` / `≠` flips the op. Enter or leaving the field applies it
+    (`replace(index, chip)`), Escape cancels it, an empty SQL text removes the chip. The URL changes once per applied
+    edit, not per keystroke.
+  - **Shown** while there is a chip, the page has buttons, or a chip is being added; on a page with `filterBar` only,
+    as today.
+- **A filter button shows as a chip while toggled on** (proposed): the chip is a plain SQL chip, its text the
+  button's `queryPart` (the `...` filled in, as today); no new URL key. A pure function in `filters.ts`,
+  `buttonOf(sql, buttons)`, gives the button a SQL chip's text matches: equal to its `queryPart`, or for a `queryPart`
+  with `...` equal with a non-empty text in place of every `...` (`request__host = '...'` matches
+  `request__host = 'app.wetell.de'`, the value `app.wetell.de`). Such a chip is labelled with the button's title
+  (`Host: app.wetell.de`, `Errors only`), its SQL in its `title`. The button is pressed (`aria-pressed="true"`) while
+  a chip matches it; pressing a pressed button removes every chip that matches it, pressing it otherwise adds its
+  chip (asking for `...` as today). So a link with `?sql=status NOT BETWEEN 200 AND 399` opens with "Errors only"
+  pressed, and editing a button's chip into other SQL makes it a plain SQL chip, the button released. A chip from
+  a `...` button whose value contains the text around `...` (`'` inside `'...'`) may match no button; it stays a
+  plain SQL chip.
+- **The table cell menu** ("Filter: Contains this value", the timestamp entries) adds a SQL chip through `add(condition)`
+  as before; each entry is now a chip of its own, removable alone.
+- **The Explore view's tab** shows the same chips; how they apply to an edited query is the Perspective concept's
+  (`docs/2026-10-30-perspective.md`, "Editable SQL").
+- **Tests:** `query.test.ts` (two `sql` and `f` interleaved keep their order through `parseSearch` / `formatSearch`, a
+  single old `sql` is one chip, `?sql=` none, `add(condition)` once, `replace`, `remove`), `filters.test.ts` (a SQL chip
+  from the funnel, editing a SQL and a structured chip, Escape, `buttonOf` with and without `...`, a pressed button
+  removes its chip), Go: `query_state_test.go` (several `sql`, an empty one), `time_range_test.go` (`SqlClause` with
+  two chips). Playwright: `e2e/filter-chips.spec.ts` (a link with two `sql` shows two chips, the funnel adds one, × on
+  one, a filter button toggles).
+
 ### 3.9 Go actions
 
 An action is **a plain `http.HandlerFunc`** plus what the menu needs to show it: `.Action(id, title, where,
@@ -763,7 +854,7 @@ interface PageApi {
 // query — the state every query depends on (§3.7)
 interface QueryApi {
   readonly time: TimeModel;                 // range, auto refresh; per page, URL-synced
-  readonly filters: FilterModel;            // {fieldId, op, value}[] + time window + free SQL; URL-synced
+  readonly filters: FilterModel;            // chips: {fieldId, op, value} | {sql} (step 7b) + time window; URL-synced
   readonly params: ParamsModel;             // form widget values; URL-synced
   readonly cursor: CursorModel;             // hovered timestamp, synchronized across time charts (step 7)
   refresh(): void;
@@ -1081,6 +1172,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7a.4 ✅ | opening: "Open in new tab" in `dashboards/entry`, search everywhere's Cmd / Ctrl+Enter (`SearchItem.accept({ newTab })`); `page.activeTab.url` instead of `location` in `dashboards`, `search-everywhere`, `chart-link`. ✅ Deviations: Cmd / Ctrl+click on an item of search everywhere opens a new tab too; `QuickPick.onDidAccept` gives `{ newTab }` (`QuickPickAccept`) | tabs from the menu and the search |
 | 7a.5 ✅ | reload: the tabs in sessionStorage, the background ones restored unloaded; Playwright `e2e/tabs.spec.ts` (open, switch, the address bar, Back, reload, paused refresh). ✅ (key `dashica:workbench:tabs`, the layout's memento) `e2e/tabs.spec.ts` not run | reload keeps the tabs |
 | (spike) | `spike/perspective`, rebased onto 7a, in its own commit (`frontend/extensions/explore-view/**`, `e2e/explore-view.spec.ts`, the Perspective doc): the renderer of kind `explore`; "Open in Explore view" is `navigate(<tab's URL>#explore=<id>, { newTab: true })`; "Close" is `context.close()`; its `showOverContent` in `hosts/ui` and its hash-keeping in `query-impl.ts` are dropped (the tab's URL keeps the hash) | the Explore view as a tab |
+| 7b ✅ | **SQL filter as a chip** (decided 2026-10-31, §3.8 "The SQL filter is a chip"): one list of chips (`FilterChip`, `FiltersModel.chips` / `replace`, `sql` / `setSql` / `fields` gone); one `?sql=` per SQL chip, chip order kept across `f` and `sql`, a single old `?sql=` one chip; the funnel adds a SQL chip, every chip edited and removed alike; a filter button a toggle, its chip labelled by its title (`buttonOf`); Go `QueryState.Sql []string`, `SqlClause` ANDs each in parentheses. Files: `lib/httpserver/query_state.go`, `time_range.go` (+ tests), `frontend/hosts/query/{query,query-impl,active-query}.ts` (+ tests), `frontend/extensions/filters/*`, `e2e/filter-chips.spec.ts`; no generated file changes. ✅ 2026-10-31 (vitest and Go tests without ClickHouse green; Playwright written, not run), deviations: `FilterChip = FieldFilter \| SqlFilter` (`FieldFilter` has `kind: 'field'`, `SqlFilter` `{kind: 'sql', sql}`); a SQL chip of only spaces is no chip in the URL, in `add` / `replace` and in Go (`TrimSpace`), not only an empty one; the `=` / `≠` of a structured chip flips its op at once (`replace`), in edit mode it flips the edit's op; the funnel is titled "Add a SQL filter" (its label "Filters" kept); filter buttons show only on a page with `filterBar`, as before; a chip of a `...` button is labelled `Title: value` (several `...` joined with `, `), one of a plain button its title alone; pressing a pressed button removes its chips one by one (one refresh each); tests also in `table`, `widgets`, `dashboard-page`, `bar-vertical`. **Open:** a chip can match two buttons (`/p_wetell/app`: "Host = app.wetell.de" and "Host" with `'...'`): both show pressed, the chip is labelled by the first in page order, either releases it | one filter bar of chips; old links open as before |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
 | Risk | Mitigation |
@@ -1121,9 +1213,10 @@ its own.
   `widget/context` / `table/row` menus as the entry points.
 - **Permissions per dashboard**, with or without filtering. A middleware on a page's subtree; `/workbench.json` filters
   the menu per user. What the design already gives: structured filters carry only ids and bound values, so they cannot
-  change a query; the free SQL chip is the only client-sent SQL, in one parameter (`sql`), parsed in one place, so it
-  can be limited to an "advanced" role. Real protection for free SQL must sit in ClickHouse (a readonly user per role,
-  grants, row policies, query limits), not in string checks.
+  change a query; the SQL chips are client-sent SQL, in one repeatable parameter (`sql`), parsed in one place, as is
+  the Explore view's edited query (`xsql`, Perspective concept, behind `explore.enabled`), so both can be limited to
+  an "advanced" role. Real protection for free SQL must sit in ClickHouse (a readonly user per role, grants, row
+  policies, query limits), not in string checks.
 - **MCP server with built-in anonymization**: sensitive data must never reach the cloud provider. What the design
   already gives: dashboards are machine-readable (`page.json`), and every query goes through one path (`QueryState` →
   handler), the single place where an anonymization step on results would sit.

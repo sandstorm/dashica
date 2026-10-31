@@ -21,8 +21,8 @@ type QueryState struct {
 	Range string
 	// Filters are the structured filters, in the order of the URL; each chart interprets them itself.
 	Filters []filter.Filter
-	// Sql is the free SQL filter, '' for none.
-	Sql string
+	// Sql are the SQL chips, in the order of the URL (one `sql` each); every query adds each to its WHERE.
+	Sql []string
 	// Params are the values of the page's form widgets by name, bound as ClickHouse parameters (`param_<name>`).
 	Params map[string]string
 	// preset is Time as a duration; 0 for `custom`.
@@ -39,12 +39,17 @@ func (e *QueryStateError) Error() string {
 }
 
 // ParseQueryState reads the query state of `r`: `time`, `range`, each `f` (`<id>:<op>:<value>`, the value everything
-// after the second colon), `sql` and `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a
+// after the second colon), each `sql` (an empty one left out) and `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a
 // missing `time`, a `time` that is neither a Go duration nor `custom`, an `f` without op or with an op other than
 // `eq` / `ne`, a `wp` that is not such an object. An unreadable `range` is ResolveTimeRange's error.
 func ParseQueryState(r *http.Request) (QueryState, error) {
 	query := r.URL.Query()
-	s := QueryState{Time: query.Get("time"), Range: query.Get("range"), Sql: query.Get("sql")}
+	s := QueryState{Time: query.Get("time"), Range: query.Get("range")}
+	for _, chip := range query["sql"] {
+		if strings.TrimSpace(chip) != "" {
+			s.Sql = append(s.Sql, chip)
+		}
+	}
 	if s.Time == "" {
 		return QueryState{}, &QueryStateError{"time range missing: want `time=<Go duration>` or `time=custom&range=<from> to <to>`"}
 	}

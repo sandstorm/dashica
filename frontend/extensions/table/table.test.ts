@@ -65,8 +65,7 @@ describe('table', () => {
     expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '1', fieldId: 'status', value: '500', anchor: cell });
     entry('Exclude')!.click();
 
-    expect(testbed.query.filters.fields).toEqual([{ fieldId: 'status', op: 'ne', value: '500' }]);
-    expect(testbed.query.filters.sql).toBe('');
+    expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '500' }]);
   });
 
   it('selects nothing from a NULL cell', async () => {
@@ -129,7 +128,7 @@ describe('table', () => {
     const time = unselecting(openCellMenu(el, 'timestamp', 0));
     expect(labels(time)).toEqual(['Filter: Equals this timestamp', 'Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
     await click(time, 'Filter: Time ±1 hour');
-    expect(testbed.query.filters.sql).toBe('timestamp BETWEEN 1761726400 AND 1761733600');
+    expect(testbed.query.filters.chips).toEqual([{ kind: 'sql', sql: 'timestamp BETWEEN 1761726400 AND 1761733600' }]);
   });
 
   it('shows table/header from a column header’s menu button; its entries size the columns', async () => {
@@ -147,14 +146,13 @@ describe('table', () => {
     expect(sized).toHaveBeenCalled();
   });
 
-  it('adds a condition to the SQL filter from a cell’s menu', async () => {
+  it('adds a SQL chip from a cell’s menu', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
 
     await click(openCellMenu(el, 'path', 0), 'Filter: Contains this value');
 
-    expect(testbed.query.filters.sql).toBe("path LIKE '%/api%'");
-    expect(testbed.query.filters.fields).toEqual([]);
+    expect(testbed.query.filters.chips).toEqual([{ kind: 'sql', sql: "path LIKE '%/api%'" }]);
   });
 });

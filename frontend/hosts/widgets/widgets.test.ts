@@ -84,7 +84,7 @@ describe('WidgetsHost', () => {
     });
 
     it('queries the widget’s handler with the page’s query state, and reads what the server says in the headers', async () => {
-      testbed.query.filters.setSql('status >= 500');
+      testbed.query.filters.add('status >= 500');
       testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Bucket-Size': '900000', 'X-Dashica-Resolved-Time-Range': '{"from":1,"to":2}' });
       const result = await ctx.query();
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);
@@ -109,7 +109,7 @@ describe('WidgetsHost', () => {
 
     it('adds a structured filter to the page, and sends it with the next query', async () => {
       ctx.addFilter('host', 'ne', 'a');
-      expect(testbed.query.filters.fields).toEqual([{ fieldId: 'host', op: 'ne', value: 'a' }]);
+      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'ne', value: 'a' }]);
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
       await ctx.query();
       expect(testbed.requests[0].searchParams.getAll('f')).toEqual(['host:ne:a']);

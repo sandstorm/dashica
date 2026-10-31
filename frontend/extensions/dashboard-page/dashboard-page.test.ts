@@ -90,7 +90,7 @@ describe('dashboardPage', () => {
     testbed.serveText('/p/stats/page.json', JSON.stringify({ ...shop, widgets: [{ type: 'stats', props: {}, dataUrl: '/p/stats/api/1' }] }));
     const shown = await start('/p/stats?f=host:eq:a');
     expect(states).toEqual([shown.activeQuery]);
-    expect(shown.activeQuery.filters.fields).toEqual([{ fieldId: 'host', op: 'eq', value: 'a' }]);
+    expect(shown.activeQuery.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }]);
   });
 
   it('takes the widgets down with the page', async () => {

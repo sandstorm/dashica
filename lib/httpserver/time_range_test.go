@@ -58,6 +58,10 @@ func TestSqlClause(t *testing.T) {
 	}{
 		"window only":     {query: "time=1h", want: window},
 		"with SQL filter": {query: "time=1h&sql=status+%3E%3D+500", want: window + " AND (status >= 500)"},
+		"two SQL chips, each in parentheses": {
+			query: "time=1h&sql=duration+%3E+2000&sql=a+OR+b",
+			want:  window + " AND (duration > 2000) AND (a OR b)",
+		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

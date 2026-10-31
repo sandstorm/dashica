@@ -43,13 +43,17 @@ func TestParseQueryState(t *testing.T) {
 		},
 		"SQL filter and params": {
 			query: url.Values{"time": {"24h"}, "sql": {"status >= 500"}, "wp": {`{"path":"^/api"}`}},
-			want:  QueryState{Time: "24h", Sql: "status >= 500", Params: map[string]string{"path": "^/api"}},
+			want:  QueryState{Time: "24h", Sql: []string{"status >= 500"}, Params: map[string]string{"path": "^/api"}},
+		},
+		"SQL chips in URL order, empty ones left out": {
+			query: url.Values{"time": {"1h"}, "sql": {"status >= 500", "", " ", "a \nAND b"}},
+			want:  QueryState{Time: "1h", Sql: []string{"status >= 500", "a \nAND b"}},
 		},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			got := parseQueryState(t, tt.query.Encode())
-			if got.Time != tt.want.Time || got.Range != tt.want.Range || got.Sql != tt.want.Sql ||
+			if got.Time != tt.want.Time || got.Range != tt.want.Range || !reflect.DeepEqual(got.Sql, tt.want.Sql) ||
 				!reflect.DeepEqual(got.Filters, tt.want.Filters) || !reflect.DeepEqual(got.Params, tt.want.Params) {
 				t.Errorf("ParseQueryState = %+v, want %+v", got, tt.want)
 			}

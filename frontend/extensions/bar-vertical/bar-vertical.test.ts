@@ -60,7 +60,7 @@ describe('barVertical', () => {
       expect(testbed.widgets.selection).toMatchObject({ kind: 'category', widgetId: '1', fieldId: 'status', value: '500', anchor: bars(el)[1] });
       entry('Filter by')!.click();
       await settle();
-      expect(testbed.query.filters.fields).toEqual([{ fieldId: 'status', op: 'eq', value: '500' }]);
+      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'eq', value: '500' }]);
       expect(testbed.widgets.selection).toBeUndefined();
       expect(testbed.floatingBar()).toBeNull();
       expect(testbed.requests.at(-1)!.searchParams.getAll('f')).toEqual(['status:eq:500']);
@@ -116,7 +116,7 @@ describe('barVertical', () => {
       await clickMark(bars(el)[0]);
       testbed.choose('status = 200');
       entry('Exclude')!.click();
-      expect(testbed.query.filters.fields).toEqual([{ fieldId: 'status', op: 'ne', value: '200' }]);
+      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '200' }]);
     });
 
     // a time bucket as x, which is never a candidate

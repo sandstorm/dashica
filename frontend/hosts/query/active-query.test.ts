@@ -41,15 +41,19 @@ const switchTo = (tab: QueryHost) => {
 describe('activeQuery', () => {
   it('reads and changes the active tab’s state', () => {
     expect(query.time.range).toBe('1h');
-    expect(query.filters.fields).toEqual([{ fieldId: 'host', op: 'eq', value: 'a' }]);
+    expect(query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }]);
     query.filters.add('status', 'eq', '500');
     query.filters.add('path LIKE \'/api%\'');
+    query.filters.replace(0, { kind: 'field', fieldId: 'host', op: 'ne', value: 'a' });
     query.params.set('path', '/x');
-    expect(shop.filters.fields).toHaveLength(2);
-    expect(shop.filters.sql).toBe("path LIKE '/api%'");
+    expect(shop.filters.chips).toEqual([
+      { kind: 'field', fieldId: 'host', op: 'ne', value: 'a' },
+      { kind: 'field', fieldId: 'status', op: 'eq', value: '500' },
+      { kind: 'sql', sql: "path LIKE '/api%'" },
+    ]);
     expect(shop.params.values).toEqual({ path: '/x' });
     expect(query.requestParams().get('time')).toBe('1h');
-    expect(checkout.filters.fields).toEqual([]);
+    expect(checkout.filters.chips).toEqual([]);
   });
 
   it('forwards the active tab’s events, and none of another tab', () => {
@@ -64,7 +68,7 @@ describe('activeQuery', () => {
     expect(query.time.range).toBe('6h');
     events = [];
     shop.time.setRange('3h');
-    checkout.filters.setSql('status >= 500');
+    checkout.filters.add('status >= 500');
     expect(events).toEqual(['filters', 'refresh']);
     query.time.setRange('2h');
     expect(checkout.time.range).toBe('2h');
