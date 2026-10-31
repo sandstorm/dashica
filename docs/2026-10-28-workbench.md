@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j; D25 (pill ops by the field's type) done as 9k. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -581,12 +581,13 @@ the server made:
 
 - **The widget's field makes the pill, on the server.** Filtering from a widget's data (a chart mark, a table cell,
   the filter bar's "add filter", §3.14 D4, D15) asks that widget: `GET <dataUrl>/pill?field=<alias>&value=<shown
-  value>&op=eq|ne` → `{key, label}`. The field's condition is by default `<field expression> = <quoted value>` (`!=`
-  for `ne`); a computed field says its own:
+  value>&op=eq|ne|lt|le|gt|ge[&type=<ClickHouse type>]` → `{key, label}` (the four range ops since 9k, §3.15 D25).
+  The field's condition is by default `(<field expression>) <op> <quoted value>` (`=`, `!=`, `<`, `<=`, `>`, `>=`,
+  `sql.Op.Compare`); a computed field says its own, for the op it is given:
 
   ```go
   sql.Field("replace(customer_project, 'customer-', '')").WithAlias("customer").
-      FilterAs(func(value string) string { return "customer_project = " + sql.Quote("customer-"+value) })
+      FilterAs(func(op sql.Op, value string) string { return op.Compare("customer_project", "customer-"+value) })
   ```
 
   A pill applies to every chart on its table, so its condition must hold on the table: a SQL file's field that is
@@ -594,8 +595,8 @@ the server made:
   pill fails the other charts on that table (`UNKNOWN_IDENTIFIER`).
 
   `sql.Quote` writes a ClickHouse string literal: `'…'`, with `\` and `'` escaped by a backslash. A field that cannot
-  filter (a count, a time bucket, any field of a chart without a table) answers 422; with `FilterAs`, `ne` is
-  `NOT (<its condition>)`. The widget's node in `page.json` says which of its fields can filter, so the quick pick
+  filter (a count, a time bucket, any field of a chart without a table) answers 422; with `FilterAs` the condition
+  writes the op itself (until 9k `ne` was `NOT (<its condition>)`). The widget's node in `page.json` says which of its fields can filter, so the quick pick
   offers only those: `filterable` beside `dataUrl` (the aliases of its dimensions that are categories, when its query
   has a table and does not skip filters) *(proposed: on the node, not in each type's props, since every chart has it;
   it replaces the table's `categories` prop)*.
@@ -611,7 +612,8 @@ the server made:
   Two bases on the same table with different WHEREs share the pills; the same column in two tables is two pills.
 - **A SQL file takes pills only when it names its table:** `sql.FromFile("x.sql", sql.Table("default.http_logs"))`.
   Without `sql.Table` it takes none, but still the time range and the SQL chips.
-- **Pills on the same table and field combine:** the `eq` ones OR-ed, the `ne` ones AND-ed; a pill holds one value.
+- **Pills on the same table and field combine:** the `eq` ones OR-ed, the `ne` ones AND-ed (since 9k those of every
+  other op too, so a `≥` and a `≤` make a range); a pill holds one value.
   *(proposed)* the key also carries the field's alias, signed, so the server knows which pills share a field (built so
   in 8e).
 - **SQL chips** (`?sql=`) stay as they are, behind their own flag `filters.sqlEnabled` (§3.15 D16, step 9a).
@@ -634,7 +636,7 @@ the server made:
   is no plain `[database.]table` (a subquery) is none; `sql.Table` on a builder query has no effect.
   `sql.FromFile(path, opts...)` takes options as `With` does.
 - **Applying** (`filter.Apply`): the pills on the chart's table, grouped by field and op in the order of their first
-  pill, each group one Where (`eq` OR-ed, `ne` AND-ed); the others named by label in Diagnostics. A query that skips
+  pill, each group one Where (`eq` OR-ed, `ne` AND-ed; since 9k every op but `eq` AND-ed); the others named by label in Diagnostics. A query that skips
   filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
   answers the first one that does not open with 400, also for the charts it does not apply to).
 - **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
@@ -658,12 +660,13 @@ filters):
   (`filterableTables`: each field once, served by the first chart naming it).
 - **The filter bar's "Add filter"** after the chips, while a chart of the page filters a table (so the bar shows on
   such a page even without chips or buttons *(proposed)*): quick picks below the button for the table (skipped when
-  there is one *(proposed)*), the field, `=` or `≠`, then the value; the value goes to that chart's `/pill` and the pill
-  into the filters; Escape at any step adds nothing.
+  there is one *(proposed)*), the field, `=` or `≠` (since 9k the ops of the field's type, §3.15 D25), then the value;
+  the value goes to that chart's `/pill` and the pill into the filters; Escape at any step adds nothing.
 - **The value** (`pickValue`, `ui.createQuickPick`): the values `<dataUrl>/values?field=<alias>&search=<text>` answers
   in the tab's query state, asked again 200 ms after the typing rests (the request before aborted); the typed text
   itself first, "as typed", when it is none of them, so a value beyond the first 100 can be chosen *(proposed)*.
-- **`/values`** (`valuesHandler`, `sql.Values`, `httpserver.HandleValues`): a JSON array of at most 100 strings, sorted.
+- **`/values`** (`valuesHandler`, `sql.Values`, `httpserver.HandleValues`): a JSON array of at most 100 strings, sorted
+  (since 9k `{type, values}`, the field's type beside them, §3.15 D25).
   A builder query's base (its From and Where, without its own SELECT, GROUP BY, ORDER BY and LIMIT): `SELECT
   toString(<definition>) AS __value FROM <table> WHERE <its Where> AND positionCaseInsensitive(toString(<definition>),
   {__search:String}) > 0 AND <time range, SQL chips, pills> GROUP BY __value ORDER BY __value LIMIT 100`. A SQL file's
@@ -1424,9 +1427,9 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9j)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1488,6 +1491,64 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   live in libraries (`time-library`, `widget-library`) *(proposed)*; the filter chips' spec stays in the `filters`
   extension, and a table cell adds its SQL chip by the command `filters.addSql` *(proposed)*. A form widget without
   the `params` state (no `dashboardPage`) shows "No extension keeps the page params" as its error *(proposed)*.
+- **D25 Pill ops by the field's type (9k, decided after 9j; maintainer: "timestamp filters usually need no = or !=
+  but <= >= etc."):** the ops are `eq`, `ne`, `lt`, `le`, `gt`, `ge` (`sql.Op`), signed as before. Which ones a field
+  offers depends on its ClickHouse type: text (a String, an Enum, a Bool, an unknown type) `=` and `≠`; a number also
+  `<`, `≤`, `>`, `≥`; a time or a day `≥` and `≤` first (`opsOf`). The type comes from the server, never guessed:
+  `<dataUrl>/values` answers `{type, values}`, the type as ClickHouse reports it in the answer's metadata; "Add filter"
+  asks it once the field is chosen, before the op. A time's value is no list of DISTINCT timestamps but an input box,
+  the edge of the time range filled in, read by ClickHouse best effort. A click on a table's timestamp cell or a
+  chart's time value offers `≥` and `≤` it (beside `=` / `≠`); the table cell menu's time windows (±5 minutes …) stay.
+  A pill's op button opens a quick pick of its type's ops. `FilterAs(func(op sql.Op, value string) string)`; the
+  default condition `(<expression>) <op> <quoted value>`.
+
+✅ **Built in 9k (2026-10-31): the ops by type**, with these details and deviations:
+
+- **Go:** `sql.Op` (`Valid`, `Sign` for the label: `=` `≠` `<` `≤` `>` `≥`, `Compare(expression, value)`: `expression
+  >= 'value'`), `sql.Condition(field, op, value)`, `FilterAs(func(op sql.Op, value string) string)` *(proposed: the op
+  as a parameter, the outer dashboards' ten `FilterAs` written as `op.Compare("<expression>", value)`)*; `filter.New(table,
+  field, op, value, type)`, the label `<alias> <sign> <value>`; `Apply` ORs only the `eq` pills of a field, every other
+  op's are AND-ed *(proposed: `ts ≥ a` and `ts ≥ b` both hold)*.
+- **The type in the key:** `Pill.Type` (`type`, omitted when empty) is the field's ClickHouse type as the client
+  learned it from the server, sent to `/pill` as `type` and signed into the key, so a reloaded pill's op button offers
+  its type's ops without a query *(proposed: the server never reads it as SQL and does not check it against the op;
+  any op is valid SQL on any field)*. A pill without one (a link from before 9k, a click on a column the answer named
+  no type of) offers `=` and `≠`.
+- **`/values`** answers `{type, values}`: `sql.Values` also selects `any(<definition>) AS __type`, whose type in the
+  JSON answer's `meta` is the expression's (also with no rows) *(proposed)*; the answer carries the resolved time
+  range (`X-Dashica-Resolved-Time-Range`, as a chart's) for the input box's default. "Add filter" reuses the first
+  answer's values for the value step, so it asks `/values` once before the op instead of twice *(proposed:
+  `pickValue`'s `initial`)*.
+- **A click's type:** a chart's Arrow answer names its columns' ClickHouse types in `X-Dashica-Column-Types` (`{"timestamp":
+  "DateTime"}`, ASCII JSON), taken from the `DESCRIBE` that `ensureArrowCompatible` runs for every Arrow query anyway,
+  before the casts (a `DateTime` arrives as UInt32 seconds) *(proposed: no extra query; the header is the
+  `clickhouse` client's, `util.ASCIIJSON` moved out of `httpserver` for it)*; `QueryResult.dashicaColumnTypes`;
+  `chart-library/candidate.ts` `candidateOf` gives each candidate its type and writes a time as ISO 8601 in UTC
+  (`2026-10-31T10:00:00.000Z`), a day as `2026-10-31` (`widget-library/clickhouse-type.ts`: `typeKind`, `pillValue`,
+  by the unit Arrow carries: `DateTime` seconds, `Date` days, `DateTime64` / `Date32` ms). The quick pick shows per
+  candidate one entry per op of its type: `=` with the filter icon, `=` with the minus icon (Exclude, as D4), the range
+  ops with their sign and a chevron.
+- **Time buckets stay without pills** *(proposed)*: a time bar's x (`AutoBucket`, `Timestamp15Min`) still cannot filter
+  (422, D6), since `=` on a bucket means nothing and the bucket's expression depends on the range; "a chart's time
+  value" is a plain time field (`sql.Field("timestamp")`, `toDate(timestamp)`), as a table's timestamp column is. The
+  drag on a time chart sets the time range.
+- **The value of a time:** an input box (`askValue`, `showInputBox`): "Add filter" fills in the time range's start for
+  `≥`, `>`, `=`, `≠` and its end for `≤`, `<` (now without a range), as ISO 8601 in UTC, a day as its date; editing a
+  pill's value fills in its value. The text goes to `/pill` as typed, a quoted literal; ClickHouse parses it (the data
+  handlers set `date_time_input_format=best_effort`) *(proposed: no parsing in the browser)*.
+- **The op button** of an editable pill opens a quick pick below it of its type's ops, the current one checked; a
+  pick asks `/pill` again and replaces the chip in place, as the value does.
+- **To check against ClickHouse** (written, not run: the sandbox blocks it): `TestHandleQuery_AnISOTimeComparesADateTimeColumn`
+  (`timestamp >= '<ISO with Z>'` against a `DateTime`, whether best effort applies to a literal compared with a
+  column), `TestHandleValues_TheValuesOfAFieldThatContainTheSearch` (the type `UInt16` from the metadata). A number
+  compared with a quoted value needs the same check as the buttons' (`status >= '1000'`, 9b).
+- **Tests:** Go `sql` (`Op`, `Condition` per op, `FilterAs` with the op, `Values` with `__type`), `filter` (`New` with
+  a range op and the type, the key back through `Open`, `Apply`'s groups per op), `widget` (`/pill` with `ge` and
+  `type`), `clickhouse` (`columnTypesHeader`); vitest: `typeKind` / `pillValue`, `opsOf`, `candidateOf`, the table's
+  timestamp cell, the widgets host's column types, `offerFilters` (a time's ops, the type sent), `pillField` (a range
+  op and its type), "Add filter" (one `/values` before the op, a time's ops and its input box at the range's edge,
+  `askValue`, `fetchValues`'s `{type, values, timeRange}`), the filter bar (the op's quick pick, a time's value in an
+  input box with its value). Playwright: `e2e/filter-chips.spec.ts` picks the op in the quick pick (written, not run).
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1561,8 +1622,10 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   so it is only removable, its tooltip its label *(proposed)*; `Value` has no `omitempty`, so an empty value is in
   the key as `""`, 9c fix); `fieldSource(tables, field)` is the first chart of the page's
   `filterableTables` with that connection, table and field. A pill with one shows as its field, its operator and its
-  value, the last two buttons: the operator asks the chart's `/pill` for the other op with the same value, the value
-  opens `pickValue` (the quick pick of "Add filter", the chart's lazy `/values`, the typed text offered) below it and
+  value, the last two buttons: the operator asks the chart's `/pill` for the other op with the same value (since 9k
+  it opens a quick pick of the ops of the pill's type, §3.15 D25), the value
+  opens `pickValue` (the quick pick of "Add filter", the chart's lazy `/values`, the typed text offered; since 9k an
+  input box for a time) below it and
   asks `/pill` with the same op. The answer `replace`s the chip at its index, so it keeps its place among the others; an answer that is
   another chip already (`host = a` switched beside a `host ≠ a`, a `...` button's value changed to one it has)
   removes the chip edited instead, so `f` never holds a key twice (9c fix);
@@ -1705,6 +1768,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9h ✅ | **D22 chart frame and shared helpers into extension libraries** (§3.5, §3.15): `ChartFrame` (`chart-frame.ts` / `.css`) moves from `hosts/widgets/chart-frame/` to `extensions/chart-library/`, `widgets.ts` no longer exports it, `ChartFrameOptions` or `DrawOptions`; `widgetTitle` moves to `extensions/widget-library/widget-title.ts` (Debug, Details, and the Explore view's `chartTitle` on it instead of its own copy), `formatTime` to `extensions/time-library/format-time.ts` (the time picker, `ChartFrame`); all imports follow; the `ChartFrame` tests moved from `widgets.test.ts` to `chart-library/chart-frame.test.ts`, new tests for `widgetTitle` and `formatTime`, the query host's custom-range test sets local times as text. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: two library folders by the helpers' users (`widget-library`, `time-library`) instead of one; `showWidgetError` stays in the `widgets` host, unexported (only the host uses it); `.d-widget-error` stays in `widgets.css`, also used by `ChartFrame` *(all proposed)* | charts as before; the `widgets` host only renders and tracks the active widget |
 | 9i ✅ | **D23 layout fix of D5** (§3.4, §3.15): the grid has two rows (sides and centre, status bar); the left and the right side span the first, from the window's top to the status bar; the top bar (tabs, "+", the `left` / `center` / `right` items) is the centre column's first child, above the filter bar and the content; `SideBar.railStart` (a `display: contents` slot before the rail's buttons, which `#place` never passes) and `WindowLayout.railStart` / `UiHost.railStart` (the left one) take the global menu's "…", now a rail button (`wb-global-menu`), above search everywhere; the Dashica icon (`.d-brand`, `dashboards`) is gone; tests: the layout's regions and the grid rows (CSS), the rail start before later buttons, the "…" first in the left rail (`workbench.test.ts`), search everywhere first after it, the start page reached by "+"; `e2e/top-bar.spec.ts` (no icon, the sides full height, the top bar only over the content, the "…" above search) and `e2e/start-page.spec.ts` ("+" leads back). ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright written, not run), deviations: the right side is full height too; the "…" sits in a slot of the rail rather than being a rail button with a command (it shows a menu at itself, a command knows no anchor); a left side without panels and rail buttons stays hidden, the "…" with it (the workbench always has Dashboards and search everywhere) *(all proposed)* | the sides from top to bottom, the tabs over the content, "…" in the rail |
 | 9j ✅ | **D24 query state registered by key** (§3.7, §3.15): `QueryApi.registerState(id, spec)` / `state(id)`, `QueryStates` shared by the tabs (the page host's), values parsed lazily from the tab's search and written into the spec's keys (other keys kept), `requestParams` the states' `request` entries in registration order; `time-library/time-state.ts` (`timeState`, `customRange`, `presetRange`) registered by `time-range`, set by `ChartFrame`'s dragged range; `time-library/refresh-state.ts` registered by `refresh`, which runs the timer (the active tab only, one interval after its last refresh, paused while hidden, catching up once; `setShown` gone); `filters/chips.ts` (`chipsState`, pure `addChip` / `replaceChip` / `removeChips`; `FilterChip` and friends leave the host), the command `filters.addSql` for the table's cell filters; `widget-library/params-state.ts` (`paramsState`, `paramsOf`, `withParam`) registered by `dashboardPage`; `load({ search, page })`; tests moved to the specs and extensions (`time-state`, `chips`, `params-state`, `refresh`). ✅ 2026-10-31 (vitest, typecheck, top-comments; Playwright not run) | the URLs as before; each extension owns its keys |
+| 9k ✅ | **D25 pill ops by the field's type** (§3.8, §3.15): `sql.Op` (`eq` `ne` `lt` `le` `gt` `ge`; `Valid`, `Sign`, `Compare`), `FilterAs(func(op sql.Op, value string) string)`, `sql.Condition(field, op, value)`; `filter.New(…, op, value, type)`, `Pill.Type` signed, `Apply` OR-s only `eq`; `/pill?…&op=…&type=…`; `/values` answers `{type, values}` (`any(<definition>) AS __type` from the JSON `meta`) with the resolved time range; `X-Dashica-Column-Types` on every Arrow answer from the `DESCRIBE` it runs anyway (`util.ASCIIJSON`); client: `widget-library/clickhouse-type.ts` (`typeKind`, `pillValue`), `filters/ops.ts` (`opsOf`, `OP_SIGNS`, `OP_ICONS`), `chart-library/candidate.ts` (`candidateOf`), `QueryResult.dashicaColumnTypes`, a click's quick pick per op of its type, "Add filter" asking `/values` before the op and a time's value in an input box (`askValue`), a pill's op button a quick pick of its type's ops; outer dashboards' `FilterAs` as `op.Compare(…)` (not committed). ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones, the new ISO time check among them, blocked in the sandbox; Playwright written, not run), deviations: the type signed into the key from the client; one `/values` before the op; the column types from the existing `DESCRIBE`; time buckets still without pills; a time's text parsed by ClickHouse only; `FilterAs` gets the op *(all proposed)* | `≥` / `≤` on times and numbers |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
