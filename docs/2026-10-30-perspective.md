@@ -282,8 +282,9 @@ with it the gap it had: SQL-file charts had no toggle, now every chart, builder 
   still apply to the dashboard's tab, and to this one after Reset).
 - **The editor:** a plain `<textarea>` (`d-field d-field--full d-field--mono`, as the filter bar's SQL field was): the
   repository has no code editor (no CodeMirror, Monaco or the old Explore's editor in `package.json` or
-  `frontend/`). A panel above the viewer, opened by the toolbar's "SQL" (`aria-pressed`) and open by itself while
-  edited (proposed). Highlighting later, if the plain field is not enough.
+  `frontend/`). A panel above the viewer, open from the start (since 2026-10-31: behind a button nobody found it); the
+  toolbar's "SQL" (`aria-pressed`) closes and opens it, and it opens by itself while edited (proposed). With Explore
+  off, the bar says "SQL editing is off (explore.enabled)". Highlighting later, if the plain field is not enough.
 - **Selection and viewer config:** an edited query's rows select nothing (no "Filter by": its columns are whatever
   the text selects, and a page chip would not change the edited query anyway). The first viewer config of an edited
   answer is the chart's mapping (§4.2) when every column it names is in the answer, else a plain datagrid of all
@@ -344,7 +345,7 @@ spaces and one trailing `;`:
   and runs again. A 404 (Explore turned off since) says "Explore is not enabled". The same for `/sql`: its error shows
   in the editor's place.
 - **Gate:** `/sql` and `?xsql` answer 404 unless `explore.enabled`; each `/rows` answer says `X-Dashica-Sql: editable`
-  when it is on, so the view shows "SQL" only then. `/rows` without `xsql` is the chart's result as before and stays
+  when it is on, so the view shows the editor only then. `/rows` without `xsql` is the chart's result as before and stays
   ungated. The gate is one function in `widget_common.go` (today's `grouping`, renamed `editable(explore, rows)`); the
   flag's comment in `config.ExploreConfig` changes from rows without grouping to edited SQL.
 
