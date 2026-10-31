@@ -40,7 +40,7 @@ function keyOf(label: string, payload: object = {}): string {
 const PATH = "path ILIKE concat(..., '%')";
 /** The pill of the button Path for `value`, as `/p/shop/button` answers it, and its chip. */
 const pathPill = (value: string) => ({ key: keyOf(`Path: ${value}`, { button: PATH, value }), label: `Path: ${value}` });
-const pathChip = (value: string) => ({ kind: 'pill', ...pathPill(value) });
+const pathChip = (value: string) => ({ kind: 'pill', key: pathPill(value).key });
 
 const errorsKey = keyOf('Errors', { button: 'status >= 500' });
 const shop: PageJson = {
@@ -59,7 +59,7 @@ let fetched: string[];
 
 /** The pill labelled `label`, as `/pill` answers it, and the chip it is. */
 const pill = (label: string) => ({ key: keyOf(label), label });
-const chipOf = (label: string) => ({ kind: 'pill', ...pill(label) });
+const chipOf = (label: string) => ({ kind: 'pill', key: pill(label).key });
 
 /** Shows `shown` as the page; `undefined`: a tab without one (loading, or it could not be loaded). */
 function show(shown: PageJson | undefined): void {
@@ -132,14 +132,14 @@ describe('buttonOf', () => {
   const buttons = shop.filterButtons;
 
   it('finds the button a pill was made for, by its condition, and the value written in', () => {
-    expect(buttonOf({ kind: 'pill', key: errorsKey, label: 'Errors' }, buttons)).toEqual({ button: buttons[0], value: '' });
+    expect(buttonOf({ kind: 'pill', key: errorsKey }, buttons)).toEqual({ button: buttons[0], value: '' });
     expect(buttonOf(pathChip("O'Brien") as FilterChip, buttons)).toEqual({ button: buttons[1], value: "O'Brien" });
   });
 
   it('finds none for a SQL chip, the pill of a field, or a button the page lacks', () => {
     expect(buttonOf({ kind: 'sql', sql: 'status >= 500' }, buttons)).toBeUndefined();
     expect(buttonOf(chipOf('host = a') as FilterChip, buttons)).toBeUndefined();
-    expect(buttonOf({ kind: 'pill', key: errorsKey, label: 'Errors' }, [])).toBeUndefined();
+    expect(buttonOf({ kind: 'pill', key: errorsKey }, [])).toBeUndefined();
   });
 });
 
@@ -149,7 +149,7 @@ describe('filters', () => {
   it('adds a filter button’s signed pill and shows the button pressed, with no chip for it', () => {
     expect(button('Errors').getAttribute('aria-pressed')).toBe('false');
     button('Errors').click();
-    expect(query.filters.chips).toEqual([{ kind: 'pill', key: errorsKey, label: 'Errors' }]);
+    expect(query.filters.chips).toEqual([{ kind: 'pill', key: errorsKey }]);
     expect(chips()).toEqual([]);
     expect(button('Errors').getAttribute('aria-pressed')).toBe('true');
     expect(button('Errors').title).toBe('status >= 500');
@@ -161,7 +161,7 @@ describe('filters', () => {
     chips()[1].querySelector<HTMLButtonElement>('button[aria-label="Remove host = a"]')!.click();
     expect(query.filters.chips).toEqual([
       { kind: 'sql', sql: 'a' },
-      { kind: 'pill', key: errorsKey, label: 'Errors' },
+      { kind: 'pill', key: errorsKey },
     ]);
   });
 
@@ -357,7 +357,7 @@ describe('filters, a field’s pill edited', () => {
     const label = `host ${op === 'eq' ? '=' : '≠'} ${value}`;
     return { key: keyOf(label, { connection: 'default', table: 'default.http_logs', field: 'host', op, value }), label };
   };
-  const hostChip = (op: 'eq' | 'ne', value: string) => ({ kind: 'pill', ...hostPill(op, value) });
+  const hostChip = (op: 'eq' | 'ne', value: string) => ({ kind: 'pill', key: hostPill(op, value).key });
   /** What the value's quick pick is given, and what it answers next. */
   let valueBox: { title?: string; anchor?: unknown; items?: { label: string }[] } | undefined;
   let picked: string | undefined;
@@ -458,7 +458,7 @@ describe('filters with SQL filters off', () => {
 
   it('still presses a filter button: its pill is signed', () => {
     button('Errors').click();
-    expect([query.filters.chips, button('Errors').getAttribute('aria-pressed')]).toEqual([[{ kind: 'pill', key: errorsKey, label: 'Errors' }], 'true']);
+    expect([query.filters.chips, button('Errors').getAttribute('aria-pressed')]).toEqual([[{ kind: 'pill', key: errorsKey }], 'true']);
   });
 
   it('has no funnel: the bar offers no way to type SQL', () => {

@@ -41,14 +41,14 @@ const switchTo = (tab: QueryHost) => {
 describe('activeQuery', () => {
   it('reads and changes the active tab’s state', () => {
     expect(query.time.range).toBe('1h');
-    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'pill-host-a', label: 'pill-host-a' }]);
-    query.filters.add({ key: 'pill-status-500', label: 'status = 500' });
+    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'pill-host-a' }]);
+    query.filters.add({ key: 'pill-status-500' });
     query.filters.add('path LIKE \'/api%\'');
-    query.filters.replace(0, { kind: 'pill', key: 'pill-host-not-a', label: 'host ≠ a' });
+    query.filters.replace(0, { kind: 'pill', key: 'pill-host-not-a' });
     query.params.set('path', '/x');
     expect(shop.filters.chips).toEqual([
-      { kind: 'pill', key: 'pill-host-not-a', label: 'host ≠ a' },
-      { kind: 'pill', key: 'pill-status-500', label: 'status = 500' },
+      { kind: 'pill', key: 'pill-host-not-a' },
+      { kind: 'pill', key: 'pill-status-500' },
       { kind: 'sql', sql: "path LIKE '/api%'" },
     ]);
     expect(shop.params.values).toEqual({ path: '/x' });

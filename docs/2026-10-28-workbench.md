@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -595,7 +595,7 @@ the server made:
 - **The key** is `<payload>.<mac>`: the pill as JSON (`connection`, `table`, `field`, `op`, `condition`, `label`) and
   its HMAC-SHA256 over the payload's text, each in unpadded base64url (`filter.Sign`, `filter.Open`). *(proposed)* The
   label is inside the signed payload, so the URL needs only `f` and a reloaded page reads each chip's label from its
-  key (`pillLabel` in `query-impl.ts`); nothing reads the label as SQL.
+  key (`pillLabel`, since 9g in the `filters` extension's `pill-key.ts`, §3.15 D21); nothing reads the label as SQL.
 - **`filters.secret`** (`config.FiltersConfig`) is checked by `dashica.New`, not by `LoadConfig`, so the db tools in
   `cmd/` and the test server load configs without it; *(proposed)* it must have at least 32 characters
   (`openssl rand -hex 32`). `rendering.Dependencies.FilterSecret` carries it to the handlers.
@@ -609,7 +609,7 @@ the server made:
   filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
   answers the first one that does not open with 400, also for the charts it does not apply to).
 - **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
-  (`FiltersModel.add(pill)`); a failed answer adds nothing and goes to the console. Since 9f (§3.15 D20) the quick
+  (`FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and goes to the console. Since 9f (§3.15 D20) the quick
   pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
   a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
@@ -1396,9 +1396,9 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
   that widget's `/pill` (✅ step 8m, built as the end of §3.8 says).
 
-### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9f)
+### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9g)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20; D12 (§3.14) is built in the same batch. Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1433,6 +1433,12 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   adds the pill to the active tab's query state (a click happens in the tab shown). `WidgetsApi.offerFilters`,
   `WidgetContext.offerFilters` go; `PillSource` / `FilterCandidate` stay as the types of what a widget offers. Without
   the `filters` extension a click does nothing.
+- **D21 A pill's key is read by the filters extension (9g, decided after 9f):** `pillLabel`, `pillButton`,
+  `pillField` and `PillField` (the decoding of the key's payload) leave the `query` host for the `filters` extension,
+  which draws the chips (`extensions/filters/pill-key.ts`). The `query` host keeps a chip as an opaque value,
+  `{kind: 'pill', key}` or `{kind: 'sql', sql}`, and only writes it to and reads it from the URL (`f`, `sql`); it
+  stores and derives no label (`Pill` is `{key}`; `fetchPill` and a button's pill give the key only, the label the
+  server answers beside it is not kept).
 
 ✅ **Built in 9a (2026-10-31): `filters.sqlEnabled`**, with these details and deviations:
 
@@ -1646,6 +1652,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9c fix ✅ | **Review fixes of 9a–9c:** `Pill.Value` always in a field pill's key (no `omitempty`) and `pillField` `undefined` for a key without it, so a pill signed before 9c is only removable instead of being made again as `<field> != ''`; `filters.replace` removes the chip at its index when the new chip is there already, so an in-place edit (operator, value, a `...` button's value) never puts the same `f` twice into the URL; the filter bar's row in §2 and the 9a block say which chips are editable and that 9b made the buttons work with SQL chips off. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: a button's key now carries `"value": ""` too (golden contract regenerated); an old pill's tooltip is its label, without a reason *(all proposed)* | the review's findings fixed |
 | 9e ✅ | **D19 records by command** (§3.4.5, §3.15): `records`, `onDidChangeRecords` (`RenderedWidget`) and `selectRecords` (`WidgetContext`) removed from the `widgets` host, and with them the activation by records; the table's renderer keeps its ticked rows and runs `details.showRecords` with `{ widget, records }` on each change, and with none when a new answer or its removal clears ticked rows; `drawTable`'s `selectRecords` is its own callback type; Details keeps what the command gave it (no `widgets` any more), counts it, pops it out; `fakeWidget` without records; tests: table (the command's calls, the press making it active), Details (by command, another table's clear leaves the records); `e2e/record-details.spec.ts`: Details keeps the records when another chart becomes active. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: the command's argument is `{ widget: WidgetNode, records }`, the `WidgetNode` the records' identity; a clear from another widget than the shown one leaves Details as it is; another active widget or tab leaves Details as it is; without `details` the command's failure goes to the console *(all proposed)* | a table's ticked rows in Details as before; they stay when another chart becomes active |
 | 9f ✅ | **D20 filter UI is the filters extension's; charts run filters.offer** (§3.8, §3.15): `WidgetsApi.offerFilters`, `WidgetContext.offerFilters`, `filterPicks`, `OP_ICONS`, `fetchPill` and the host's `showQuickPick` leave the `widgets` host; `extensions/filters/offer.ts` (`offerFilters(ui, query, at, candidates, source)`, `OP_ICONS`, `fetchPill`), registered as `filters.offer` on the extension's `ui` and `query` (the tab shown); `chart-library/filter-on-click.ts`: `OfferFilters` (the callback `filterOnClick` and `drawTable` are given) and `offerFiltersOf(commands, { dataUrl, filterable })`, which the renderers of `timeBar`, `timeLine`, `barVertical`, `barHorizontal`, `timeHeatmapOrdinal`, `table` and the Explore view use (they get `commands` from their extension's context); `widgetTestbed` registers a recording `filters.offer` (`offers`) in place of the extension, `choices` / `candidates` / `choose` / `pill` and its `/pill` answer gone; the host's tests moved to `extensions/filters/offer.test.ts`, the renderers' tests check the command's arguments, `filters.test.ts` the registered command. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: one helper `offerFiltersOf` names the command for all seven places instead of seven `executeCommand` calls; the candidates are filtered by `filterable` in the extension, as before in the host; without `filters` the unknown command goes to the console, as `details.showRecords` does; `filters.offer` resolves when the pick is done *(all proposed)* | the click's quick pick as before, owned by `filters` |
+| 9g ✅ | **D21 a pill's key read by the filters extension** (§3.15): `pillLabel`, `pillButton`, `pillField` and `PillField` move from `hosts/query/query-impl.ts` / `query.ts` to `extensions/filters/pill-key.ts`; the `query` host's chips are opaque (`{kind: 'pill', key}` / `{kind: 'sql', sql}`, `Pill` only `{key}`), `parseChip` and `filters.add` keep no label; the filter bar reads each chip's label from its key; `fetchPill` and `fetchButtonPill` give the key only; the key tests moved from `query.test.ts` to `pill-key.test.ts`, the chip expectations of the other tests lost their `label`. ✅ 2026-10-31 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed), deviations: `Pill` stays the type `filters.add` takes, now `{key}`; the server's `/pill` and `/button` answers keep their `label`, which the client ignores *(all proposed)* | chips as keys in the query host, read by `filters` |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

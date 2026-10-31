@@ -100,7 +100,7 @@ describe('addFilter', () => {
     await pick('admin', 'login');
     await done;
 
-    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'key:host:eq:admin', label: 'host eq admin' }]);
+    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'key:host:eq:admin' }]);
     const asked = fetched.find((url) => url.pathname === '/p/shop/api/1/values')!;
     expect([asked.searchParams.get('field'), asked.searchParams.get('search'), asked.searchParams.get('time')]).toEqual(['host', '', '1h']);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');

@@ -15,7 +15,7 @@ let fetched: URL[];
 let refused: Response | undefined;
 
 const source = { dataUrl: '/p/shop/api/3', filterable: ['status', 'instance'] };
-const pill = (field: string, op: string, value: string) => ({ kind: 'pill', key: `key:${field}:${op}:${value}`, label: `${field} ${op} ${value}` });
+const pill = (field: string, op: string, value: string) => ({ kind: 'pill', key: `key:${field}:${op}:${value}` });
 
 /** The quick pick's options as their icon and label read ("Filter status = 500", "Exclude status = 500"). */
 const choices = () =>
@@ -96,8 +96,8 @@ describe('offerFilters', () => {
 });
 
 describe('fetchPill', () => {
-  it('asks <dataUrl>/pill for the field, op and value, and rejects with the server’s answer', async () => {
-    expect(await fetchPill('/p/shop/api/3', { fieldId: 'host', op: 'eq', value: 'a b' })).toEqual({ key: 'key:host:eq:a b', label: 'host eq a b' });
+  it('asks <dataUrl>/pill for the field, op and value, gives the key it answers, and rejects with the server’s answer', async () => {
+    expect(await fetchPill('/p/shop/api/3', { fieldId: 'host', op: 'eq', value: 'a b' })).toEqual({ key: 'key:host:eq:a b' });
     refused = new Response('no field host', { status: 422 });
     await expect(fetchPill('/p/shop/api/3', { fieldId: 'host', op: 'eq', value: 'a' })).rejects.toThrow('422: no field host');
   });

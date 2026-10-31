@@ -66,27 +66,12 @@ export type FilterChip = PillFilter | SqlFilter;
 /**
  * A pill: a condition on a table that the server wrote from a widget's field and signed (`<dataUrl>/pill`); every
  * chart on that table applies it, the others say they ignore it. Or a filter button's condition, signed the same
- * (`page.json`'s `key`, or `<page>/button`; `pillButton`), which every query that takes filters applies. The client
- * only keeps and sends its key.
+ * (`page.json`'s `key`, or `<page>/button`), which every query that takes filters applies. The client only keeps and
+ * sends its key; what the key says of itself (its label, field or button) is the filters extension's to read.
  */
 export interface Pill {
-  /** What the URL holds (`?f=<key>`): the signed pill, its label readable in it (`pillLabel`). */
+  /** What the URL holds (`?f=<key>`): the signed pill. */
   readonly key: string;
-  /** The chip's text: `customer = acme`, `customer ≠ acme`. */
-  readonly label: string;
-}
-
-/** What a field's pill filters (`pillField`): the rows of `table` where `field` shows `value` (`eq`) or does not (`ne`). */
-export interface PillField {
-  /** The ClickHouse connection of `table` (`default`). */
-  readonly connection: string;
-  /** With its database: `default.http_logs`. */
-  readonly table: string;
-  /** The alias of the field (`host`). */
-  readonly field: string;
-  readonly op: FilterOp;
-  /** As the field shows it (`acme`); '' for an empty one. */
-  readonly value: string;
 }
 
 export interface PillFilter extends Pill {
@@ -107,5 +92,5 @@ export interface ParamsModel {
   readonly onDidChange: Event<void>;
 }
 
-export { QueryHost, formatTime, parseSearch, formatSearch, pillLabel, pillButton, pillField, type QueryState } from './query-impl';
+export { QueryHost, formatTime, parseSearch, formatSearch, type QueryState } from './query-impl';
 export { activeQuery, type ActiveQuerySource } from './active-query';

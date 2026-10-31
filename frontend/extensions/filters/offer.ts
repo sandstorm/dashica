@@ -56,12 +56,12 @@ function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
 }
 
 /**
- * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, "Add filter", an edited chip); rejects
- * with the server's message (a field that cannot filter: 422).
+ * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, "Add filter", an edited chip), its key
+ * (the chip reads its label from it, `pillLabel`); rejects with the server's message (a field that cannot filter: 422).
  */
 export async function fetchPill(dataUrl: string, { fieldId, op, value }: FilterCandidate & { readonly op: FilterOp }): Promise<Pill> {
   const response = await fetch(`${dataUrl}/pill?${new URLSearchParams({ field: fieldId, op, value })}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { key, label } = (await response.json()) as Pill;
-  return { key, label };
+  const { key } = (await response.json()) as Pill;
+  return { key };
 }

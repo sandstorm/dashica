@@ -3,11 +3,12 @@ import { Filter, ListFilterPlus, X, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { pillButton, pillField, type FilterChip, type FilterOp, type Pill, type PillField, type PillFilter, type QueryApi, type SqlFilter } from '../../hosts/query/query';
+import type { FilterChip, FilterOp, Pill, PillFilter, QueryApi, SqlFilter } from '../../hosts/query/query';
 import type { MenuAnchor, UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
 import { addFilter, fetchValues, fieldSource, filterableTables, pickValue, type FilterableTable } from './add-filter';
 import { fetchPill, offerFilters } from './offer';
+import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
 import './filters.css';
 
 /**
@@ -84,8 +85,8 @@ export function buttonOf(chip: FilterChip, buttons: readonly FilterButton[]): { 
 async function fetchButtonPill(url: string, value: string): Promise<Pill> {
   const response = await fetch(`${url}&${new URLSearchParams({ value })}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { key, label } = (await response.json()) as Pill;
-  return { key, label };
+  const { key } = (await response.json()) as Pill;
+  return { key };
 }
 
 /** How a pill's chip shows its operator. */
@@ -200,8 +201,8 @@ class FilterBar {
     if (chip.kind === 'pill' && made && source) return this.#pillOf(chip, index, made, source);
     const edit = chip.kind === 'sql' && this.sqlEnabled ? () => this.#edit(index) : undefined;
     const label = chip.kind === 'sql' ? 'SQL:' : '';
-    const value = chip.kind === 'sql' ? chip.sql.replace(/\s+/g, ' ') : chip.label;
-    const whole = chip.kind === 'sql' ? chip.sql : chip.label;
+    const value = chip.kind === 'sql' ? chip.sql.replace(/\s+/g, ' ') : pillLabel(chip.key);
+    const whole = chip.kind === 'sql' ? chip.sql : value;
     const title =
       chip.kind === 'sql' && !this.sqlEnabled
         ? `${whole}\nSQL filters are not enabled (filters.sqlEnabled)`
@@ -231,7 +232,8 @@ class FilterBar {
       class="d-filter-chip__value"
       title=${`Change the value of ${made.field}`}>${made.value === '' ? '(empty)' : made.value}</button>`;
     value.addEventListener('click', () => void this.#changeValue(chip, index, made, source, value));
-    return html`<span class="d-filter-chip d-filter-chip--pill" data-testid="filter-chip" title=${chip.label}>
+    const label = pillLabel(chip.key);
+    return html`<span class="d-filter-chip d-filter-chip--pill" data-testid="filter-chip" title=${label}>
       <span class="d-filter-chip__field">${made.field}</span>
       <button
         type="button"
@@ -242,8 +244,8 @@ class FilterBar {
       <button
         type="button"
         class="d-filter-chip__remove"
-        title=${`Remove ${chip.label}`}
-        aria-label=${`Remove ${chip.label}`}
+        title=${`Remove ${label}`}
+        aria-label=${`Remove ${label}`}
         onclick=${() => this.query.filters.remove(index)}>${createElement(X, { width: 12, height: 12 })}</button>
     </span>`;
   }
@@ -317,7 +319,7 @@ class FilterBar {
    */
   async #press(button: FilterButton, el: HTMLElement, index?: number): Promise<void> {
     if (!button.url) {
-      if (button.key) this.query.filters.add({ key: button.key, label: button.title });
+      if (button.key) this.query.filters.add({ key: button.key });
       return;
     }
     const shown = index === undefined ? undefined : this.query.filters.chips[index];

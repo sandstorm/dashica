@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 // Tests for QueryHost: the state from and into a query string (parseSearch, formatSearch), the filter chips,
-// what each change asks of the widgets, auto refresh paused while hidden or not shown; what a pill's key says of itself
-// (pillLabel, pillButton, pillField).
+// what each change asks of the widgets, auto refresh paused while hidden or not shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryHost, formatSearch, formatTime, parseSearch, pillButton, pillField, pillLabel } from './query';
+import { QueryHost, formatSearch, formatTime, parseSearch } from './query';
 
 let query: QueryHost;
 let refreshes: number;
@@ -16,9 +15,9 @@ function keyOf(label: string, payload: object = {}): string {
   return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
 }
 
-/** The pill of `keyOf(label)`, as `/pill` answers it. */
+/** The pill of `keyOf(label)`, as the filters extension adds it. */
 function pill(label: string) {
-  return { key: keyOf(label), label };
+  return { key: keyOf(label) };
 }
 
 beforeEach(() => {
@@ -110,12 +109,12 @@ describe('QueryHost', () => {
     expect(refreshes).toBe(2);
   });
 
-  it('takes the pills from the URL’s f as they are, each labelled as its key says; an empty f none', () => {
+  it('takes the pills from the URL’s f as they are, opaque keys; an empty f none', () => {
     query.load({ search: `?f=${keyOf('status = 500')}&f=&f=status:eq:500&f=${keyOf('path ≠ /api')}` });
     expect(query.filters.chips).toEqual([
-      { kind: 'pill', key: keyOf('status = 500'), label: 'status = 500' },
-      { kind: 'pill', key: 'status:eq:500', label: 'status:eq:500' },
-      { kind: 'pill', key: keyOf('path ≠ /api'), label: 'path ≠ /api' },
+      { kind: 'pill', key: keyOf('status = 500') },
+      { kind: 'pill', key: 'status:eq:500' },
+      { kind: 'pill', key: keyOf('path ≠ /api') },
     ]);
   });
 
@@ -123,7 +122,7 @@ describe('QueryHost', () => {
     query.load({ search: `?sql=a+%0AAND+b&f=${keyOf('host = x')}&sql=&sql=duration+%3E+2000` });
     expect(query.filters.chips).toEqual([
       { kind: 'sql', sql: 'a \nAND b' },
-      { kind: 'pill', key: keyOf('host = x'), label: 'host = x' },
+      { kind: 'pill', key: keyOf('host = x') },
       { kind: 'sql', sql: 'duration > 2000' },
     ]);
   });
@@ -187,7 +186,7 @@ describe('QueryHost', () => {
     query.filters.add('status >= 500');
     refreshes = 0;
     query.filters.add(pill('host = a'));
-    query.filters.add({ key: keyOf('host = a'), label: 'another label' });
+    query.filters.add({ key: keyOf('host = a') });
     query.filters.add(pill('host ≠ b'));
     query.filters.add(pill('path = /api'));
     expect(refreshes).toBe(3);
@@ -379,41 +378,5 @@ describe('parseSearch and formatSearch', () => {
     const state = parseSearch('?time=3h&sql=a&f=k.mac', '1h');
     expect(formatSearch(state, '1h', '?tab=x&time=6h')).toBe('?tab=x&time=3h&sql=a&f=k.mac');
     expect(formatSearch(parseSearch('', '1h'), '1h', '?sql=a')).toBe('');
-  });
-});
-
-describe('pillLabel and pillButton', () => {
-  it("read a pill's label, and the filter button it was made for with its value", () => {
-    const duration = keyOf('Duration: 500', { button: 'duration_ms >= ...', value: '500' });
-    expect([pillLabel(duration), pillButton(duration)]).toEqual(['Duration: 500', { button: 'duration_ms >= ...', value: '500' }]);
-    expect(pillButton(keyOf('Errors', { button: 'status >= 500' }))).toEqual({ button: 'status >= 500', value: '' });
-  });
-
-  it('read no button from the pill of a field, and the key itself as the label of one without a payload', () => {
-    expect(pillButton(keyOf('host = a'))).toBeUndefined();
-    expect([pillLabel('status:eq:500'), pillButton('status:eq:500'), pillButton('!!.mac')]).toEqual(['status:eq:500', undefined, undefined]);
-  });
-});
-
-describe('pillField', () => {
-  const host = { connection: 'default', table: 'default.http_logs', field: 'host', op: 'ne', value: "O'Brien" };
-
-  it("reads the table, field, op and shown value of a field's pill, an empty value too", () => {
-    expect(pillField(keyOf("host ≠ O'Brien", host))).toEqual(host);
-    expect(pillField(keyOf('host = ', { ...host, op: 'eq', value: '' }))).toEqual({ ...host, op: 'eq', value: '' });
-  });
-
-  it('reads none from a key without a value, signed before pills carried it', () => {
-    expect(pillField(keyOf('host = acme', { ...host, op: 'eq', value: undefined }))).toBeUndefined();
-  });
-
-  it("reads none from a button's pill, a key without a field or op, or one without a payload", () => {
-    const button = { connection: '', table: '', field: '', op: '', button: 'status >= 500' };
-    expect([pillField(keyOf('Errors', button)), pillField(keyOf('host = a')), pillField(keyOf('host', { ...host, op: 'like' })), pillField('status:eq:500')]).toEqual([
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-    ]);
   });
 });

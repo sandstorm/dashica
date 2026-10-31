@@ -110,7 +110,7 @@ describe('WidgetsHost', () => {
     });
 
     it('sends the page’s pills with the next query, their keys', async () => {
-      testbed.query.filters.add({ key: 'k1.mac', label: 'host ≠ a' });
+      testbed.query.filters.add({ key: 'k1.mac' });
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
       await ctx.query();
       expect(testbed.requests[0].searchParams.getAll('f')).toEqual(['k1.mac']);

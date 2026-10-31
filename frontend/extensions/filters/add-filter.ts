@@ -1,9 +1,10 @@
 // See addFilter.
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { FilterOp, PillField, QueryApi } from '../../hosts/query/query';
+import type { FilterOp, QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
 import type { PillSource } from '../../hosts/widgets/widgets';
 import { OP_ICONS, fetchPill } from './offer';
+import type { PillField } from './pill-key';
 
 /** A table the shown page's charts filter (`page.json`'s `table` of a widget), and the fields they filter it by. */
 export interface FilterableTable {
