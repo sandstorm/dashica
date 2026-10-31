@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -321,6 +322,32 @@ func TestValues_AFieldThatCannotFilterIs422AnUnsignedPill400(t *testing.T) {
 		if rec := askPath(bar, path+"?time=1h&field=status&search=50"); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "clickhouse") {
 			t.Errorf("%s, a field that filters: %d %s", path, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestOthersThan_LeavesTheOtherFieldOfTheSameName(t *testing.T) {
+	logs := filter.Table{Connection: "default", Name: "default.http_logs"}
+	newPill := func(field sql.SqlField, value string) filter.Pill {
+		p, err := filter.New(logs, field, sql.OpEq, value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	column := newPill(sql.ColumnField("host"), "web-1")
+	computed := newPill(sql.Field("lower(host_name)").WithAlias("host"), "shop")
+	other := newPill(sql.ColumnField("host"), "web-2")
+	other.Table = filter.Table{Connection: "logs", Name: "monitoring.full_logs"}
+	pills := []filter.Pill{column, computed, other}
+
+	if got := othersThan(pills, logs, "host", true); !reflect.DeepEqual(got, []filter.Pill{computed, other}) {
+		t.Errorf("the column's: %+v", got)
+	}
+	if got := othersThan(pills, logs, "host", false); !reflect.DeepEqual(got, []filter.Pill{column, other}) {
+		t.Errorf("the computed field's: %+v", got)
+	}
+	if len(pills) != 3 {
+		t.Errorf("pills changed: %+v", pills)
 	}
 }
 

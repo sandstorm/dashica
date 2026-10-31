@@ -213,6 +213,21 @@ func TestApply_PillsOnOneFieldCombine(t *testing.T) {
 	}
 }
 
+func TestApply_AColumnAndAComputedFieldOfOneNameAreTwoFields(t *testing.T) {
+	q := sql.New(sql.From("http_logs"))
+	pills := []Pill{
+		pill(t, httpLogs, sql.ColumnField("host"), "eq", "web-1"),
+		pill(t, httpLogs, sql.Field("lower(host_name)").WithAlias("host"), "eq", "shop"),
+	}
+
+	got, _ := Apply(q, httpLogs, true, pills)
+
+	want := "WHERE\n    (((`host`) = 'web-1'))\n    AND (((lower(host_name)) = 'shop'))"
+	if !strings.Contains(got.Build(), want) {
+		t.Errorf("query:\n%s", got.Build())
+	}
+}
+
 func TestApply_TwoBasesOnOneTableShareThePills(t *testing.T) {
 	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
 	for _, q := range []sql.SqlQueryable{

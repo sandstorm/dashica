@@ -53,7 +53,7 @@ func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table
 type Pill struct {
 	Table
 	// Field is the alias of the field it filters by ("customer"), or with Column the column's name; the pills on one
-	// table and field combine (Apply).
+	// table, field and Column combine (Apply).
 	Field string
 	// Column is set for a pill on a column of the table, whose Condition is the column's own (`(`host`) = 'web-1'`,
 	// sql.ColumnField; "Add filter"'s table columns and a click on a field that is just a column,
@@ -338,16 +338,17 @@ func shorten(key string) string {
 }
 
 // Apply is `q` with the pills on `table` added to its WHERE (a SQL file's {{DASHICA_FILTERS}}), and the Diagnostics
-// naming the others; without a table (`ok` false, TableOf) it applies none. The pills on one field combine, in the
-// order of their first one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op
+// naming the others; without a table (`ok` false, TableOf) it applies none. The pills on one field combine (a column
+// and a computed field of the same name being two fields, Pill.Column), in the order of their first one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op
 // AND-ed (`customer ≠ acme` and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one
 // Where, so a `≥` and a `≤` on one field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table
 // too, each one Where after those of the fields.
 func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQueryable, Diagnostics) {
 	var d Diagnostics
 	type group struct {
-		field string
-		op    sql.Op
+		field  string
+		column bool
+		op     sql.Op
 	}
 	var order []group
 	conditions := map[group][]string{}
@@ -363,7 +364,7 @@ func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQuery
 			}
 			continue
 		}
-		g := group{p.Field, p.Op}
+		g := group{p.Field, p.Column, p.Op}
 		if _, seen := conditions[g]; !seen {
 			order = append(order, g)
 		}

@@ -329,10 +329,16 @@ func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 			httpError(w, err)
 			return
 		}
-		pills = slices.DeleteFunc(pills, func(p filter.Pill) bool { return p.Table == table && p.Field == target.field.Alias() })
-		filtered, _ := filter.Apply(target.query, table, true, pills)
+		_, plain := columnOf(chart, target.field)
+		filtered, _ := filter.Apply(target.query, table, true, othersThan(pills, table, target.field.Alias(), target.column || plain))
 		httpError(w, qh.HandleValues(of(filtered, target.field), state, r.URL.Query().Get("search"), w, r))
 	}
+}
+
+// othersThan are `pills` without those on `field` of `table`: the pills on its column with `column` (a column, or a
+// field that is just one, makes the column's pill, pillHandler), else those on the computed field of that alias.
+func othersThan(pills []filter.Pill, table filter.Table, field string, column bool) []filter.Pill {
+	return slices.DeleteFunc(slices.Clone(pills), func(p filter.Pill) bool { return p.Table == table && p.Field == field && p.Column == column })
 }
 
 // columnsHandler answers `GET /columns` with the columns of the chart's table as the schema of its connection has
