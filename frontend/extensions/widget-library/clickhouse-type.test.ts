@@ -1,4 +1,5 @@
 // Tests for clickhouse-type.ts: what a ClickHouse type holds (typeKind) and a value as a pill compares it (pillValue).
+import { makeData, makeVector, TimestampMicrosecond, TimestampNanosecond } from 'apache-arrow';
 import { describe, expect, it } from 'vitest';
 import { pillValue, typeKind } from './clickhouse-type';
 
@@ -24,6 +25,19 @@ describe('pillValue', () => {
     expect(pillValue(at / 1000, "Nullable(DateTime('Europe/Berlin'))")).toBe('2026-10-31T10:00:00.000Z');
     expect(pillValue(at, 'DateTime64(3)')).toBe('2026-10-31T10:00:00.000Z');
     expect(pillValue(new Date(at), 'DateTime64(3)')).toBe('2026-10-31T10:00:00.000Z');
+  });
+
+  it('writes the µs of a DateTime64(4…9), as apache-arrow reads them from a Timestamp in µs or ns', () => {
+    const read = (type: TimestampMicrosecond | TimestampNanosecond, value: bigint): unknown => makeVector(makeData({ type, data: BigInt64Array.of(value) })).get(0);
+    const micros = read(new TimestampMicrosecond(), BigInt(at) * 1000n + 123456n); // 10:00:00.123456
+    expect(pillValue(micros, 'DateTime64(6)')).toBe('2026-10-31T10:00:00.123456Z');
+    expect(pillValue(micros, "Nullable(DateTime64(6, 'UTC'))")).toBe('2026-10-31T10:00:00.123456Z');
+    expect(pillValue(read(new TimestampMicrosecond(), BigInt(at) * 1000n + 123400n), 'DateTime64(4)')).toBe('2026-10-31T10:00:00.1234Z');
+    // a ns value to the µs, rounded; .9999996 ms carries over to the next ms
+    expect(pillValue(read(new TimestampNanosecond(), BigInt(at) * 1000000n + 123456789n), 'DateTime64(9)')).toBe('2026-10-31T10:00:00.123457Z');
+    expect(pillValue(read(new TimestampNanosecond(), BigInt(at) * 1000000n + 999999600n), 'DateTime64(9)')).toBe('2026-10-31T10:00:01.000000Z');
+    // up to DateTime64(3) the ms, as before
+    expect(pillValue(at + 100, 'DateTime64(1)')).toBe('2026-10-31T10:00:00.100Z');
   });
 
   it('writes a day as its date', () => {
