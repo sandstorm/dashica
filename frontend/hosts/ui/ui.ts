@@ -44,8 +44,20 @@ export interface UiApi {
    */
   registerFloatingBar<C extends object>(options: FloatingBarOptions<C>): FloatingBar<C>;
   /**
-   * A quick pick its owner drives: a box at the top in the middle of the workbench with the items the owner sets as
-   * the text changes. Hidden until `show`; one box at a time (a new one hides the open one).
+   * Shows `items` in a quick pick at `options.anchor` (else at the top in the middle of the workbench); typing narrows
+   * them (fuzzily, by label, else description), a heading shows while an item of its group does. Resolves with the
+   * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
+   * elsewhere, another box). As VS Code's `window.showQuickPick`.
+   */
+  showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options?: QuickPickOptions): Promise<T | undefined>;
+  /**
+   * Asks for a text in a box at `options.anchor` (else at the top in the middle): resolves with it on Enter, once the
+   * box is gone and the focus back, or `undefined` when it was hidden without. As VS Code's `window.showInputBox`.
+   */
+  showInputBox(options?: InputBoxOptions): Promise<string | undefined>;
+  /**
+   * A quick pick its owner drives: a box at its `anchor` (else at the top in the middle of the workbench) with the
+   * items the owner sets as the text changes. Hidden until `show`; one box at a time (a new one hides the open one).
    */
   createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
   /** Adds what `provider` finds to search everywhere, as a group of its own under `provider.label`, until disposed; `provider.id` is unique. */
@@ -122,6 +134,30 @@ export interface FloatingBar<C extends object> {
   dispose(): void;
 }
 
+/** Where and how `showQuickPick` shows its box. */
+export interface QuickPickOptions {
+  /** The box's accessible name ("Filter"). */
+  readonly title?: string;
+  /** Shown in the empty field. */
+  readonly placeholder?: string;
+  /** Where the box opens: below an element, or at a point (a click's `clientX` / `clientY`); else at the top in the middle. */
+  readonly anchor?: MenuAnchor;
+}
+
+/** Where and how `showInputBox` shows its box. */
+export interface InputBoxOptions {
+  /** The box's accessible name ("Parameter value"). */
+  readonly title?: string;
+  /** A line below the field, e.g. what the text is for. */
+  readonly prompt?: string;
+  /** Shown in the empty field. */
+  readonly placeholder?: string;
+  /** The text in the field at first. */
+  readonly value?: string;
+  /** Where the box opens, as `QuickPickOptions.anchor`. */
+  readonly anchor?: MenuAnchor;
+}
+
 /** How an item of a quick pick was picked. */
 export interface QuickPickAccept {
   /** With Cmd / Ctrl held: what it opens goes into a new tab. */
@@ -140,6 +176,16 @@ export interface QuickPickItem {
   readonly highlights?: QuickPickHighlights;
   /** The key that does the same, as people read it (`⌘K`), at the row's end. */
   readonly keybinding?: string;
+  /** In front of the label: SVG markup, drawn in `currentColor`, with its accessible name (`Filter`). */
+  readonly icon?: QuickPickIcon;
+  /** An item that is on or off (a menu's toggled entry): a check mark in front while on; `undefined` for any other. */
+  readonly checked?: boolean;
+}
+
+/** An item's icon: what it shows and what it says to a screen reader. */
+export interface QuickPickIcon {
+  readonly svg: string;
+  readonly label: string;
 }
 
 /** The [start, end) offsets of the characters to mark in an item's texts. */
@@ -152,10 +198,13 @@ export interface QuickPickHighlights {
 /** What `QuickPickSeparator.kind` says. */
 export const QuickPickItemKind = { Separator: -1, Default: 0 } as const;
 
-/** A heading starting a group of a quick pick's items ("Dashboards"), with a note after it ("12 more"). */
+/**
+ * A heading starting a group of a quick pick's items ("Dashboards"), with a note after it ("12 more"); without a label
+ * only a line between the groups (a menu's).
+ */
 export interface QuickPickSeparator {
   readonly kind: typeof QuickPickItemKind.Separator;
-  readonly label: string;
+  readonly label?: string;
   readonly description?: string;
 }
 
@@ -167,6 +216,8 @@ export interface QuickPickSeparator {
 export interface QuickPick<T extends QuickPickItem> {
   /** The box's accessible name. */
   title: string | undefined;
+  /** Where the box opens, as `QuickPickOptions.anchor`; read on `show`. */
+  anchor: MenuAnchor | undefined;
   /** Shown in the empty field. */
   placeholder: string | undefined;
   /** The text in the field; setting it fires `onDidChangeValue`. */

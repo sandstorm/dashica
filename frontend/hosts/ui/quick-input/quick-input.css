@@ -1,5 +1,6 @@
-/* The quick pick (see QuickInput in quick-input.ts): a box at the top in the middle of the workbench, a field, a
-   progress line, the items in groups under headings, the matched characters marked. Its values are tokens. */
+/* The quick pick and the input box (see QuickInput in quick-input.ts): a box at the top in the middle of the
+   workbench or fixed at its anchor, a field, a progress line, the items in groups under headings (or only a line
+   between them), check marks and icons in front, the matched characters marked. Its values are tokens. */
 .d-workbench__quick-pick {
   position: absolute;
   z-index: 40;
@@ -19,6 +20,12 @@
   color: var(--color-text);
   font-size: var(--text-sm);
   line-height: 1.4;
+}
+.d-workbench__quick-pick--anchored {
+  position: fixed;
+  z-index: 50;
+  transform: none;
+  width: min(360px, calc(100vw - 16px));
 }
 .d-workbench__quick-pick-field {
   padding: var(--space-1) var(--space-2);
@@ -50,6 +57,10 @@
   border-radius: var(--radius-md);
   cursor: pointer;
 }
+.d-workbench__quick-pick-check { display: none; }
+.d-workbench__quick-pick-list--checks .d-workbench__quick-pick-check { display: inline-block; width: 1.25em; color: var(--color-accent); }
+.d-workbench__quick-pick-icon { display: inline-flex; align-self: center; color: var(--color-text-muted); }
+.d-workbench__quick-pick-icon svg { width: 14px; height: 14px; }
 .d-workbench__quick-pick-item:hover { background: var(--color-hover); }
 .d-workbench__quick-pick-item[aria-selected='true'] { background: var(--color-accent-subtle); }
 .d-workbench__quick-pick-description,

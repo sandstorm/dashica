@@ -1,7 +1,7 @@
 // See searchEverywhere in ../search-everywhere.ts.
 import type { PageApi } from '../../../hosts/page/page';
 import type { SearchItem, SearchProvider } from '../../../hosts/ui/ui';
-import { fuzzyMatch } from '../model/fuzzy';
+import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
 
 /**
  * "Charts": every chart in the outlines of `workbench.json`'s menu as "Shop › Details › Requests" (its page, its

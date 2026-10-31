@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for quick-input.ts (createQuickPick).
+// Tests for quick-input.ts (createQuickPick, showQuickPick, showInputBox).
 import { afterEach, describe, expect, it } from 'vitest';
 import { QuickPickItemKind } from '../ui';
 import { QuickInput } from './quick-input';
@@ -16,7 +16,9 @@ function setup() {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   };
   const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
-  return { host, button, quickInput, key, type, field };
+  const options = () => [...host.querySelectorAll<HTMLElement>('[role=option]')];
+  const box = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick');
+  return { host, button, quickInput, key, type, field, options, box };
 }
 
 describe('createQuickPick', () => {
@@ -112,5 +114,84 @@ describe('createQuickPick', () => {
     });
     const ids = picks.flat();
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('showQuickPick', () => {
+  const ITEMS = [
+    { kind: QuickPickItemKind.Separator, label: 'Filter' },
+    { label: 'status = 500', icon: { svg: '<svg></svg>', label: 'Filter' } },
+    { label: 'host = web-1', description: 'instance' },
+    { kind: QuickPickItemKind.Separator },
+    { label: 'Copy link', keybinding: '⌘C', checked: true },
+  ] as const;
+
+  it('shows the items at a point, narrows them as the viewer types (marked, headings with their items) and resolves with the one picked, the focus back', async () => {
+    const { host, button, quickInput, key, type, field, options, box } = setup();
+    button.focus();
+    const picked = quickInput.showQuickPick([...ITEMS], { title: 'Filter', placeholder: 'Pick a filter', anchor: { x: 10, y: 20 } });
+    expect([box()!.getAttribute('aria-label'), field().placeholder, document.activeElement]).toEqual(['Filter', 'Pick a filter', field()]);
+    expect(box()!.classList.contains('d-workbench__quick-pick--anchored')).toBe(true);
+    expect([box()!.style.left, box()!.style.top]).toEqual(['10px', '20px']);
+    expect(options().map((option) => option.textContent)).toEqual([' status = 500', 'host = web-1 instance', '✓Copy link ⌘C']);
+    expect(host.querySelector('[role=img]')!.getAttribute('aria-label')).toBe('Filter');
+    expect(options()[2].getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelectorAll('.d-workbench__quick-pick-heading')).toHaveLength(1);
+    type(field(), 'web');
+    expect([options().map((option) => option.textContent), host.querySelector('mark')!.textContent]).toEqual([['host = web-1 instance'], 'web']);
+    expect(host.querySelector('.d-workbench__quick-pick-heading')!.textContent).toBe('Filter');
+    type(field(), 'instance');
+    expect(host.querySelector('.d-workbench__quick-pick-description mark')!.textContent).toBe('instance');
+    key(field(), 'Enter');
+    expect(await picked).toBe(ITEMS[2]);
+    expect([box(), document.activeElement]).toEqual([null, button]);
+  });
+
+  it('opens below an element, and resolves with undefined on Escape, a press elsewhere or another box', async () => {
+    const { button, quickInput, key, field, box } = setup();
+    button.getBoundingClientRect = () => ({ left: 5, bottom: 7 }) as DOMRect;
+    const escaped = quickInput.showQuickPick([{ label: 'Shop' }], { anchor: button });
+    expect([box()!.style.left, box()!.style.top]).toEqual(['5px', '7px']);
+    key(field(), 'Escape');
+    expect(await escaped).toBeUndefined();
+    const pressed = quickInput.showQuickPick([{ label: 'Shop' }]);
+    expect([box()!.classList.contains('d-workbench__quick-pick--anchored'), box()!.style.left]).toEqual([false, '']);
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(await pressed).toBeUndefined();
+    const replaced = quickInput.showQuickPick([{ label: 'Shop' }]);
+    void quickInput.showQuickPick([{ label: 'Billing' }]);
+    expect(await replaced).toBeUndefined();
+    quickInput.hide();
+    expect(box()).toBeNull();
+  });
+
+  it('calls pickOne\'s `done` while the click is still going on, the box gone and the focus back', () => {
+    const { button, quickInput, options, box } = setup();
+    button.focus();
+    const done: [string | undefined, boolean, boolean][] = [];
+    quickInput.pickOne([{ label: 'Shop' }], {}, (item) => done.push([item?.label, box() === null, document.activeElement === button]));
+    options()[0].click();
+    expect(done).toEqual([['Shop', true, true]]);
+  });
+});
+
+describe('showInputBox', () => {
+  it('asks for a text (its value, prompt, placeholder) and resolves with it on Enter, the focus back', async () => {
+    const { host, button, quickInput, key, type, field, box } = setup();
+    button.focus();
+    const asked = quickInput.showInputBox({ title: 'Parameter value', prompt: 'Replaces the ... of the filter', placeholder: '/api/', value: '/a', anchor: { x: 1, y: 2 } });
+    expect([box()!.getAttribute('aria-label'), field().value, field().placeholder, document.activeElement]).toEqual(['Parameter value', '/a', '/api/', field()]);
+    expect(host.querySelector(`#${field().getAttribute('aria-describedby')}`)!.textContent).toBe('Replaces the ... of the filter');
+    type(field(), '/api/');
+    key(field(), 'Enter');
+    expect(await asked).toBe('/api/');
+    expect([box(), document.activeElement]).toEqual([null, button]);
+  });
+
+  it('resolves with undefined on Escape', async () => {
+    const { quickInput, key, field } = setup();
+    const asked = quickInput.showInputBox();
+    key(field(), 'Escape');
+    expect(await asked).toBeUndefined();
   });
 });

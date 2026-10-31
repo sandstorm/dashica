@@ -8,7 +8,22 @@ import { ContextMenu } from './menus/context-menu';
 import { FloatingBars } from './menus/floating-bar';
 import { Menus } from './menus/menus';
 import { QuickInput } from './quick-input/quick-input';
-import type { BarPlacement, Choice, ContextMenuOptions, FloatingBar, FloatingBarOptions, Panel, QuickPick, QuickPickItem, SearchProvider, SidePanelOptions, UiApi } from './ui';
+import type {
+  BarPlacement,
+  Choice,
+  ContextMenuOptions,
+  FloatingBar,
+  FloatingBarOptions,
+  InputBoxOptions,
+  Panel,
+  QuickPick,
+  QuickPickItem,
+  QuickPickOptions,
+  QuickPickSeparator,
+  SearchProvider,
+  SidePanelOptions,
+  UiApi,
+} from './ui';
 import './layout/window-layout.css';
 import './menus/context-menu.css';
 import './menus/floating-bar.css';
@@ -69,6 +84,14 @@ export class UiHost implements UiApi {
 
   registerFloatingBar<C extends object>(options: FloatingBarOptions<C>): FloatingBar<C> {
     return this.#floatingBars.register(options);
+  }
+
+  showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options?: QuickPickOptions): Promise<T | undefined> {
+    return this.#quickInput.showQuickPick(items, options);
+  }
+
+  showInputBox(options?: InputBoxOptions): Promise<string | undefined> {
+    return this.#quickInput.showInputBox(options);
   }
 
   createQuickPick<T extends QuickPickItem>(): QuickPick<T> {

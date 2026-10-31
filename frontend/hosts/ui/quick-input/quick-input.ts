@@ -1,11 +1,23 @@
 // See UiApi in ../ui.ts.
 import { html } from 'htl';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
-import { type QuickPick, type QuickPickAccept, type QuickPickHighlights, type QuickPickItem, QuickPickItemKind, type QuickPickSeparator } from '../ui';
+import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
+import {
+  type InputBoxOptions,
+  type MenuAnchor,
+  type QuickPick,
+  type QuickPickAccept,
+  type QuickPickHighlights,
+  type QuickPickItem,
+  QuickPickItemKind,
+  type QuickPickOptions,
+  type QuickPickSeparator,
+} from '../ui';
 
 /**
- * What `createQuickPick` shows: one box at a time over the workbench `host` (a new one hides the open one), at the top
- * in the middle. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was.
+ * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `host` (a new
+ * one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the top in
+ * the middle. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was.
  */
 export class QuickInput {
   #open: Open | null = null;
@@ -14,19 +26,74 @@ export class QuickInput {
 
   createQuickPick<T extends QuickPickItem>(): QuickPick<T> {
     return new OwnedQuickPick<T>({
-      show: (box, field, onHide) => this.#present(box, field, onHide),
+      show: (box, field, onHide, anchor) => this.#present(box, field, onHide, anchor),
       hide: (box) => {
         if (this.#open?.box === box) this.#open.close();
       },
     });
   }
 
+  showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options: QuickPickOptions = {}): Promise<T | undefined> {
+    return new Promise((resolve) => this.pickOne(items, options, resolve));
+  }
+
+  /**
+   * As `showQuickPick`, but calls `done` right as the box is gone and the focus back, so what it does still counts as
+   * the viewer's gesture (a command opening a tab, copying to the clipboard).
+   */
+  pickOne<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options: QuickPickOptions, done: (item: T | undefined) => void): void {
+    const pick = this.createQuickPick<Shown<T>>();
+    pick.title = options.title;
+    pick.placeholder = options.placeholder;
+    pick.anchor = options.anchor;
+    let picked: T | undefined;
+    pick.onDidChangeValue((value) => (pick.items = narrow(items, value)));
+    pick.onDidAccept(() => {
+      picked = pick.selectedItems[0]?.item;
+      pick.hide();
+    });
+    pick.onDidHide(() => {
+      pick.dispose();
+      done(picked);
+    });
+    pick.items = narrow(items, '');
+    pick.show();
+  }
+
+  showInputBox(options: InputBoxOptions = {}): Promise<string | undefined> {
+    const name = options.title ?? 'Input';
+    const field = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" aria-label=${name} placeholder=${options.placeholder ?? ''}>`;
+    field.value = options.value ?? '';
+    const prompt = options.prompt ? html`<div class="d-workbench__quick-pick-hint" id=${uniqueId('dashica-input-box')}>${options.prompt}</div>` : null;
+    if (prompt) field.setAttribute('aria-describedby', prompt.id);
+    const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field}${prompt}</div>`;
+    return new Promise((resolve) => {
+      let value: string | undefined;
+      field.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        value = field.value;
+        if (this.#open?.box === box) this.#open.close();
+      });
+      this.#present(box, field, () => resolve(value), options.anchor);
+      field.setSelectionRange(field.value.length, field.value.length);
+    });
+  }
+
+  /** Hides the open box, if any. */
+  hide(): void {
+    this.#open?.close();
+  }
+
   dispose(): void {
     this.#open?.close();
   }
 
-  /** Shows `box` (hiding an open one) and focuses `focus`; Escape, a press outside or `close` remove it and call `onHide`. */
-  #present(box: HTMLElement, focus: HTMLElement, onHide: () => void): void {
+  /**
+   * Shows `box` (hiding an open one) at `anchor` and focuses `focus`; Escape, a press outside or `close` remove it and
+   * call `onHide`.
+   */
+  #present(box: HTMLElement, focus: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined): void {
     this.#open?.close();
     const doc = this.host.ownerDocument;
     const previous = doc.activeElement;
@@ -54,9 +121,56 @@ export class QuickInput {
     box.addEventListener('keydown', onkeydown);
     this.#open = { box, close };
     this.host.append(box);
+    place(box, anchor);
     doc.addEventListener('mousedown', outside, true);
     focus.focus();
   }
+}
+
+/** An item of `showQuickPick` as shown: marked where the text matched, `item` the one handed in. */
+type Shown<T extends QuickPickItem> = QuickPickItem & { readonly item: T };
+
+/**
+ * The items of `items` that `value` matches (fuzzily, by label, else description), in their order and marked where it
+ * matched, each heading while an item of its group is left; all of them, unmarked, while `value` is empty.
+ */
+function narrow<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], value: string): (Shown<T> | QuickPickSeparator)[] {
+  const shown: (Shown<T> | QuickPickSeparator)[] = [];
+  let heading: QuickPickSeparator | null = null;
+  for (const item of items) {
+    if (isSeparator(item)) {
+      heading = item;
+      continue;
+    }
+    const label = fuzzyMatch(value, item.label);
+    const description = label ? null : item.description ? fuzzyMatch(value, item.description) : null;
+    if (!label && !description) continue;
+    if (heading) shown.push(heading);
+    heading = null;
+    const highlights: QuickPickHighlights = value.trim() === '' ? (item.highlights ?? {}) : label ? { label: label.ranges } : { description: description!.ranges };
+    shown.push({ ...item, highlights, item });
+  }
+  return shown;
+}
+
+/** Puts `box` at `anchor` (below an element's left edge, or at a point), inside the viewport; else where its CSS says. */
+function place(box: HTMLElement, anchor: MenuAnchor | undefined): void {
+  box.classList.toggle('d-workbench__quick-pick--anchored', anchor !== undefined);
+  if (!anchor) {
+    box.style.left = box.style.top = '';
+    return;
+  }
+  const view = box.ownerDocument.defaultView;
+  const point = anchor instanceof Element ? { x: anchor.getBoundingClientRect().left, y: anchor.getBoundingClientRect().bottom } : anchor;
+  const maxX = Math.max(0, (view?.innerWidth ?? 0) - box.offsetWidth);
+  const maxY = Math.max(0, (view?.innerHeight ?? 0) - box.offsetHeight);
+  box.style.left = `${Math.min(Math.max(point.x, 0), maxX)}px`;
+  box.style.top = `${Math.min(Math.max(point.y, 0), maxY)}px`;
+}
+
+/** `prefix` and a random part: an id no other box on the page has. */
+function uniqueId(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** A box on screen: closing it removes it and gives the focus back. */
@@ -84,7 +198,7 @@ class OnePicker<T extends QuickPickItem> {
     private readonly pick: (item: T, modified: boolean) => void,
   ) {
     const { listbox, input } = parts;
-    listbox.id = `dashica-quick-pick-${Math.random().toString(36).slice(2, 10)}`;
+    listbox.id = uniqueId('dashica-quick-pick');
     input.setAttribute('aria-controls', listbox.id);
   }
 
@@ -96,6 +210,8 @@ class OnePicker<T extends QuickPickItem> {
   /** Shows `items` (and headings starting groups), the first item active. */
   show(items: readonly (T | QuickPickSeparator)[]): void {
     this.#options = [];
+    // a column for the check marks, so every item's label starts at the same place
+    this.parts.listbox.classList.toggle('d-workbench__quick-pick-list--checks', items.some((item) => !isSeparator(item) && item.checked !== undefined));
     const rows: HTMLElement[] = [];
     let group: HTMLElement | null = null;
     for (const item of items) {
@@ -119,8 +235,9 @@ class OnePicker<T extends QuickPickItem> {
     }
   }
 
-  /** A group under a heading, which names it. */
+  /** A group under a heading, which names it; without a label, a group of its own only. */
   #group(separator: QuickPickSeparator): HTMLElement {
+    if (!separator.label) return html`<div class="d-workbench__quick-pick-group" role="group"></div>`;
     const id = `${this.parts.listbox.id}-${++this.#rows}`;
     const description = separator.description ? html.fragment` <span class="d-workbench__quick-pick-heading-description">${separator.description}</span>` : null;
     return html`<div class="d-workbench__quick-pick-group" role="group" aria-labelledby=${id}>
@@ -131,6 +248,7 @@ class OnePicker<T extends QuickPickItem> {
   #option(item: T): HTMLElement {
     const option = itemElement(item);
     option.setAttribute('role', 'option');
+    if (item.checked !== undefined) option.setAttribute('aria-checked', String(item.checked));
     option.id = `${this.parts.listbox.id}-${++this.#rows}`;
     // keeps the focus in the field
     option.addEventListener('mousedown', (event) => event.preventDefault());
@@ -153,7 +271,7 @@ class OnePicker<T extends QuickPickItem> {
 
 /**
  * The quick pick of `createQuickPick`: a box with a field, a progress line, the owner's items, "No results" and the
- * prompt. `boxes` shows and hides it as the workbench's one box.
+ * prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`.
  */
 class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #box: HTMLElement;
@@ -166,6 +284,7 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #accepted = new EventEmitter<QuickPickAccept>();
   readonly #hidden = new EventEmitter<void>();
   #title: string | undefined;
+  anchor: MenuAnchor | undefined;
   #items: readonly (T | QuickPickSeparator)[] = [];
   #selected: readonly T[] = [];
   #busy = false;
@@ -176,7 +295,7 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 
   constructor(
     private readonly boxes: {
-      show(box: HTMLElement, field: HTMLElement, onHide: () => void): void;
+      show(box: HTMLElement, field: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined): void;
       hide(box: HTMLElement): void;
     },
   ) {
@@ -260,7 +379,7 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
     this.boxes.show(this.#box, this.#field, () => {
       this.#shown = false;
       this.#hidden.fire();
-    });
+    }, this.anchor);
     this.#field.setSelectionRange(this.#field.value.length, this.#field.value.length);
   }
 
@@ -288,11 +407,21 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   }
 }
 
-/** An item's label, description, key and detail, the `highlights` marked; a space before each further part, so its accessible name reads as words. */
+/**
+ * An item's check mark, icon, label, description, key and detail, the `highlights` marked; a space before each further
+ * part, so its accessible name reads as words.
+ */
 function itemElement(item: QuickPickItem): HTMLElement {
   const highlights = item.highlights ?? {};
   const space = (part: Node | null) => (part ? html.fragment` ${part}` : null);
-  return html`<div class="d-workbench__quick-pick-item">${highlighted('d-workbench__quick-pick-label', item.label, highlights.label)}${space(
+  const check = html`<span class="d-workbench__quick-pick-check" aria-hidden="true">${item.checked ? '✓' : ''}</span>`;
+  let icon: HTMLElement | null = null;
+  if (item.icon) {
+    const span: HTMLElement = html`<span class="d-workbench__quick-pick-icon" role="img" aria-label=${item.icon.label}></span>`;
+    span.insertAdjacentHTML('beforeend', item.icon.svg);
+    icon = span;
+  }
+  return html`<div class="d-workbench__quick-pick-item">${check}${icon ? html.fragment`${icon} ` : null}${highlighted('d-workbench__quick-pick-label', item.label, highlights.label)}${space(
     item.description ? highlighted('d-workbench__quick-pick-description', item.description, highlights.description) : null,
   )}${space(item.keybinding ? html`<kbd class="d-workbench__quick-pick-keybinding">${item.keybinding}</kbd>` : null)}${space(
     item.detail ? highlighted('d-workbench__quick-pick-detail', item.detail, highlights.detail) : null,
