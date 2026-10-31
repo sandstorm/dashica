@@ -75,6 +75,11 @@ export function renderExploreView(el: HTMLElement, options: ExploreViewOptions):
   return new Disposable(() => view.dispose());
 }
 
+/** What the view calls `widget`: its title, else its type. */
+export function chartTitle(widget: WidgetNode): string {
+  return 'title' in widget.props && widget.props.title ? widget.props.title : widget.type;
+}
+
 /** The key of `widget`'s viewer config in the view's state, on its result or (`ungrouped`) its rows without grouping. */
 export function stateKey(widget: { readonly dataUrl: string }, ungrouped = false): string {
   return ungrouped ? `view:${widget.dataUrl}:ungrouped` : `view:${widget.dataUrl}`;
@@ -109,7 +114,7 @@ class ExploreView {
     private readonly el: HTMLElement,
     private readonly options: ExploreViewOptions,
   ) {
-    const title = 'title' in options.widget.props && options.widget.props.title ? options.widget.props.title : options.widget.type;
+    const title = chartTitle(options.widget);
     const reset: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-reset">Reset</button>`;
     const close: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-close">Close</button>`;
     reset.onclick = () => void this.#reset();

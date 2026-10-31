@@ -5,10 +5,10 @@ import { fuzzyMatch } from '../model/fuzzy';
 
 /**
  * "Charts": every chart in the outlines of `workbench.json`'s menu as "Shop › Details › Requests" (its page, its
- * collapsible group, its title), matched fuzzily; the page shown first, then the other pages, each best match first.
- * Picking one opens its page at the chart (`/p/shop#w=3`).
+ * collapsible group, its title), matched fuzzily; the active tab's page first, then the other pages, each best match
+ * first. Picking one opens its page at the chart (`/p/shop#w=3`), with Cmd / Ctrl+Enter in a new tab.
  */
-export function chartSearch(page: Pick<PageApi, 'workbench' | 'navigate'>): SearchProvider {
+export function chartSearch(page: Pick<PageApi, 'workbench' | 'navigate' | 'activeTab'>): SearchProvider {
   const charts = page.workbench.menu.flatMap((group) =>
     group.entries.flatMap((entry) =>
       entry.outline.map((chart) => ({
@@ -24,11 +24,16 @@ export function chartSearch(page: Pick<PageApi, 'workbench' | 'navigate'>): Sear
     order: 20,
     provideItems: (query) => {
       const found: { item: SearchItem; shown: boolean; score: number }[] = [];
+      const shownPath = new URL(page.activeTab.url, location.origin).pathname;
       for (const { url, id, label } of charts) {
         const match = fuzzyMatch(query, label);
         if (!match) continue;
-        const item = { label, highlights: { label: match.ranges }, accept: () => page.navigate(`${url}#w=${encodeURIComponent(id)}`) };
-        found.push({ item, shown: url === location.pathname, score: match.score });
+        const item: SearchItem = {
+          label,
+          highlights: { label: match.ranges },
+          accept: (options) => page.navigate(`${url}#w=${encodeURIComponent(id)}`, options),
+        };
+        found.push({ item, shown: url === shownPath, score: match.score });
       }
       return found.sort((a, b) => Number(b.shown) - Number(a.shown) || b.score - a.score).map(({ item }) => item);
     },

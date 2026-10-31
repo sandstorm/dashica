@@ -86,9 +86,8 @@ const serve = (result: string, ungrouped = 'raw-1') => (url: URL) =>
   url.searchParams.get('grouping') === 'none' ? rowsResponse(ungrouped, { 'X-Dashica-Rows-Limit': '3' }) : rowsResponse(result);
 
 beforeEach(() => {
-  history.replaceState(null, '', '/p/shop?time=1h&f=host:eq:a#explore=3');
   query = new QueryHost(window);
-  query.load({ defaultTime: '24h' });
+  query.load({ search: '?time=1h&f=host:eq:a', defaultTime: '24h' });
   tables = [];
   schema = { time: 'datetime', status: 'integer', host: 'string', requests: 'integer' };
   failRestoreOf = undefined;

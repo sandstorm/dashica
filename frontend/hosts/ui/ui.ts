@@ -14,11 +14,6 @@ export interface UiApi {
   registerSidePanel(id: string, options: SidePanelOptions): Panel;
   /** Adds a panel below the content with its tab; one shows at a time. */
   registerBottomPanel(id: string, options: BottomPanelOptions): Panel;
-  /**
-   * Lays `element` over the content region until disposed, filling it, while the page beneath stays as it is (its
-   * scroll position, its charts) and takes no focus. One at a time: a new one replaces the one shown.
-   */
-  showOverContent(element: HTMLElement): Disposable;
   /** Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item. */
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
   /**
@@ -82,8 +77,11 @@ export interface SearchProvider {
 
 /** A result of search everywhere: what it shows, and what picking it does. */
 export interface SearchItem extends QuickPickItem {
-  /** Opens, runs or applies what the item stands for; called once the search is closed and the focus is back. */
-  accept(): void | Promise<unknown>;
+  /**
+   * Opens, runs or applies what the item stands for; called once the search is closed and the focus is back.
+   * `newTab`: picked with Cmd / Ctrl, a page opens in a new tab.
+   */
+  accept(options?: { readonly newTab?: boolean }): void | Promise<unknown>;
 }
 
 export interface ContextMenuOptions {
@@ -126,6 +124,12 @@ export interface FloatingBar<C extends object> {
   dispose(): void;
 }
 
+/** How an item of a quick pick was picked. */
+export interface QuickPickAccept {
+  /** With Cmd / Ctrl held: what it opens goes into a new tab. */
+  readonly newTab: boolean;
+}
+
 /** A row of a quick pick. */
 export interface QuickPickItem {
   /** What the item is called ("Shop"). */
@@ -159,7 +163,7 @@ export interface QuickPickSeparator {
 
 /**
  * A quick pick its owner drives: it shows `items` as they are (the owner filters and marks them as `value` changes)
- * and tells what the viewer does. Picking an item (Enter, a click) fires `onDidAccept` with it in `selectedItems`; the
+ * and tells what the viewer does. Picking an item (Enter, a click, either with Cmd / Ctrl) fires `onDidAccept` with it in `selectedItems`; the
  * box stays until `hide`. Escape, a press outside or another box hide it.
  */
 export interface QuickPick<T extends QuickPickItem> {
@@ -178,7 +182,7 @@ export interface QuickPick<T extends QuickPickItem> {
   /** The item picked last. */
   readonly selectedItems: readonly T[];
   readonly onDidChangeValue: Event<string>;
-  readonly onDidAccept: Event<void>;
+  readonly onDidAccept: Event<QuickPickAccept>;
   /** The box is gone, the focus back where it was. */
   readonly onDidHide: Event<void>;
   /** Shows the box (hiding an open one) and focuses its field. */

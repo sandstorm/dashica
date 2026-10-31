@@ -6,19 +6,20 @@ import type { MenuAnchor } from '../ui/ui';
 
 /**
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
- * renderer, and the page renders its widgets through them. A renderer gets the widget's props and a `WidgetContext`:
- * the page's query state (`state`), its data (`query()`), its children, its menu and the page's one selection
- * (`select`, or `choose` among candidates). Charts put themselves into one `ChartFrame` (title, spinner, error, menu
+ * renderer, and a page renders its widgets through them with its tab's query state. A renderer gets the widget's props
+ * and a `WidgetContext`: that query state (`state`), its data (`query()`), its children, its menu and the workbench's
+ * one selection (`select`, or `choose` among candidates). Charts put themselves into one `ChartFrame` (title, spinner, error, menu
  * button).
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable;
   /**
-   * Renders `widget` (one of a page's widgets) into `el` until disposed; a type without renderer shows its error there.
-   * A widget with data marks `el` with its URL (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
+   * Renders `widget` (one of a page's widgets) into `el` until disposed, with `state` (its tab's query state,
+   * `PageContext.query`); a type without renderer shows its error there. A widget with data marks `el` with its URL
+   * (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
    */
-  render(el: HTMLElement, widget: WidgetNode): Disposable;
+  render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable;
   /** What the viewer selected on a chart, one at a time; `undefined` while nothing is. */
   readonly selection: Selection | undefined;
   /**
@@ -56,7 +57,7 @@ export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: Wid
 
 /** What a widget's renderer gets to work with. */
 export interface WidgetContext {
-  /** The page's time range, filter and params; `state.onDidRequestRefresh`: query again. */
+  /** The time range, filter and params of the widget's tab; `state.onDidRequestRefresh`: query again. */
   readonly state: QueryApi;
   /** The widget's data from its handler (`<dataUrl>/query`) with the page's query state; rejects with the server's message. */
   query(signal?: AbortSignal): Promise<QueryResult>;

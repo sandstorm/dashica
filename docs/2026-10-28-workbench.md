@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser). Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -63,8 +63,8 @@ POST /p/shop/action/<id>           a Go action (§3.9)                          
 
 - `page.json` is built **in the same `CollectHandlers` pass** that mounts the widget handlers, so it carries exactly
   the mounted URLs. A compiled dashboard never changes: its JSON is built once at registration.
-- **Navigation without reloads:** the shell boots once; a link fetches the target's `page.json` and swaps the content
-  (`history.pushState`). Panel state survives navigation; the time range does not (§3.7).
+- **Navigation without reloads:** the shell boots once; a link fetches the target's `page.json` and swaps the active
+  tab's content (`history.pushState`, §3.4.1). Panel state survives navigation; the time range does not (§3.7).
 - **Data per widget:** each chart fetches from its own handler URL, in parallel, as today. Explore (later) keeps an
   inline POST. Both sit behind `ctx.query()` (§3.6).
 - **The outline: what a page holds by title** (decided 2026-10-30). Registering a page produces its description as a
@@ -109,7 +109,8 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 
 ```
 ┌─ Dashica › Shop ────── [⌘K search] ── [Last 1h ▾][⟳ 30s][log] ┐   title bar
-│▐menu▌ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐inspector▌│   filter bar (above the content)
+│▐menu▌ [Shop ×] [Explore: 500 per instance ×]       │▐inspector▌│   tab bar
+│▐    ▌ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐         ▌│   filter bar (above the content)
 │▐    ▌ content (scrolls)                          │▐         ▌│   left · content · right
 │▐    ▌ bottom panel: Debug │ Details              │▐         ▌│   bottom panel (below the content)
 └─ status: 12 queries · 2 loading · 1 failed · 340 ms ──────────┘   status bar
@@ -118,6 +119,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Region | Holds |
 |---|---|
 | Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
+| Tab bar | above the filter bar: a tab per open page, the active one selected, × to close (§3.4.1) |
 | Filter bar | above the content, between the side panels, only while it has something to show: active filters as removable chips, the page's filter buttons as toggles, the SQL filter (opened from the funnel button in the title bar) |
 | Left side panel | "Dashboards" (menu groups, favorites, search); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
@@ -126,8 +128,159 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
   resizable, state remembered, left panel overlays on narrow screens) plus a bottom panel.
-- **One page at a time**, no tabs inside the app; browser tabs do that.
-- A **page** is what the content area shows: `page.kind` = `dashboard` | `explore` | `docs`.
+- **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar above the filter bar; each tab shows one
+  page with its own URL and query state, the address bar the active tab's (§3.4.1).
+- A **page** is what a tab shows: `page.kind` = `dashboard` | `explore` | `docs`.
+
+#### 3.4.1 Tabs (decided 2026-10-31, reversing one page at a time)
+
+**Decided by the maintainer:** a tab bar above the content, ported from Zwiebelfisch's editor tabs; any page can be
+a tab (a dashboard, a chart's Explore view, docs); each tab keeps its own URL (path, `?time`, `?range`, `?f`, `?sql`,
+`?wp`, hash) and query state, and the address bar shows the active tab's, so links and reload work as before; a
+background tab keeps its DOM (scroll position, Perspective's layout), its charts do not query and auto refresh pauses,
+and it catches up when shown; the Explore view opens as a tab, and `showOverContent` goes. Everything marked
+*(proposed)* below was decided by the agent and waits for review.
+
+```
+┌─ Dashica › Shop ────────── [⌘K search] ── [Last 1h ▾][⟳ 30s] ┐   title bar: the active tab's time and refresh
+│▐menu▌ [Shop ×] [Explore: 500 per instance ×] [Checkout ×]     │   tab bar
+│▐    ▌ filters: [Status = 500 ×]                               │   filter bar: the active tab's filters
+│▐    ▌ content: the active tab; the others hidden, rendered    │   content
+```
+
+**A tab is a value** `{ id, url, title }`: `url` is path, query and hash (`/p/shop?time=1h&f=host:eq:a#w=3`), so its
+query state *is* its URL's query and nothing else is kept per tab; `title` is what the tab bar shows. For each open
+tab the `page` host keeps what that value stands for: a `QueryHost` with the state of the tab's URL, its `page.json`
+and its rendered page, in its own element of the content region (`hidden` while in the background). The open tabs
+are a list of these values plus the active id; opening, closing, the limit and the tab shown after a close are pure
+functions on it (`frontend/hosts/page/tabs.ts`), tested without DOM *(proposed)*.
+
+| | One per window | One per tab |
+|---|---|---|
+| commands, `ui` (regions, menus, quick input, floating bars), widget and page renderers, extensions | ✓ | |
+| query state (`QueryHost`) | | ✓, from the tab's URL |
+| `page.json`, the rendered page | | ✓ |
+| the selection (`widgets.selection`) | ✓; switching tabs clears it *(proposed)* | |
+| side and bottom panels (Dashboards, Debug) | ✓; they keep what they were asked to show *(proposed)* | |
+
+- **`QueryHost` per tab, without `location`.** It takes its state from a given query string
+  (`load({ search, defaultTime })`) and reports each change instead of writing the address bar:
+  `onDidChangeSearch: Event<string>` (debounced as today; the hash is the tab's, not the query host's). Reading and
+  writing the query string become pure functions, `parseSearch(search, defaultTime)` and
+  `formatSearch(state, defaultTime, search)` *(proposed)*. The `page` host puts the new search into the tab's `url`,
+  and for the active tab into the address bar.
+- **Extensions see the active tab.** `ExtensionContext.query` is `activeQuery(page)`
+  (`frontend/hosts/query/active-query.ts`): a `QueryApi` that forwards every read and call to the active tab's
+  `QueryHost` and fires each model's `onDidChange` when the active tab's fires and once when another tab becomes
+  active; `onDidRequestRefresh` only when the active tab's fires (a tab shown catches up itself, below). So the time
+  picker and refresh button in the title bar, the filter bar, the table's filter commands and "Filter by …" keep their
+  code *(proposed; the alternative, each of them re-subscribing to `page.activeTab.query` on a tab change, repeats
+  that in four extensions)*.
+- **Widgets see their own tab.** A page renderer gets its tab's `PageContext` and renders each widget with
+  `widgets.render(el, widget, context.query)`, so `WidgetContext.state` is that tab's `QueryHost`: a chart in a
+  background tab never sees the active tab's changes.
+- **`page.current`, `onDidChangePage`** are the active tab's page: it fires with `page.current` when the active tab
+  shows another page, when its page could not be shown (`undefined`), and on every switch to another tab, also to one
+  without a page (`undefined` while it loads or after it failed), so the filter bar and the dashboards panel never keep
+  the tab before's (chosen over the extensions also listening to `onDidChangeTabs`: one event, one listener each). `page.tabs`, `page.activeTab`, `onDidChangeTabs` are
+  for the tab bar and whoever names the page shown (the dashboards panel's highlight, search everywhere's "current page
+  first", "Copy link to chart" read `page.activeTab.url` instead of `location`).
+
+```ts
+// page — the open tabs and the page each shows
+interface PageApi {
+  readonly workbench: WorkbenchJson;
+  readonly tabs: readonly Tab[];                 // in the tab bar's order
+  readonly activeTab: Tab;
+  readonly onDidChangeTabs: Event<void>;         // opened, closed, activated, retitled, its URL changed
+  readonly current: PageJson | undefined;        // the active tab's page; undefined while it loads or failed
+  readonly onDidChangePage: Event<PageJson | undefined>;   // with `current`, on every switch too
+  /** In the active tab as today; `newTab`: in a new tab after the active one, shown; one with the same URL open is shown instead. */
+  navigate(url: string, options?: { newTab?: boolean }): Promise<void>;
+  showTab(id: string): void;                     // the tab bar, the tab commands
+  closeTab(id: string): void;
+  registerPageRenderer(kind: string, renderer: PageRenderer): Disposable;
+}
+interface Tab { readonly id: string; readonly url: string; readonly title: string }
+
+type PageRenderer = (el: HTMLElement, page: PageJson, context: PageContext) => { dispose(): unknown; readonly title?: string };
+interface PageContext {
+  readonly query: QueryApi;                      // the tab's
+  readonly hash: string;                         // the tab's hash (`#w=3`, `#explore=3`)
+  readonly onDidChangeHash: Event<void>;         // only this tab's hash changed
+  close(): void;                                 // closes the tab (the Explore view's "Close")
+}
+```
+
+`dashboard-page` reveals `#w=` from `context.hash` and `onDidChangeHash` instead of the window's `hashchange`, so a
+background tab never scrolls.
+
+**Address bar and history.**
+
+- The address bar shows the active tab's URL, `document.title` its title.
+- Every history entry names its tab: `history.state = { tab: id }`. Inside a tab as today: `navigate`, a change of
+  the query state and a jump to a hash push an entry. **Switching tabs replaces the entry** (`replaceState` with the
+  shown tab's URL): a switch is no step of Back, and Back goes to the entry before the one replaced *(proposed)*. **Opening a tab pushes one**, so Back after "Open in
+  Explore view" shows the dashboard's tab again, as Back closed the overlay before; the Explore tab stays open.
+- `popstate`: the entry's tab is shown (opened again with that id if it was closed *(proposed)*) and takes the entry's
+  URL as today: only its hash changed → `onDidChangeHash`; its query → `query.load`; else its page loads. An entry
+  without a tab (a hash link the browser followed, a URL typed into the address bar, the first load) belongs to the
+  active tab and gets its id by `replaceState`.
+- **Reload** restores the open tabs *(proposed: the least that survives a reload)*: the list `{ id, url, title }` and
+  the active id are in sessionStorage (`dashica:workbench:tabs`, beside the layout's state). On start they come back in
+  their order; the address bar's URL goes into the tab its entry names, else into the stored active tab, which shows.
+  The others stay unloaded until first shown: each gets its `QueryHost` and element, but no `page.json` is fetched and
+  nothing queries until the tab is first shown; Back or Forward to an entry of such a tab loads that entry's URL once. Scroll positions
+  are lost; Perspective's layout comes back from its `globalState` as today. A duplicated browser tab starts with a
+  copy of the tabs (the browser copies sessionStorage).
+
+**Opening and closing.**
+
+- **Opens a tab:** "Open in Explore view" (always a new tab); "Open in new tab" in a dashboard entry's menu
+  (`dashboards/entry`); search everywhere with Cmd / Ctrl+Enter (`SearchItem.accept({ newTab })`) *(proposed)*. A plain
+  click on a link navigates the active tab as today; Cmd / Ctrl / Shift / middle click stays the browser's (a new
+  browser tab), since every tab's URL is a real link *(proposed)*.
+- **Closes a tab:** its ×, a middle click on it, the command `workbench.tabs.close`. The tab shown before it becomes
+  active. The last tab has no ×: there is always one *(proposed)*. Closing disposes its page and its `QueryHost`;
+  `ChartFrame` aborts its running queries on dispose.
+- **Limit:** 10 tabs; opening an eleventh closes the one shown least recently, since no tab holds unsaved work
+  *(proposed)*.
+- **Title:** the renderer's `title` when it returns one (`Explore: Absolute HTTP 500 Errors per Instance`), else
+  `page.title`, else the URL's path while it loads or failed.
+- The tab bar shows with a single tab too, so nothing moves when the second opens *(proposed)*. Commands
+  `workbench.tabs.close`, `workbench.tabs.next`, `workbench.tabs.previous` are in the palette without keys: Cmd / Ctrl+W
+  and Ctrl+Tab are the browser's *(proposed)*.
+
+**A background tab** is `hidden`; its DOM stays. Its charts query nothing: its `QueryHost` fires
+`onDidRequestRefresh` on a change of its own state, which only the active tab's controls make, and on auto refresh.
+`QueryHost.setShown(false)` makes an auto refresh tick count as skipped, exactly as while `document.hidden` (§3.7,
+6a); `setShown(true)` refreshes once when one was skipped, the next tick a whole interval later, the same path as
+`visibilitychange`. A chart not yet in view queries once it is, as today (`ChartFrame`'s IntersectionObserver; a
+hidden element never intersects). A relative range without auto refresh is not refreshed when the tab is shown, as
+in a hidden browser tab *(proposed)*.
+
+**What replaces `showOverContent`:** `page.navigate(url, { newTab: true })` and a page kind named in the hash.
+`UiApi.showOverContent` and the window layout's over-content element (added on `spike/perspective`) go.
+
+**The Explore view is a tab without a server route.** A tab whose hash has a key that is a registered page kind
+(`#explore=3`) is rendered by that kind's renderer, with the `page.json` of the URL's path; otherwise by `page.kind`
+*(proposed)*. A change of only the hash that names another kind renders the tab anew. The Explore tab's URL is the
+source tab's URL with `#explore=<id>` instead of its hash (`/p/shop?time=1h&f=host:eq:a#explore=3`): the same shell
+and `page.json`, so a reload and a shared link reopen it; it starts with a copy of the source tab's query state, and
+its filters change only its own rows. The tab API names no kind: without the `explore-view` extension, `#explore=3`
+names nothing and the dashboard renders.
+
+| File (frontend) | Change |
+|---|---|
+| `hosts/page/tabs.ts` | new: the `Tab` value and the pure functions on the list (open, close, limit, the tab shown after a close, restore) |
+| `hosts/page/page-impl.ts` | the open tabs: per tab `QueryHost`, element, `page.json`, rendered page; `navigate(url, { newTab })`, `closeTab`; history `{ tab }`, `popstate`, hash changes per tab; the renderer by the hash's kind; sessionStorage |
+| `hosts/query/query-impl.ts` | state from a given search, `onDidChangeSearch`, `setShown`; `parseSearch` / `formatSearch` |
+| `hosts/query/active-query.ts` | new: `activeQuery`, the active tab's `QueryApi` for extensions |
+| `hosts/ui/layout/tab-bar.ts` | new: `TabBar`, ported from Zwiebelfisch's `EditorTabs` (`role=tablist`, a button per tab with `aria-selected` and its id in `data-`, one click listener on the list, `update(tabs, active)`), plus a title, × and middle click (`onDidChoose`, `onDidClose`) |
+| `hosts/ui/layout/window-layout.ts` | the tab bar region above the filter bar; the over-content element gone |
+| `hosts/widgets` | `render(el, widget, state)` |
+| `workbench/workbench.ts` | no window-wide `QueryHost`; the `page` host makes one per tab and draws into the `TabBar` |
+| `extensions/dashboard-page`, `dashboards`, `search-everywhere`, `chart-link` | `context.hash`; "Open in new tab"; Cmd / Ctrl+Enter; `page.activeTab.url` instead of `location` |
 
 ### 3.5 Extensions and UI code
 
@@ -146,8 +299,8 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
 | `ui` | side / bottom panels, title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
 | `widgets` | `registerWidget` (§3.6) |
-| `page` | the shown page (`page.json`), `onDidChangePage` |
-| `query` | the state every query depends on (§3.7) |
+| `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
+| `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
 
 - Client extensions live only in `dashica-src`; the instances customize through Go.
@@ -597,14 +750,15 @@ interface Panel extends Disposable {
   show(): void; hide(): void; readonly onDidChangeVisibility: Event<void>;
 }
 
-// page — what the content area shows
+// page — the open tabs and what each shows (§3.4.1)
 interface PageApi {
   readonly workbench: WorkbenchJson;        // menu groups and outlines, from /workbench.json (generated type, §3.2)
-  readonly current: PageJson | undefined;   // from <url>/page.json (generated type); undefined while it failed
-  readonly onDidChangePage: Event<PageJson>;
-  navigate(url: string): Promise<void>;     // fetch page.json, pushState, swap content
-  registerPageRenderer(kind: string, render: (el: HTMLElement, page: PageJson) => Disposable): Disposable;
-}                                           // `dashboard` by the extension dashboardPage, later `explore`
+  readonly tabs: readonly Tab[];            // {id, url, title}; activeTab, onDidChangeTabs, closeTab(id)
+  readonly current: PageJson | undefined;   // the active tab's, from <url>/page.json (generated type); undefined while it loads or failed
+  readonly onDidChangePage: Event<PageJson | undefined>;   // with `current`: another page, a failed one, every switch of tabs
+  navigate(url: string, o?: { newTab?: boolean }): Promise<void>;   // fetch page.json, pushState, swap the tab's content
+  registerPageRenderer(kind: string, render: (el: HTMLElement, page: PageJson, context: PageContext) => Disposable): Disposable;
+}                                           // `dashboard` by the extension dashboardPage; a kind in the hash (`#explore=3`)
 
 // query — the state every query depends on (§3.7)
 interface QueryApi {
@@ -674,7 +828,7 @@ page has rendered, the dashboard page opens the collapsible groups around the ch
 scrolls the chart into view and highlights it briefly; on the current page without a reload. A link breaks when the
 page is reordered and the chart has no `.Id(…)`: accepted.
 
-✅ As implemented (6a): the outline (§3.2). The charts are a group of `search-everywhere` ("Charts", after
+✅ As implemented (6a; the hash handling superseded by 7a, below): the outline (§3.2). The charts are a group of `search-everywhere` ("Charts", after
 "Dashboards"), matched there so the page shown comes first. A widget with data carries `data-data-url` on its element,
 where the dashboard page finds it. `navigate` to a hash on the page shown (a link without a query keeps the page's)
 pushes the hash and fires `hashchange`, without loading `page.json`. A change of only the hash by the browser (a link
@@ -683,6 +837,12 @@ pushes the hash and fires `hashchange`, without loading `page.json`. A change of
 another page still running is aborted by either. The charts come in the order they were mounted (a grid's by
 area name). "Copy link to chart" copies the page and the hash without the query state; the
 next change of the query state drops the hash from the URL.
+
+✅ Since 7a (tabs, §3.4.1): the hash is the tab's. `navigate` to a hash on the page shown pushes the tab's URL with
+it, and a change of only the hash by the browser (back and forward, a link the browser followed) goes into the tab's
+URL; neither fires `hashchange` nor loads `page.json`. The renderer reads it from `context.hash` and hears of it by
+`PageContext.onDidChangeHash` (only its own tab's), and the `query` host knows no hash: a change of the query state
+keeps the hash in the tab's URL (`/p/shop?time=1h#w=3`).
 
 ### 3.12 Sketch: Go changes
 
@@ -777,6 +937,7 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; the query handler asks the chart for its filtered query and Diagnostics, binds every filter's value (`__f<i>`) and writes `X-Dashica-Diagnostics`; a skipped chart runs no query |
 | `lib/clickhouse` | `DESCRIBE TABLE` columns, cached per server, database and table until restart |
+| (tabs, §3.4.1) | no Go change: an Explore tab is its source page's URL with `#explore=<id>`, served by the same shell and `page.json` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
 | deleted | `lib/components/**` (templ), Alpine, dockview, `lib/explore` + `frontend/explore` (rebuilt later, §6) |
 
@@ -852,7 +1013,7 @@ Open in this design:
 | Drop non-applicable filters silently / fail the chart | silent is misleading; failing hides useful data. The chart's Diagnostics + badge instead (§3.8) |
 | A page-wide registry of filter fields (collected at mount, id → expression, a conflict check across charts) | state gathered in a shared object, read per request; template dashboards over several tables give the same alias two expressions. The chart interprets the filters at execution and returns what it did (§3.8) |
 | Time range global across pages | Grafana-style per-page default is what dashboards expect; links can still carry `?time=` |
-| Tabs inside the app | browser tabs do that |
+| One page at a time, tabs left to the browser | reversed 2026-10-31: tabs inside the app (§3.4.1), each with its own URL and query state, so the Explore view of a chart and its dashboard stay open side by side |
 
 ## 5. Migration and risks
 
@@ -913,6 +1074,13 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 6.8 ✅ | the other charts select categories: time bar / time line series (fill, stroke, z), ordinal heatmap rows, `fx` / `fy` facets; table cells select through the same bar (every column, by its name; §7, 8), replacing the cell menu's entries of 6.6; a category field selects by its alias, never a measure or a time bucket; reworked 2026-10-31: the mark `selectOnClick` and a menu of candidates (`ctx.choose`, `ui.showChoices`), no legend | click-to-filter everywhere |
 | 6.9 ✅ | props carry aliases (§3.13, 3): client `SqlField` slots go out as `{kind, alias, xBucketSizeMs?}`, never the definition; generator, TS types and fixtures regenerated | dashboards; no expression in `page.json` |
 | 6a ✅ | small, any time after 5b.9: queries stop with their client (§3.7), auto refresh pauses in a hidden tab, chart titles in search everywhere and chart links (§3.11) | |
+| 7a ✅ | **tab bar** (§3.4.1, decided 2026-10-31); in sub-steps, each its own commit; nothing in it imports the Explore view. ✅ 2026-10-31, deviations: the sub-steps were done at once, as one change (split by path from the spike only); vitest and `quality:typecheck` pass, also without `extensions/explore-view` (and `index.ts`, which imports it); the Playwright specs are written but not run | several pages open side by side |
+| 7a.1 ✅ | `query` host per tab: state from a given search (`load({ search, defaultTime })`), `onDidChangeSearch` instead of writing `location`, `setShown`; `parseSearch` / `formatSearch` pure; `activeQuery` for extensions; the `page` host still holds one tab and writes its search into the address bar. ✅ Deviations: `QueryHost.holdsState` is gone (the `page` host compares the tab's URL); `formatSearch` gives `?…` or ''; `activeQuery(source)` takes `{ activeQuery, onDidChangeTabs }`, the `PageHost`'s getter `activeQuery` (not part of `PageApi`) | dashboards (refactor only) |
+| 7a.2 ✅ | `page` host with tabs: `tabs.ts` (the `Tab` value, open / close / limit 10 / the tab shown after a close, pure); per tab a `QueryHost`, an element, `page.json` and the rendered page; `navigate(url, { newTab })`, `closeTab`; history entries `{ tab }`, `popstate`, hash changes per tab; `PageContext` (`query`, `hash`, `onDidChangeHash`, `close`) and the renderer's `title`; a page kind named in the hash; `widgets.render(el, widget, state)`; `dashboard-page` on `context.hash`. ✅ Deviations: `PageApi.showTab(id)` added (the tab bar and the tab commands show a tab); a `QueryHost` exists for every open tab, also one restored unloaded, but loads (and queries) only when its tab is first shown; a tab renders anew when its hash names another kind *or another value of it* (`#explore=3` → `#explore=4`); each tab's element scrolls itself and its scroll position is put back on a switch (a `hidden` element loses it); a new tab of a URL without `page.json` shows the error in the tab (only `navigate` in the active tab hands it to the browser, and only while that tab is still the active one when the 404 comes); `onDidChangePage` carries `PageJson | undefined` and fires on every switch of tabs; a chart measuring a width of 0 (its tab in the background) keeps what it drew; `WidgetsHost` takes no query state | dashboards; a second tab only through `navigate(…, { newTab })`, not visible yet |
+| 7a.3 ✅ | `TabBar` ported from Zwiebelfisch's `EditorTabs`, its region above the filter bar; ×, middle click, `workbench.tabs.close` / `next` / `previous`; a background tab hidden and paused (`setShown`); the selection cleared on a switch. ✅ (`hosts/ui/layout/tab-bar.ts`, wired in `workbench.ts`) Deviations: a tab is a `role=tab` button with its × beside it in one item (a × inside the tab button would nest buttons); the tab commands are declared after the extensions, so search everywhere lists them after the extensions' commands | tabs |
+| 7a.4 ✅ | opening: "Open in new tab" in `dashboards/entry`, search everywhere's Cmd / Ctrl+Enter (`SearchItem.accept({ newTab })`); `page.activeTab.url` instead of `location` in `dashboards`, `search-everywhere`, `chart-link`. ✅ Deviations: Cmd / Ctrl+click on an item of search everywhere opens a new tab too; `QuickPick.onDidAccept` gives `{ newTab }` (`QuickPickAccept`) | tabs from the menu and the search |
+| 7a.5 ✅ | reload: the tabs in sessionStorage, the background ones restored unloaded; Playwright `e2e/tabs.spec.ts` (open, switch, the address bar, Back, reload, paused refresh). ✅ (key `dashica:workbench:tabs`, the layout's memento) `e2e/tabs.spec.ts` not run | reload keeps the tabs |
+| (spike) | `spike/perspective`, rebased onto 7a, in its own commit (`frontend/extensions/explore-view/**`, `e2e/explore-view.spec.ts`, the Perspective doc): the renderer of kind `explore`; "Open in Explore view" is `navigate(<tab's URL>#explore=<id>, { newTab: true })`; "Close" is `context.close()`; its `showOverContent` in `hosts/ui` and its hash-keeping in `query-impl.ts` are dropped (the tab's URL keeps the hash) | the Explore view as a tab |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions, status bar query states, row details | |
 
 | Risk | Mitigation |
@@ -962,7 +1130,7 @@ its own.
 - **Perspective instead of the Tabulator table** ([perspective-dev.github.io](https://perspective-dev.github.io/)):
   it reads Arrow, which the query results already are, and pivots, groups and filters in the browser. To check: what
   the table's own features (search highlight, sticky tooltips, record details, add-filter menus) cost to rebuild on it.
-- Tabs inside the app; client extensions from the instances (outer repo); other database backends; query
+- Client extensions from the instances (outer repo); other database backends; query
   understanding (AST).
 
 ## 7. Open questions
@@ -984,3 +1152,5 @@ its own.
    columns in Go (`.Categories("host", "status")`), which it then interprets as its own output columns?
 9. ✅ **A filter on a measure's alias** (6.9): a base-table column that a select of the chart's query aliases with
    another expression (`sum(bytes) AS bytes`) is ignored (§3.8).
+10. **The kind `explore`** (tabs, §3.4.1): the Explore view's tab is the kind `explore`, named in the hash. Is the
+    Explore rebuild of §6 (`page.kind === 'explore'`) that same view grown (widget tree, inspector), or a kind of its own?

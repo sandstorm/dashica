@@ -99,7 +99,8 @@ export class ChartFrame {
 
   readonly #onResize = (entries: ResizeObserverEntry[]) => {
     const width = Math.round(entries[entries.length - 1].contentRect.width);
-    if (width === this.#width) return;
+    // a chart in a tab in the background measures 0; it keeps what it drew until the tab is shown
+    if (width === 0 || width === this.#width) return;
     this.#width = width;
     void this.#draw();
   };

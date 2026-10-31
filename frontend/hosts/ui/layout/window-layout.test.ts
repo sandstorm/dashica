@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('WindowLayout', () => {
-  it('puts the title bar, the left side, the filter bar, content and bottom panel between the sides, the right side and the status bar into the host', () => {
+  it('puts the title bar, the left side, the tab bar, filter bar, content and bottom panel between the sides, the right side and the status bar into the host', () => {
     const { host, layout } = setup();
     expect([...host.children].map((c) => c.className)).toEqual([
       'd-workbench__title-bar',
@@ -64,27 +64,8 @@ describe('WindowLayout', () => {
       'd-workbench__side d-workbench__side--right',
       'd-workbench__status-bar',
     ]);
-    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__filter-bar', 'd-workbench__main', 'd-workbench__bottom']);
+    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__tab-bar', 'd-workbench__filter-bar', 'd-workbench__content', 'd-workbench__bottom']);
     expect(layout.content.className).toBe('d-workbench__content');
-  });
-
-  it('lays an element over the content until disposed, the content kept beneath and inert, one at a time', () => {
-    const { host, layout } = setup();
-    const page = layout.content.appendChild(document.createElement('div'));
-    const over = host.querySelector<HTMLElement>('.d-workbench__over-content')!;
-    const first = layout.showOverContent(document.createElement('section'));
-    const second = document.createElement('article');
-    const shown = layout.showOverContent(second);
-    expect([...over.children]).toEqual([second]);
-    expect(over.hidden).toBe(false);
-    expect(layout.content.inert).toBe(true);
-    first.dispose();
-    expect(over.hidden).toBe(false);
-    shown.dispose();
-    expect(over.hidden).toBe(true);
-    expect(over.children).toHaveLength(0);
-    expect(layout.content.inert).toBe(false);
-    expect(page.isConnected).toBe(true);
   });
 
   it('places rail buttons by order, equal orders in registration order', () => {

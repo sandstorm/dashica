@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for chartSearch: the label of a chart, the order of the results, where a result goes.
+// Tests for chartSearch: the label of a chart, the order of the results, where a result goes (also in a new tab).
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { WorkbenchJson } from '../../../generated/zz_generated.dashica';
 import type { SearchItem, SearchProvider } from '../../../hosts/ui/ui';
@@ -26,11 +26,19 @@ const workbench: WorkbenchJson = {
 
 let navigated: string[];
 let provider: SearchProvider;
+/** The active tab's URL. */
+let shown: string;
 
 beforeEach(() => {
-  history.replaceState(null, '', '/p/checkout?time=1h');
   navigated = [];
-  provider = chartSearch({ workbench, navigate: async (url) => void navigated.push(url) });
+  shown = '/p/checkout?time=1h';
+  provider = chartSearch({
+    workbench,
+    get activeTab() {
+      return { id: '1', url: shown, title: 'Checkout' };
+    },
+    navigate: async (url, options) => void navigated.push(options?.newTab ? `${url} (new tab)` : url),
+  });
 });
 
 /** What the provider gives for `query`: a list, as it answers at once. */
@@ -42,9 +50,9 @@ describe('chartSearch', () => {
     expect(labels('')).toEqual(['Checkout › Requests', 'Checkout › Details › Slow requests', 'Orders › Requests']);
   });
 
-  it('puts the charts of the page shown first, then the best matches', () => {
+  it('puts the charts of the active tab’s page first, then the best matches', () => {
     expect(labels('requests')).toEqual(['Checkout › Requests', 'Checkout › Details › Slow requests', 'Orders › Requests']);
-    history.replaceState(null, '', '/p/orders');
+    shown = '/p/orders';
     expect(labels('requests')).toEqual(['Orders › Requests', 'Checkout › Requests', 'Checkout › Details › Slow requests']);
   });
 
@@ -57,6 +65,7 @@ describe('chartSearch', () => {
   it('opens the page of the picked chart at the chart', async () => {
     const [item] = items('slow');
     await item.accept();
-    expect(navigated).toEqual(['/p/checkout#w=slow']);
+    await item.accept({ newTab: true });
+    expect(navigated).toEqual(['/p/checkout#w=slow', '/p/checkout#w=slow (new tab)']);
   });
 });

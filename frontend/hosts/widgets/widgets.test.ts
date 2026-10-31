@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
+import { QueryHost } from '../query/query';
 import { ChartFrame, type Selection, type WidgetContext, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
@@ -55,6 +56,20 @@ describe('WidgetsHost', () => {
     });
     const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { title: 'Shop' } } } };
     expect(testbed.render(grid).el.textContent).toBe('Shop');
+  });
+
+  it('renders a widget and its children with the query state it is given (its tab’s)', () => {
+    const states: unknown[] = [];
+    testbed.widgets.registerWidget('grid', (el, widget, ctx) => {
+      states.push(ctx.state);
+      return Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child)));
+    });
+    testbed.widgets.registerWidget('markdown', (_el, _widget, ctx) => (states.push(ctx.state), new Disposable(() => {})));
+    const tab = new QueryHost(window);
+    const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: {} } } };
+    testbed.widgets.render(document.body.appendChild(document.createElement('div')), grid, tab);
+    expect(states).toEqual([tab, tab]);
+    tab.dispose();
   });
 
   describe('the widget context', () => {
@@ -266,6 +281,19 @@ describe('ChartFrame', () => {
     await settle();
     expect(testbed.requests).toHaveLength(2);
     expect(drawn.at(-1)).toEqual({ rows: 1, width: 320 });
+  });
+
+  it('keeps what it drew while it measures 0 (its tab in the background), and draws again only for another width', async () => {
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    testbed.render(requests);
+    testbed.resize(640);
+    testbed.scrollIntoView();
+    await settle();
+    expect(drawn).toEqual([{ rows: 1, width: 640 }]);
+    testbed.resize(0);
+    testbed.resize(640);
+    await settle();
+    expect(drawn).toEqual([{ rows: 1, width: 640 }]);
   });
 
   it('shows the error of a failed query in the chart', async () => {

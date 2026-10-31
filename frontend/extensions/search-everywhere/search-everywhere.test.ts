@@ -56,7 +56,7 @@ describe('searchEverywhere', () => {
     const { ran, field, options, press } = setup();
     press({ key: 'a', code: 'KeyA', ctrlKey: true, shiftKey: true });
     expect(field()!.value).toBe('>');
-    expect(options()).toEqual(['Time range: Refresh Ctrl+R']);
+    expect(options()).toEqual(['Time range: Refresh Ctrl+R', 'Tabs: Close tab', 'Tabs: Next tab', 'Tabs: Previous tab']);
     field()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(ran).toEqual(['refresh']);
   });

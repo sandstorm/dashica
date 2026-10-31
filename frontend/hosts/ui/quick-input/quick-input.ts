@@ -1,7 +1,7 @@
 // See UiApi in ../ui.ts.
 import { html } from 'htl';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
-import { type QuickPick, type QuickPickHighlights, type QuickPickItem, QuickPickItemKind, type QuickPickSeparator } from '../ui';
+import { type QuickPick, type QuickPickAccept, type QuickPickHighlights, type QuickPickItem, QuickPickItemKind, type QuickPickSeparator } from '../ui';
 
 /**
  * What `createQuickPick` shows: one box at a time over the workbench `host` (a new one hides the open one), at the top
@@ -80,7 +80,8 @@ class OnePicker<T extends QuickPickItem> {
 
   constructor(
     private readonly parts: { listbox: HTMLElement; input: HTMLInputElement },
-    private readonly pick: (item: T) => void,
+    /** `modified`: picked with Cmd / Ctrl (Enter, a click). */
+    private readonly pick: (item: T, modified: boolean) => void,
   ) {
     const { listbox, input } = parts;
     listbox.id = `dashica-quick-pick-${Math.random().toString(36).slice(2, 10)}`;
@@ -114,7 +115,7 @@ class OnePicker<T extends QuickPickItem> {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const active = this.#options[this.#active];
-      if (active) this.pick(active.item);
+      if (active) this.pick(active.item, event.metaKey || event.ctrlKey);
     }
   }
 
@@ -133,7 +134,7 @@ class OnePicker<T extends QuickPickItem> {
     option.id = `${this.parts.listbox.id}-${++this.#rows}`;
     // keeps the focus in the field
     option.addEventListener('mousedown', (event) => event.preventDefault());
-    option.addEventListener('click', () => this.pick(item));
+    option.addEventListener('click', (event) => this.pick(item, event.metaKey || event.ctrlKey));
     this.#options.push({ item, element: option });
     return option;
   }
@@ -162,7 +163,7 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #prompt: HTMLElement;
   readonly #picker: OnePicker<T>;
   readonly #changed = new EventEmitter<string>();
-  readonly #accepted = new EventEmitter<void>();
+  readonly #accepted = new EventEmitter<QuickPickAccept>();
   readonly #hidden = new EventEmitter<void>();
   #title: string | undefined;
   #items: readonly (T | QuickPickSeparator)[] = [];
@@ -186,9 +187,9 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
     this.#empty = html`<div class="d-workbench__quick-pick-empty">No results</div>`;
     this.#prompt = html`<div class="d-workbench__quick-pick-hint"></div>`;
     this.#box = html`<div class="d-workbench__quick-pick" role="dialog">${this.#field}${this.#progress}${listbox}${this.#empty}${this.#prompt}</div>`;
-    this.#picker = new OnePicker<T>({ listbox, input: this.#field }, (item) => {
+    this.#picker = new OnePicker<T>({ listbox, input: this.#field }, (item, modified) => {
       this.#selected = [item];
-      this.#accepted.fire();
+      this.#accepted.fire({ newTab: modified });
     });
     this.#prompt.id = `${listbox.id}-hint`;
     this.#update();

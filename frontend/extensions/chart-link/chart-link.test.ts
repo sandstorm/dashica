@@ -11,11 +11,11 @@ let copy: (widget: WidgetMenuContext) => Promise<void>;
 let copied: string[];
 
 beforeEach(() => {
-  history.replaceState(null, '', '/p/shop?time=1h');
   copied = [];
   vi.stubGlobal('navigator', { clipboard: { writeText: async (text: string) => void copied.push(text) } });
   const context = {
     subscriptions: [],
+    page: { activeTab: { id: '1', url: '/p/shop?time=1h#w=2', title: 'Shop' } },
     ui: { registerMenuItem: (_menuId: string, registered: typeof item) => (item = registered) },
     commands: { registerCommand: (_id: string, run: typeof copy) => (copy = run) },
   };
@@ -34,7 +34,7 @@ describe('chartLink', () => {
     expect(item.when!(menuOf({ type: 'markdown', props: { html: '' } }))).toBe(false);
   });
 
-  it('copies the absolute link to the chart on the page shown', async () => {
+  it('copies the absolute link to the chart on the active tab’s page', async () => {
     await copy(chart);
     expect(copied).toEqual([`${location.origin}/p/shop#w=shop_orders`]);
   });

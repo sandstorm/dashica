@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
-// Tests for exploreView in explore-view.ts: the chart menu's entry, the view as the page's hash over the content,
-// Close, the widget found in the page's tree.
+// Tests for exploreView in explore-view.ts: the chart menu's entry opening a tab, the view as the page kind `explore`
+// named in the tab's hash, its title, Close, the widget found in the page's tree.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
+import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
 import type { Selection, WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { exploreView, findWidget } from './explore-view';
+import { exploreUrl, exploreView, findWidget } from './explore-view';
 
 const chart: WidgetNode = {
   type: 'barVertical',
@@ -21,41 +22,36 @@ const page = { kind: 'dashboard', title: 'Shop', filterBar: true, filterButtons:
 
 let menuItems: { menuId: string; title?: string; when?: (context: WidgetMenuContext) => boolean }[];
 let run: (context: WidgetMenuContext) => unknown;
-let navigated: string[];
-let over: HTMLElement[];
-let pageChanged: EventEmitter<PageJson>;
+let navigated: { url: string; newTab?: boolean }[];
+let renderers: Map<string, PageRenderer>;
 let query: QueryHost;
 let subscriptions: { dispose(): unknown }[];
 let selections: Selection[];
+let closed: number;
 
 beforeEach(() => {
-  history.replaceState(null, '', '/p/shop?time=1h');
   menuItems = [];
   navigated = [];
-  over = [];
+  renderers = new Map();
   selections = [];
-  pageChanged = new EventEmitter<PageJson>();
+  closed = 0;
   query = new QueryHost(window);
+  query.load({ search: '?time=1h' });
   subscriptions = [];
   vi.stubGlobal('fetch', async () => new Response('rows'));
   const context = {
     subscriptions,
     globalState: { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} },
-    query,
-    page: { current: page, onDidChangePage: pageChanged.event, navigate: async (url: string) => void navigated.push(url) },
+    page: {
+      activeTab: { id: '1', url: '/p/shop?time=1h#w=2', title: 'Shop' },
+      navigate: async (url: string, options?: { newTab?: boolean }) => void navigated.push({ url, ...options }),
+      registerPageRenderer: (kind: string, renderer: PageRenderer) => (renderers.set(kind, renderer), new Disposable(() => renderers.delete(kind))),
+    },
     widgets: { select: (selection: Selection) => selections.push(selection) },
     ui: {
       registerMenuItem: (menuId: string, item: { title?: string; when?: (context: WidgetMenuContext) => boolean }) => {
         menuItems.push({ menuId, ...item });
         return new Disposable(() => {});
-      },
-      showOverContent: (element: HTMLElement) => {
-        over.push(element);
-        document.body.append(element);
-        return new Disposable(() => {
-          over.splice(over.indexOf(element), 1);
-          element.remove();
-        });
       },
     },
     commands: { registerCommand: (_id: string, command: typeof run) => ((run = command), new Disposable(() => {})) },
@@ -70,10 +66,12 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const goTo = (hash: string) => {
-  history.replaceState(null, '', `/p/shop?time=1h${hash}`);
-  window.dispatchEvent(new HashChangeEvent('hashchange'));
-};
+/** Renders the tab of the page kind `explore` with `hash`, as the page host does. */
+function renderTab(hash: string) {
+  const el = document.body.appendChild(document.createElement('div'));
+  const context: PageContext = { query, hash, onDidChangeHash: new EventEmitter<void>().event, close: () => closed++ };
+  return { el, rendered: renderers.get('explore')!(el, page, context) };
+}
 
 describe('exploreView', () => {
   it('is in the menu of a chart with rows, not of one without', () => {
@@ -83,33 +81,35 @@ describe('exploreView', () => {
     expect(when({ widget: { type: 'alertOverview', props: {}, dataUrl: '/p/shop/api/1' } as WidgetNode, url: () => '', lastResult: undefined })).toBe(false);
   });
 
-  it('opens the view as the page’s hash', async () => {
+  it('opens the view in a new tab: the active tab’s URL with the hash #explore=<id>', async () => {
     await run({ widget: chart, url: () => '', lastResult: undefined });
-    expect(navigated).toEqual(['#explore=3']);
+    expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=3', newTab: true }]);
   });
 
-  it('lays the view of the hash’s chart over the content, and takes it away when the hash goes', () => {
-    goTo('#explore=3');
-    expect(over).toHaveLength(1);
-    expect(over[0].querySelector('.d-explore-view__title')!.textContent).toBe('Explore: By status');
-    goTo('#w=3');
-    expect(over).toHaveLength(0);
+  it('renders the tab of the kind explore: the view of the hash’s chart, titled after it, with the tab’s query state', async () => {
+    const { el, rendered } = renderTab('#explore=3');
+    expect([...el.children].map((child) => child.className)).toEqual(['d-explore-view__host']);
+    expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: By status');
+    expect(rendered.title).toBe('Explore: By status');
+    rendered.dispose();
+    expect(el.children).toHaveLength(0);
   });
 
-  it('opens the view of a link once the page is shown, and none for a chart the page lacks', () => {
-    history.replaceState(null, '', '/p/shop#explore=3');
-    pageChanged.fire(page);
-    expect(over).toHaveLength(1);
-    pageChanged.fire(page);
-    expect(over).toHaveLength(1);
-    goTo('#explore=9');
-    expect(over).toHaveLength(0);
+  it('refuses a hash naming a chart the page lacks, which the tab shows as its error', () => {
+    expect(() => renderTab('#explore=9')).toThrow('Shop has no chart 9 to explore');
   });
 
-  it('goes to the chart on Close', () => {
-    goTo('#explore=3');
-    over[0].querySelector<HTMLButtonElement>('[data-testid="explore-view-close"]')!.click();
-    expect(navigated).toEqual(['#w=3']);
+  it('closes its tab on Close', () => {
+    const { el } = renderTab('#explore=3');
+    el.querySelector<HTMLButtonElement>('[data-testid="explore-view-close"]')!.click();
+    expect(closed).toBe(1);
+  });
+});
+
+describe('exploreUrl', () => {
+  it('replaces the hash of a tab’s URL, keeping its path and query', () => {
+    expect(exploreUrl('/p/shop?time=1h&f=host:eq:a#w=2', '3')).toBe('/p/shop?time=1h&f=host:eq:a#explore=3');
+    expect(exploreUrl('/p/shop', 'a b')).toBe('/p/shop#explore=a%20b');
   });
 });
 

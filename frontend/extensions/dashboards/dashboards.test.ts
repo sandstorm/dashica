@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Tests for dashboards.ts in the workbench: the menu, the page shown marked, favorites, search everywhere (with the
-// charts of searchEverywhere after the dashboards).
+// Tests for dashboards.ts in the workbench: the menu, the active tab's page marked, favorites, "Open in new tab" with
+// the workbench's tab bar, search everywhere (with the charts of searchEverywhere after the dashboards, Cmd / Ctrl+Enter
+// in a new tab).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { settle } from '../../hosts/widgets/widgets-testing';
@@ -62,6 +63,26 @@ describe('dashboards', () => {
     expect(titles('a.d-list__item--active')).toEqual(['Checkout']);
   });
 
+  it('opens a dashboard in a new tab from its menu; the tab bar shows both, the mark follows the tab shown', async () => {
+    const more = [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__more')][1];
+    more.click();
+    [...host.querySelectorAll<HTMLElement>('[role=menuitem]')].find((item) => item.textContent?.includes('Open in new tab'))!.click();
+    await settle();
+    const tabs = () => [...host.querySelectorAll<HTMLElement>('[role=tab]')];
+    expect(tabs().map((tab) => [tab.textContent, tab.getAttribute('aria-selected')])).toEqual([
+      ['/p/shop/page.json', 'false'],
+      ['/p/checkout/page.json', 'true'],
+    ]);
+    expect(location.pathname).toBe('/p/checkout');
+    expect(titles('a.d-list__item--active')).toEqual(['Checkout']);
+    tabs()[0].click();
+    await settle();
+    expect(location.pathname).toBe('/p/shop');
+    expect(titles('a.d-list__item--active')).toEqual(['Orders']);
+    host.querySelector<HTMLButtonElement>('[aria-label="Close /p/checkout/page.json"]')!.click();
+    expect(tabs()).toHaveLength(1);
+  });
+
   it('keeps a starred dashboard among the favorites, for the next visit too; a second click removes it', () => {
     const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')][1];
     star().click();
@@ -92,5 +113,17 @@ describe('dashboards', () => {
     options[1].click();
     await settle();
     expect(location.pathname + location.hash).toBe('/p/checkout#w=3');
+  });
+
+  it('opens a dashboard picked with Cmd / Ctrl+Enter in search everywhere in a new tab', async () => {
+    host.querySelector<HTMLButtonElement>('.d-search-button')!.click();
+    const field = host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+    field.value = 'checkout';
+    field.dispatchEvent(new Event('input'));
+    await settle();
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
+    await settle();
+    expect([...host.querySelectorAll('[role=tab]')]).toHaveLength(2);
+    expect(location.pathname).toBe('/p/checkout');
   });
 });

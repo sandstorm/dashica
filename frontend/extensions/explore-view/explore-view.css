@@ -1,7 +1,8 @@
-/* See explore-view.ts: the Explore view over the content, its bar, notes and the viewer filling the rest; the viewer's
+/* See explore-view.ts: the Explore view filling its tab, its bar, notes and the viewer filling the rest; the viewer's
    --psp-* variables taken from the tokens, so light and dark apply. */
+/* in the page's element, which grows with its content: a basis of 0 keeps the viewer as tall as the tab */
 .d-explore-view__host {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;

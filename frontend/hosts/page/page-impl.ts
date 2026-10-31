@@ -2,29 +2,40 @@
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
-import type { QueryHost } from '../query/query';
-import type { PageApi, PageRenderer } from './page';
+import type { Memento } from '../extension-host/extension-host';
+import { QueryHost } from '../query/query';
+import type { PageApi, PageContext, PageRenderer } from './page';
+import { closeTab, openTab, restoreTabs, showTab, storedTabs, titleOf, updateTab, type Tab, type TabList } from './tabs';
 
-/** The workbench's `PageApi` in `browserWindow`, rendering into `content`. `start` shows the page of the URL. */
+/**
+ * The workbench's `PageApi` in `browserWindow`, a tab's page in an element of its own in `content` (`hidden` while
+ * the tab is in the background). The open tabs come back from `state` (sessionStorage, key `tabs`) after a reload;
+ * those in the background stay unloaded until shown. `start` loads the active tab's page.
+ */
 export class PageHost implements PageApi {
-  current: PageJson | undefined;
-  readonly #onDidChangePage = new EventEmitter<PageJson>();
+  readonly #onDidChangePage = new EventEmitter<PageJson | undefined>();
   readonly onDidChangePage = this.#onDidChangePage.event;
+  readonly #onDidChangeTabs = new EventEmitter<void>();
+  readonly onDidChangeTabs = this.#onDidChangeTabs.event;
   readonly #renderers = new Map<string, PageRenderer>();
-  /** The path of the page shown (`/p/shop`). */
-  #path: string | undefined;
-  #rendered: { dispose(): unknown } | undefined;
-  /** Aborts the loading of the page asked for before. */
-  #loading: AbortController | undefined;
+  #list: TabList;
+  /** What each open tab shows, by its id. */
+  readonly #open = new Map<string, OpenTab>();
   readonly #listeners: Disposable;
 
   constructor(
     private readonly browserWindow: Window,
     readonly workbench: WorkbenchJson,
-    private readonly query: QueryHost,
     private readonly content: HTMLElement,
+    private readonly state: Memento,
   ) {
-    const onPopState = () => void this.#open(this.browserWindow.location.href, 'history');
+    const { history } = browserWindow;
+    this.#list = restoreTabs(state.get<unknown>('tabs'), this.#addressBar(), entryTab(history.state), newTabId());
+    for (const tab of this.#list.tabs) this.#open.set(tab.id, this.#createTab(tab.id));
+    // the entry shown names the active tab
+    this.#writeAddressBar('replace');
+    this.#save();
+    const onPopState = (event: PopStateEvent) => this.#followHistory(event.state);
     const onClick = (event: MouseEvent) => this.#followLink(event);
     browserWindow.addEventListener('popstate', onPopState);
     browserWindow.document.addEventListener('click', onClick);
@@ -34,13 +45,56 @@ export class PageHost implements PageApi {
     });
   }
 
-  /** Shows the page of the browser's URL. */
-  start(): Promise<void> {
-    return this.#open(this.browserWindow.location.href, 'start');
+  get tabs(): readonly Tab[] {
+    return this.#list.tabs;
   }
 
-  navigate(url: string): Promise<void> {
-    return this.#open(url, 'navigate');
+  get activeTab(): Tab {
+    return this.#tab(this.#list.active);
+  }
+
+  get current(): PageJson | undefined {
+    return this.#active().page;
+  }
+
+  /** The active tab's query state (`activeQuery`). */
+  get activeQuery(): QueryHost {
+    return this.#active().query;
+  }
+
+  /** Loads the active tab's page. */
+  start(): Promise<void> {
+    return this.#load(this.#active(), this.activeTab.url);
+  }
+
+  async navigate(url: string, options: { readonly newTab?: boolean } = {}): Promise<void> {
+    const target = new URL(url, this.browserWindow.location.href);
+    if (options.newTab) {
+      const href = relative(target);
+      const opened = openTab(this.#list, { id: newTabId(), url: href, title: titleOf(href) });
+      const isNew = !this.#open.has(opened.active);
+      this.#change(opened, isNew ? 'push' : 'replace');
+      return this.#active().loading?.promise;
+    }
+    const open = this.#active();
+    const shown = new URL(this.activeTab.url, target);
+    open.loading?.abort.abort();
+    const samePage = target.pathname === shown.pathname && (target.search === '' || target.search === shown.search);
+    if (samePage && open.page && target.hash) {
+      const jumped = shown.pathname + shown.search + target.hash;
+      if (jumped !== this.activeTab.url) this.#setUrl(open, jumped, 'push');
+      this.#hashChanged(open);
+      return;
+    }
+    return this.#load(open, relative(target), 'navigate');
+  }
+
+  showTab(id: string): void {
+    this.#change(showTab(this.#list, id), 'replace');
+  }
+
+  closeTab(id: string): void {
+    this.#change(closeTab(this.#list, id), 'replace');
   }
 
   registerPageRenderer(kind: string, renderer: PageRenderer): Disposable {
@@ -50,108 +104,261 @@ export class PageHost implements PageApi {
   }
 
   dispose(): void {
-    this.#loading?.abort();
     this.#listeners.dispose();
-    this.#unrender();
+    for (const open of this.#open.values()) this.#disposeTab(open);
+    this.#open.clear();
     this.#onDidChangePage.dispose();
+    this.#onDidChangeTabs.dispose();
+  }
+
+  #tab(id: string): Tab {
+    return this.#list.tabs.find((tab) => tab.id === id)!;
+  }
+
+  #active(): OpenTab {
+    return this.#open.get(this.#list.active)!;
+  }
+
+  /** The address bar's URL without the origin (`/p/shop?time=1h#w=3`). */
+  #addressBar(): string {
+    return relative(new URL(this.browserWindow.location.href));
+  }
+
+  #createTab(id: string): OpenTab {
+    const el = this.content.appendChild(this.browserWindow.document.createElement('div'));
+    el.className = 'd-workbench__tab-page';
+    el.hidden = id !== this.#list.active;
+    const query = new QueryHost(this.browserWindow);
+    query.setShown(!el.hidden);
+    const hashChanged = new EventEmitter<void>();
+    const context: PageContext = {
+      query,
+      get hash() {
+        return hashOf(tabOf());
+      },
+      onDidChangeHash: hashChanged.event,
+      close: () => this.closeTab(id),
+    };
+    const tabOf = () => this.#tab(id);
+    const open: OpenTab = { id, el, query, context, hashChanged, listening: Disposable.from(), page: undefined, rendered: undefined, renderedAs: undefined, loading: undefined, loaded: false, scrollTop: 0 };
+    open.listening = query.onDidChangeSearch((search) => {
+      const shown = new URL(tabOf().url, 'http://dashica');
+      this.#setUrl(open, shown.pathname + search + shown.hash, id === this.#list.active ? 'push' : 'none');
+    });
+    return open;
+  }
+
+  #disposeTab(open: OpenTab): void {
+    open.loading?.abort.abort();
+    this.#unrender(open);
+    open.listening.dispose();
+    open.hashChanged.dispose();
+    open.query.dispose();
+    open.el.remove();
   }
 
   /**
-   * Shows the page at `url`. `navigate`: as a new history entry, or by the browser when it has no `page.json`;
-   * `history`: the browser's back or forward, or a link to a hash, went there, the URL is set already, and on the same
-   * page only its query state or its hash changed; `start`: the first page.
+   * Makes the tabs follow `list`: closed ones disposed, new ones created, the active one shown (loaded when it was not
+   * yet) and the one before hidden; then the address bar shows the active tab's URL (`history`: as a new entry, in
+   * place of the entry shown, or as it is already).
    */
-  async #open(url: string, how: 'navigate' | 'history' | 'start'): Promise<void> {
-    const target = new URL(url, this.browserWindow.location.href);
-    this.#loading?.abort();
-    if (how === 'history' && target.pathname === this.#path && this.current) {
-      // only the hash changed (`#w=3`, back between two): the browser fires `hashchange` itself
-      if (!this.query.holdsState()) this.query.load({ defaultTime: this.current.defaultTime });
+  #change(list: TabList, history: 'push' | 'replace' | 'none'): void {
+    const before = this.#list.active;
+    this.#list = list;
+    for (const [id, open] of this.#open) {
+      if (list.tabs.some((tab) => tab.id === id)) continue;
+      this.#disposeTab(open);
+      this.#open.delete(id);
+    }
+    for (const tab of list.tabs) if (!this.#open.has(tab.id)) this.#open.set(tab.id, this.#createTab(tab.id));
+    const switched = before !== list.active;
+    const hidden = this.#open.get(before);
+    if (switched && hidden) {
+      hidden.scrollTop = hidden.el.scrollTop;
+      hidden.el.hidden = true;
+      hidden.query.setShown(false);
+    }
+    const shown = this.#active();
+    if (switched) {
+      shown.el.hidden = false;
+      shown.el.scrollTop = shown.scrollTop;
+      shown.query.setShown(true);
+    }
+    this.#writeAddressBar(history);
+    this.#save();
+    this.#onDidChangeTabs.fire();
+    if (!switched) return;
+    if (!shown.loaded) void this.#load(shown, this.activeTab.url);
+    this.#onDidChangePage.fire(shown.page);
+  }
+
+  /** The tab `open` shows `url` now; for the active one the address bar too (`history`). */
+  #setUrl(open: OpenTab, url: string, history: 'push' | 'replace' | 'none'): void {
+    this.#list = updateTab(this.#list, open.id, { url });
+    if (open.id === this.#list.active) this.#writeAddressBar(history);
+    this.#save();
+    this.#onDidChangeTabs.fire();
+  }
+
+  #setTitle(open: OpenTab, title: string): void {
+    if (this.#tab(open.id).title !== title) {
+      this.#list = updateTab(this.#list, open.id, { title });
+      this.#save();
+      this.#onDidChangeTabs.fire();
+    }
+    if (open.id === this.#list.active) this.#writeAddressBar('none');
+  }
+
+  /** The address bar and the document's title as the active tab says; each history entry names its tab (`{ tab }`). */
+  #writeAddressBar(how: 'push' | 'replace' | 'none'): void {
+    const { history, document } = this.browserWindow;
+    const tab = this.activeTab;
+    if (how === 'push') history.pushState({ tab: tab.id }, '', tab.url);
+    else if (how === 'replace') history.replaceState({ tab: tab.id }, '', tab.url);
+    const page = this.#active().page;
+    document.title = page ? `${tab.title} · Dashica` : 'Dashica';
+  }
+
+  #save(): void {
+    void this.state.update('tabs', storedTabs(this.#list));
+  }
+
+  /**
+   * The browser's back or forward, or a link to a hash it followed, went to the entry `state`: its tab is shown (opened
+   * again with its id when it was closed; an entry without a tab is the active tab's) and takes the address bar's URL.
+   * Only its hash changed: the renderer is told; its query: the query state is loaded; else the page loads.
+   */
+  #followHistory(state: unknown): void {
+    const url = this.#addressBar();
+    const id = entryTab(state) ?? this.#list.active;
+    const open = this.#open.get(id);
+    if (!open) {
+      this.#change(openTab(this.#list, { id, url, title: titleOf(url) }), 'replace');
       return;
     }
-    const samePage = target.pathname === this.#path && (target.search === '' || target.search === this.browserWindow.location.search);
-    if (how === 'navigate' && samePage && this.current && target.hash) {
-      this.#jumpTo(target.hash);
+    const before = new URL(this.#tab(id).url, 'http://dashica');
+    const wasLoaded = open.loaded;
+    this.#list = updateTab(this.#list, id, { url });
+    // replaced: an entry the browser made gets the tab's id; a tab not loaded yet loads `url` as it is shown
+    this.#change(showTab(this.#list, id), 'replace');
+    if (!wasLoaded || relative(before) === url) return;
+    open.loading?.abort.abort();
+    const after = new URL(url, 'http://dashica');
+    if (after.pathname === before.pathname && open.page) {
+      if (after.search !== before.search) open.query.load({ search: after.search, defaultTime: open.page.defaultTime });
+      if (after.hash !== before.hash) this.#hashChanged(open);
       return;
     }
-    const loading = new AbortController();
-    this.#loading = loading;
-    let page: PageJson;
-    try {
-      const response = await fetch(`${target.pathname.replace(/\/$/, '')}/page.json`, { signal: loading.signal });
-      if (response.status === 404 && how === 'navigate') {
-        this.browserWindow.location.assign(target.href);
+    void this.#load(open, url, 'history');
+  }
+
+  /**
+   * Loads the page at `url` into the tab `open` and shows it. `navigate`: as a new history entry, or by the browser
+   * when it has no `page.json`; `history`: the address bar is there already; else (a tab shown first) the tab has
+   * `url` already.
+   */
+  #load(open: OpenTab, url: string, how?: 'navigate' | 'history'): Promise<void> {
+    open.loading?.abort.abort();
+    open.loaded = true;
+    const abort = new AbortController();
+    const target = new URL(url, 'http://dashica');
+    const promise = (async () => {
+      let page: PageJson;
+      try {
+        const response = await fetch(`${target.pathname.replace(/\/$/, '')}/page.json`, { signal: abort.signal });
+        // the browser leaves the workbench for it only while the tab is the one shown
+        if (response.status === 404 && how === 'navigate' && open.id === this.#list.active) {
+          this.browserWindow.location.assign(url);
+          return;
+        }
+        if (!response.ok) throw new Error(`${target.pathname}: ${response.status} ${await response.text()}`);
+        page = await response.json();
+      } catch (error) {
+        if (abort.signal.aborted) return;
+        this.#arrive(open, url, how);
+        this.#showError(open, error);
         return;
       }
-      if (!response.ok) throw new Error(`${target.pathname}: ${response.status} ${await response.text()}`);
-      page = await response.json();
-    } catch (error) {
-      if (loading.signal.aborted) return;
-      if (how === 'navigate') this.#pushState(target);
-      this.#showError(target.pathname, error);
-      return;
-    }
-    if (loading.signal.aborted) return;
-    if (how === 'navigate') this.#pushState(target);
-    this.#show(target.pathname, page);
+      if (abort.signal.aborted) return;
+      this.#arrive(open, url, how);
+      this.#show(open, target, page);
+    })();
+    open.loading = { abort, promise };
+    return promise;
   }
 
-  /**
-   * Goes to `hash` (`#w=3`) on the page shown, keeping its query state, as a new history entry; `hashchange` tells the
-   * page, also when the hash was there already.
-   */
-  #jumpTo(hash: string): void {
-    const { location, history } = this.browserWindow;
-    const oldURL = location.href;
-    if (hash !== location.hash) history.pushState(history.state, '', hash);
-    this.browserWindow.dispatchEvent(new HashChangeEvent('hashchange', { oldURL, newURL: location.href }));
+  /** The tab `open` is at `url` now, after its page was fetched. */
+  #arrive(open: OpenTab, url: string, how: 'navigate' | 'history' | undefined): void {
+    open.loading = undefined;
+    if (this.#tab(open.id).url !== url || how === 'navigate') this.#setUrl(open, url, how === 'navigate' ? 'push' : 'none');
   }
 
-  #pushState(target: URL): void {
-    this.browserWindow.history.pushState(null, '', target.pathname + target.search + target.hash);
+  /** Takes down the page the tab showed, then renders `page` with the query state of `target`. */
+  #show(open: OpenTab, target: URL, page: PageJson): void {
+    this.#unrender(open);
+    open.page = page;
+    open.query.load({ search: target.search, defaultTime: page.defaultTime });
+    this.#render(open);
   }
 
-  /** Takes down the page shown, then renders `page` with the query state of the URL. */
-  #show(path: string, page: PageJson): void {
-    this.#unrender();
-    this.#path = path;
-    this.current = page;
-    this.browserWindow.document.title = page.title ? `${page.title} · Dashica` : 'Dashica';
-    this.query.load({ defaultTime: page.defaultTime });
-    const renderer = this.#renderers.get(page.kind);
+  /** Renders the tab's page by the renderer of the kind its hash names (`#explore=3`), else of the page's kind. */
+  #render(open: OpenTab): void {
+    const page = open.page!;
+    const named = [...new URLSearchParams(hashOf(this.#tab(open.id)).slice(1))].find(([key]) => this.#renderers.has(key));
+    const kind = named ? named[0] : page.kind;
+    open.renderedAs = named ? `${named[0]}=${named[1]}` : page.kind;
+    const renderer = this.#renderers.get(kind);
     if (!renderer) {
-      this.#showError(path, new Error(`no renderer for the page kind ${page.kind}`));
+      this.#showError(open, new Error(`no renderer for the page kind ${kind}`));
       return;
     }
-    const el = this.content.appendChild(this.browserWindow.document.createElement('div'));
+    const el = open.el.appendChild(this.browserWindow.document.createElement('div'));
+    el.className = 'd-workbench__page';
     try {
-      this.#rendered = renderer(el, page);
+      open.rendered = renderer(el, page, open.context);
     } catch (error) {
-      this.#showError(path, error);
+      this.#showError(open, error);
       return;
     }
-    this.#onDidChangePage.fire(page);
+    this.#setTitle(open, open.rendered.title || page.title || titleOf(this.#tab(open.id).url));
+    if (open.id === this.#list.active) this.#onDidChangePage.fire(page);
   }
 
-  #showError(path: string, error: unknown): void {
-    this.#unrender();
-    this.#path = path;
-    this.current = undefined;
+  /** Only the tab's hash changed: renders it anew when the hash names another kind (or another one of it), else tells the renderer. */
+  #hashChanged(open: OpenTab): void {
+    const page = open.page;
+    if (!page) return;
+    const named = [...new URLSearchParams(hashOf(this.#tab(open.id)).slice(1))].find(([key]) => this.#renderers.has(key));
+    if ((named ? `${named[0]}=${named[1]}` : page.kind) === open.renderedAs) {
+      open.hashChanged.fire();
+      return;
+    }
+    this.#unrender(open);
+    open.page = page;
+    this.#render(open);
+  }
+
+  #showError(open: OpenTab, error: unknown): void {
+    this.#unrender(open);
     const shown = this.browserWindow.document.createElement('div');
     shown.className = 'd-notice d-notice--error';
     shown.textContent = error instanceof Error ? error.message : String(error);
-    this.content.replaceChildren(shown);
+    open.el.replaceChildren(shown);
+    this.#setTitle(open, titleOf(this.#tab(open.id).url));
+    if (open.id === this.#list.active) this.#onDidChangePage.fire(undefined);
   }
 
-  #unrender(): void {
-    this.#rendered?.dispose();
-    this.#rendered = undefined;
-    this.content.replaceChildren();
+  #unrender(open: OpenTab): void {
+    open.rendered?.dispose();
+    open.rendered = undefined;
+    open.renderedAs = undefined;
+    open.page = undefined;
+    open.el.replaceChildren();
   }
 
   /**
-   * Opens a link to another page of this Dashica in the content area: a plain click on a link of the same origin to
-   * another path or query. A new tab (a modifier key, `target`), a download or a jump on the same page stay the
+   * Opens a link to another page of this Dashica in the active tab: a plain click on a link of the same origin to
+   * another path or query. A new browser tab (a modifier key, `target`), a download or a jump on the same page stay the
    * browser's.
    */
   #followLink(event: MouseEvent): void {
@@ -165,4 +372,44 @@ export class PageHost implements PageApi {
     event.preventDefault();
     void this.navigate(target.href);
   }
+}
+
+/** What the page host keeps for one open tab. */
+interface OpenTab {
+  readonly id: string;
+  /** Its element in the content region; `hidden` in the background. */
+  readonly el: HTMLElement;
+  readonly query: QueryHost;
+  readonly context: PageContext;
+  readonly hashChanged: EventEmitter<void>;
+  listening: Disposable;
+  /** The page rendered; `undefined` before and while it could not be shown. */
+  page: PageJson | undefined;
+  rendered: ReturnType<PageRenderer> | undefined;
+  /** The kind it is rendered by, with the value its hash gave it (`explore=3`). */
+  renderedAs: string | undefined;
+  loading: { abort: AbortController; promise: Promise<void> } | undefined;
+  /** Its page was asked for: a tab restored after a reload is not until it is shown. */
+  loaded: boolean;
+  /** Where its element was scrolled when it went to the background (a hidden element forgets it). */
+  scrollTop: number;
+}
+
+/** The tab a history entry names (`history.state.tab`); `undefined` for an entry the workbench did not write. */
+function entryTab(state: unknown): string | undefined {
+  const tab = (state as { tab?: unknown } | null)?.tab;
+  return typeof tab === 'string' ? tab : undefined;
+}
+
+function newTabId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+/** `url` without its origin (`/p/shop?time=1h#w=3`). */
+function relative(url: URL): string {
+  return url.pathname + url.search + url.hash;
+}
+
+function hashOf(tab: Tab): string {
+  return new URL(tab.url, 'http://dashica').hash;
 }

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// Tests for dashboard-page.ts: the widgets one below the other, taken down with the page; a link to a chart.
+// Tests for dashboard-page.ts: the widgets one below the other with their tab's query state, taken down with the page;
+// a link to a chart.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageJson } from '../../generated/zz_generated.dashica';
+import type { Memento } from '../../hosts/extension-host/extension-host';
 import { PageHost } from '../../hosts/page/page';
 import { widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { collapsible } from '../collapsible/collapsible';
@@ -11,7 +13,7 @@ import { dashboardPage } from './dashboard-page';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 let content: HTMLElement;
-let page: PageHost;
+let page: PageHost | undefined;
 let scrolledTo: Element[];
 
 /** A page with a chart in a closed group inside a closed group. */
@@ -50,13 +52,21 @@ beforeEach(() => {
     scrolledTo.push(this);
   };
   content = document.body.appendChild(document.createElement('main'));
-  page = new PageHost(window, { menu: [] }, testbed.query, content);
   testbed.activate(markdown, collapsible, schemaTable);
-  dashboardPage.activate({ page, widgets: testbed.widgets, subscriptions: [] } as never);
 });
 
+/** The page host at `url`, the dashboard page's renderer registered, started. */
+async function start(url: string): Promise<PageHost> {
+  history.replaceState(null, '', url);
+  page = new PageHost(window, { menu: [] }, content, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
+  dashboardPage.activate({ page, widgets: testbed.widgets, subscriptions: [] } as never);
+  await page.start();
+  return page;
+}
+
 afterEach(() => {
-  page.dispose();
+  page?.dispose();
+  page = undefined;
   testbed.dispose();
   vi.unstubAllGlobals();
   delete (Element.prototype as Partial<Element>).scrollIntoView;
@@ -70,19 +80,26 @@ const linked = () => [...content.querySelectorAll('[data-data-url]')].filter((wi
 
 describe('dashboardPage', () => {
   it('renders the widgets one below the other', async () => {
-    await page.start();
+    await start('/p/shop');
     expect([...content.querySelectorAll('.d-markdown')].map((w) => w.textContent)).toEqual(['Orders', 'Payments']);
   });
 
+  it('renders the widgets with its tab’s query state', async () => {
+    const states: unknown[] = [];
+    testbed.widgets.registerWidget('stats', (_el, _widget, ctx) => (states.push(ctx.state), { dispose() {} }));
+    testbed.serveText('/p/stats/page.json', JSON.stringify({ ...shop, widgets: [{ type: 'stats', props: {}, dataUrl: '/p/stats/api/1' }] }));
+    const shown = await start('/p/stats?f=host:eq:a');
+    expect(states).toEqual([shown.activeQuery]);
+    expect(shown.activeQuery.filters.fields).toEqual([{ fieldId: 'host', op: 'eq', value: 'a' }]);
+  });
+
   it('takes the widgets down with the page', async () => {
-    await page.start();
-    page.dispose();
+    (await start('/p/shop')).dispose();
     expect(content.children.length).toBe(0);
   });
 
   it('opens the groups around the chart a link names, scrolls it into view and highlights it for a moment', async () => {
-    history.replaceState(null, '', '/p/billing#w=slow_payments');
-    await page.start();
+    await start('/p/billing#w=slow_payments');
     const chart = content.querySelector<HTMLElement>('[data-data-url="/p/billing/api/slow_payments"]')!;
     expect([...content.querySelectorAll('details')].map((group) => group.open)).toEqual([true, true]);
     expect(scrolledTo).toEqual([chart]);
@@ -94,17 +111,15 @@ describe('dashboardPage', () => {
   });
 
   it('goes to a chart of the page shown on a hash change, without loading the page again', async () => {
-    history.replaceState(null, '', '/p/billing');
-    await page.start();
+    const shown = await start('/p/billing');
     expect(scrolledTo).toEqual([]);
-    await page.navigate('/p/billing#w=1');
+    await shown.navigate('/p/billing#w=1');
     expect(linked()).toEqual([content.querySelector('[data-data-url="/p/billing/api/1"]')]);
     expect(testbed.requests.filter((url) => url.pathname.endsWith('/page.json')).length).toBe(1);
   });
 
   it('leaves the page as it is for a link to a chart it lacks', async () => {
-    history.replaceState(null, '', '/p/billing#w=99');
-    await page.start();
+    await start('/p/billing#w=99');
     expect(scrolledTo).toEqual([]);
     expect([...content.querySelectorAll('details')].map((group) => group.open)).toEqual([false, false]);
   });

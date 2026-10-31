@@ -1,7 +1,7 @@
-// Tests for the Explore view (docs/2026-10-30-perspective.md §4.4): "Open in Explore view" in a chart's menu lays the
-// chart's result in Perspective over the content (`#explore=<id>`); "Remove grouping" shows its rows without grouping
-// (needs `explore.enabled`, else that test is skipped); the link opens it, Close goes back to the chart, a changed
-// config is kept per chart until Reset.
+// Tests for the Explore view (docs/2026-10-30-perspective.md §4.4): "Open in Explore view" in a chart's menu opens a
+// new tab with the chart's result in Perspective (the dashboard's URL with `#explore=<id>`, docs/2026-10-28-workbench.md
+// §3.4.1); "Remove grouping" shows its rows without grouping (needs `explore.enabled`, else that test is skipped); the
+// link opens it, Close closes its tab, Back shows the dashboard's tab, a changed config is kept per chart until Reset.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance", over the last 7 days. Another page and chart: DASHICA_E2E_EXPLORE_PAGE,
@@ -23,9 +23,14 @@ async function openExplore(page: Page) {
     return view;
 }
 
-test('opens the chart’s result in Perspective over the content, as the page’s hash', async ({page}) => {
+const tabs = (page: Page) => page.getByTestId('wb-tab-bar').getByRole('tab');
+
+test('opens the chart’s result in Perspective in a new tab, the dashboard’s URL with #explore=<id>', async ({page}) => {
     const view = await openExplore(page);
-    await expect(page).toHaveURL(/#explore=\d+$/);
+    await expect(page).toHaveURL(/\?time=168h#explore=\d+$/);
+    await expect(tabs(page)).toHaveCount(2);
+    await expect(tabs(page).nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs(page).nth(1)).toHaveText(`Explore: ${CHART}`);
     await expect(view.locator('.d-explore-view__title')).toHaveText(`Explore: ${CHART}`);
     await expect(view.locator('perspective-viewer')).toBeVisible();
     await expect(view.locator('.d-explore-view__status')).toHaveText(/^[\d,]+ rows of the chart’s result$/);
@@ -64,15 +69,30 @@ test('a link with the hash opens the view, with the link’s time range', async 
     await expect(view.locator('perspective-viewer')).toBeVisible();
 });
 
-test('Close and Back return to the dashboard', async ({page}) => {
+test('Close closes the Explore tab; Back shows the dashboard’s tab, the Explore tab kept', async ({page}) => {
     let view = await openExplore(page);
     await view.getByTestId('explore-view-close').click();
     await expect(view).toBeHidden();
-    await expect(page).toHaveURL(/#w=\d+$/);
+    await expect(tabs(page)).toHaveCount(1);
+    await expect(page).not.toHaveURL(/#explore=/);
 
     view = await openExplore(page);
     await page.goBack();
     await expect(view).toBeHidden();
+    await expect(tabs(page)).toHaveCount(2);
+    await expect(tabs(page).nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(page).not.toHaveURL(/#explore=/);
+});
+
+test('the Explore tab keeps a time range of its own', async ({page}) => {
+    await openExplore(page);
+    const refetched = page.waitForRequest((request) => /\/rows\?time=6h/.test(request.url()));
+    await page.getByTestId('wb-title-bar').getByRole('button', {name: /Last 7 days/}).click();
+    await page.getByRole('button', {name: 'Last 6 hours'}).click();
+    await refetched;
+    await expect(page).toHaveURL(/\?time=6h#explore=\d+$/);
+    await tabs(page).nth(0).click();
+    await expect(page).toHaveURL(/\?time=168h$/);
 });
 
 test('keeps the config the viewer changed for the chart, until Reset', async ({page}) => {

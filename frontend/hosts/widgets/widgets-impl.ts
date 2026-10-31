@@ -17,10 +17,7 @@ export class WidgetsHost implements WidgetsApi {
   readonly #selectionBar: FloatingBar<Selection>;
   #selection: { selection: Selection; owner: RenderedWidget | undefined; listening: Disposable } | undefined;
 
-  constructor(
-    private readonly query: QueryApi,
-    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices' | 'registerFloatingBar'>,
-  ) {
+  constructor(private readonly ui: Pick<UiApi, 'showContextMenu' | 'showChoices' | 'registerFloatingBar'>) {
     this.#selectionBar = ui.registerFloatingBar<Selection>({
       id: 'widget/selection',
       title: 'Selection',
@@ -68,8 +65,8 @@ export class WidgetsHost implements WidgetsApi {
     return new Disposable(() => this.#renderers.delete(type));
   }
 
-  /** Renders `widget` into `el` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
-  render(el: HTMLElement, widget: WidgetNode): Disposable {
+  /** Renders `widget` into `el` with `state` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
+  render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable {
     if ('dataUrl' in widget && widget.dataUrl) el.dataset.dataUrl = widget.dataUrl;
     const renderer = this.#renderers.get(widget.type);
     if (!renderer) {
@@ -77,7 +74,7 @@ export class WidgetsHost implements WidgetsApi {
       return new Disposable(() => el.replaceChildren());
     }
     try {
-      const ctx = new RenderedWidget(widget, this, this.query, this.ui);
+      const ctx = new RenderedWidget(widget, this, state, this.ui);
       const rendered = renderer(el, widget, ctx);
       return new Disposable(() => {
         if (this.#selection?.owner === ctx) this.clearSelection();
@@ -113,7 +110,7 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
   }
 
   renderChild(el: HTMLElement, child: WidgetNode): Disposable {
-    return this.host.render(el, child);
+    return this.host.render(el, child, this.state);
   }
 
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void {

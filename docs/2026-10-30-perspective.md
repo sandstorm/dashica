@@ -194,9 +194,13 @@ handler) is not planned.
 
 - **Entry:** `ui.registerMenuItem('widget/context', { command: 'exploreView.openWidget', title: 'Open in Explore
   view', group: 'data' })` for charts (`rowsUrl` in the widget's node).
-- **Place:** the dashboard's hash `#explore=<id>` (the id of the chart's `dataUrl`), laid over the content region by
-  `UiApi.showOverContent(element)`; the title bar (time picker, refresh) and the filter bar stay above it and refresh
-  it (`table.replace(bytes)`, the viewer keeps its config). A link opens it, Back closes it, "Close" goes to `#w=<id>`.
+- **Place** (a tab since 2026-10-31, workbench §3.4.1, step 7a): a new tab of the page kind `explore`, named in its
+  hash; its URL is the source tab's with `#explore=<id>` (the id of the chart's `dataUrl`), so it starts with a copy of
+  that tab's query state and a link or a reload opens it again. The title bar (time picker, refresh) and the filter
+  bar show the Explore tab's state and refresh it (`table.replace(bytes)`, the viewer keeps its config); the
+  dashboard's tab keeps its own. The tab is titled "Explore: <chart title>"; Back shows the dashboard's tab, "Close"
+  closes the Explore tab. A hash naming a chart the page lacks (or one without rows) shows "<page> has no chart <id>
+  to explore" in the tab. Before: the dashboard's hash, laid over the content by `UiApi.showOverContent` (gone).
 - **Toolbar:** title, "n rows of the chart's result" / "the newest n rows (limit)", the filters the chart ignores,
   "Remove grouping" (pressed: rows without grouping; shown only when the answer says `X-Dashica-Grouping: removable`),
   "Reset", "Close".
@@ -306,7 +310,7 @@ typechecked.
 
 - Every chart serves `<dataUrl>/rows` (`rowsUrl` in `page.json`): its query as at `/query` in plain Arrow types; with
   `explore.enabled`, builder charts also serve `?grouping=none` (§4.5).
-- A chart's menu (⋮) has "Open in Explore view": the chart's result in `<perspective-viewer>` over the content area,
+- A chart's menu (⋮) has "Open in Explore view": the chart's result in `<perspective-viewer>` in a new tab,
   rebuilt as the chart (§4.2), with a toolbar "Explore: <title>", the row count, the filters the chart ignores,
   "Remove grouping" (builder charts, Explore enabled), "Reset" and "Close".
 - "Remove grouping" shows the original rows (newest first, at most 100,000) as a datagrid; pressed again, the chart's
@@ -337,6 +341,12 @@ Steps for the maintainer (none of them were run in the spike):
     (`TestHandleRows_*`, written but never run).
 
 ### 8.2 Deviations
+
+Note (2026-10-31): ✅ adapted to the tabs of workbench step 7a: the overlay below (`showOverContent`, the dashboard's
+hash, the query host keeping the hash) is replaced by a tab of the page kind `explore` (`page.registerPageRenderer`,
+`page.navigate(exploreUrl(tab URL, id), { newTab: true })`, "Close" = `context.close()`); the view renders with the
+tab's `context.query`. So the "Cost" in the first row is gone: the dashboard's tab is in the background, its charts
+query nothing. Not run in a browser; `e2e/explore-view.spec.ts` updated.
 
 | Plan | What was done | Why |
 |---|---|---|

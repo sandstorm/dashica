@@ -9,7 +9,7 @@ import { fuzzyMatch } from '../model/fuzzy';
  * prefix it starts with, if any), the previous round cancelled; synchronous results show at once, async ones as they
  * come (a progress line meanwhile). Items a provider did not match itself are matched fuzzily against their label, else
  * their description. Groups follow the providers' `order`. Picking an item closes the search, gives the focus back and
- * runs the item's `accept` right then (still in the user's gesture).
+ * runs the item's `accept` right then (still in the user's gesture); with Cmd / Ctrl in a new tab.
  */
 export class SearchPick {
   #pick: QuickPick<Row> | null = null;
@@ -24,10 +24,10 @@ export class SearchPick {
     pick.placeholder = 'Search dashboards, charts, commands…';
     pick.prompt = this.#hint();
     pick.onDidChangeValue((text) => this.#search(text));
-    pick.onDidAccept(() => {
+    pick.onDidAccept(({ newTab }) => {
       const [row] = pick.selectedItems;
       pick.hide();
-      if (row) accept(row.item);
+      if (row) accept(row.item, newTab);
     });
     pick.onDidHide(() => {
       if (this.#pick === pick) {
@@ -95,11 +95,11 @@ export class SearchPick {
   }
 }
 
-/** Runs the item's `accept` now; a failure is logged. */
-function accept(item: SearchItem): void {
+/** Runs the item's `accept` now (`newTab`: picked with Cmd / Ctrl); a failure is logged. */
+function accept(item: SearchItem, newTab: boolean): void {
   const failed = (error: unknown) => console.error(`Search item ${item.label} failed:`, error);
   try {
-    const result = item.accept();
+    const result = item.accept(newTab ? { newTab } : undefined);
     if (result instanceof Promise) result.catch(failed);
   } catch (error) {
     failed(error);

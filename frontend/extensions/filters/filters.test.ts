@@ -13,8 +13,8 @@ import { filters } from './filters';
 let query: QueryHost;
 let titleBar: HTMLElement;
 let bar: HTMLElement;
-let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson>['event'] };
-let pageChanged: EventEmitter<PageJson>;
+let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event'] };
+let pageChanged: EventEmitter<PageJson | undefined>;
 let menuItems: { menuId: string; item: MenuItem<Selection> }[];
 let commands: CommandsHost;
 let selectionCleared: number;
@@ -30,8 +30,8 @@ const shop: PageJson = {
   widgets: [],
 };
 
-/** Shows `shown` as the page. */
-function show(shown: PageJson): void {
+/** Shows `shown` as the page; `undefined`: a tab without one (loading, or it could not be loaded). */
+function show(shown: PageJson | undefined): void {
   page.current = shown;
   pageChanged.fire(shown);
 }
@@ -42,7 +42,7 @@ beforeEach(() => {
   query.load();
   titleBar = document.body.appendChild(document.createElement('div'));
   bar = document.body.appendChild(document.createElement('div'));
-  pageChanged = new EventEmitter<PageJson>();
+  pageChanged = new EventEmitter<PageJson | undefined>();
   page = { current: undefined, onDidChangePage: pageChanged.event };
   const ui = {
     registerBarItem: (name: string, el: HTMLElement) => {
@@ -128,8 +128,7 @@ describe('filters', () => {
   });
 
   it('shows the chips of a link’s filters', () => {
-    history.replaceState(null, '', '/p/shop?f=host:ne:a');
-    query.load();
+    query.load({ search: '?f=host:ne:a' });
     show(shop);
     expect(chips().map(chipText)).toEqual(['host ≠ a']);
   });
@@ -153,6 +152,12 @@ describe('filters', () => {
 
   it('is gone on a page without filters', () => {
     show({ ...shop, title: 'Checkout', filterBar: false });
+    expect(bar.children.length).toBe(0);
+    expect(titleBar.children.length).toBe(0);
+  });
+
+  it('is gone in a tab without a page', () => {
+    show(undefined);
     expect(bar.children.length).toBe(0);
     expect(titleBar.children.length).toBe(0);
   });

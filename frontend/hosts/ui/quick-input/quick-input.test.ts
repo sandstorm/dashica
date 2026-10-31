@@ -53,6 +53,19 @@ describe('createQuickPick', () => {
     expect(hidden).toBe(2);
   });
 
+  it('says whether an item was picked with Cmd / Ctrl (Enter, a click): for a new tab', () => {
+    const { host, quickInput, field } = setup();
+    const pick = quickInput.createQuickPick<{ label: string }>();
+    const accepted: boolean[] = [];
+    pick.onDidAccept(({ newTab }) => accepted.push(newTab));
+    pick.items = [{ label: 'Shop' }];
+    pick.show();
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    host.querySelector<HTMLElement>('[role=option]')!.dispatchEvent(new MouseEvent('click', { ctrlKey: true, bubbles: true }));
+    expect(accepted).toEqual([true, false, true]);
+  });
+
   it('moves the active item with the arrow keys, picks with a click, and says "No results" for text without items', () => {
     const { host, quickInput, key, type, field } = setup();
     const pick = quickInput.createQuickPick<{ label: string }>();

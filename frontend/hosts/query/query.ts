@@ -1,10 +1,10 @@
 import type { Event } from '../../core/event-emitter/event-emitter';
 
 /**
- * The state every query of the shown page depends on: its time range and auto refresh, its filters, the values of its
- * form widgets. It lives in the URL (`?time=1h&f=host:eq:a&sql=…&wp=…&refresh=30`),
- * so a link opens the page as it was shared; the browser's back button goes to the state before. Widgets query again
- * on `onDidRequestRefresh` and send `requestParams()` along.
+ * The state every query of a tab's page depends on: its time range and auto refresh, its filters, the values of its
+ * form widgets. Each tab has its own, in the tab's URL (`?time=1h&f=host:eq:a&sql=…&wp=…&refresh=30`), so a link
+ * opens the page as it was shared; the browser's back button goes to the state before. Widgets query again on
+ * `onDidRequestRefresh` and send `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
 export interface QueryApi {
   readonly time: TimeModel;
@@ -26,7 +26,7 @@ export interface TimeModel {
   readonly range: string;
   /** The custom range as the server reads it (`2026-10-29 10:00 to now-1h`); '' unless `range` is `custom`. */
   readonly custom: string;
-  /** The seconds between two automatic refreshes, paused while the tab is hidden; `undefined`: no auto refresh. */
+  /** The seconds between two automatic refreshes, paused while the tab or the browser tab is hidden; `undefined`: no auto refresh. */
   readonly autoRefresh: number | undefined;
   setRange(range: string): void;
   /**
@@ -74,4 +74,5 @@ export interface ParamsModel {
   readonly onDidChange: Event<void>;
 }
 
-export { QueryHost, formatTime } from './query-impl';
+export { QueryHost, formatTime, parseSearch, formatSearch, type QueryState } from './query-impl';
+export { activeQuery, type ActiveQuerySource } from './active-query';

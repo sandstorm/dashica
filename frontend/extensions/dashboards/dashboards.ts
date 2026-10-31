@@ -6,8 +6,8 @@ import './dashboards.css';
 /**
  * The dashboards of `workbench.json`: the left panel "Dashboards" (the viewer's favorites, then the menu groups; the
  * page shown is marked; a star makes an entry a favorite, "…" opens the menu `dashboards/entry`: context `{ url, title }`,
- * argument the URL), their group in search everywhere, and "Dashica" in the title bar. Picking one opens it in the
- * content area.
+ * argument the URL; "Open in new tab" opens it in a tab of its own), their group in search everywhere (Cmd / Ctrl+Enter:
+ * in a new tab), and "Dashica" in the title bar. Picking one opens it in the active tab.
  */
 export const dashboards: Extension = {
   id: 'dashboards',
@@ -32,12 +32,16 @@ export const dashboards: Extension = {
         order: 10,
         provideItems: () =>
           page.workbench.menu.flatMap((group) =>
-            group.entries.map((entry) => ({ label: entry.title, description: group.title, accept: () => page.navigate(entry.url) })),
+            group.entries.map((entry) => ({
+              label: entry.title,
+              description: group.title,
+              accept: (options?: { newTab?: boolean }) => page.navigate(entry.url, options),
+            })),
           ),
       }),
     );
 
-    subscriptions.push(commands.registerCommand('dashboards.openInNewTab', (url: string) => void window.open(url, '_blank', 'noopener')));
+    subscriptions.push(commands.registerCommand('dashboards.openInNewTab', (url: string) => page.navigate(url, { newTab: true })));
     subscriptions.push(commands.registerCommand('dashboards.copyLink', (url: string) => navigator.clipboard.writeText(new URL(url, location.href).href)));
     subscriptions.push(ui.registerMenuItem('dashboards/entry', { command: 'dashboards.openInNewTab', title: 'Open in new tab', group: 'navigation', order: 1 }));
     subscriptions.push(ui.registerMenuItem('dashboards/entry', { command: 'dashboards.copyLink', title: 'Copy link', group: 'navigation', order: 2 }));
@@ -85,7 +89,7 @@ class DashboardsMenu {
   }
 
   #link(entry: MenuGroupEntry): HTMLElement {
-    const shown = entry.url === location.pathname;
+    const shown = entry.url === new URL(this.context.page.activeTab.url, location.origin).pathname;
     return html`<a href=${entry.url} class=${shown ? 'd-list__item d-list__item--active' : 'd-list__item'} title=${entry.title}>${entry.title}</a>`;
   }
 

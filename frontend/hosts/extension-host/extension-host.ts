@@ -37,9 +37,9 @@ export interface ExtensionContext {
   readonly commands: Commands;
   /** The workbench's regions: panels and bar items. */
   readonly ui: UiApi;
-  /** The page shown, and the way to another one. */
+  /** The open tabs and the page each shows, and the way to another one. */
   readonly page: PageApi;
-  /** The state the shown page's queries depend on: time range, filter, params, view options. */
+  /** The state the active tab's queries depend on: time range, filter, params; it follows the tab shown. */
   readonly query: QueryApi;
   /** How each widget type is rendered. */
   readonly widgets: WidgetsApi;

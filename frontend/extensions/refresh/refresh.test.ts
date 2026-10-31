@@ -10,9 +10,8 @@ let bar: HTMLElement;
 let commands: Map<string, () => void>;
 
 beforeEach(() => {
-  history.replaceState(null, '', '/p/shop?refresh=45');
   query = new QueryHost(window);
-  query.load();
+  query.load({ search: '?refresh=45' });
   bar = document.body.appendChild(document.createElement('div'));
   commands = new Map();
   const context = {
@@ -27,7 +26,6 @@ beforeEach(() => {
 afterEach(() => {
   query.dispose();
   document.body.replaceChildren();
-  history.replaceState(null, '', '/');
 });
 
 const interval = () => bar.querySelector('select')!;

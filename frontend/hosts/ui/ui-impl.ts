@@ -14,7 +14,7 @@ import './menus/context-menu.css';
 import './menus/floating-bar.css';
 import './quick-input/quick-input.css';
 
-/** The workbench's `UiApi`, laid out in `host`. `content`: the region the shown page goes into. */
+/** The workbench's `UiApi`, laid out in `host`. `content`: the region the tabs' pages go into; `tabBar`: the tab bar's. */
 export class UiHost implements UiApi {
   readonly #layout: WindowLayout;
   readonly #bars: Record<'title' | 'filter' | 'status', Bar>;
@@ -39,16 +39,16 @@ export class UiHost implements UiApi {
     return this.#layout.content;
   }
 
+  get tabBar(): HTMLElement {
+    return this.#layout.tabBar;
+  }
+
   registerSidePanel(id: string, options: SidePanelOptions): Panel {
     return this.#layout.addSidePanel(id, options);
   }
 
   registerBottomPanel(id: string, options: BottomPanelOptions): Panel {
     return this.#layout.addBottomPanel(id, options);
-  }
-
-  showOverContent(element: HTMLElement): Disposable {
-    return this.#layout.showOverContent(element);
   }
 
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable {

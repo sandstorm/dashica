@@ -10,8 +10,8 @@ import { UiHost, type ContextMenuOptions } from '../ui/ui';
 import { WidgetsHost } from './widgets';
 
 /**
- * For the tests of a widget renderer: a `WidgetsHost` on a `QueryHost` and a `UiHost`, with the browser parts jsdom
- * lacks stubbed. `activate` activates extensions on it (they get `widgets`, `query`, `ui`, `commands` and `page`);
+ * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
+ * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`, `query`, `ui`, `commands` and `page`);
  * `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an error; `scrollIntoView` makes every
  * chart visible, `resize` sets every chart's width; `menus` are the context menus shown, `choices()` / `choose` the
  * choices `ctx.choose` shows, `floatingBar()` the floating bar shown. `dispose` in `afterEach`.
@@ -20,12 +20,12 @@ export function widgetTestbed() {
   history.replaceState(null, '', '/p/shop');
   const query = new QueryHost(window);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
-  const pageChanged = new EventEmitter<PageJson>();
-  const page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson>['event'] } = { current: undefined, onDidChangePage: pageChanged.event };
+  const pageChanged = new EventEmitter<PageJson | undefined>();
+  const page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event'] } = { current: undefined, onDidChangePage: pageChanged.event };
   const workbench = document.body.appendChild(document.createElement('div'));
   const commands = new CommandsHost(workbench);
   const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
-  const widgets = new WidgetsHost(query, {
+  const widgets = new WidgetsHost({
     showContextMenu: (menuId, options) => menus.push({ menuId, options }),
     showChoices: (entries, options) => ui.showChoices(entries, options),
     registerFloatingBar: (options) => ui.registerFloatingBar(options),
@@ -105,7 +105,7 @@ export function widgetTestbed() {
     /** Renders `widget` into a new element in the document. */
     render(widget: WidgetNode) {
       const el = document.body.appendChild(document.createElement('div'));
-      const rendered = widgets.render(el, widget);
+      const rendered = widgets.render(el, widget, query);
       return { el, rendered };
     },
     scrollIntoView() {

@@ -8,8 +8,10 @@ import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
  */
 export const chartLink: Extension = {
   id: 'chartLink',
-  activate({ ui, commands, subscriptions }) {
-    subscriptions.push(commands.registerCommand('chartLink.copy', (widget: WidgetMenuContext) => navigator.clipboard.writeText(chartUrl(widget))));
+  activate({ ui, page, commands, subscriptions }) {
+    subscriptions.push(
+      commands.registerCommand('chartLink.copy', (widget: WidgetMenuContext) => navigator.clipboard.writeText(chartUrl(widget, page.activeTab.url))),
+    );
     subscriptions.push(
       ui.registerMenuItem<WidgetMenuContext>('widget/context', {
         command: 'chartLink.copy',
@@ -21,8 +23,8 @@ export const chartLink: Extension = {
   },
 };
 
-/** The absolute link to `widget` on the page shown. */
-function chartUrl({ widget }: WidgetMenuContext): string {
+/** The absolute link to `widget` on the page at `shown` (the active tab's URL). */
+function chartUrl({ widget }: WidgetMenuContext, shown: string): string {
   const id = 'dataUrl' in widget ? widget.dataUrl.split('/').pop()! : '';
-  return `${location.origin}${location.pathname}#w=${encodeURIComponent(id)}`;
+  return `${location.origin}${new URL(shown, location.origin).pathname}#w=${encodeURIComponent(id)}`;
 }
