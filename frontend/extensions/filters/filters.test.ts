@@ -9,7 +9,7 @@ import { QueryHost } from '../../hosts/query/query';
 import { buttonOf, filters } from './filters';
 
 let query: QueryHost;
-let titleBar: HTMLElement;
+let topBar: HTMLElement;
 let bar: HTMLElement;
 let page: { current: PageJson | undefined; onDidChangePage: EventEmitter<PageJson | undefined>['event'] };
 let pageChanged: EventEmitter<PageJson | undefined>;
@@ -38,13 +38,13 @@ beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost(window);
   query.load();
-  titleBar = document.body.appendChild(document.createElement('div'));
+  topBar = document.body.appendChild(document.createElement('div'));
   bar = document.body.appendChild(document.createElement('div'));
   pageChanged = new EventEmitter<PageJson | undefined>();
   page = { current: undefined, onDidChangePage: pageChanged.event };
   const ui = {
     registerBarItem: (name: string, el: HTMLElement) => {
-      (name === 'title' ? titleBar : bar).appendChild(el);
+      (name === 'top' ? topBar : bar).appendChild(el);
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: { title?: string; prompt?: string; anchor?: unknown }) => (asked.push(options), answer),
@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((b) => b.textContent === title)!;
-const funnel = () => titleBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
+const funnel = () => topBar.querySelector<HTMLButtonElement>('button[aria-label=Filters]')!;
 const editor = () => bar.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-testid=filter-chip-editor] textarea, [data-testid=filter-chip-editor] input');
 const chips = () => [...bar.querySelectorAll<HTMLElement>('[data-testid=filter-chip]')];
 const chipText = (chip: HTMLElement) =>
@@ -242,12 +242,12 @@ describe('filters', () => {
   it('is gone on a page without filters', () => {
     show({ ...shop, title: 'Checkout', filterBar: false });
     expect(bar.children.length).toBe(0);
-    expect(titleBar.children.length).toBe(0);
+    expect(topBar.children.length).toBe(0);
   });
 
   it('is gone in a tab without a page', () => {
     show(undefined);
     expect(bar.children.length).toBe(0);
-    expect(titleBar.children.length).toBe(0);
+    expect(topBar.children.length).toBe(0);
   });
 });

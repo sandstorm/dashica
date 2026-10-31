@@ -1,3 +1,5 @@
+import { html } from 'htl';
+import { Ellipsis, createElement } from 'lucide';
 import { Disposable } from '../core/disposable/disposable';
 import type { WorkbenchJson } from '../generated/zz_generated.dashica';
 import { CommandsHost } from '../hosts/commands/commands';
@@ -11,9 +13,9 @@ import { WidgetsHost } from '../hosts/widgets/widgets';
 
 /**
  * The workbench in `host`: its hosts (commands, ui, page, query, widgets, extensions) and the extensions activated on
- * them, the tab bar with the commands `workbench.tabs.close` / `next` / `previous`, then the page of the URL in the
- * active tab. `workbench` is what `/workbench.json` says. Bound keys work anywhere on the page. Lives as long as the
- * page; `dispose` takes it all down (tests).
+ * them, the tab bar with the commands `workbench.tabs.close` / `next` / `previous`, the global menu's "…" first in the
+ * top bar, then the page of the URL in the active tab. `workbench` is what `/workbench.json` says. Bound keys work
+ * anywhere on the page. Lives as long as the page; `dispose` takes it all down (tests).
  */
 export function createWorkbench(host: HTMLElement, options: { extensions: readonly Extension[]; workbench: WorkbenchJson }): Disposable {
   const doc = host.ownerDocument;
@@ -26,11 +28,13 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
   const extensions = new ExtensionHost({ commands, ui, page, query, widgets, ownerDocument: doc });
   extensions.activate(options.extensions);
   const tabs = showTabs(page, ui.tabBar, commands);
+  const globalMenu = showGlobalMenu(ui);
   void page.start();
   return new Disposable(() => {
     page.dispose();
     extensions.dispose();
     tabs.dispose();
+    globalMenu.dispose();
     widgets.dispose();
     query.dispose();
     ui.dispose();
@@ -39,10 +43,15 @@ export function createWorkbench(host: HTMLElement, options: { extensions: readon
 }
 
 /**
- * The tab bar in `region`, drawn anew on each change of the tabs. The tab commands work on the active tab.
+ * The tab bar in `region`, drawn anew on each change of the tabs; "+" opens the start page in a new tab (or shows the
+ * tab that has it). The tab commands work on the active tab.
  */
 function showTabs(page: PageHost, region: HTMLElement, commands: CommandsHost): Disposable {
-  const bar = new TabBar(region, { onDidChoose: (id) => page.showTab(id), onDidClose: (id) => page.closeTab(id) });
+  const bar = new TabBar(region, {
+    onDidChoose: (id) => page.showTab(id),
+    onDidClose: (id) => page.closeTab(id),
+    onDidAdd: () => void page.navigate('/', { newTab: true }),
+  });
   const draw = () => bar.update(page.tabs, page.activeTab.id);
   draw();
   commands.declareCommands([
@@ -56,5 +65,21 @@ function showTabs(page: PageHost, region: HTMLElement, commands: CommandsHost): 
     commands.registerCommand('workbench.tabs.close', () => page.closeTab(page.activeTab.id)),
     commands.registerCommand('workbench.tabs.next', () => page.showTab(adjacentTab(page.tabs, page.activeTab.id, 1))),
     commands.registerCommand('workbench.tabs.previous', () => page.showTab(adjacentTab(page.tabs, page.activeTab.id, -1))),
+  );
+}
+
+/** The menu the "…" at the top bar's start shows (context and arguments none); the button is hidden while it is empty. */
+const GLOBAL_MENU = 'workbench/global';
+
+/** The "…" at the top bar's start, left of the Dashica icon: it shows the menu `workbench/global`. */
+function showGlobalMenu(ui: UiHost): Disposable {
+  const button: HTMLButtonElement = html`<button type="button" class="d-workbench__global-menu" aria-label="Dashica menu" title="Menu"
+    aria-haspopup="dialog" data-testid="wb-global-menu" onclick=${() => ui.showContextMenu(GLOBAL_MENU, { anchor: button, title: 'Dashica' })}></button>`;
+  button.append(createElement(Ellipsis, { width: 16, height: 16 }));
+  const update = () => (button.hidden = ui.getMenuItems(GLOBAL_MENU).length === 0);
+  update();
+  return Disposable.from(
+    ui.registerBarItem('top', button, { alignment: 'left', priority: 100 }),
+    ui.onDidChangeMenu((id) => id === GLOBAL_MENU && update()),
   );
 }

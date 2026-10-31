@@ -1,4 +1,4 @@
-/* See TimeRangePicker in time-range.ts: the segmented group in the title bar, the panel below it (custom range on the
+/* See TimeRangePicker in time-range.ts: the segmented group in the top bar, the panel below it (custom range on the
    left, quick ranges on the right; one column when narrow). */
 .d-time-picker {
   position: relative;

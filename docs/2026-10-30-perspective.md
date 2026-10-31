@@ -209,7 +209,7 @@ handler) is not planned.
   view', group: 'data' })` for charts (`rowsUrl` in the widget's node).
 - **Place** (a tab since 2026-10-31, workbench §3.4.1, step 7a): a new tab of the page kind `explore`, named in its
   hash; its URL is the source tab's with `#explore=<id>` (the id of the chart's `dataUrl`), so it starts with a copy of
-  that tab's query state and a link or a reload opens it again. The title bar (time picker, refresh) and the filter
+  that tab's query state and a link or a reload opens it again. The top bar (time picker, refresh) and the filter
   bar show the Explore tab's state and refresh it (`table.replace(bytes)`, the viewer keeps its config); the
   dashboard's tab keeps its own. The tab is titled "Explore: <chart title>"; Back shows the dashboard's tab, "Close"
   closes the Explore tab. A hash naming a chart the page lacks (or one without rows) shows "<page> has no chart <id>
@@ -283,7 +283,7 @@ with it the gap it had: SQL-file charts had no toggle, now every chart, builder 
 - **A draft** (typed, not run) is the editor's text only: while it differs from the last materialized SQL, a refresh
   does not overwrite it, and the editor's note says "not run" (proposed).
 - **The view says so while edited:** a note above the viewer, "Edited query: the page's time range and filters do
-  not apply", and the button "Reset to the chart's query". The title bar and filter bar stay as they are (the chips
+  not apply", and the button "Reset to the chart's query". The top bar and filter bar stay as they are (the chips
   still apply to the dashboard's tab, and to this one after Reset).
 - **The editor:** a plain `<textarea>` (`d-field d-field--full d-field--mono`, as the filter bar's SQL field was): the
   repository has no code editor (no CodeMirror, Monaco or the old Explore's editor in `package.json` or

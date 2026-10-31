@@ -109,29 +109,34 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 ### 3.4 Workbench regions
 
 ```
-┌─ Dashica › Shop ────── [⌘K search] ── [Last 1h ▾][⟳ 30s][log] ┐   title bar
-│▐menu▌ [Shop ×] [Explore: 500 per instance ×]       │▐inspector▌│   tab bar
-│▐Debug▌ filters: [Status = 500 ×] [Only errors] ✎ SQL│▐         ▌│   filter bar (above the content)
-│▐    ▌ content (scrolls)                          │▐         ▌│   left · content · right
+┌ […][▮] [Shop ×] [Explore: 500 per instance ×] [+] ── [⛛][Last 1h ▾][⟳ 30s] ┐   top bar (step 8d)
+│🔍│ DASHBOARDS   … │ filters: [Status = 500 ×] [Only errors] ✎ SQL │▐inspector▌│   filter bar (above the content)
+│▦ │ favorites …     │ content (scrolls)                             │▐         ▌│   rail · panel · content · right
+│🐞│                 │                                               │▐         ▌│
 └─ Requests · 1,234 rows · 87 ms · ignores host · 2 records selected ┘   status bar: the active widget, its records
 ```
 
 | Region | Holds |
 |---|---|
-| Title bar | breadcrumb, search everywhere, time range, refresh; always visible |
-| Tab bar | above the filter bar: a tab per open page, the active one selected, × to close (§3.4.1) |
-| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the title bar adds a SQL chip (step 7b, §3.8) |
+| Top bar | one row, always visible: the global menu's "…" (menu `workbench/global`, hidden while empty; its entries come with 8i), the Dashica icon (a link to "/"), the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the filter funnel, time range and refresh (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them) |
+| Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the top bar adds a SQL chip (step 7b, §3.8) |
+| Rails | a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first in the left rail; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
 
-Step 8d (§3.14 D5) changes the top: the tabs move into the top row, `[…][Dashica][tabs][+] … [time range][refresh]`;
-the title bar and its search field go (search everywhere becomes a rail button); the filter bar stays below.
+- **Panel headers (step 8d):** the shown panel sits under a header row: its name in caps ("DEBUG", CSS
+  `text-transform`, so screen readers read "Debug"; the panel's body is labelled by it) and "…", which shows the menu
+  `panel/<id>` (context and arguments none). Every such menu has "Hide" (command `workbench.view.<id>.hide`), so "…"
+  is never empty *(proposed)*; D14's "Pop out" goes there too.
+- **"+"** opens the start page "/" in a new tab, or shows the tab that has it (`navigate('/', { newTab: true })`)
+  *(proposed)*. The Dashica icon is lucide's `ChartColumn` in the accent colour *(proposed: Dashica has no logo of its
+  own in the frontend; `/assets/favicon/…` is not served by the framework)*.
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
   resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
   moved to the left side, it had no other user); a table's selected rows show in the left side panel "Details" (§3.4.5).
-- **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar above the filter bar; each tab shows one
+- **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar in the top row (step 8d); each tab shows one
   page with its own URL and query state, the address bar the active tab's (§3.4.1).
 - A **page** is what a tab shows: `page.kind` = `dashboard` | `explore` | `home` (the start page, §3.4.3) | `docs`.
 
@@ -145,8 +150,7 @@ and it catches up when shown; the Explore view opens as a tab, and `showOverCont
 *(proposed)* below was decided by the agent and waits for review.
 
 ```
-┌─ Dashica › Shop ────────── [⌘K search] ── [Last 1h ▾][⟳ 30s] ┐   title bar: the active tab's time and refresh
-│▐menu▌ [Shop ×] [Explore: 500 per instance ×] [Checkout ×]     │   tab bar
+┌ […][▮] [Shop ×] [Explore: 500 per instance ×] [Checkout ×] [+] ── [Last 1h ▾][⟳ 30s] ┐   top bar: the tabs, the active tab's time and refresh
 │▐    ▌ filters: [Status = 500 ×]                               │   filter bar: the active tab's filters
 │▐    ▌ content: the active tab; the others hidden, rendered    │   content
 ```
@@ -177,7 +181,7 @@ functions on it (`frontend/hosts/page/tabs.ts`), tested without DOM *(proposed)*
   (`frontend/hosts/query/active-query.ts`): a `QueryApi` that forwards every read and call to the active tab's
   `QueryHost` and fires each model's `onDidChange` when the active tab's fires and once when another tab becomes
   active; `onDidRequestRefresh` only when the active tab's fires (a tab shown catches up itself, below). So the time
-  picker and refresh button in the title bar, the filter bar, the table's filter commands and "Filter by …" keep their
+  picker and refresh button in the top bar, the filter bar, the table's filter commands and "Filter by …" keep their
   code *(proposed; the alternative, each of them re-subscribing to `page.activeTab.query` on a tab change, repeats
   that in four extensions)*.
 - **Widgets see their own tab.** A page renderer gets its tab's `PageContext` and renders each widget with
@@ -413,7 +417,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `ui` | side panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
+| `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
 | `widgets` | `registerWidget` (§3.6), `offerFilters` (click to filter, §3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
@@ -840,7 +844,7 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
 - **The filter bar** (`FilterBar` in `filters.ts`): one row of chips in the model's order, then the page's buttons.
   A structured chip shows `id`, `=` / `≠`, value; a SQL chip shows `SQL:` and its text on one line (cut with an
   ellipsis, the whole text in its `title`). × removes a chip (`remove(index)`).
-  - **Adding:** the funnel in the title bar opens a new, empty SQL chip in edit mode at the end of the chips; Enter
+  - **Adding:** the funnel in the top bar opens a new, empty SQL chip in edit mode at the end of the chips; Enter
     adds it (`add(text)`), Escape or an empty text drops it. The funnel's dot (marked while a SQL filter was set) goes:
     the chips show what is set. (proposed)
   - **Editing, the same for every chip** (proposed): a click on a chip's text puts it in edit mode in its place, one
@@ -938,9 +942,12 @@ interface Commands {
 // ui — regions, menus, input, messages
 interface UiApi {
   registerSidePanel(id: string, o: { label: string; icon: string; side: 'left' | 'right'; order?: number;
-                                     when?: (p: Page) => boolean }): Panel;     // command workbench.view.<id>
-  registerBarItem(bar: 'title' | 'filter' | 'status', el: HTMLElement,
-                  o: { alignment: 'left' | 'right'; priority?: number }): Disposable;
+                                     when?: (p: Page) => boolean }): Panel;     // command workbench.view.<id>;
+                                          // its header: name in caps, "…" shows menu panel/<id> ("Hide") (8d)
+  registerRailButton(id: string, o: { label: string; icon: string; command: string; side?; alignment?; order? }): Disposable;
+                                          // a rail button running a command (search everywhere) (8d)
+  registerBarItem(bar: 'top' | 'filter' | 'status', el: HTMLElement,
+                  o: { alignment: 'left' | 'center' | 'right'; priority?: number }): Disposable;   // top: around the tabs
 
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
@@ -1041,9 +1048,9 @@ Built-in extensions:
 | Extension | Contributes |
 |---|---|
 | `dashboards` | left panel "Dashboards" (groups, favorites, filter box) |
-| `search-everywhere` | the palette (⌘K / Shift Shift): pages, commands, favorites, chart titles |
-| `time-range` | title bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7) |
-| `refresh` | title bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
+| `search-everywhere` | the palette (⌘K / Shift Shift, its button first in the left rail): pages, commands, favorites, chart titles |
+| `time-range` | top bar: the range button with its panel (quick ranges, From / To, recently used), shift ‹ ›, zoom out ⊖, refresh (§3.7) |
+| `refresh` | top bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
 | (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip; the chips a click adds come from `widgets.offerFilters` (8c) |
@@ -1392,7 +1399,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 8a ✅ | **D1 start page** (§3.4.3): the time range, refresh and Debug's status item registered once with `ui.registerBarItem`, so they show on every page, "/" included ("No active chart" there); `hasQueries` (`hosts/page/page.ts`) and `registerBarItemWhile` (`hosts/ui/bar/bar.ts`) deleted; Details' "N records selected" stays registered and is `hidden` while none *(proposed)*; tests: the "not on the start page" cases dropped, Details' status checked by `hidden`; `e2e/start-page.spec.ts` checks the time range, refresh and status bar on "/". ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run) | "/" with the time range and the status bar |
 | 8b ✅ | **D2 active widget** (§3.4.4, §3.4.5): `widgets.active` is the widget itself (`RenderedWidget`: `status` + `onDidChangeStatus`, `records` + `onDidChangeRecords`; the impl class `WidgetInstance` is its renderer's context too), `onDidChangeActive` only on another widget or tab or its removal; `ActiveWidget` and its copies gone, the host's `statusChanged` / `recordsChanged` gone; Debug follows the active widget's status, Details its records (resubscribed on `onDidChangeActive`); Details' draw guard gone (only records or the widget redraw it); tests: `fakeWidget` in `widgets-testing.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright not run, the e2e specs see no API and stay), deviations: the type is named `RenderedWidget`, events carry no value (read `status` / `records`); with records a widget is activated before its records' event fires; a removed widget's late `selectRecords` is ignored; Debug keeps the guard for an aborted query putting back the status it asked for *(all proposed)* | Debug and Details as before |
 | 8c ✅ | **D3 + D4 quick input, click to filter** (§3.8, §3.11): `ui.showQuickPick(items, {title, placeholder, anchor})` (typing narrows, fuzzy by label else description, headings only with their items) and `ui.showInputBox({title, prompt, placeholder, value, anchor})`, both and `createQuickPick` (`anchor`) at a point or below an element, else at the top in the middle (search everywhere stays there); items with an icon (`{svg, label}`) and `checked`, separators without a label as lines; the fuzzy matcher moved to `frontend/core/fuzzy`; `showContextMenu` draws every registered menu in it (`context-menu.ts` builds the items, the old menu list and its CSS gone); a filter button's `...` asked with `showInputBox` below the button instead of `prompt()`; a click on a mark, a table cell or an Explore group row: `offerFilters` (Filter / Exclude per candidate, the pill at once); `showChoices`, the floating bar, the selection model and `widget/selection` deleted; `selectOnClick` renamed `filterOnClick`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: `=` in both labels, the icon (and its accessible name) tells filter from exclude; no new right-click menus (only `table/cell` opens on one, as before); a menu's command runs synchronously as the box closes (`QuickInput.pickOne`), `showQuickPick`'s promise after it *(all proposed)* | click to filter in one step |
-| 8d | **D5 layout:** tabs in the top row (`[…][Dashica][tabs][+] … [time range][refresh]`), the title bar goes; search everywhere a rail button; side panel headers in caps with "…"; rail tooltips with name and shortcut (§3.4) | the new top row |
+| 8d ✅ | **D5 layout** (§3.4): one top bar (`WindowLayout.topBar`, `registerBarItem('top', …)`: `left` items, the tab bar, `center` / `right` items; `Bar` takes the tab bar as its fixed middle), the title bar gone; the global menu's "…" (`workbench/global`, hidden while empty) and the Dashica icon (`ChartColumn`) before the tabs, "+" after them (`TabBar.onDidAdd`: "/" in a new tab); `ui.registerRailButton` (a rail button running a command, its tooltip with the key), search everywhere's first in the left rail (its field and `search-everywhere.css` gone); every side panel under a header (name in caps, "…" showing `panel/<id>` with "Hide", `workbench.view.<id>.hide`); a panel button's tooltip already named its name and key (since the layout's port), now shared by panel and command buttons; `e2e/top-bar.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: "Hide" in every panel menu so "…" is never empty; the global "…" hidden until 8i gives it entries; "+" opens "/"; the icon is lucide's, not a logo; tooltips stay the native `title` *(all proposed)* | the new top row |
 | 8e | **D6 signed pills:** `<dataUrl>/pill` (422 for fields that cannot filter), `.FilterAs`, `sql.Quote`, `sql.Table`; the key (connection, table, condition, HMAC-SHA-256 with `filters.secret`, required at start); a chart applies the pills of its base table; 400 for a tampered pill; `filter.Apply`'s rules, `DESCRIBE` and its cache, bound `__f<i>`, `withFilters` removed; filterable fields in `page.json` props; generator and golden contract regenerated (§3.8) | filters as signed pills |
 | 8f | **D7 filter buttons:** pressed while active, no duplicate chip | buttons as toggles in place |
 | 8g | **D8 + D9 Explore off, Explore SQL:** with `explore.enabled` false no Explore extension, the handlers answer 404 before any query, "Explore" greyed in the global menu; `xsql` → `exploreSql`; the editor shows placeholders, parameters listed beside it and sent on Run; `inline_parameters.go` removed (Perspective §4.8) | Explore with placeholders |

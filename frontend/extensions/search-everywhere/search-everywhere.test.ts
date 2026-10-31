@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests for search-everywhere.ts in the workbench: its ways in (keys, the title bar button) and its group of commands.
+// Tests for search-everywhere.ts in the workbench: its ways in (keys, the rail button) and its group of commands.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { createWorkbench } from '../../workbench/workbench';
@@ -40,10 +40,10 @@ function setup() {
 }
 
 describe('searchEverywhere', () => {
-  it('opens with Ctrl+K and from its title bar button, which names the key', () => {
+  it('opens with Ctrl+K and from its button first in the left rail, whose tooltip names the key', () => {
     const { host, field, press } = setup();
-    const button = host.querySelector<HTMLButtonElement>('.d-search-button')!;
-    expect(button.textContent).toBe('Search Ctrl+K');
+    const button = host.querySelector<HTMLButtonElement>('.d-workbench__side--left .d-workbench__rail-button')!;
+    expect([button.dataset.testid, button.title]).toEqual(['wb-rail-button-search', 'Search everywhere (Ctrl+K)']);
     button.click();
     expect(document.activeElement).toBe(field());
     field()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

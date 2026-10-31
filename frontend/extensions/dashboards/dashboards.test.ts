@@ -224,7 +224,7 @@ describe('dashboards', () => {
   });
 
   it('finds the dashboards in search everywhere, with their group', async () => {
-    host.querySelector<HTMLButtonElement>('.d-search-button')!.click();
+    host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
     await settle();
     const options = [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);
     expect(options).toContain('Orders Shop');
@@ -232,7 +232,7 @@ describe('dashboards', () => {
   });
 
   it('ranks the dashboards before the charts in search everywhere, and opens a chart at its place', async () => {
-    host.querySelector<HTMLButtonElement>('.d-search-button')!.click();
+    host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
     const field = host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
     field.value = 'orders';
     field.dispatchEvent(new Event('input'));
@@ -245,7 +245,7 @@ describe('dashboards', () => {
   });
 
   it('opens a dashboard picked with Cmd / Ctrl+Enter in search everywhere in a new tab', async () => {
-    host.querySelector<HTMLButtonElement>('.d-search-button')!.click();
+    host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
     const field = host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
     field.value = 'checkout';
     field.dispatchEvent(new Event('input'));

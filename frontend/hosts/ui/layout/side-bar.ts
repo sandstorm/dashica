@@ -1,17 +1,22 @@
 // See WindowLayout in window-layout.ts.
 
-import type { Disposable } from '../../../core/disposable/disposable';
+import { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { html } from 'htl';
-import type { Panel, SidePanelOptions } from '../ui';
+import { Ellipsis, createElement } from 'lucide';
+import type { MenuItem } from '../../commands/commands';
+import type { ContextMenuOptions, Panel, RailButtonOptions, SidePanelOptions } from '../ui';
 
 /**
- * One side of the workbench (left or right): its rail (a button per panel, by `order`, in its top or bottom group) and
- * at most one panel shown, sized by a separator on the panel's inner edge (drag or arrow keys; remembered). Which panel
+ * One side of the workbench (left or right): its rail (a button per panel and per command put there, by `order`, in its
+ * top or bottom group) and at most one panel shown, sized by a separator on the panel's inner edge (drag or arrow keys;
+ * remembered). A panel shows under a header with its name (in caps) and "…", its menu `panel/<id>`, which always holds
+ * "Hide" (its command `workbench.view.<id>.hide`). Which panel
  * shows: the viewer's pick (a rail button; clicking the shown panel's button hides the side), else the side's default
  * panel, else the first panel whose owner asked for it (`setDefault`). As an overlay (`setOverlay`, the narrow
  * workbench's left side) a pick lasts for the moment only, and Escape, a click outside or `dismiss()` close the panel.
- * Each panel's command `workbench.view.<id>` picks it from the keyboard; its rail button's tooltip names the key.
+ * Each panel's command `workbench.view.<id>` picks it from the keyboard; its rail button's tooltip names the key, as a
+ * command button's names its command's.
  */
 export class SideBar {
   readonly element: HTMLElement;
@@ -23,6 +28,8 @@ export class SideBar {
   readonly #panel: HTMLElement;
   readonly #resizer: HTMLElement;
   readonly #panels = new Map<string, PanelEntry>();
+  /** The rail's command buttons (`addButton`). */
+  readonly #buttons = new Set<HTMLElement>();
   readonly #size: (typeof SIZES)[Side];
   #shown: string | null = null;
   #defaultPanel: string | null | undefined;
@@ -62,21 +69,31 @@ export class SideBar {
 
   addPanel(id: string, options: SidePanelOptions): Panel {
     const command = `workbench.view.${id}`;
-    const body = html`<div class="d-workbench__panel-body" id=${`wb-panel-${id}-${Math.random().toString(36).slice(2, 8)}`} data-panel=${id}></div>`;
-    // the key may be bound after the panel is added: named anew whenever the tooltip may show
-    const describe = () => {
-      const key = this.owner.commands.keybindingLabel(command);
-      button.title = key ? `${options.label} (${key})` : options.label;
-    };
-    const button = html<HTMLButtonElement>`<button type="button" class="d-workbench__rail-button" aria-label=${options.label}
-      aria-controls=${body.id} data-testid=${`wb-panel-toggle-${id}`} onpointerenter=${describe} onfocus=${describe}
-      onclick=${() => this.#choose(this.#shown === id ? null : id)}></button>`;
-    describe();
-    button.insertAdjacentHTML('beforeend', options.icon);
+    const hide = `${command}.hide`;
+    const menu = `panel/${id}`;
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const body = html`<div class="d-workbench__panel-body" id=${`wb-panel-${id}-${suffix}`} data-panel=${id}
+      aria-labelledby=${`wb-panel-title-${id}-${suffix}`}></div>`;
+    const button = this.#railButton(options, command, () => this.#choose(this.#shown === id ? null : id));
+    button.setAttribute('aria-controls', body.id);
+    button.dataset.testid = `wb-panel-toggle-${id}`;
+    const actions: HTMLButtonElement = html`<button type="button" class="d-workbench__panel-actions" aria-label=${`${options.label} actions`}
+      title="More actions" aria-haspopup="dialog" onclick=${() => this.owner.menus.showContextMenu(menu, { anchor: actions, title: options.label })}></button>`;
+    actions.append(createElement(Ellipsis, { width: 16, height: 16 }));
+    const header = html`<div class="d-workbench__panel-header" data-testid=${`wb-panel-header-${id}`}>
+      <h2 class="d-workbench__panel-title" id=${`wb-panel-title-${id}-${suffix}`}>${options.label}</h2>${actions}
+    </div>`;
     this.#place(button, options.order ?? 0, options.alignment === 'bottom');
+    this.#panel.insertBefore(header, this.#resizer);
     this.#panel.insertBefore(body, this.#resizer);
-    const registration = this.owner.commands.registerCommand(command, () => this.#toggleFocus(id));
-    const entry: PanelEntry = { body, button, registration, fallback: false, available: true, visible: false, visibility: new EventEmitter<void>() };
+    const registration = Disposable.from(
+      this.owner.commands.registerCommand(command, () => this.#toggleFocus(id)),
+      this.owner.commands.registerCommand(hide, () => {
+        if (this.#shown === id) this.#choose(null);
+      }),
+      this.owner.menus.registerMenuItem(menu, { command: hide, title: 'Hide', group: 'panel' }),
+    );
+    const entry: PanelEntry = { body, header, button, registration, fallback: false, available: true, visible: false, visibility: new EventEmitter<void>() };
     this.#panels.set(id, entry);
     this.layout();
     return {
@@ -94,6 +111,22 @@ export class SideBar {
       dismiss: () => this.#dismiss(),
       dispose: () => this.#remove(id),
     };
+  }
+
+  /** Adds a rail button running `options.command`, until disposed. */
+  addButton(id: string, options: RailButtonOptions): Disposable {
+    const button = this.#railButton(options, options.command, () => {
+      this.owner.commands.executeCommand(options.command).catch((error: unknown) => console.error(`Command ${options.command} failed:`, error));
+    });
+    button.dataset.testid = `wb-rail-button-${id}`;
+    this.#place(button, options.order ?? 0, options.alignment === 'bottom');
+    this.#buttons.add(button);
+    this.layout();
+    return new Disposable(() => {
+      if (!this.#buttons.delete(button)) return;
+      button.remove();
+      this.layout();
+    });
   }
 
   /** The panel the side shows until the viewer picks one (null: none), before any panel's `setDefault`; undefined: no such panel. */
@@ -117,11 +150,12 @@ export class SideBar {
 
   show(id: string | null): void {
     this.#shown = id;
-    this.element.hidden = ![...this.#panels.values()].some((panel) => panel.available);
+    this.element.hidden = this.#buttons.size === 0 && ![...this.#panels.values()].some((panel) => panel.available);
     for (const [panelId, panel] of this.#panels) {
       panel.button.hidden = !panel.available;
       panel.button.setAttribute('aria-pressed', String(panelId === id));
       panel.body.hidden = panelId !== id;
+      panel.header.hidden = panelId !== id;
     }
     this.#panel.hidden = id === null;
     this.#applySize();
@@ -138,6 +172,22 @@ export class SideBar {
     for (const stop of this.#cleanup) stop();
     this.element.remove();
     this.host.style.removeProperty('--d-workbench-right-side');
+  }
+
+  /**
+   * A rail button with `options`' icon, running `click`; its tooltip names `command`'s key, asked anew whenever the
+   * tooltip may show (the key may be bound after the button is added).
+   */
+  #railButton(options: { label: string; icon: string }, command: string, click: () => void): HTMLButtonElement {
+    const describe = () => {
+      const key = this.owner.commands.keybindingLabel(command);
+      button.title = key ? `${options.label} (${key})` : options.label;
+    };
+    const button = html<HTMLButtonElement>`<button type="button" class="d-workbench__rail-button" aria-label=${options.label}
+      onpointerenter=${describe} onfocus=${describe} onclick=${click}></button>`;
+    describe();
+    button.insertAdjacentHTML('beforeend', options.icon);
+    return button;
   }
 
   /** Inserts `button` into the rail's top or bottom group, before the first of its buttons with a higher order. */
@@ -211,6 +261,7 @@ export class SideBar {
     const panel = this.#panels.get(id);
     if (!panel) return;
     panel.body.remove();
+    panel.header.remove();
     panel.button.remove();
     panel.registration.dispose();
     panel.visibility.dispose();
@@ -298,22 +349,32 @@ export function restoreSideBarState(value: unknown, side: Side): SideBarState {
   return { size: typeof saved.size === 'number' ? saved.size : SIZES[side].initial, chosen };
 }
 
-/** What a side needs of the whole layout: to save the state of both sides, and the commands. */
+/** What a side needs of the whole layout: to save the state of both sides, the commands and the menus. */
 export interface SideBarOwner {
   save(): void;
   readonly commands: PanelCommands;
+  readonly menus: PanelMenus;
 }
 
-/** What a panel needs of the commands: to register its own, and the label of its key. */
+/** What a side needs of the commands: to register a panel's, run a rail button's, and the label of a key. */
 export interface PanelCommands {
   registerCommand(id: string, handler: () => void): Disposable;
+  executeCommand(id: string): Promise<unknown>;
   keybindingLabel(id: string): string | undefined;
+}
+
+/** What a panel's "…" needs of the menus: to add "Hide" to its menu and to show it. */
+export interface PanelMenus {
+  registerMenuItem(menuId: string, item: MenuItem): Disposable;
+  showContextMenu(menuId: string, options: ContextMenuOptions): void;
 }
 
 interface PanelEntry {
   body: HTMLElement;
+  /** Its name and "…", above `body`. */
+  header: HTMLElement;
   button: HTMLButtonElement;
-  /** Its command `workbench.view.<id>`. */
+  /** Its commands `workbench.view.<id>` and `.hide`, and "Hide" in its menu. */
   registration: Disposable;
   fallback: boolean;
   available: boolean;

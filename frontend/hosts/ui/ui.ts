@@ -4,16 +4,23 @@ import type { Event } from '../../core/event-emitter/event-emitter';
 import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
- * The workbench's regions as extensions fill them (side panels left and right, items in the title bar, the filter bar
- * and the status bar), its menus, and what search everywhere finds. Each panel has a command `workbench.view.<id>`: it
- * shows and focuses the panel, or hides it while it is shown and has the focus. Sizes and the panels picked are
- * remembered for the browser session.
+ * The workbench's regions as extensions fill them (side panels left and right and command buttons in their rails,
+ * items in the top bar around the tabs, the filter bar and the status bar), its menus, and what search everywhere
+ * finds. Each panel has a command `workbench.view.<id>`: it shows and focuses the panel, or hides it while it is shown
+ * and has the focus; its header's "…" shows its menu `panel/<id>` (context and arguments none), which has "Hide". The
+ * "…" at the top bar's start shows the menu `workbench/global` (context and arguments none) and is hidden while it is
+ * empty. Sizes and the panels picked are remembered for the browser session.
  */
 export interface UiApi {
   /** Adds a side panel with its rail button on `options.side`; one panel per side shows at a time. Ids are unique across all panels. */
   registerSidePanel(id: string, options: SidePanelOptions): Panel;
-  /** Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item. */
-  registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
+  /** Adds a button running `options.command` to the rail of `options.side`, until disposed; its tooltip names the command's key. */
+  registerRailButton(id: string, options: RailButtonOptions): Disposable;
+  /**
+   * Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item (the top bar
+   * always: it holds the tabs, its `left` items before them, `center` and `right` ones after them).
+   */
+  registerBarItem(bar: 'top' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
   /**
    * Adds `item` to the menu `menuId` until disposed. A menu is only an id; whoever shows it documents its context `C`
    * and its arguments, e.g. `dashboards/entry`: `{ url, title }` of a dashboard entry, its URL as the argument.
@@ -211,6 +218,22 @@ export interface SidePanelOptions {
   /** The rail's group: `'top'` (the default) or `'bottom'`, at the rail's far end. */
   alignment?: 'top' | 'bottom';
   /** The place among the buttons of its side and group (lower first; equal: registration order); default 0. */
+  order?: number;
+}
+
+/** A rail button that runs a command (search everywhere's). */
+export interface RailButtonOptions {
+  /** The button's tooltip (with the command's key) and accessible name. */
+  label: string;
+  /** SVG markup, drawn in `currentColor`. */
+  icon: string;
+  /** Run without arguments on a click. */
+  command: string;
+  /** Default `'left'`. */
+  side?: 'left' | 'right';
+  /** As `SidePanelOptions.alignment`. */
+  alignment?: 'top' | 'bottom';
+  /** The place among the side's buttons, panels' included (lower first; equal: registration order); default 0. */
   order?: number;
 }
 

@@ -1,14 +1,16 @@
 // See UiApi in ../ui.ts.
 
-import type { Panel, SidePanelOptions } from '../ui';
+import type { Disposable } from '../../../core/disposable/disposable';
+import type { Panel, RailButtonOptions, SidePanelOptions } from '../ui';
 import type { Memento } from '../../extension-host/extension-host';
 import { html } from 'htl';
-import { restoreSideBarState, SideBar, type PanelCommands, type Side } from './side-bar';
+import { restoreSideBarState, SideBar, type PanelCommands, type PanelMenus, type Side } from './side-bar';
 
 /**
- * The workbench's regions in one grid: the title bar above everything; the left side (a rail with a button per side
- * panel and the shown panel); in the middle the tab bar, the filter bar and the content; the right side (the shown
- * panel and its rail, on the outer edge); the status bar below everything. Each side shows one panel at a time;
+ * The workbench's regions in one grid: the top bar above everything (its items around the tab bar); the left side (a
+ * rail with a button per side panel and per command put there, and the shown panel); in the middle the filter bar and
+ * the content; the right side (the shown panel and its rail, on the outer edge); the status bar below everything.
+ * Each side shows one panel at a time;
  * clicking the shown one's rail button hides the side and the content takes the room. Sizes and the panels picked are
  * remembered for the session.
  *
@@ -16,8 +18,8 @@ import { restoreSideBarState, SideBar, type PanelCommands, type Side } from './s
  * outside, or `dismiss()` (e.g. after a dashboard was chosen in it).
  */
 export class WindowLayout {
-  readonly titleBar: HTMLElement;
-  /** Above the filter bar: where the tab bar (`TabBar`) goes. */
+  readonly topBar: HTMLElement;
+  /** In the top bar, between its left and its other items: where the tab bar (`TabBar`) goes. */
   readonly tabBar: HTMLElement;
   readonly filterBar: HTMLElement;
   readonly content: HTMLElement;
@@ -30,23 +32,25 @@ export class WindowLayout {
     private readonly host: HTMLElement,
     /** Where the layout keeps its state for the browser session (key `layout`). */
     memento: Memento,
-    /** Where each panel's command `workbench.view.<id>` goes, and the keys its button names. */
+    /** Where each panel's commands `workbench.view.<id>` go, what rail buttons run, and the keys buttons name. */
     commands: PanelCommands,
+    /** Where each panel's menu `panel/<id>` gets "Hide", and how its "…" shows it. */
+    menus: PanelMenus,
   ) {
     const saved = memento.get<unknown>('layout');
     const save = () => void memento.update('layout', { left: this.#sides.left.state, right: this.#sides.right.state });
     this.#sides = {
-      left: new SideBar(host, 'left', restoreSideBarState(saved, 'left'), { save, commands }),
-      right: new SideBar(host, 'right', restoreSideBarState(saved, 'right'), { save, commands }),
+      left: new SideBar(host, 'left', restoreSideBarState(saved, 'left'), { save, commands, menus }),
+      right: new SideBar(host, 'right', restoreSideBarState(saved, 'right'), { save, commands, menus }),
     };
-    this.titleBar = html`<div class="d-workbench__title-bar" data-testid="wb-title-bar"></div>`;
     this.tabBar = html`<div class="d-workbench__tab-bar" data-testid="wb-tab-bar"></div>`;
+    this.topBar = html`<div class="d-workbench__top-bar" data-testid="wb-top-bar">${this.tabBar}</div>`;
     this.filterBar = html`<div class="d-workbench__filter-bar" data-testid="wb-filter-bar"></div>`;
     this.content = html`<div class="d-workbench__content"></div>`;
-    this.#center = html`<div class="d-workbench__center">${this.tabBar}${this.filterBar}${this.content}</div>`;
+    this.#center = html`<div class="d-workbench__center">${this.filterBar}${this.content}</div>`;
     this.statusBar = html`<div class="d-workbench__status-bar"></div>`;
     host.classList.add('d-workbench');
-    host.append(this.titleBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
+    host.append(this.topBar, this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
     this.#watchWidth();
   }
 
@@ -58,6 +62,11 @@ export class WindowLayout {
   addSidePanel(id: string, options: SidePanelOptions): Panel {
     this.#refuseTaken(id);
     return this.#sides[options.side ?? 'left'].addPanel(id, options);
+  }
+
+  /** Adds a button running `options.command` to the rail of `options.side` (default left), placed as a panel's. */
+  addRailButton(id: string, options: RailButtonOptions): Disposable {
+    return this.#sides[options.side ?? 'left'].addButton(id, options);
   }
 
   /**
@@ -72,7 +81,7 @@ export class WindowLayout {
     for (const stop of this.#cleanup) stop();
     this.#sides.left.dispose();
     this.#sides.right.dispose();
-    this.titleBar.remove();
+    this.topBar.remove();
     this.#center.remove();
     this.statusBar.remove();
     this.host.classList.remove('d-workbench', 'd-workbench--narrow');

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for tab-bar.ts (TabBar): a tab per open page, the shown one selected, choosing and closing (×, middle click),
-// no × on the last tab.
+// no × on the last tab, "+" asking for a new one.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TabBar } from './tab-bar';
 
@@ -8,12 +8,14 @@ let container: HTMLElement;
 let bar: TabBar;
 let chosen: string[];
 let closed: string[];
+let added: number;
 
 beforeEach(() => {
   container = document.body.appendChild(document.createElement('div'));
   chosen = [];
   closed = [];
-  bar = new TabBar(container, { onDidChoose: (id) => chosen.push(id), onDidClose: (id) => closed.push(id) });
+  added = 0;
+  bar = new TabBar(container, { onDidChoose: (id) => chosen.push(id), onDidClose: (id) => closed.push(id), onDidAdd: () => added++ });
   bar.update(
     [
       { id: 'a', title: 'Shop' },
@@ -59,7 +61,15 @@ describe('TabBar', () => {
     expect(closed).toEqual([]);
   });
 
-  it('takes its tab list out of the container when disposed', () => {
+  it('asks for a new tab by "+", after the tabs, without choosing one', () => {
+    const add = container.querySelector<HTMLButtonElement>('[aria-label="New tab"]')!;
+    expect(container.lastElementChild).toBe(add);
+    add.click();
+    expect(added).toBe(1);
+    expect(chosen).toEqual([]);
+  });
+
+  it('takes its tab list and "+" out of the container when disposed', () => {
     bar.dispose();
     expect(container.children).toHaveLength(0);
   });

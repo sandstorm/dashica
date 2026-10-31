@@ -1,5 +1,5 @@
 import { html } from 'htl';
-import { GripVertical, createElement } from 'lucide';
+import { ChartColumn, GripVertical, createElement } from 'lucide';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { MenuGroupEntry } from '../../generated/zz_generated.dashica';
 import type { Extension, ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
@@ -12,15 +12,15 @@ import { homePage } from './home-page';
  * the menu groups, each a view the viewer closes and opens; the page shown is marked; a star makes an entry a
  * favorite, "…" opens the menu `dashboards/entry`: context `{ url, title }`, argument the URL; "Open in new tab"
  * opens it in a tab of its own), their group in search everywhere (Cmd / Ctrl+Enter: in a new tab), the start page
- * "/" (page kind `home`: the favorites as tiles, then the groups), and "Dashica" in the title bar, a link to it.
+ * "/" (page kind `home`: the favorites as tiles, then the groups), and the Dashica icon in the top bar, a link to it.
  * Picking one opens it in the active tab.
  */
 export const dashboards: Extension = {
   id: 'dashboards',
   activate(context) {
     const { ui, page, commands, subscriptions } = context;
-    const brand = html`<a href="/" class="d-brand">Dashica</a>`;
-    subscriptions.push(ui.registerBarItem('title', brand, { alignment: 'left' }));
+    const brand = html`<a href="/" class="d-brand" aria-label="Dashica" title="Dashica: start page">${createElement(ChartColumn, { width: 18, height: 18 })}</a>`;
+    subscriptions.push(ui.registerBarItem('top', brand, { alignment: 'left' }));
 
     const panel = ui.registerSidePanel('dashboards', { label: 'Dashboards', icon: DASHBOARDS_ICON });
     panel.setDefault(true);

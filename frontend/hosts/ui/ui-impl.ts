@@ -13,6 +13,7 @@ import type {
   InputBoxOptions,
   Panel,
   QuickPick,
+  RailButtonOptions,
   QuickPickItem,
   QuickPickOptions,
   QuickPickSeparator,
@@ -26,7 +27,7 @@ import './quick-input/quick-input.css';
 /** The workbench's `UiApi`, laid out in `host`. `content`: the region the tabs' pages go into; `tabBar`: the tab bar's. */
 export class UiHost implements UiApi {
   readonly #layout: WindowLayout;
-  readonly #bars: Record<'title' | 'filter' | 'status', Bar>;
+  readonly #bars: Record<'top' | 'filter' | 'status', Bar>;
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
   readonly #quickInput: QuickInput;
@@ -34,11 +35,15 @@ export class UiHost implements UiApi {
   readonly onDidChangeMenu;
 
   constructor(host: HTMLElement, layoutState: Memento, commands: CommandsHost) {
-    this.#layout = new WindowLayout(host, layoutState, commands);
-    this.#bars = { title: new Bar(this.#layout.titleBar), filter: new Bar(this.#layout.filterBar), status: new Bar(this.#layout.statusBar) };
     this.#menus = new Menus(() => commands.getCommands());
     this.#quickInput = new QuickInput(host);
     this.#contextMenu = new ContextMenu(this.#quickInput, this.#menus, commands);
+    this.#layout = new WindowLayout(host, layoutState, commands, this);
+    this.#bars = {
+      top: new Bar(this.#layout.topBar, this.#layout.tabBar),
+      filter: new Bar(this.#layout.filterBar),
+      status: new Bar(this.#layout.statusBar),
+    };
     this.onDidChangeMenu = this.#menus.onDidChange;
   }
 
@@ -54,7 +59,11 @@ export class UiHost implements UiApi {
     return this.#layout.addSidePanel(id, options);
   }
 
-  registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable {
+  registerRailButton(id: string, options: RailButtonOptions): Disposable {
+    return this.#layout.addRailButton(id, options);
+  }
+
+  registerBarItem(bar: 'top' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable {
     return this.#bars[bar].add(element, placement);
   }
 

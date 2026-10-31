@@ -1,12 +1,14 @@
 // See PageApi in ../../page/page.ts.
 
 /**
- * The tab bar above the filter bar: a tab per open page (a dashboard, a chart's Explore view), the shown one
- * selected, each with × to close it while there are several. Choosing another tab asks for it (`onDidChoose`); its ×
- * or a middle click on it asks to close it (`onDidClose`). The bar shows with a single tab too.
+ * The tab bar in the top bar: a tab per open page (a dashboard, a chart's Explore view), the shown one selected, each
+ * with × to close it while there are several, then "+" for a new tab. Choosing another tab asks for it
+ * (`onDidChoose`); its × or a middle click on it asks to close it (`onDidClose`); "+" asks for a new one (`onDidAdd`).
+ * The bar shows with a single tab too.
  */
 export class TabBar {
   readonly #tabs: HTMLElement;
+  readonly #add: HTMLButtonElement;
 
   /** Appends the bar's tab list to `container` (the workbench's tab bar region). */
   constructor(container: HTMLElement, options: TabBarOptions) {
@@ -15,7 +17,15 @@ export class TabBar {
     this.#tabs.className = 'd-workbench__tab-list';
     this.#tabs.setAttribute('role', 'tablist');
     this.#tabs.setAttribute('aria-label', 'Open pages');
-    container.append(this.#tabs);
+    this.#add = doc.createElement('button');
+    this.#add.type = 'button';
+    this.#add.className = 'd-workbench__tab-add';
+    this.#add.setAttribute('aria-label', 'New tab');
+    this.#add.title = 'New tab';
+    this.#add.dataset.testid = 'wb-tab-add';
+    this.#add.textContent = '+';
+    this.#add.addEventListener('click', () => options.onDidAdd());
+    container.append(this.#tabs, this.#add);
     this.#tabs.addEventListener('click', (event) => {
       const close = (event.target as HTMLElement).closest<HTMLElement>('[data-close]');
       if (close?.dataset.close) {
@@ -74,6 +84,7 @@ export class TabBar {
 
   dispose(): void {
     this.#tabs.remove();
+    this.#add.remove();
   }
 }
 
@@ -82,6 +93,8 @@ export interface TabBarOptions {
   onDidChoose(id: string): void;
   /** The viewer closed a tab (its id): its ×, a middle click. */
   onDidClose(id: string): void;
+  /** The viewer asked for a new tab ("+"). */
+  onDidAdd(): void;
 }
 
 /** A tab of the bar: an open page. */

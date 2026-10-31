@@ -10,7 +10,7 @@ import './filters.css';
 /**
  * The filters of a page that has them (`page.json`'s `filterBar`): the filter bar shows one chip per filter, structured
  * ("host = a") or SQL ("SQL: duration > 2000"), each removed with its × and edited with a click on its text. The funnel
- * button in the title bar adds a SQL chip. The page's filter buttons are toggles: pressed while a SQL chip has their
+ * button in the top bar adds a SQL chip. The page's filter buttons are toggles: pressed while a SQL chip has their
  * condition (`status >= 500`; a `...` in it is asked for), which is then labelled with the button's title. The bar
  * shows while it has a chip or a button, else the page has no bar for nothing. A click on a chart adds its structured
  * chips (`WidgetsApi.offerFilters`).
@@ -34,7 +34,7 @@ export const filters: Extension = {
       button?.dispose();
       button = undefined;
       filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : []);
-      if (page.current?.filterBar) button = ui.registerBarItem('title', filterBar.toggle, { alignment: 'right', priority: 40 });
+      if (page.current?.filterBar) button = ui.registerBarItem('top', filterBar.toggle, { alignment: 'right', priority: 40 });
       showBar();
     };
     subscriptions.push(page.onDidChangePage(showForPage));

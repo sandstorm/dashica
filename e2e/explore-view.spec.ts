@@ -122,7 +122,7 @@ test('Close closes the Explore tab; Back shows the dashboard’s tab, the Explor
 test('the Explore tab keeps a time range of its own', async ({page}) => {
     await openExplore(page);
     const refetched = page.waitForRequest((request) => /\/rows\?time=6h/.test(request.url()));
-    await page.getByTestId('wb-title-bar').getByRole('button', {name: /Last 7 days/}).click();
+    await page.getByTestId('wb-top-bar').getByRole('button', {name: /Last 7 days/}).click();
     await page.getByRole('button', {name: 'Last 6 hours'}).click();
     await refetched;
     await expect(page).toHaveURL(/\?time=6h#explore=\d+$/);

@@ -4,20 +4,23 @@ import { Disposable } from '../../../core/disposable/disposable';
 import type { BarPlacement, UiApi } from '../ui';
 
 /**
- * The items of one bar (title, filter or status): `left` from its start, `center` in the middle, `right` at its end;
+ * The items of one bar (top, filter or status): `left` from its start, `center` in the middle, `right` at its end;
  * within a side the higher `priority` further left (default 0), equal priorities in registration order. The bar is
- * hidden while it has no item.
+ * hidden while it has no item, unless it holds a fixed part between its `left` and `center` items (the top bar's tabs).
  */
 export class Bar {
   readonly #bar: HTMLElement;
   readonly #sides: Record<BarPlacement['alignment'], { element: HTMLElement; entries: Entry[] }>;
 
-  /** Fills `bar`, the layout's region. */
-  constructor(bar: HTMLElement) {
+  /** Fills `bar`, the layout's region; `fixed` goes between the `left` and the `center` items. */
+  constructor(
+    bar: HTMLElement,
+    private readonly fixed?: HTMLElement,
+  ) {
     this.#bar = bar;
     const side = (alignment: string) => ({ element: html`<div class="d-workbench__bar-${alignment}"></div>`, entries: [] as Entry[] });
     this.#sides = { left: side('left'), center: side('center'), right: side('right') };
-    bar.append(this.#sides.left.element, this.#sides.center.element, this.#sides.right.element);
+    bar.append(this.#sides.left.element, ...(fixed ? [fixed] : []), this.#sides.center.element, this.#sides.right.element);
     this.#update();
   }
 
@@ -38,7 +41,7 @@ export class Bar {
   }
 
   #update(): void {
-    this.#bar.hidden = Object.values(this.#sides).every((side) => side.entries.length === 0);
+    this.#bar.hidden = !this.fixed && Object.values(this.#sides).every((side) => side.entries.length === 0);
   }
 }
 

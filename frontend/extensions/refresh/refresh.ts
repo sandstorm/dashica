@@ -3,7 +3,7 @@ import { RefreshCw, createElement } from 'lucide';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 
 /**
- * Refresh in the title bar, as one split button: ⟳ queries the page again now (also the command `refresh.now`), the
+ * Refresh in the top bar, as one split button: ⟳ queries the page again now (also the command `refresh.now`), the
  * interval beside it queries again every so often (`?refresh=30`; "Off" by default). On every page, the start page
  * too.
  */
@@ -35,7 +35,7 @@ export const refresh: Extension = {
     subscriptions.push(query.time.onDidChange(show));
     subscriptions.push(commands.registerCommand('refresh.now', () => query.refresh()));
     const item = html`<div class="d-segmented">${button}${interval}</div>`;
-    subscriptions.push(ui.registerBarItem('title', item, { alignment: 'right', priority: 20 }));
+    subscriptions.push(ui.registerBarItem('top', item, { alignment: 'right', priority: 20 }));
   },
 };
 

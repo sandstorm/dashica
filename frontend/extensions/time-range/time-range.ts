@@ -5,7 +5,7 @@ import { formatTime, type QueryApi } from '../../hosts/query/query';
 import './time-range.css';
 
 /**
- * The time range of the page's queries, in the title bar: a button showing the range ("Last 1 hour",
+ * The time range of the page's queries, in the top bar: a button showing the range ("Last 1 hour",
  * "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the window by its length, ⊖ zooming out to twice the
  * window. On every page, the start page too.
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
@@ -19,7 +19,7 @@ export const timeRange: Extension = {
     const picker = new TimeRangePicker(query, globalState);
     picker.show();
     subscriptions.push(query.time.onDidChange(() => picker.show()));
-    subscriptions.push(ui.registerBarItem('title', picker.el, { alignment: 'right', priority: 30 }));
+    subscriptions.push(ui.registerBarItem('top', picker.el, { alignment: 'right', priority: 30 }));
     subscriptions.push({ dispose: () => picker.close() });
   },
 };

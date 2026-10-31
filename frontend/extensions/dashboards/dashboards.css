@@ -90,7 +90,9 @@
   color: var(--color-accent);
 }
 
-/* the brand at the title bar's start */
+/* the Dashica icon at the top bar's start, before the tabs */
 .d-brand {
-  font-weight: var(--weight-bold);
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-accent);
 }

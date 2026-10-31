@@ -1,5 +1,5 @@
-/* The workbench's regions (see WindowLayout in window-layout.ts): the title and filter bars, the two sides (rail,
-   resizable panel; the left one an overlay when narrow), between them the tab bar, the filter bar and the content,
+/* The workbench's regions (see WindowLayout in window-layout.ts): the top bar with the tabs, the two sides (rail,
+   resizable panel under its header; the left one an overlay when narrow), between them the filter bar and the content,
    the status bar. All values are tokens (core/style/tokens.css), so light and dark apply. */
 .d-workbench {
   position: relative;
@@ -11,8 +11,9 @@
   color: var(--color-text);
 }
 
-/* Above everything the title bar; above the content the filter bar. Each is hidden while it has no item. */
-.d-workbench__title-bar,
+/* Above everything the top bar: its left items, the tabs, its other items; above the content the filter bar (hidden
+   while it has no item). */
+.d-workbench__top-bar,
 .d-workbench__filter-bar {
   display: flex;
   align-items: center;
@@ -22,9 +23,9 @@
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-surface-subtle);
 }
-.d-workbench__title-bar { grid-column: 1 / -1; grid-row: 1; min-height: 36px; font-size: var(--text-sm); }
+.d-workbench__top-bar { grid-column: 1 / -1; grid-row: 1; align-items: stretch; min-height: 36px; font-size: var(--text-sm); }
 .d-workbench__filter-bar { flex: none; }
-.d-workbench__title-bar[hidden],
+.d-workbench__top-bar[hidden],
 .d-workbench__filter-bar[hidden],
 .d-workbench__status-bar[hidden] { display: none; }
 .d-workbench__bar-left,
@@ -34,6 +35,28 @@
 .d-workbench__bar-center { flex: 0 1 auto; justify-content: center; }
 .d-workbench__bar-right { flex: 1 1 0; justify-content: flex-end; }
 .d-workbench__filter-bar .d-workbench__bar-left { flex: 1 1 auto; }
+/* the top bar: the tabs take the room between its left and its right items */
+.d-workbench__top-bar .d-workbench__bar-left,
+.d-workbench__top-bar .d-workbench__bar-center { flex: none; }
+.d-workbench__top-bar .d-workbench__bar-right { flex: none; padding-left: var(--space-2); }
+/* the global menu's "…" */
+.d-workbench__global-menu,
+.d-workbench__panel-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 0;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.d-workbench__global-menu[hidden] { display: none; }
+.d-workbench__global-menu:hover,
+.d-workbench__panel-actions:hover { background: var(--color-hover); color: var(--color-text); }
 
 /* The sides: a rail of buttons and the shown panel. */
 .d-workbench__side {
@@ -85,7 +108,30 @@
 .d-workbench__side--left .d-workbench__panel { max-width: 50vw; border-left: var(--border-width) solid var(--color-border); }
 .d-workbench__side--right .d-workbench__panel { flex: 1; border-right: var(--border-width) solid var(--color-border); }
 .d-workbench__panel[hidden],
+.d-workbench__panel-header[hidden],
 .d-workbench__panel-body[hidden] { display: none; }
+/* the shown panel's header: its name in caps, "…" for its menu */
+.d-workbench__panel-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-1) 0 var(--space-3);
+}
+.d-workbench__panel-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .d-workbench__panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 /* the separator on the panel's inner edge */
 .d-workbench__resizer {
@@ -113,14 +159,13 @@
   box-shadow: var(--shadow-overlay);
 }
 
-/* The tab bar: a tab per open page, the shown one selected, × to close. */
+/* The tab bar in the top bar: a tab per open page, the shown one selected, × to close, then "+". */
 .d-workbench__tab-bar {
-  flex: none;
+  flex: 1 1 auto;
   display: flex;
+  align-items: flex-end;
   min-width: 0;
-  padding: var(--space-1) var(--space-2) 0;
-  border-bottom: var(--border-width) solid var(--color-border);
-  background: var(--color-surface-subtle);
+  padding-top: var(--space-1);
 }
 /* the list lies over the bar's bottom border, so the selected tab covers it without reaching out of the list (that
    would scroll it vertically: a list scrolling sideways scrolls up and down as well) */
@@ -157,10 +202,26 @@
 .d-workbench__tab-title { min-width: 0; padding: var(--space-1) var(--space-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .d-workbench__tab-close { padding: 0 var(--space-1); margin-right: var(--space-1); border-radius: var(--radius-md); line-height: 1; }
 .d-workbench__tab-close:hover { background: var(--color-hover); }
+.d-workbench__tab-add {
+  flex: none;
+  align-self: center;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--text-lg);
+  line-height: 24px;
+  cursor: pointer;
+}
+.d-workbench__tab-add:hover { background: var(--color-hover); color: var(--color-text); }
 .d-workbench__tab-title:focus-visible,
-.d-workbench__tab-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.d-workbench__tab-close:focus-visible,
+.d-workbench__tab-add:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
-/* The centre column: the tab bar, the filter bar, the content. */
+/* The centre column: the filter bar, the content. */
 .d-workbench__center {
   grid-column: 2;
   grid-row: 2;

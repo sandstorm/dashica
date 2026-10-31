@@ -29,7 +29,7 @@ import { timeBar } from './extensions/time-bar/time-bar';
 import { timeLine } from './extensions/time-line/time-line';
 import { timeRange } from './extensions/time-range/time-range';
 
-/** The workbench's extensions: the chrome first (its title bar items in this order), then the page and widget types. */
+/** The workbench's extensions: the chrome first (its top bar items in this order), then the page and widget types. */
 const EXTENSIONS: readonly Extension[] = [
   dashboards,
   searchEverywhere,

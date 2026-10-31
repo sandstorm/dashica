@@ -3,6 +3,8 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandsHost } from '../../commands/commands';
+import { Menus } from '../menus/menus';
+import type { ContextMenuOptions } from '../ui';
 import { WindowLayout } from './window-layout';
 
 let resize: (() => void) | null = null;
@@ -31,7 +33,12 @@ function setup({ observe = false, key = `test-${Math.random()}` } = {}) {
   const host = document.createElement('div');
   document.body.append(host);
   const commands = new CommandsHost(host);
-  const layout = new WindowLayout(host, sessionMemento(`${key}:`), commands);
+  const menus = new Menus(() => commands.getCommands());
+  const shownMenus: [string, ContextMenuOptions][] = [];
+  const layout = new WindowLayout(host, sessionMemento(`${key}:`), commands, {
+    registerMenuItem: (menuId, item) => menus.register(menuId, item),
+    showContextMenu: (menuId, options) => shownMenus.push([menuId, options]),
+  });
   const sidePanel = layout.addSidePanel('dashboards', { label: 'Dashboards', icon: '<svg></svg>' });
   const body = sidePanel.body;
   body.textContent = 'menu';
@@ -45,7 +52,7 @@ function setup({ observe = false, key = `test-${Math.random()}` } = {}) {
   const isOpen = () => toggle.getAttribute('aria-pressed') === 'true' && !panel.hidden && !body.hidden;
   /** Adds the right side's panel `id`. */
   const right = (id = 'inspector', label = 'Inspector') => layout.addSidePanel(id, { label, icon: '<svg></svg>', side: 'right' });
-  return { host, layout, commands, sidePanel, body, toggle, panel, setWidth, key, isOpen, right };
+  return { host, layout, commands, menus, shownMenus, sidePanel, body, toggle, panel, setWidth, key, isOpen, right };
 }
 
 afterEach(() => {
@@ -55,16 +62,17 @@ afterEach(() => {
 });
 
 describe('WindowLayout', () => {
-  it('puts the title bar, the left side, the tab bar, filter bar and content between the sides, the right side and the status bar into the host', () => {
+  it('puts the top bar with the tab bar, the left side, filter bar and content between the sides, the right side and the status bar into the host', () => {
     const { host, layout } = setup();
     expect([...host.children].map((c) => c.className)).toEqual([
-      'd-workbench__title-bar',
+      'd-workbench__top-bar',
       'd-workbench__side d-workbench__side--left',
       'd-workbench__center',
       'd-workbench__side d-workbench__side--right',
       'd-workbench__status-bar',
     ]);
-    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__tab-bar', 'd-workbench__filter-bar', 'd-workbench__content']);
+    expect(layout.tabBar.parentElement).toBe(layout.topBar);
+    expect([...host.querySelector('.d-workbench__center')!.children].map((c) => c.className)).toEqual(['d-workbench__filter-bar', 'd-workbench__content']);
     expect(layout.content.className).toBe('d-workbench__content');
   });
 
@@ -334,6 +342,57 @@ describe('WindowLayout', () => {
     toggle.dispatchEvent(new Event('pointerenter'));
     expect(toggle.title).toBe('Dashboards (Alt+1)');
     expect(toggle.getAttribute('aria-label')).toBe('Dashboards');
+  });
+
+  it('shows the shown panel under a header with its name and "…", which shows its menu with "Hide"', async () => {
+    const { host, layout, commands, menus, shownMenus, sidePanel, isOpen } = setup();
+    const header = (id: string) => host.querySelector<HTMLElement>(`[data-testid=wb-panel-header-${id}]`)!;
+    const debug = layout.addSidePanel('debug', { label: 'Debug', icon: '<svg></svg>' });
+    sidePanel.show();
+    expect([header('dashboards').hidden, header('debug').hidden]).toEqual([false, true]);
+    expect(header('dashboards').querySelector('h2')!.textContent).toBe('Dashboards');
+    expect(sidePanel.body.getAttribute('aria-labelledby')).toBe(header('dashboards').querySelector('h2')!.id);
+    const more = header('dashboards').querySelector<HTMLButtonElement>('button[aria-label="Dashboards actions"]')!;
+    more.click();
+    expect(shownMenus).toEqual([['panel/dashboards', { anchor: more, title: 'Dashboards' }]]);
+    const [hide] = menus.items('panel/dashboards');
+    expect([hide.title, hide.command]).toEqual(['Hide', 'workbench.view.dashboards.hide']);
+    // "Hide" closes the side while it shows the panel, else nothing
+    debug.show();
+    await commands.executeCommand(hide.command);
+    expect(debug.visible).toBe(true);
+    sidePanel.show();
+    await commands.executeCommand(hide.command);
+    expect(isOpen()).toBe(false);
+    sidePanel.dispose();
+    expect([header('dashboards'), menus.items('panel/dashboards')]).toEqual([null, []]);
+  });
+
+  it('puts a command button into the rail among the panels by order, runs its command, names its key, until disposed', async () => {
+    const { host, layout, commands } = setup();
+    const ran: string[] = [];
+    commands.registerCommand('test.search', () => ran.push('search'));
+    commands.declareKeybindings([{ key: 'Mod+KeyK', command: 'test.search' }]);
+    const search = layout.addRailButton('search', { label: 'Search everywhere', icon: '<svg></svg>', command: 'test.search', order: -1 });
+    const rail = () => [...host.querySelectorAll<HTMLButtonElement>('.d-workbench__side--left .d-workbench__rail-button')].map((b) => b.getAttribute('aria-label'));
+    expect(rail()).toEqual(['Search everywhere', 'Dashboards']);
+    const button = host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!;
+    expect([button.title, button.hasAttribute('aria-pressed')]).toEqual(['Search everywhere (Ctrl+K)', false]);
+    button.click();
+    await Promise.resolve();
+    expect(ran).toEqual(['search']);
+    search.dispose();
+    expect(rail()).toEqual(['Dashboards']);
+  });
+
+  it('shows a side that has only a command button', () => {
+    const { host, layout } = setup();
+    const right = host.querySelector<HTMLElement>('.d-workbench__side--right')!;
+    expect(right.hidden).toBe(true);
+    const button = layout.addRailButton('help', { label: 'Help', icon: '<svg></svg>', command: 'test.help', side: 'right' });
+    expect(right.hidden).toBe(false);
+    button.dispose();
+    expect(right.hidden).toBe(true);
   });
 
   it('when narrow, the right side stays beside the content', () => {
