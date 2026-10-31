@@ -40,16 +40,37 @@ func Values(q SqlQueryable, field SqlField, limit int) SqlQueryable {
 	return &valuesOf{result: q, definition: field.Definition(), limit: limit}
 }
 
+// ValueType is the query of no rows whose ValuesTypeColumn has the type of `field` on `q`, as Values' has it, for a
+// field whose values are not asked (a time, docs/2026-10-28-workbench.md §3.15 D25): of a builder query its base
+// with `WHERE 0`, which ClickHouse answers without reading the table (`SELECT timestamp AS __type FROM http_logs
+// WHERE (0) AND …`); of a SQL file or string its result in a subquery, `WHERE 0` around it (whether ClickHouse runs
+// the subquery then is not checked; it costs at most what the chart's own query does).
+func ValueType(q SqlQueryable, field SqlField) SqlQueryable {
+	if b, ok := q.(*SqlQuery); ok {
+		base := *b
+		base.selectF = []SqlField{Field(field.Definition()).WithAlias(ValuesTypeColumn)}
+		base.groupBy = nil
+		base.orderBy = nil
+		base.fillStep = ""
+		base.limit = 0
+		base.where = append(slices.Clip(b.where), "0")
+		return &base
+	}
+	return &valuesOf{result: q, definition: field.Definition(), typeOnly: true}
+}
+
 // searched is the condition that `expression` contains the search (ValuesSearchParameter), ignoring case.
 func searched(expression string) string {
 	return "positionCaseInsensitive(" + expression + ", {" + ValuesSearchParameter + ":String}) > 0"
 }
 
-// valuesOf is Values of a SQL file or string: the distinct values of `definition` over its `result`.
+// valuesOf is Values of a SQL file or string: the distinct values of `definition` over its `result`; with
+// `typeOnly` ValueType's: no rows, only the type.
 type valuesOf struct {
 	result     SqlQueryable
 	definition string
 	limit      int
+	typeOnly   bool
 }
 
 // Build is the result's SQL in a subquery, one trailing `;` trimmed, on lines of their own so that a trailing
@@ -68,6 +89,9 @@ func (v *valuesOf) buildWithFS(fileSystem fs.ReadFileFS) (string, error) {
 
 func (v *valuesOf) around(inner string) string {
 	inner = strings.TrimSuffix(strings.TrimSpace(inner), ";")
+	if v.typeOnly {
+		return "SELECT " + v.definition + " AS " + ValuesTypeColumn + "\nFROM (\n" + inner + "\n)\nWHERE 0"
+	}
 	return "SELECT toString(" + v.definition + ") AS " + valuesColumn + ", any(" + v.definition + ") AS " + ValuesTypeColumn +
 		"\nFROM (\n" + inner + "\n)\n" +
 		"WHERE " + searched(valuesColumn) + "\n" +
@@ -76,12 +100,12 @@ func (v *valuesOf) around(inner string) string {
 
 // With applies `opts` to the result (its Where goes to its {{DASHICA_FILTERS}}).
 func (v *valuesOf) With(opts ...SqlBuilderOption) SqlQueryable {
-	return &valuesOf{result: v.result.With(opts...), definition: v.definition, limit: v.limit}
+	return &valuesOf{result: v.result.With(opts...), definition: v.definition, limit: v.limit, typeOnly: v.typeOnly}
 }
 
 func (v *valuesOf) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
 	result, size := v.result.AdjustBuckets(widthS)
-	return &valuesOf{result: result, definition: v.definition, limit: v.limit}, size
+	return &valuesOf{result: result, definition: v.definition, limit: v.limit, typeOnly: v.typeOnly}, size
 }
 
 func (v *valuesOf) ShouldSkipFilters() bool {

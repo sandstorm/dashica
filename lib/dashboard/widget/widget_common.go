@@ -284,7 +284,10 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	})
 	mux.Handle("/sql", serve(qh.HandleSql))
 	mux.Handle("/pill", pillHandler(deps, chart))
-	mux.Handle("/values", valuesHandler(deps, qh, chart))
+	mux.Handle("/values", valuesHandler(deps, qh, chart, func(q sql.SqlQueryable, field sql.SqlField) sql.SqlQueryable {
+		return sql.Values(q, field, httpserver.ValuesLimit)
+	}))
+	mux.Handle("/type", valuesHandler(deps, qh, chart, sql.ValueType))
 	return mux
 }
 
@@ -292,8 +295,10 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 // field `field` and its values that contain `search` (ignoring case), at most httpserver.ValuesLimit, sorted, as JSON
 // `{type, values}` (HandleValues): sql.Values of its query in the request's time range, SQL chips and pills, the
 // pills on that field left out, so that a value besides one filtered by is still offered. 422 for a field that cannot
-// filter (as /pill), 400 for a pill not signed with deps.FilterSecret or a query state that cannot be read.
-func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
+// filter (as /pill), 400 for a pill not signed with deps.FilterSecret or a query state that cannot be read. `of` makes
+// the query from the chart's filtered one: sql.Values for `/values`, sql.ValueType for `/type` (`{type, values: []}`,
+// the type alone, for "add filter"'s op step without reading the field's values).
+func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery, of func(sql.SqlQueryable, sql.SqlField) sql.SqlQueryable) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		alias := r.URL.Query().Get("field")
 		i := slices.IndexFunc(filterableFields(chart), func(f sql.SqlField) bool { return f.Alias() == alias })
@@ -314,7 +319,7 @@ func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 		}
 		pills = slices.DeleteFunc(pills, func(p filter.Pill) bool { return p.Table == table && p.Field == alias })
 		filtered, _ := filter.Apply(chart.Query(), table, ok, pills)
-		values := sql.Values(filtered, filterableFields(chart)[i], httpserver.ValuesLimit)
+		values := of(filtered, filterableFields(chart)[i])
 		httpError(w, qh.HandleValues(values, state, r.URL.Query().Get("search"), w, r))
 	}
 }

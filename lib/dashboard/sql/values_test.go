@@ -57,3 +57,39 @@ LIMIT 100`
 		t.Errorf("database %q, skips filters %v", v.Database(), v.ShouldSkipFilters())
 	}
 }
+
+func TestValueType_OfABuilderQueryIsItsBaseWithoutRows(t *testing.T) {
+	chart := New(From("http_logs"), Where("path != '/'"), Select(Field("status")), Select(Count()), GroupBy(Field("status")), OrderBy(Count()), Limit(5), OnDatabase("logs"))
+
+	got := ValueType(chart, Field("timestamp")).With(Where("time_clause")).Build()
+
+	want := `SELECT
+    timestamp AS __type
+FROM
+    http_logs
+WHERE
+    (path != '/')
+    AND (0)
+    AND (time_clause);`
+	if !strings.HasSuffix(got, want) {
+		t.Errorf("got:\n%s", got)
+	}
+	if db := ValueType(chart, Field("status")).Database(); db != "logs" {
+		t.Errorf("database %q", db)
+	}
+}
+
+func TestValueType_OfASqlStringIsItsResultInASubqueryWithoutRows(t *testing.T) {
+	file := FromString("SELECT timestamp, host FROM http_logs WHERE {{DASHICA_FILTERS}}").With(Table("http_logs"))
+
+	got, err := BuildWithFS(ValueType(file, NewFieldAlias("timestamp")).With(Where("time_clause")), nil)
+
+	want := `SELECT timestamp AS __type
+FROM (
+SELECT timestamp, host FROM http_logs WHERE (time_clause)
+)
+WHERE 0`
+	if err != nil || got != want {
+		t.Errorf("%v, got:\n%s", err, got)
+	}
+}

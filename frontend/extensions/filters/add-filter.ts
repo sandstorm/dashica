@@ -54,8 +54,8 @@ export function fieldSource(tables: readonly FilterableTable[], { connection, ta
 /**
  * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15, §3.15 D25): asks
  * in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its fields, an op of the
- * field's type (`opsOf`; the type and the first values from the field's chart's `/values` in `query`'s state, asked
- * once the field is chosen), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`, with the
+ * field's type (`opsOf`; the type from the field's chart's `/type` in `query`'s state, asked once the field is chosen,
+ * which reads no values, so a time's are never asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`, with the
  * type), added to `chips`. Escape at any step adds nothing; a failed `/pill` goes to the console.
  */
 export async function addFilter(
@@ -76,7 +76,7 @@ export async function addFilter(
   );
   if (!field) return;
   // the type decides the ops; a failed answer leaves it unknown (= and ≠), the value step shows the message
-  const first = await fetchValues(field.widget.dataUrl, field.field, '', query.requestParams()).catch(() => undefined);
+  const first = await fetchType(field.widget.dataUrl, field.field, query.requestParams()).catch(() => undefined);
   const op = await ui.showQuickPick(
     opsOf(first?.type).map((op) => ({ label: `${field.field} ${OP_SIGNS[op]} …`, icon: OP_ICONS[op], op })),
     { anchor, title: 'Add filter' },
@@ -217,11 +217,27 @@ export interface Values {
  * The type of `field` and its values that contain `search`, as `<dataUrl>/values` answers them in the query state
  * `params`; rejects with the server's message.
  */
-export async function fetchValues(dataUrl: string, field: string, search: string, params: URLSearchParams, signal?: AbortSignal): Promise<Values> {
+export function fetchValues(dataUrl: string, field: string, search: string, params: URLSearchParams, signal?: AbortSignal): Promise<Values> {
   const asked = new URLSearchParams(params);
   asked.set('field', field);
   asked.set('search', search);
-  const response = await fetch(`${dataUrl}/values?${asked}`, { signal });
+  return fetchAnswer(`${dataUrl}/values?${asked}`, signal);
+}
+
+/**
+ * The type of `field` alone, as `<dataUrl>/type` answers it in the query state `params` without reading the field's
+ * values (its `values` are empty, so none are kept: the value step asks them); rejects with the server's message.
+ */
+export async function fetchType(dataUrl: string, field: string, params: URLSearchParams): Promise<Omit<Values, 'values'>> {
+  const asked = new URLSearchParams(params);
+  asked.set('field', field);
+  const { values: _none, ...type } = await fetchAnswer(`${dataUrl}/type?${asked}`);
+  return type;
+}
+
+/** The answer of `/values` or `/type` at `url`, with the resolved time range. */
+async function fetchAnswer(url: string, signal?: AbortSignal): Promise<Values> {
+  const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   const { type, values } = (await response.json()) as Values;
   const timeRange = JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null') as Values['timeRange'] | null;

@@ -178,7 +178,7 @@ func TestQueryHandler_ATamperedPillIsABadRequest(t *testing.T) {
 func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
 	chip := "&sql=" + url.QueryEscape("status >= 500")
-	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status"} {
+	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status", "/type?time=1h&field=status"} {
 		if rec := askPath(bar, path+chip); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
 			t.Errorf("off, %s: %d %s", path, rec.Code, rec.Body)
 		}
@@ -252,28 +252,30 @@ func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
 func TestValues_AFieldThatCannotFilterIs422AnUnsignedPill400(t *testing.T) {
 	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
-	for name, tt := range map[string]struct {
-		chart withQuery
-		field string
-	}{
-		"a count":                    {bar, "cnt"},
-		"a time bucket":              {bar, "time"},
-		"no field of it":             {bar, "path"},
-		"a SQL file without a table": {noTable, "host"},
-	} {
-		if rec := askPath(tt.chart, "/values?time=1h&field="+tt.field); rec.Code != http.StatusUnprocessableEntity {
-			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
+	for _, path := range []string{"/values", "/type"} {
+		for name, tt := range map[string]struct {
+			chart withQuery
+			field string
+		}{
+			"a count":                    {bar, "cnt"},
+			"a time bucket":              {bar, "time"},
+			"no field of it":             {bar, "path"},
+			"a SQL file without a table": {noTable, "host"},
+		} {
+			if rec := askPath(tt.chart, path+"?time=1h&field="+tt.field); rec.Code != http.StatusUnprocessableEntity {
+				t.Errorf("%s, %s: %d %s", path, name, rec.Code, rec.Body)
+			}
 		}
-	}
-	if rec := askPath(bar, "/values?time=1h&field=status&f=status:eq:500"); rec.Code != http.StatusBadRequest {
-		t.Errorf("unsigned pill: %d %s", rec.Code, rec.Body)
-	}
-	if rec := askPath(bar, "/values?field=status"); rec.Code != http.StatusBadRequest {
-		t.Errorf("no time range: %d %s", rec.Code, rec.Body)
-	}
-	// the ClickHouse of testDeps is unreachable: a request that passed every check fails there
-	if rec := askPath(bar, "/values?time=1h&field=status&search=50"); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "clickhouse") {
-		t.Errorf("a field that filters: %d %s", rec.Code, rec.Body)
+		if rec := askPath(bar, path+"?time=1h&field=status&f=status:eq:500"); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s, unsigned pill: %d %s", path, rec.Code, rec.Body)
+		}
+		if rec := askPath(bar, path+"?field=status"); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s, no time range: %d %s", path, rec.Code, rec.Body)
+		}
+		// the ClickHouse of testDeps is unreachable: a request that passed every check fails there
+		if rec := askPath(bar, path+"?time=1h&field=status&search=50"); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "clickhouse") {
+			t.Errorf("%s, a field that filters: %d %s", path, rec.Code, rec.Body)
+		}
 	}
 }
 

@@ -2,14 +2,15 @@
 // Tests for add-filter.ts: the page's filterable tables (filterableTables), the chart that makes a pill again
 // (fieldSource), "add filter" through table, field, operator (of the field's type) and value to the pill of the
 // field's chart (addFilter), a time's value in an input box at the edge of the time range (askValue), the value's
-// quick pick asking the server as the text changes (pickValue), and the request of /values (fetchValues).
+// quick pick asking the server as the text changes (pickValue), and the requests of /values and /type (fetchValues,
+// fetchType).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost, type QueryState } from '../../hosts/query/query';
 import { FILTERS_STATE, chipsState, type FilterChip } from './chips';
 import { TIME_STATE, presetRange, timeState, type TimeRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
-import { addFilter, askValue, fetchValues, fieldSource, filterableTables, pickValue } from './add-filter';
+import { addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, pickValue } from './add-filter';
 import { OP_ICONS } from './ops';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default') =>
@@ -25,11 +26,11 @@ let anchor: HTMLButtonElement;
 let quickInput: QuickInput;
 let query: QueryHost;
 let chips: QueryState<readonly FilterChip[]>;
-/** The URLs fetched, and what `/values` answers (by `search`; the type by field, else `String`). */
+/** The URLs fetched, and what `/values` answers (by `search`; the type by field, else `String`; `/type` no values). */
 let fetched: URL[];
 let values: (search: string) => string[];
 const types: Record<string, string> = { timestamp: 'DateTime' };
-/** The resolved time range `/values` answers in its header. */
+/** The resolved time range `/values` and `/type` answer in their header. */
 const from = Date.UTC(2026, 9, 31, 9, 0, 0);
 const to = Date.UTC(2026, 9, 31, 10, 0, 0);
 
@@ -61,8 +62,8 @@ beforeEach(() => {
     const url = new URL(input, location.href);
     fetched.push(url);
     const args = url.searchParams;
-    if (url.pathname.endsWith('/values')) {
-      const answer = { type: types[args.get('field') ?? ''] ?? 'String', values: values(args.get('search') ?? '') };
+    if (url.pathname.endsWith('/values') || url.pathname.endsWith('/type')) {
+      const answer = { type: types[args.get('field') ?? ''] ?? 'String', values: url.pathname.endsWith('/type') ? [] : values(args.get('search') ?? '') };
       return new Response(JSON.stringify(answer), { headers: { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from, to }) } });
     }
     return new Response(JSON.stringify({ key: `key:${args.get('field')}:${args.get('op')}:${args.get('value')}`, label: `${args.get('field')} ${args.get('op')} ${args.get('value')}` }));
@@ -114,9 +115,12 @@ describe('addFilter', () => {
     await done;
 
     expect(chips.get()).toEqual([{ kind: 'pill', key: 'key:host:eq:admin' }]);
-    // asked once for the type and the first values, before the operator
-    const asked = fetched.filter((url) => url.pathname === '/p/shop/api/1/values');
-    expect(asked.map((url) => [url.searchParams.get('field'), url.searchParams.get('search'), url.searchParams.get('time')])).toEqual([['host', '', '1h']]);
+    // the type before the operator, the values for the value step
+    const asked = fetched.filter((url) => url.pathname.startsWith('/p/shop/api/1/') && !url.pathname.endsWith('/pill'));
+    expect(asked.map((url) => [url.pathname, url.searchParams.get('field'), url.searchParams.get('search'), url.searchParams.get('time')])).toEqual([
+      ['/p/shop/api/1/type', 'host', null, '1h'],
+      ['/p/shop/api/1/values', 'host', '', '1h'],
+    ]);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');
     expect(fetched.at(-1)!.searchParams.get('type')).toBe('String');
   });
@@ -135,6 +139,8 @@ describe('addFilter', () => {
 
     expect(chips.get()).toEqual([{ kind: 'pill', key: 'key:timestamp:le:2026-10-31T09:30:00Z' }]);
     expect(fetched.at(-1)!.searchParams.get('type')).toBe('DateTime');
+    // a time's values are never asked
+    expect(fetched.filter((url) => url.pathname.endsWith('/values'))).toEqual([]);
   });
 
   it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
@@ -205,5 +211,12 @@ describe('fetchValues', () => {
 
     expect(await fetchValues('/p/shop/api/1', 'host', 'sh', new URLSearchParams({ time: '1h', f: 'k' }))).toEqual({ type: 'String', values: ['a'], timeRange: { from, to } });
     expect(fetched[0].pathname + fetched[0].search).toBe('/p/shop/api/1/values?time=1h&f=k&field=host&search=sh');
+  });
+});
+
+describe('fetchType', () => {
+  it('asks <dataUrl>/type with the query state and the field', async () => {
+    expect(await fetchType('/p/shop/api/1', 'timestamp', new URLSearchParams({ time: '1h', f: 'k' }))).toEqual({ type: 'DateTime', timeRange: { from, to } });
+    expect(fetched[0].pathname + fetched[0].search).toBe('/p/shop/api/1/type?time=1h&f=k&field=timestamp');
   });
 });
