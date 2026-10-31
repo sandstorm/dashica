@@ -329,14 +329,11 @@ no favorites a hint to star one. The brand "Dashica" links to it; its tab is tit
   toggles or moves a favorite in the panel (an `EventEmitter` inside the extension) *(proposed)*. The tiles are links,
   opened by the page host like any other (Cmd / Ctrl+click: the browser's new tab); no star, menu or drag on the start
   page itself *(proposed)*.
-- **No query controls on "/"** *(proposed; reversed 2026-10-31, D1, step 8a: the time range, refresh and the status
-  bar items show on every page, `hasQueries` and `registerBarItemWhile` are deleted)*: the start page queries nothing, so the time range, refresh and Debug's
-  status bar item ("No active chart") are not shown there: `hasQueries(page)` (`hosts/page/page.ts`, every kind but
-  `home`; also a page still loading, so the title bar does not flicker) decides, and `registerBarItemWhile(ui, bar,
-  element, placement, page.onDidChangePage, …)` (`hosts/ui/bar/bar.ts`) registers the item while it holds and removes
-  it otherwise, so a bar of such items alone hides: Details' "N records selected" is registered only while there are
-  records, so "/" has no status bar. A page kind, not a `page.json` flag: kinds are the client's
-  renderers already. The start page's `page.json` is in the contract golden file (`export const home`).
+- **The same bars on every page** (D1, step 8a): the time range, refresh and the status bar show on "/" as on any
+  other page; Debug's status item says "No active chart" there. Each extension registers its bar item once, with
+  `ui.registerBarItem`, for the whole session. (Step 7d.1 took them off "/" with `hasQueries(page)` and
+  `registerBarItemWhile`; both are deleted: "no magic, useless abstraction".) The start page's `page.json` is in the
+  contract golden file (`export const home`).
 
 #### 3.4.4 The active widget, Debug and the status bar (step 7e, decided 2026-10-31)
 
@@ -364,11 +361,11 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   widget's query answered or failed (a query state change queries the chart again); while that query runs it keeps
   what it shows, and a change of its records alone (the same status value as when it asked) asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
   panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
-- **Status bar:** one item of the `debug` extension, there on every page but "/": the active widget's "1,234
+- **Status bar:** one item of the `debug` extension, there on every page: the active widget's "1,234
   rows · 87 ms" (not its title, since 2026-10-31), "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red;
   the whole message in the tooltip); "No active chart" without one. A click opens Debug *(proposed)*. The status bar so
-  always shows *(proposed)*, but on the start page (§3.4.3); the page-wide query counts of the sketch (`query-status`)
-  are not built.
+  always shows, on the start page too (§3.4.3); the page-wide query counts of the sketch (`query-status`) are not
+  built.
 - **The bottom panel is removed** (`BottomPanel`, `registerBottomPanel`, its CSS and stored layout key): Debug was its
   only user.
 
@@ -395,8 +392,8 @@ a category for the floating bar (§3.8), unchanged; the two never mix.
   table closed "Record 1" of every other table and of the next selection *(proposed)*. Drawn only while
   shown, anew when the active widget or its records change (not on its status). Without records: "Tick rows of a table
   to see them here." The table's search term is no longer highlighted in the details *(proposed)*.
-- **Status bar:** a second item, of the `details` extension: "2 records selected", not in the bar while none; a click
-  opens Details *(proposed)*.
+- **Status bar:** a second item, of the `details` extension: "2 records selected", hidden while none (step 8a: it
+  stays registered); a click opens Details *(proposed)*.
 
 ### 3.5 Extensions and UI code
 
@@ -928,8 +925,6 @@ interface UiApi {
                                      when?: (p: Page) => boolean }): Panel;     // command workbench.view.<id>
   registerBarItem(bar: 'title' | 'filter' | 'status', el: HTMLElement,
                   o: { alignment: 'left' | 'right'; priority?: number }): Disposable;
-                                          // registerBarItemWhile(ui, bar, el, o, changed, wanted): only while
-                                          // wanted() holds (the time range: hasQueries(page.current), §3.4.3)
 
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when / enabled / toggled / group / order
   getMenuItems<C>(menuId: string, context?: C): readonly MenuItem<C>[];
@@ -1376,7 +1371,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7f.2 ✅ | **review fix: comment wrap** (§3.10): the top comments and tests' headers where steps 7a–7f inserted text without re-wrapping (`dashboards`, its tests, `table` tests, `window-layout`, `ui`, `widgets-testing`) are wrapped to 120 columns again; wording unchanged. ✅ 2026-10-31 | — |
 | 7f.3 ✅ | **review fix: §3.11 sketch** follows the code: `registerBottomPanel` dropped (gone since 7e), `createView` (7c), `ActiveWidget` with `records` and an excerpt of `WidgetContext` with `selectRecords` (7f), the `details` extension in the table. ✅ 2026-10-31 | — |
 | 8 ✅ | **the batch of 2026-10-31 planned** (§3.14): D1–D15 written into this concept (§3.14, §3.8 rewritten for the signed pills) and into the Perspective concept (§4.8); docs only. ✅ 2026-10-31 | — |
-| 8a | **D1 start page:** time range, refresh and the status bar items on every page; `hasQueries` and `registerBarItemWhile` deleted (§3.4.3) | "/" with the time range and the status bar |
+| 8a ✅ | **D1 start page** (§3.4.3): the time range, refresh and Debug's status item registered once with `ui.registerBarItem`, so they show on every page, "/" included ("No active chart" there); `hasQueries` (`hosts/page/page.ts`) and `registerBarItemWhile` (`hosts/ui/bar/bar.ts`) deleted; Details' "N records selected" stays registered and is `hidden` while none *(proposed)*; tests: the "not on the start page" cases dropped, Details' status checked by `hidden`; `e2e/start-page.spec.ts` checks the time range, refresh and status bar on "/". ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run) | "/" with the time range and the status bar |
 | 8b | **D2 active widget:** `widgets.active` a reference, `onDidChangeActive` only on another widget or tab; the widget carries status and records, each with its event; `ActiveWidget`'s copies go; Debug on the status, Details on the records (§3.4.4, §3.4.5) | Debug and Details as before |
 | 8c | **D3 + D4 quick input, click to filter:** `ui.showQuickPick` / `showInputBox` / `createQuickPick` in place; `showChoices`, the floating bar and the selection model go; chart candidates, context menus, search everywhere move to it; a mark's click offers ⊕ / ⊖ per field and adds the pill at once | click to filter in one step |
 | 8d | **D5 layout:** tabs in the top row (`[…][Dashica][tabs][+] … [time range][refresh]`), the title bar goes; search everywhere a rail button; side panel headers in caps with "…"; rail tooltips with name and shortcut (§3.4) | the new top row |

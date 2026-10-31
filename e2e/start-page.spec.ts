@@ -1,6 +1,6 @@
 // Tests for the start page "/" (docs/2026-10-28-workbench.md §3.4.3): no redirect; a hint while there are no
 // favorites, then every group with its dashboards; a starred dashboard shows as a tile with its group and opens from
-// there; the brand "Dashica" leads back to it; no time range, refresh or chart status there.
+// there; the brand "Dashica" leads back to it; the time range, refresh and the status bar show there too.
 //
 // The dashboard starred defaults to the Sandstorm instance's "/clickhouse/table_sizes". Another one:
 // DASHICA_E2E_START_PAGE.
@@ -39,12 +39,13 @@ test('shows a starred dashboard as a tile with its group, which opens it; the br
     await expect(page.locator(`.d-home-page__tile[href="${PAGE}"]`)).toBeVisible();
 });
 
-test('has no time range, refresh or chart status on "/", and has them on a dashboard', async ({page}) => {
+test('has the time range, refresh and the status bar on "/" as on a dashboard', async ({page}) => {
     await expect(page.locator('.d-home-page')).toBeVisible();
-    await expect(page.getByLabel('Auto refresh')).toHaveCount(0);
-    await expect(page.getByRole('button', {name: 'Refresh'})).toHaveCount(0);
-    await expect(page.getByTestId('debug-status')).toHaveCount(0);
-    await expect(page.locator('.d-workbench__status-bar')).toBeHidden();
+    await expect(page.getByRole('button', {name: 'Shift back'})).toBeVisible();
+    await expect(page.getByLabel('Auto refresh')).toBeVisible();
+    await expect(page.getByRole('button', {name: 'Refresh'})).toBeVisible();
+    await expect(page.locator('.d-workbench__status-bar')).toBeVisible();
+    await expect(page.getByTestId('debug-status')).toHaveText('No active chart');
     await page.goto(PAGE);
     await expect(page.getByLabel('Auto refresh')).toBeVisible();
     await expect(page.getByTestId('debug-status')).toBeVisible();

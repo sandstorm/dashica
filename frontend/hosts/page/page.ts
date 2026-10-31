@@ -60,13 +60,5 @@ export interface PageContext {
   close(): void;
 }
 
-/**
- * Whether `page` queries data, so its time range, refresh and active chart mean something: every page but the start
- * page (kind `home`); `undefined` (loading) does too, so the title bar keeps its items while a page loads.
- */
-export function hasQueries(page: PageJson | undefined): boolean {
-  return page?.kind !== 'home';
-}
-
 export { PageHost } from './page-impl';
 export type { Tab } from './tabs';

@@ -232,4 +232,3 @@ export interface BarPlacement {
 
 export { UiHost } from './ui-impl';
 export { createView, type ViewOptions } from './views/view';
-export { registerBarItemWhile } from './bar/bar';

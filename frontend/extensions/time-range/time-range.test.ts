@@ -1,16 +1,12 @@
 // @vitest-environment jsdom
 // Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range), closing the panel, shift and zoom.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { timeRange } from './time-range';
 
 let query: QueryHost;
 let bar: HTMLElement;
-let page: PageJson | undefined;
-let pageChanged: EventEmitter<PageJson | undefined>;
 let stored: Map<string, unknown>;
 
 beforeEach(() => {
@@ -18,8 +14,6 @@ beforeEach(() => {
   query = new QueryHost(window);
   query.load();
   bar = document.body.appendChild(document.createElement('div'));
-  page = undefined;
-  pageChanged = new EventEmitter<PageJson | undefined>();
   stored = new Map();
   const globalState: Memento = {
     get: (key: string, defaultValue?: unknown) => (stored.has(key) ? stored.get(key) : defaultValue),
@@ -34,12 +28,6 @@ beforeEach(() => {
         bar.appendChild(el);
         return { dispose: () => el.remove() };
       },
-    },
-    page: {
-      get current() {
-        return page;
-      },
-      onDidChangePage: pageChanged.event,
     },
   };
   timeRange.activate(context as unknown as ExtensionContext);
@@ -206,15 +194,5 @@ describe('timeRange', () => {
     query.time.setCustom('2026-10-29 10:00', '2026-10-29 12:00');
     click('Zoom out');
     await vi.waitFor(() => expect(query.time.custom).toBe('2026-10-29 09:00 to 2026-10-29 13:00'));
-  });
-
-  it('is not in the title bar on the start page, which queries nothing', () => {
-    expect(rangeButton()).not.toBeNull();
-    page = { kind: 'home', title: 'Home', filterBar: false, filterButtons: [], widgets: [] };
-    pageChanged.fire(page);
-    expect(bar.querySelector('button[aria-haspopup]')).toBeNull();
-    page = { kind: 'dashboard', title: 'Shop', filterBar: false, filterButtons: [], widgets: [] };
-    pageChanged.fire(page);
-    expect(rangeButton()).not.toBeNull();
   });
 });

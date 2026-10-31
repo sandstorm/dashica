@@ -1,7 +1,7 @@
 import { html } from 'htl';
 import { ListChecks, createElement } from 'lucide';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { createView, registerBarItemWhile } from '../../hosts/ui/ui';
+import { createView } from '../../hosts/ui/ui';
 import { widgetTitle, type ActiveWidget, type WidgetRecord } from '../../hosts/widgets/widgets';
 import { tryPrettyJson } from '../chart-library/table';
 import './details.css';
@@ -11,16 +11,15 @@ import './details.css';
  * (`widgets.active.records`: a table's ticked rows). The panel shows the widget's title, then a view per record, its
  * fields one below the other (a JSON value pretty-printed, a value of several lines as it is), drawn anew when the
  * records or the active widget change; each view starts open, its collapsed state not kept (a place in one selection
- * says nothing about another's). The status bar says "3 records selected" while there are some (else the item is not
- * in it, so the start page has no status bar); a click on it opens the panel.
+ * says nothing about another's). The status bar says "3 records selected" while there are some (else the item is
+ * hidden); a click on it opens the panel.
  */
 export const details: Extension = {
   id: 'details',
   activate({ ui, widgets, subscriptions }) {
     const panel = ui.registerSidePanel('details', { label: 'Details', icon: createElement(ListChecks).outerHTML, order: 20 });
     const status: HTMLButtonElement = html`<button type="button" class="d-details-status" data-testid="details-status" title="Show Details" onclick=${() => panel.show()}></button>`;
-    const selected = () => (widgets.active?.records.length ?? 0) > 0;
-    subscriptions.push(panel, registerBarItemWhile(ui, 'status', status, { alignment: 'left' }, widgets.onDidChangeActive, selected));
+    subscriptions.push(panel, ui.registerBarItem('status', status, { alignment: 'left' }));
 
     /** What the panel shows, to draw it only when that changes. */
     let shown: Pick<ActiveWidget, 'widget' | 'records'> | undefined;
@@ -28,6 +27,7 @@ export const details: Extension = {
       const active = widgets.active;
       const records = active?.records ?? [];
       status.textContent = recordsSelected(records.length);
+      status.hidden = records.length === 0;
       if (!panel.visible) {
         shown = undefined;
         return;
