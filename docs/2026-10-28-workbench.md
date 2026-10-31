@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser). Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14). Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -124,6 +124,9 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
+
+Step 8d (§3.14 D5) changes the top: the tabs move into the top row, `[…][Dashica][tabs][+] … [time range][refresh]`;
+the title bar and its search field go (search everywhere becomes a rail button); the filter bar stays below.
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
   resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
@@ -326,7 +329,8 @@ no favorites a hint to star one. The brand "Dashica" links to it; its tab is tit
   toggles or moves a favorite in the panel (an `EventEmitter` inside the extension) *(proposed)*. The tiles are links,
   opened by the page host like any other (Cmd / Ctrl+click: the browser's new tab); no star, menu or drag on the start
   page itself *(proposed)*.
-- **No query controls on "/"** *(proposed)*: the start page queries nothing, so the time range, refresh and Debug's
+- **No query controls on "/"** *(proposed; reversed 2026-10-31, D1, step 8a: the time range, refresh and the status
+  bar items show on every page, `hasQueries` and `registerBarItemWhile` are deleted)*: the start page queries nothing, so the time range, refresh and Debug's
   status bar item ("No active chart") are not shown there: `hasQueries(page)` (`hosts/page/page.ts`, every kind but
   `home`; also a page still loading, so the title bar does not flicker) decides, and `registerBarItemWhile(ui, bar,
   element, placement, page.onDidChangePage, …)` (`hosts/ui/bar/bar.ts`) registers the item while it holds and removes
@@ -341,7 +345,7 @@ As the active editor: the **active widget** is the widget with data the viewer p
 cell. A quiet accent outline marks it (`d-widget--active`). Each tab has its own; switching tabs shows that tab's.
 Escape keeps it; removing the widget (its page rendered anew, its tab closed) ends it.
 
-- **API (`widgets` host):** `widgets.active: ActiveWidget | undefined` (`{widget, url(path), lastResult, status}`, a
+- **API (`widgets` host; reworked by step 8b, §3.14 D2):** `widgets.active: ActiveWidget | undefined` (`{widget, url(path), lastResult, status}`, a
   value taken anew on each read) and `widgets.onDidChangeActive` (another widget or tab, the widget removed, its query
   started, answered or failed). `WidgetStatus` = `idle` | `loading` | `done {rows, ms, diagnostics}` | `error {message,
   ms}`, set by `ctx.query()` itself, so every widget with data has one; `ms` is the time until the answer in the
@@ -379,7 +383,8 @@ a category for the floating bar (§3.8), unchanged; the two never mix.
   name) in place of those before; with records the widget becomes its tab's active widget (the press on the checkbox
   made it so already; ticking by keyboard does too). `ActiveWidget.records` (in the order ticked *(proposed)*, empty
   while none); `onDidChangeActive` also fires when the active widget's records change. No `widgets.records` and no
-  event of its own *(proposed)*: one value, one event, as for the status.
+  event of its own *(proposed)*: one value, one event, as for the status. *(Reversed 2026-10-31, D2, step 8b: the
+  widget carries its records with their own change event.)*
 - **The table:** `drawTable(…, { selectRecords })` draws the checkbox column only with it (so Debug's result table has
   none *(proposed)*), its `rowSelectionChanged` calls it. Each draw starts with no row ticked, so the table's renderer
   clears the records before each draw: a new answer, and also another width or color scheme, drops them *(proposed)*.
@@ -408,7 +413,7 @@ through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand`, `executeCommand`; keys via `contributes.keybindings` |
-| `ui` | side panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices`, quick pick, messages, search providers |
+| `ui` | side panels, views inside them (`createView`, §3.4.2), title bar and status bar items, `registerMenuItem`, `showContextMenu`, `showChoices` (goes with 8c: `showQuickPick` / `showInputBox` / `createQuickPick`, §3.14 D3), quick pick, messages, search providers |
 | `widgets` | `registerWidget` (§3.6), the selection (§3.8), the active widget (`active`, `onDidChangeActive`, §3.4.4) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's |
@@ -503,44 +508,61 @@ refresh.
 handler and never `sql`: an alert chart's `{{DASHICA_FILTERS}}` is the window alone (`httpserver.TimeClause`).
 Dashboard filters do not apply to alert widgets, and alert evaluation (`lib/alerting`) is not touched.
 
-### 3.8 Filters: structured, interpreted by the chart, explicit
+### 3.8 Filters: signed pills on a table, explicit
 
-**A filter is an id, an op and a value; the chart that runs decides what it means** (decided 2026-10-30). The page
-registers nothing: no list of filter fields, no lookup in a shared object, no check across charts. A chart's handler
-gets the request's filters as plain values (`[{id, op, value}]` from `httpserver.QueryState`), builds its query from
-them and returns what it did as **Diagnostics**, sent with its data. Everything happens in Go, per request; the client
-only shows and sends ids.
+**A pill is a condition on a table that the server wrote and signed** (decided 2026-10-31, D6 of §3.14, step 8e;
+maintainer: "THIS MUST BE SIGNED AS OTHERWISE WE CAN INJECT SQL LATER ON"). It replaces the filter as an id, an op and
+a value that each chart interpreted (6.3 / 6.4, kept below as history). The client never sends a condition, only a key
+the server made:
 
-- **The id is the alias of the clicked column** (`host`, `status`): the browser sends the alias the chart's data
-  carries, and a chip's label is its id. `page.json` carries no filter fields and a chart's Node no filter ids.
-- **Ops:** `eq` (Filter by …) and `ne` (Exclude …); a NULL is not selectable. More (`in`, ranges) when a UI needs
-  them.
+- **The widget's field makes the pill, on the server.** Filtering from a widget's data (a chart mark, a table cell,
+  the filter bar's "add filter", §3.14 D4, D15) asks that widget: `GET <dataUrl>/pill?field=<alias>&value=<shown
+  value>&op=eq|ne` → `{key, label}`. The field's condition is by default `<field expression> = <quoted value>` (`!=`
+  for `ne`); a computed field says its own:
 
-The URL carries ids, ops and values (`?f=status:eq:500&f=host:ne:a`; the value is everything after the second colon);
-**values are bound as ClickHouse parameters** (`{__f0:String}`, beside `__from` / `__to`), never quoted into SQL. The
-expression a value is compared with comes only from Go: a chart's own field definitions or a real column of its base
-table. No per-backend quoting code, no injection through filters, and no client SQL except the free SQL chip
-(`?sql=…`). Filter buttons stay SQL, written in Go; since step 7b a pressed button shows as a SQL chip ("The SQL
-filter is a chip", the end of this section).
+  ```go
+  sql.Field("replace(customer_project, 'customer-', '')").WithAlias("customer").
+      FilterAs(func(value string) string { return "customer = " + sql.Quote("customer-"+value) })
+  ```
+
+  `sql.Quote` writes a ClickHouse string literal: `'…'`, with `\` and `'` escaped by a backslash. A field that cannot
+  filter (a count, a time bucket) answers 422; the widget's props in `page.json` say which of its fields can filter,
+  so the quick pick offers only those.
+- **The key** holds the connection, `database.table`, the condition and an HMAC (`crypto/hmac`, SHA-256) over them,
+  made with `filters.secret` from `dashica_config`. The secret is **required**: the server refuses to start without
+  it. It is never in a checked-in file: the checked-in `*-production.yaml` names the environment variable
+  (`FILTERS__SECRET`, as it does for `CLICKHOUSE__DEFAULT__PASSWORD`). The label (the chip's text, `customer = acme`)
+  travels unsigned beside the key. The URL keeps `?f=<key>`, repeatable, in chip order with `sql`.
+- **Checked on every request:** a pill whose HMAC does not match (tampered, unsigned, made with another secret)
+  fails the request with 400.
+- **A chart applies a pill when its base table is the pill's table** (`sql.From`, with database and connection): the
+  condition goes into its WHERE (a SQL file's `{{DASHICA_FILTERS}}`); else its Diagnostics say "ignores customer".
+  Two bases on the same table with different WHEREs share the pills; the same column in two tables is two pills.
+- **A SQL file takes pills only when it names its table:** `sql.FromFile("x.sql", sql.Table("default.http_logs"))`.
+  Without `sql.Table` it takes none, but still the time range and the SQL chips.
+- **Pills on the same table and field combine:** the `eq` ones OR-ed, the `ne` ones AND-ed; a pill holds one value.
+  *(proposed)* the key also carries the field's alias, signed, so the server knows which pills share a field.
+- **SQL chips** (`?sql=`) stay as they are (a feature flag later).
+- **What goes:** `filter.Apply`'s rule of the chart's own fields by alias, the base-table columns from `DESCRIBE
+  TABLE` (`Client.Columns`, `Manager.Columns`, `filter.Columns`, the cache and its `singleflight`), the values bound
+  as `{__f<i>:String}`, the unused `withFilters` interface, the `.Filterable` ideas. `Diagnostics` stays.
+
+**To check** (step 8e, against CI's ClickHouse): a quoted literal compares with the column types the bound `String`
+did (below, checked 2026-10-30 for parameters); `status = '500'` against a `UInt16` column.
+
+**History (6.3 – 7b, replaced by step 8e):** until 8e a filter was `{id, op, value}` (`?f=status:eq:500`), its value
+bound as a ClickHouse parameter, and each chart interpreted the id: one of its own fields by alias, else a column of
+its base table (`DESCRIBE TABLE`, cached), a SQL file its own output columns; a chart could implement
+`ApplyFilters(q, filters) (q, Diagnostics)` instead. The paragraphs below record how that was built.
 
 ✅ Checked 2026-10-30 on ClickHouse 25.9 (`clickhouse local`): a `String` parameter compared with `UInt16`,
 `Nullable(UInt16)`, `Float64`, `DateTime` and `LowCardinality(String)` columns converts and matches (`=`, `!=`, also
 `IN {p:Array(String)}`); a value that does not convert (`abc` against `UInt16`) fails the query with `TYPE_MISMATCH`
 (code 53), which the chart shows as its error. So filters carry no type.
 
-**A chart interprets the filters itself, optionally.** A chart may implement
+**Diagnostics** is what a chart tells the outside about one answer, a value returned with the query (kept by 8e):
 
-```go
-ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
-```
-
-and returns its query with the filters it interprets added (one more `sql.Where`, which a SQL file receives in
-`{{DASHICA_FILTERS}}`) and the Diagnostics of what it did. A chart without it gets the **default helper** (below). A
-query with `SkipFilters()` / `FromFileWithoutFilters` interprets none: every id is ignored.
-
-**Diagnostics** is what a chart tells the outside about one answer, a value returned with the query:
-
-- `Ignored []string`: the filter ids it does not interpret, each once, in URL order;
+- `Ignored []string`: the filters it does not apply, each once, in URL order (from 8e: their labels);
 - `Skipped string`: non-empty when the chart did not run, and why;
 - more fields later, as charts need to say more.
 
@@ -550,33 +572,7 @@ shows the Diagnostics: no badge when they are empty, "ignores `host`", "skipped:
 still renders without the filters it ignores. A runtime `UNKNOWN_IDENTIFIER` (ClickHouse code 47, e.g. from the free
 SQL chip) fails that chart only, with the column named. No query parsing.
 
-**The default helper** (`lib/dashboard/filter`, a small pure package) interprets a filter id when it is, in this order:
-
-1. **one of the chart's own fields, by alias:** the field's definition (`status`, `JSONExtractString(attrs,'host')`);
-2. **a column of the chart's base table** (builder queries, `From` and database): the column itself;
-
-else the id goes into `Ignored`. A **SQL-file chart** (`sql.FromFile`, also `sql.FromString`) interprets only its own
-output columns, by name: ClickHouse resolves SELECT aliases in WHERE, and `{{DASHICA_FILTERS}}` sits in the WHERE of
-the SELECT that defines them, so `host = {__f0:String}` works for that chart. The author maps nothing and declares no
-base table. **Measures** (`count()` etc.) and **time buckets** (an `AutoBucket`, a chart's time axis) are not
-interpreted as filters, known from the field's `kind` and slot (time selection is step 7).
-
-**The base table's columns come from `DESCRIBE TABLE`**, asked at a chart's first query and cached per table and
-ClickHouse server until restart. The helper takes the column source as a function value, so its tests give it a
-fixed list and need no ClickHouse:
-
-```go
-// Columns are the names of the columns of `table` on the ClickHouse server `server` ("" for "default") that a filter
-// value compares with, as DESCRIBE TABLE gives them.
-type Columns func(ctx context.Context, server, table string) ([]string, error)
-
-// fields: the chart's own fields (its dimensions())
-func Apply(ctx context.Context, q sql.SqlQueryable, fields []sql.SqlField, filters []Filter, columns Columns) (sql.SqlQueryable, Diagnostics, error)
-```
-
-A `DESCRIBE` that fails fails the chart (500) and is not cached.
-
-✅ **Done in 6.3 / 6.4, with these deviations from the sketch above (2026-10-30):**
+✅ **Done in 6.3 / 6.4 (history, replaced by step 8e), with these deviations from the first sketch (2026-10-30):**
 
 - **`Filter` lives in `lib/dashboard/filter`**, not in `httpserver`; `QueryState.Filters` is `[]filter.Filter`. So
   `httpserver` writes `X-Dashica-Diagnostics` and answers a skipped chart, importing `filter`; `filter` imports only
@@ -656,6 +652,9 @@ Contains this value" (a SQL `LIKE`), for a timestamp column "Time ±5 minutes / 
 value is what Arrow gives the cell: a `DateTime` arrives as `Uint32` seconds, a `DateTime64(3)` as milliseconds; checked
 on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter equals that `DateTime` and
 `'1761730000000'` that `DateTime64(3)`. The chip shows the number as it is, not the formatted time.
+
+*Step 8c (§3.14 D3, D4) replaces the floating bar below: a click on a mark shows "⊕ / ⊖ `<field> = <value>`" in a
+quick pick and adds the pill at once; `registerFloatingBar`, the selection model and `showChoices` go.*
 
 **Clicks select; a floating bar offers what to do** (as Zwiebelfisch's `visualEditor/selection` bar above a text
 selection). A chart only reports a *selection*; it does not know what can be done with it:
@@ -1100,6 +1099,7 @@ type withQuery interface {
 func (b *TimeBar) Query() sql.SqlQueryable { return b.sql }
 
 // withFilters is a chart that interprets the request's filters itself (§3.8); every other chart gets filter.Apply
+// (sketch of 6.3; withFilters, Columns, Apply and the bound Condition go with step 8e, §3.8)
 type withFilters interface {
 	ApplyFilters(q sql.SqlQueryable, filters []filter.Filter) (sql.SqlQueryable, filter.Diagnostics)
 }
@@ -1162,7 +1162,7 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 | `lib/dashboard/filter` | new, pure: `Diagnostics`, the default helper `Apply` (own fields by alias, then base-table columns; SQL files: own output columns), its column source a function value |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once; the query handler asks the chart for its filtered query and Diagnostics, binds every filter's value (`__f<i>`) and writes `X-Dashica-Diagnostics`; a skipped chart runs no query |
-| `lib/clickhouse` | `DESCRIBE TABLE` columns, cached per server, database and table until restart |
+| `lib/clickhouse` | `DESCRIBE TABLE` columns, cached per server, database and table until restart (goes with 8e) |
 | (tabs, §3.4.1) | no Go change: an Explore tab is its source page's URL with `#explore=<id>`, served by the same shell and `page.json` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
 | deleted | `lib/components/**` (templ), Alpine, dockview, `lib/explore` + `frontend/explore` (rebuilt later, §6) |
@@ -1220,6 +1220,62 @@ Open in this design:
    reads that, nothing reads the props. A field without an alias (`sql.Field("lower(host)")`) is aliased by its
    definition, as its result column is named; such an alias still shows the expression, so give it an alias.
 
+### 3.14 The batch of 2026-10-31 (decided 2026-10-31, planned as steps 8a–8m)
+
+The maintainer decided D1–D15 together; each step of §5 (8a …) builds its part and rewrites the sections it changes.
+The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-perspective.md`, §4.8).
+
+- **D1 Start page (8a):** the time range, refresh and the status bar items show on every page, "/" included;
+  `hasQueries` and `registerBarItemWhile` are deleted ("no magic, useless abstraction"; §3.4.3).
+- **D2 Active widget the VS Code way (8b):** `widgets.active` is only a reference to the active widget (as
+  `window.activeTextEditor`); `onDidChangeActive` fires only when another widget or tab becomes active. The widget
+  object carries its status and its records, each with its own change event (as `editor.selections` /
+  `onDidChangeTextEditorSelection`). `ActiveWidget`'s flattened copy of status and records and the one event for
+  everything go. Debug listens to the active widget's status, Details to its records (§3.4.4, §3.4.5).
+- **D3 Quick input as VS Code (8c):** `ui.showQuickPick` / `ui.showInputBox` / `ui.createQuickPick`, drawn in place
+  (anchored at the click or element; centred for search everywhere), typing narrows. `showChoices` goes; every popup
+  moves to it: a chart click's candidates, the registered context menus (right click, the "…" menu buttons), search
+  everywhere.
+- **D4 Click to filter (8c):** a click on a chart mark shows at once, per candidate field, "⊕ `<field> = <value>`"
+  (filter, a filter icon) and "⊖ `<field> = <value>`" (exclude, a minus icon) in the quick pick; choosing one adds the
+  pill (D6). The floating "Filter by / Exclude" bar goes. No multi-value accumulation: pills on the same table and
+  field combine, the `eq` ones OR-ed, the `ne` ones AND-ed (§3.8).
+- **D5 Layout (8d):** one top row `[… global menu][Dashica icon][tabs][+] … [time range][refresh]`; the separate
+  title bar goes, the filter bar stays below. Search everywhere is a button in the left rail (as Typst), not a field.
+  Each side panel has a header row with its name in caps ("DEBUG", "DASHBOARDS") and a "…" for its actions; rail
+  buttons have a hover tooltip with name and keyboard shortcut (§3.4).
+- **D6 Signed pills (8e):** a pill belongs to a table, is made by the widget's field on the server
+  (`<dataUrl>/pill`, `.FilterAs`, `sql.Quote`) and signed with `filters.secret` (HMAC-SHA-256), required at start; a
+  chart applies it when its base table is the pill's table, a SQL file only with `sql.Table(…)`; a tampered pill is a
+  400. The old rules go (§3.8).
+- **D7 Filter buttons (8f):** a button stays where it is and shows pressed while its filter is active; no chip for it
+  in the chip row (§3.8 "The SQL filter is a chip").
+- **D8 Explore off (8g):** with `explore.enabled: false` the whole Explore extension is off (no chart menu entry, no
+  Explore tabs); `HandleSql`, the edited-rows handler and the free SQL endpoint check it in their handlers and answer
+  404 before any query. In the UI only the global "…" menu shows "Explore" greyed, hover "Explore is not enabled
+  (explore.enabled)".
+- **D9 Explore SQL (8g):** the key `xsql` is renamed `exploreSql` everywhere (Go, TS, tab hash, docs); the editor
+  shows the chart's SQL with its ClickHouse placeholders (`{__from:DateTime64}`), the values listed beside it, and Run
+  sends them again as parameters; `lib/clickhouse/inline_parameters.go` goes.
+- **D10 Global "…" menu (8i):** left of the Dashica icon. "Explore" opens a blank Explore tab: a ClickHouse
+  connection picker and an empty editor, run on a new per-connection endpoint behind `explore.enabled`; "Start from
+  chart…" fills the editor from one of the shown page's charts.
+- **D11 Schema view (8h):** a left side panel "Schema", a tree connection › database › table; a table opens
+  structured as DataGrip does; one cached query set per connection, refreshable; the same data feeds the editor's
+  autocomplete.
+- **D12 SQL editor (8j):** CodeMirror 6 (`@codemirror/lang-sql`, a ClickHouse dialect by `SQLDialect.define`, its
+  `schema` from D11), loaded only when Explore opens.
+- **D13 Explore (8k):** Perspective's settings panel opens with the view; "Reset" asks for confirmation first.
+- **D14 View pop-out (8l):** a side panel view pops out into its own tab, bound to the widget it showed then; the
+  popped tab no longer follows the active widget; kept in memory only (gone after a reload). Details pops out to a tab
+  comparing all selected records side by side; Debug pops out; "Open Speedscope" opens a new tab with Speedscope in
+  an iframe.
+- **D15 Ad hoc pills (8m, as Grafana's ad hoc filters):** an "add filter" button on the filter bar: pick a table,
+  then a field (the filterable fields the shown page's widgets declare, per table), then `eq` / `ne`, then a value
+  from a lazy `SELECT DISTINCT <expression> … LIMIT 100` over the time range on the base query of a widget with that
+  field (`<dataUrl>/values?field=…&search=…`, typing narrows on the server); the value becomes a signed pill through
+  that widget's `/pill`.
+
 ## 4. Alternatives considered
 
 | Alternative | Why rejected |
@@ -1233,9 +1289,9 @@ Open in this design:
 | Schema-first (OpenAPI, protobuf) | heaviest; fights the Go-first builder |
 | Widgets as classes with `update(props)` | Plot redraws anyway; dispose + render is simpler |
 | Host wraps every widget in a frame | containers and markdown don't want one; leads to `frame: false` options |
-| Filters as raw expressions in the URL | client-sent SQL everywhere; blocks permissions later (§6); ids + bound values cost little |
+| Filters as raw expressions in the URL | client-sent SQL everywhere; blocks permissions later (§6); ids + bound values cost little. From 8e the URL carries conditions, but only ones the server wrote and signed (§3.8) |
 | `additional_table_filters` (as Grafana's ClickHouse plugin) | ClickHouse applies it at every read of the table, also in subqueries where a filter must not apply; complex queries need to say *where* filters go, hence `{{DASHICA_FILTERS}}` |
-| Parsing queries (SQL AST) | not needed: a chart knows its own fields, `DESCRIBE TABLE` its base table's columns; ClickHouse's JSON AST (`clickhouse_json` dialect) is unverified as released and would tie us to ClickHouse |
+| Parsing queries (SQL AST) | not needed: a chart knows its own fields and its base table (from 8e: the field writes its condition, a SQL file names its table by `sql.Table`); ClickHouse's JSON AST (`clickhouse_json` dialect) is unverified as released and would tie us to ClickHouse |
 | Drop non-applicable filters silently / fail the chart | silent is misleading; failing hides useful data. The chart's Diagnostics + badge instead (§3.8) |
 | A page-wide registry of filter fields (collected at mount, id → expression, a conflict check across charts) | state gathered in a shared object, read per request; template dashboards over several tables give the same alias two expressions. The chart interprets the filters at execution and returns what it did (§3.8) |
 | Time range global across pages | Grafana-style per-page default is what dashboards expect; links can still carry `?time=` |
@@ -1319,6 +1375,20 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7f.1 ✅ | **review fix: Details' record views** (§3.4.2, §3.4.5): `createView`'s `state` is optional (without it nothing is kept); Details passes none, so every record view starts open instead of taking the state stored under `record.<index>` from another table or selection. ✅ 2026-10-31 (vitest) | closing a record of one table leaves the others open |
 | 7f.2 ✅ | **review fix: comment wrap** (§3.10): the top comments and tests' headers where steps 7a–7f inserted text without re-wrapping (`dashboards`, its tests, `table` tests, `window-layout`, `ui`, `widgets-testing`) are wrapped to 120 columns again; wording unchanged. ✅ 2026-10-31 | — |
 | 7f.3 ✅ | **review fix: §3.11 sketch** follows the code: `registerBottomPanel` dropped (gone since 7e), `createView` (7c), `ActiveWidget` with `records` and an excerpt of `WidgetContext` with `selectRecords` (7f), the `details` extension in the table. ✅ 2026-10-31 | — |
+| 8 ✅ | **the batch of 2026-10-31 planned** (§3.14): D1–D15 written into this concept (§3.14, §3.8 rewritten for the signed pills) and into the Perspective concept (§4.8); docs only. ✅ 2026-10-31 | — |
+| 8a | **D1 start page:** time range, refresh and the status bar items on every page; `hasQueries` and `registerBarItemWhile` deleted (§3.4.3) | "/" with the time range and the status bar |
+| 8b | **D2 active widget:** `widgets.active` a reference, `onDidChangeActive` only on another widget or tab; the widget carries status and records, each with its event; `ActiveWidget`'s copies go; Debug on the status, Details on the records (§3.4.4, §3.4.5) | Debug and Details as before |
+| 8c | **D3 + D4 quick input, click to filter:** `ui.showQuickPick` / `showInputBox` / `createQuickPick` in place; `showChoices`, the floating bar and the selection model go; chart candidates, context menus, search everywhere move to it; a mark's click offers ⊕ / ⊖ per field and adds the pill at once | click to filter in one step |
+| 8d | **D5 layout:** tabs in the top row (`[…][Dashica][tabs][+] … [time range][refresh]`), the title bar goes; search everywhere a rail button; side panel headers in caps with "…"; rail tooltips with name and shortcut (§3.4) | the new top row |
+| 8e | **D6 signed pills:** `<dataUrl>/pill` (422 for fields that cannot filter), `.FilterAs`, `sql.Quote`, `sql.Table`; the key (connection, table, condition, HMAC-SHA-256 with `filters.secret`, required at start); a chart applies the pills of its base table; 400 for a tampered pill; `filter.Apply`'s rules, `DESCRIBE` and its cache, bound `__f<i>`, `withFilters` removed; filterable fields in `page.json` props; generator and golden contract regenerated (§3.8) | filters as signed pills |
+| 8f | **D7 filter buttons:** pressed while active, no duplicate chip | buttons as toggles in place |
+| 8g | **D8 + D9 Explore off, Explore SQL:** with `explore.enabled` false no Explore extension, the handlers answer 404 before any query, "Explore" greyed in the global menu; `xsql` → `exploreSql`; the editor shows placeholders, parameters listed beside it and sent on Run; `inline_parameters.go` removed (Perspective §4.8) | Explore with placeholders |
+| 8h | **D11 schema view:** the left side panel "Schema" (connection › database › table, the table structured as DataGrip), one cached query set per connection, refreshable (Perspective §4.8) | the schema of every connection |
+| 8i | **D10 global "…" menu:** left of the Dashica icon; "Explore" a blank Explore tab (connection picker, per-connection endpoint behind `explore.enabled`); "Start from chart…" (Perspective §4.8) | Explore without a chart |
+| 8j | **D12 SQL editor:** CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
+| 8k | **D13 Explore:** settings panel open from the start; "Reset" asks first (Perspective §4.8) | |
+| 8l | **D14 view pop-out:** a side panel view into its own tab, bound to its widget, in memory only; Details compares the selected records side by side; Debug pops out; Speedscope in a tab (iframe) | views as tabs |
+| 8m | **D15 ad hoc pills:** "add filter" on the filter bar: table, field, `eq` / `ne`, a value from `<dataUrl>/values?field=…&search=…` (`SELECT DISTINCT … LIMIT 100` over the time range), signed through that widget's `/pill` | filters without a click on a chart |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |
@@ -1327,8 +1397,9 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | Explore unavailable from step 3 until rebuilt | accepted: Explore is experimental; rebuilt after the merge (§6) |
 | Long-lived branch drifts from `main` (new dashboards in the outer repo) | dashboards are Go only and keep their builder API; rebase regularly |
 | Bound filter values typed `String` against numeric columns | ✅ checked on ClickHouse 25.9 (§3.8): converts; a value that does not convert fails that chart with `TYPE_MISMATCH`. Production runs 26.10: the integration test of 6.4 (`lib/httpserver/query_filters_e2e_test.go`) runs against CI's ClickHouse once CI's dashica-src test job sets `APP_ENV=testing_ci` (today it reads `dashica_config.testing.yaml`, `127.0.0.1:28123`) |
-| The same alias means different things in two charts (template dashboards over several tables) | each chart interprets the id by its own definition or its base table's column; a chart without either reports it as ignored |
-| `DESCRIBE TABLE` per base table | once per table and server, cached until restart; a schema change needs a restart |
+| The same alias means different things in two charts (template dashboards over several tables) | from 8e a pill belongs to one table: the same column in two tables is two pills; a chart on another table reports it as ignored |
+| A pill's condition is SQL in the URL | signed by the server (HMAC-SHA-256, `filters.secret`, required); a tampered or unsigned pill is a 400 (§3.8, step 8e) |
+| `filters.secret` leaks or changes | a leaked secret lets anyone sign SQL: it stays out of checked-in files (env `FILTERS__SECRET`); a changed secret makes old links' pills a 400 |
 | SELECT aliases in WHERE are ClickHouse-specific | only for SQL files, which are ClickHouse SQL anyway |
 | Bookmarked inner URLs (debug links) break | accepted; entry-point URLs stay |
 | Playwright cannot run in the sandbox | specs written by the agent, run by the maintainer |
@@ -1359,8 +1430,8 @@ its own.
   `widget/context` / `table/row` menus as the entry points.
 - **Permissions per dashboard**, with or without filtering. A middleware on a page's subtree; `/workbench.json` filters
   the menu per user. What the design already gives: structured filters carry only ids and bound values, so they cannot
-  change a query; the SQL chips are client-sent SQL, in one repeatable parameter (`sql`), parsed in one place, as is
-  the Explore view's edited query (`xsql`, Perspective concept, behind `explore.enabled`), so both can be limited to
+  change a query (from 8e: conditions only the server wrote and signed); the SQL chips are client-sent SQL, in one repeatable parameter (`sql`), parsed in one place, as is
+  the Explore view's edited query (`xsql`, `exploreSql` from 8g, Perspective concept, behind `explore.enabled`), so both can be limited to
   an "advanced" role. Real protection for free SQL must sit in ClickHouse (a readonly user per role, grants, row
   policies, query limits), not in string checks.
 - **MCP server with built-in anonymization**: sensitive data must never reach the cloud provider. What the design
@@ -1377,7 +1448,8 @@ its own.
 1. **Time selection:** does "Filter to window" need its own chip, or is it a second, narrower time range?
 2. ✅ **Filters on SQL files** (decided 2026-10-30): a SQL-file chart interprets filters only on its own output
    column names, which ClickHouse resolves in WHERE; no `.FilterAs` / `.AcceptFilter` / `sql.Table`. Every other
-   filter is reported as ignored (§3.8).
+   filter is reported as ignored (§3.8). **Reversed 2026-10-31 (D6, step 8e):** a SQL file takes pills only when it
+   names its table (`sql.Table("default.http_logs")`); a field writes its own condition by `.FilterAs`.
 3. **Alerts and filters:** should dashboard filters ever apply to alert widgets (e.g. only alerts of host `a`)? For
    now no.
 4. **Drill-down:** is "drill to detail" (raw rows in the bottom panel) wanted early, before the Explore rebuild?
@@ -1385,7 +1457,9 @@ its own.
 5. **Permission model:** roles per dashboard subtree; who may use free SQL; how roles map to ClickHouse users.
 6. **Anonymization:** declared per column in Go, or in ClickHouse; reversible (pseudonyms) or not.
 7. ✅ **Who interprets a filter** (decided 2026-10-30): the chart, when it runs, in Go; it returns its Diagnostics.
-   No page-wide registry of filter fields and no conflict check across charts (§3.8).
+   No page-wide registry of filter fields and no conflict check across charts (§3.8). **Changed 2026-10-31 (D6, step
+   8e):** the widget's field writes the condition when the pill is made (`<dataUrl>/pill`); a chart only applies the
+   pills of its base table.
 8. **Table cells of a SQL file:** a builder table selects in its category columns (6.9); a SQL-file table selects in
    none, since the server knows its output columns only from its text. Should such a table name its category
    columns in Go (`.Categories("host", "status")`), which it then interprets as its own output columns?

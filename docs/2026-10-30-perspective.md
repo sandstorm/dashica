@@ -2,7 +2,9 @@
 
 Status: **draft (2026-10-30); simplified (2026-10-31, after the maintainer's notes); built as a spike on branch
 `spike/perspective`, not yet run in a browser: see §8. Decided 2026-10-31: the view shows the chart's materialized SQL
-in an editor, and an edited query runs as it is written; this replaces "Remove grouping" (§4.7).**
+in an editor, and an edited query runs as it is written; this replaces "Remove grouping" (§4.7). Decided 2026-10-31
+as well, planned (§4.8, workbench §3.14 D8–D13): placeholders instead of literals, `exploreSql`, Explore off means
+off, a global "Explore" without a chart, a Schema view, CodeMirror.**
 
 Builds on the workbench concept (`docs/2026-10-28-workbench.md`: §3.8 selections, §6 "Explore rebuilt", "drill to
 detail", "Perspective instead of the Tabulator table").
@@ -30,7 +32,7 @@ This concept answers:
 5. What happens to the table widget (Tabulator) and the charts (Observable Plot): **both stay** (§4.6).
 
 Fixed: ClickHouse credentials never reach the browser. **Reversed 2026-10-31:** the client sends SQL for the Explore
-view, the edited query (`xsql`, §4.7), beside the page's SQL chips (`sql=`); Go runs it with the chart's ClickHouse
+view, the edited query (`xsql`, `exploreSql` from step 8g, §4.7, §4.8), beside the page's SQL chips (`sql=`); Go runs it with the chart's ClickHouse
 connection, read-only. Guiding principle (maintainer): the least machinery that still behaves nicely.
 
 ## 2. Current state
@@ -253,6 +255,9 @@ Since 2026-10-31 (§4.7; proposed where §4.7 says so):
 
 ### 4.7 Editable SQL (decided 2026-10-31; ✅ built 2026-10-31, deviations in §6 step 4)
 
+*§4.8 changes this section (planned): the editor shows placeholders, not literals, and `InlineParameters` goes
+(D9); `xsql` is `exploreSql` (D9); the gate sits in the handlers (D8); the textarea becomes CodeMirror (D12).*
+
 Maintainer: "EXPLORE IS SHOWING THE MATERIALIZED SQL AND PEOPLE CAN START ADJUSTING IT FULLY ... SO NOT
 DASHICA_FILTERS PLACEHOLDER". The Explore view gets a SQL editor, prefilled with **the chart's query exactly as it
 runs**: its window, the page's filters (structured and SQL chips), the form values, its auto buckets, all written
@@ -373,6 +378,34 @@ refresh, the edited note, an error with the editor kept, no selection while edit
 (`e2e/explore-view.spec.ts`): open the view, "SQL", delete the `GROUP BY`, Run (more rows, the note), reload (still
 edited), Reset.
 
+### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31, planned)
+
+The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each step rewrites what it changes above.
+
+- **D8 Explore off is off (step 8g):** with `explore.enabled: false` the whole Explore extension is off: no "Open in
+  Explore view" in the chart menu, no Explore tabs. The server endpoints check the flag **in their handlers**
+  (`HandleSql`, the edited-rows handler, the free SQL endpoint of D10) and answer 404 before any query. The only trace
+  in the UI: the global "…" menu (D10) shows "Explore" greyed, hovered "Explore is not enabled (explore.enabled)".
+- **D9 Placeholders, not literals (step 8g):** the key `xsql` is renamed `exploreSql` everywhere (Go, TS, the tab's
+  hash, the docs). The editor shows the chart's SQL with its ClickHouse parameter placeholders
+  (`{__from:DateTime64}` …), not their values written in; the values are listed beside the editor, and Run sends them
+  along again as parameters. `lib/clickhouse/inline_parameters.go` (its own escaping) goes. This reverses "not the
+  `{name:Type}` placeholder" of §4.7 for parameters; `{{DASHICA_FILTERS}}` stays filled in *(proposed)*.
+- **D10 Explore without a chart (step 8i):** the global "…" menu, left of the Dashica icon. Its "Explore" opens a
+  blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an empty editor, run on
+  a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts as the edited rows);
+  "Start from chart…" fills the editor from one of the shown page's charts.
+- **D11 Schema view (step 8h):** a left side panel "Schema": a tree connection › database › table, the shown page's
+  connections first, the others below. A table opens structured as DataGrip shows it: columns with type, default and
+  comment; engine, ORDER BY, PARTITION BY, primary key, TTL, skip indices. One cached query set per connection on
+  `system.tables`, `system.columns` and `system.data_skipping_indices`, refreshable from the view. The same data feeds
+  the editor's autocomplete (D12).
+- **D12 SQL editor (step 8j):** CodeMirror 6, `@codemirror/lang-sql` with a ClickHouse dialect (`SQLDialect.define`),
+  its `schema` option fed by the Schema data; loaded only when Explore opens (with the Perspective bundle). Replaces
+  the `<textarea>` of §4.7.
+- **D13 Viewer (step 8k):** Perspective's settings panel opens when the view opens; "Reset" asks for confirmation
+  first.
+
 ## 5. Alternatives considered
 
 | Alternative | For | Against |
@@ -437,6 +470,9 @@ edited), Reset.
    - `InlineParameters` writes a NUL byte of a value as `\0`; `#` comments are not skipped (only `--` and `/* */`),
      nested `/* */` neither.
 5. (With the Explore rebuild) the widget builder joins the view.
+6. **The batch of 2026-10-31** (§4.8; workbench steps): 8g D8 + D9 (Explore off, `exploreSql`, placeholders), 8h
+   D11 (Schema view), 8i D10 (global "…" menu, blank Explore), 8j D12 (CodeMirror), 8k D13 (settings panel, Reset
+   asks). Planned, not built.
 
 ## 7. Open questions
 
