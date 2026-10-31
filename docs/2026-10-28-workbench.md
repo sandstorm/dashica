@@ -918,7 +918,6 @@ interface Commands {
 interface UiApi {
   registerSidePanel(id: string, o: { label: string; icon: string; side: 'left' | 'right'; order?: number;
                                      when?: (p: Page) => boolean }): Panel;     // command workbench.view.<id>
-  registerBottomPanel(id: string, o: { label: string; order?: number; when?: (p: Page) => boolean }): Panel;
   registerBarItem(bar: 'title' | 'filter' | 'status', el: HTMLElement,
                   o: { alignment: 'left' | 'right'; priority?: number }): Disposable;
 
@@ -944,6 +943,11 @@ interface Panel extends Disposable {
   show(): void; hide(): void; readonly onDidChangeVisibility: Event<void>;
 }
 
+// a view inside a panel's body (§3.4.2): a pure helper exported from hosts/ui/ui.ts, no registry; the owner places the
+// element and draws it anew; the collapsed state under `views.<id>.collapsed` in `state`, not kept without one
+function createView(o: { id: string; title: string; description?: string; actions?: HTMLElement[];
+                         collapsed?: boolean; state?: Memento; body: Node | Node[] }): HTMLElement;
+
 // page — the open tabs and what each shows (§3.4.1)
 interface PageApi {
   readonly workbench: WorkbenchJson;        // menu groups and outlines, from /workbench.json (generated type, §3.2)
@@ -968,8 +972,25 @@ interface QueryApi {
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
   registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
-  readonly active: ActiveWidget | undefined;              // the active tab's active widget: Debug, the status bar (§3.4.4)
-  readonly onDidChangeActive: Event<void>;
+  readonly active: ActiveWidget | undefined;              // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
+  readonly onDidChangeActive: Event<void>;                // another widget or tab, its status, its records
+}
+
+interface ActiveWidget {                                  // a value, taken anew on each read
+  readonly widget: WidgetNode; url(path: string): string; readonly lastResult: QueryResult | undefined;
+  readonly status: WidgetStatus;                          // idle | loading | done {rows, ms, diagnostics} | error {message, ms}
+  readonly records: readonly WidgetRecord[];              // a table's ticked rows (§3.4.5)
+}
+
+interface WidgetContext {                                 // what a renderer gets; excerpt
+  readonly state: QueryApi;                               // its tab's query state
+  query(signal?: AbortSignal): Promise<QueryResult>;      // sets the widget's status (the latest call only)
+  url(path: string): string;
+  renderChild(el: HTMLElement, child: WidgetNode): Disposable;
+  showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
+  addFilter(fieldId: string, op: FilterOp, value: string): void;
+  select(…): void; choose(at: MenuAnchor, candidates: …[]): void; clearSelection(): void;   // §3.8
+  selectRecords(records: readonly WidgetRecord[]): void;  // its selected records; with some it becomes active
 }
 ```
 
@@ -1004,6 +1025,7 @@ Built-in extensions:
 | `theme` | light / dark toggle |
 | `filters` | filter bar: chips, filter buttons, SQL chip; `widget/selection` "Filter by …" / "Exclude …" / "Filter to window" |
 | `debug` | left panel "Debug" (the active widget's query, stats, EXPLAIN, result, as views); the status bar's item (the active widget's status); `widget/context` "Debug" (§3.4.4) |
+| `details` | left panel "Details" (the active widget's selected records, a view per record); the status bar's "N records selected" (§3.4.5) |
 | `chart-link` | `widget/context` "Copy link to chart" (`/p/shop#w=3`) |
 | `row-details` | `table/row` "Details" and `widget/selection` "Show rows" → a panel (its place open since the bottom panel is gone) |
 | `page-actions` | Go actions from `page.json` → commands + menu items |
@@ -1284,6 +1306,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 7f ✅ | **selected records** (§3.4.5): `ctx.selectRecords`, `ActiveWidget.records` (`WidgetRecord`), told by `onDidChangeActive`; the table's ticked rows, its checkbox column only with `selectRecords`, cleared on each draw; the in-table details panel (full screen, close) and its CSS removed; the `details` extension: the left side panel "Details" (a view per record, `renderRecordDetails`' formatting as `drawRecord`), the status bar's "N records selected"; `widgetTitle` moved from Debug into the `widgets` host; `e2e/record-details.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments green; Playwright written, not run), deviations: records in the order ticked; a redraw (also another width) drops them; Debug's result table has no checkboxes; collapsed state per record place in `workspaceState`; the search highlight leaves the details *(all proposed)* | a table's ticked rows in Details and the status bar |
 | 7f.1 ✅ | **review fix: Details' record views** (§3.4.2, §3.4.5): `createView`'s `state` is optional (without it nothing is kept); Details passes none, so every record view starts open instead of taking the state stored under `record.<index>` from another table or selection. ✅ 2026-10-31 (vitest) | closing a record of one table leaves the others open |
 | 7f.2 ✅ | **review fix: comment wrap** (§3.10): the top comments and tests' headers where steps 7a–7f inserted text without re-wrapping (`dashboards`, its tests, `table` tests, `window-layout`, `ui`, `widgets-testing`) are wrapped to 120 columns again; wording unchanged. ✅ 2026-10-31 | — |
+| 7f.3 ✅ | **review fix: §3.11 sketch** follows the code: `registerBottomPanel` dropped (gone since 7e), `createView` (7c), `ActiveWidget` with `records` and an excerpt of `WidgetContext` with `selectRecords` (7f), the `details` extension in the table. ✅ 2026-10-31 | — |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |
