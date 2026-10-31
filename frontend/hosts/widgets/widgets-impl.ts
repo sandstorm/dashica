@@ -4,9 +4,9 @@ import { Filter, Minus, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
-import type { ActiveQuerySource, FilterOp, QueryApi } from '../query/query';
+import type { ActiveQuerySource, FilterOp, Pill, QueryApi } from '../query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../ui/ui';
-import type { FilterCandidate, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type { FilterCandidate, PillSource, QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRecord, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
 import './widgets.css';
 
 /**
@@ -69,11 +69,16 @@ export class WidgetsHost implements WidgetsApi {
     this.#active.clear();
   }
 
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi): void {
-    const items = filterPicks(candidates);
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi, widget: PillSource): void {
+    const items = filterPicks(candidates.filter(({ fieldId }) => widget.filterable?.includes(fieldId)));
     if (items.length === 0) return;
-    void this.ui.showQuickPick(items, { anchor: at, title: 'Filter' }).then((picked) => {
-      if (picked) state.filters.add(picked.fieldId, picked.op, picked.value);
+    void this.ui.showQuickPick(items, { anchor: at, title: 'Filter' }).then(async (picked) => {
+      if (!picked) return;
+      try {
+        state.filters.add(await fetchPill(widget.dataUrl, picked));
+      } catch (error) {
+        console.error(`Filter ${picked.fieldId} failed:`, error);
+      }
     });
   }
 
@@ -204,12 +209,8 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     this.ui.showContextMenu(menuId, { anchor, title: this.widget.type, context: shown, args: [shown] });
   }
 
-  addFilter(fieldId: string, op: FilterOp, value: string): void {
-    this.state.filters.add(fieldId, op, value);
-  }
-
   offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void {
-    this.host.offerFilters(at, candidates, this.state);
+    if ('dataUrl' in this.widget) this.host.offerFilters(at, candidates, this.state, this.widget);
   }
 
   /** With records it becomes its tab's active widget first, so the records' change is told to whoever follows it. */
@@ -245,6 +246,14 @@ function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
       { label, icon: EXCLUDE_ICON, fieldId, value, op: 'ne' as const },
     ];
   });
+}
+
+/** The pill `<dataUrl>/pill` makes of `fieldId` `op` `value`; rejects with the server's message (a field that cannot filter: 422). */
+async function fetchPill(dataUrl: string, { fieldId, op, value }: FilterCandidate & { readonly op: FilterOp }): Promise<Pill> {
+  const response = await fetch(`${dataUrl}/pill?${new URLSearchParams({ field: fieldId, op, value })}`);
+  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
+  const { key, label } = (await response.json()) as Pill;
+  return { key, label };
 }
 
 /** A widget's title (`props.title`), else its type (`timeBar`). */

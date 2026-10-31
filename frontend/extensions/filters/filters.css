@@ -1,4 +1,4 @@
-/* See FilterBar in filters.ts: the chips, structured and SQL, one of them in edit mode, and the bar's buttons, tinted
+/* See FilterBar in filters.ts: the chips, pills and SQL, a SQL one in edit mode, and the bar's buttons, tinted
    while pressed (aria-pressed, see controls.css). */
 .d-filter-bar {
   display: flex;
@@ -17,7 +17,7 @@
   gap: var(--space-2);
 }
 
-/* a chip: its field's label (or `SQL:`, or a filter button's title), = or ≠, the value, and a × that removes it */
+/* a chip: `SQL:` (or a filter button's title) and its text, or a pill's label; and a × that removes it */
 .d-filter-chip {
   display: inline-flex;
   align-items: center;
@@ -36,20 +36,6 @@
   cursor: text;
 }
 
-.d-filter-chip__op {
-  padding: 0 var(--space-1);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-}
-
-.d-filter-chip__op:hover {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-
 .d-filter-chip__value {
   overflow: hidden;
   max-width: 40ch;
@@ -57,6 +43,11 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   cursor: text;
+}
+
+/* a pill's label is not edited */
+.d-filter-chip--pill .d-filter-chip__value {
+  cursor: default;
 }
 
 /* a SQL chip in edit mode: its textarea across the bar */

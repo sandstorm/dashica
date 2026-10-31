@@ -109,12 +109,11 @@ describe('WidgetsHost', () => {
       expect(result.dashicaDiagnostics).toEqual({ skipped: 'pick a host' });
     });
 
-    it('adds a structured filter to the page, and sends it with the next query', async () => {
-      ctx.addFilter('host', 'ne', 'a');
-      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'ne', value: 'a' }]);
+    it('sends the page’s pills with the next query, their keys', async () => {
+      testbed.query.filters.add({ key: 'k1.mac', label: 'host ≠ a' });
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
       await ctx.query();
-      expect(testbed.requests[0].searchParams.getAll('f')).toEqual(['host:ne:a']);
+      expect(testbed.requests[0].searchParams.getAll('f')).toEqual(['k1.mac']);
     });
 
     it('rejects with the server’s message', async () => {
@@ -153,9 +152,14 @@ describe('WidgetsHost', () => {
       });
     });
 
-    const byStatus: WidgetNode = { type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/3' };
+    const byStatus: WidgetNode = {
+      type: 'barVertical',
+      props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } },
+      dataUrl: '/p/shop/api/3',
+      filterable: ['status', 'instance'],
+    };
 
-    it('offers to filter by and to exclude each candidate in order, also a single one; choosing one adds the filter at once; none offer nothing', async () => {
+    it('offers to filter by and to exclude each candidate in order, also a single one; choosing one adds its pill at once; none offer nothing', async () => {
       testbed.render(byStatus);
       contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }]);
       expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500', 'Filter instance = web-1', 'Exclude instance = web-1']);
@@ -163,17 +167,33 @@ describe('WidgetsHost', () => {
       await testbed.choose('Exclude instance = web-1');
       await settle();
       expect(testbed.choices()).toEqual([]);
-      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'instance', op: 'ne', value: 'web-1' }]);
+      expect(testbed.query.filters.chips).toEqual([testbed.pill('instance', 'ne', 'web-1')]);
+      expect(testbed.requests.at(-1)?.pathname).toBe('/p/shop/api/3/pill');
+      expect(Object.fromEntries(testbed.requests.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
       contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '404' }]);
       expect(testbed.choices()).toEqual(['Filter status = 404', 'Exclude status = 404']);
       contexts[0].offerFilters({ x: 10, y: 20 }, []);
       expect(testbed.choices()).toEqual(['Filter status = 404', 'Exclude status = 404']);
       await testbed.choose('Filter status = 404');
       await settle();
-      expect(testbed.query.filters.chips).toEqual([
-        { kind: 'field', fieldId: 'instance', op: 'ne', value: 'web-1' },
-        { kind: 'field', fieldId: 'status', op: 'eq', value: '404' },
-      ]);
+      expect(testbed.query.filters.chips).toEqual([testbed.pill('instance', 'ne', 'web-1'), testbed.pill('status', 'eq', '404')]);
+    });
+
+    it('offers only the fields the widget can filter by', () => {
+      testbed.render({ ...byStatus, filterable: ['status'] } as WidgetNode);
+      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'cnt', value: '3' }]);
+      expect(testbed.candidates()).toEqual(['status = 500']);
+    });
+
+    it('adds no pill when its widget’s /pill fails', async () => {
+      const failing = vi.spyOn(console, 'error').mockImplementation(() => {});
+      testbed.serveText('/p/shop/api/3/pill', '"status" cannot filter this chart\'s table', 422);
+      testbed.render(byStatus);
+      contexts[0].offerFilters({ x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }]);
+      await testbed.choose('Filter status = 500');
+      await settle();
+      expect(testbed.query.filters.chips).toEqual([]);
+      expect(failing).toHaveBeenCalled();
     });
 
     it('adds nothing when the viewer closes the quick pick', async () => {
@@ -186,10 +206,10 @@ describe('WidgetsHost', () => {
 
     it('adds the filter to the query state given, for a view of a chart outside the page’s widgets', async () => {
       const other = new QueryHost(window);
-      testbed.widgets.offerFilters({ x: 0, y: 0 }, [{ fieldId: 'host', value: 'a' }], other);
+      testbed.widgets.offerFilters({ x: 0, y: 0 }, [{ fieldId: 'host', value: 'a' }], other, { dataUrl: '/p/shop/api/3', filterable: ['host'] });
       await testbed.choose('Filter host = a');
       await settle();
-      expect([other.filters.chips, testbed.query.filters.chips]).toEqual([[{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }], []]);
+      expect([other.filters.chips, testbed.query.filters.chips]).toEqual([[testbed.pill('host', 'eq', 'a')], []]);
       other.dispose();
     });
   });

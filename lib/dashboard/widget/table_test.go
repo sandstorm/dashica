@@ -89,7 +89,7 @@ func TestTableAppliesLimitToQuery(t *testing.T) {
 	}
 }
 
-func TestTable_NamesItsCategoryColumns(t *testing.T) {
+func TestTable_FiltersByItsCategoryColumns(t *testing.T) {
 	grouped := NewTable(sql.New(sql.From("http_logs"),
 		sql.Select(sql.JsonExtractString("attrs", "host")),
 		sql.Select(sql.Timestamp15Min()),
@@ -108,9 +108,12 @@ func TestTable_NamesItsCategoryColumns(t *testing.T) {
 		"all selects of raw rows":               {rawRows, []string{"status", "path"}},
 		"none of a SQL file":                    {sqlFile, nil},
 	} {
-		computed, err := tc.table.computeProps(nil)
-		if err != nil || !slices.Equal(computed.categories, tc.want) {
-			t.Errorf("%s: categories %v (%v), want %v", name, computed.categories, err, tc.want)
+		var got []string
+		for _, field := range filterableFields(tc.table) {
+			got = append(got, field.Alias())
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: filterable %v, want %v", name, got, tc.want)
 		}
 	}
 }

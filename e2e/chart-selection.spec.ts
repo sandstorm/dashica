@@ -58,5 +58,6 @@ test('a click on a table cell offers its value; "Exclude" adds it as ≠; its me
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('≠');
-    await expect(page).toHaveURL(new RegExp(`[?&]f=${COLUMN}(:|%3A)ne(:|%3A)`));
+    // the URL holds the pill's signed key, `<payload>.<mac>`
+    await expect(page).toHaveURL(/[?&]f=[\w-]+\.[\w-]+/);
 });

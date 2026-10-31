@@ -38,6 +38,7 @@ function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetCont
       ctx.selectRecords([]);
       const table = drawTable(result, widget.props, {
         offerFilters: (at, candidates) => ctx.offerFilters(at, candidates),
+        filterable: widget.filterable,
         selectRecords: (records) => ctx.selectRecords(records),
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
       });

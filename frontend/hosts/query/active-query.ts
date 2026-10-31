@@ -1,7 +1,7 @@
 // See QueryApi in query.ts.
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter, type Event } from '../../core/event-emitter/event-emitter';
-import type { FilterChip, FilterOp, FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
+import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, TimeModel } from './query';
 
 /** Where `activeQuery` finds the active tab's query state: the `page` host. */
 export interface ActiveQuerySource {
@@ -60,8 +60,8 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
     get chips(): readonly FilterChip[] {
       return active().filters.chips;
     },
-    add: ((conditionOrFieldId: string, op?: FilterOp, value?: string) =>
-      op === undefined || value === undefined ? active().filters.add(conditionOrFieldId) : active().filters.add(conditionOrFieldId, op, value)) as FiltersModel['add'],
+    add: ((conditionOrPill: string | Pill) =>
+      typeof conditionOrPill === 'string' ? active().filters.add(conditionOrPill) : active().filters.add(conditionOrPill)) as FiltersModel['add'],
     replace: (index, chip) => active().filters.replace(index, chip),
     remove: (which) => active().filters.remove(which),
     clear: () => active().filters.clear(),

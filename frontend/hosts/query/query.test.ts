@@ -9,6 +9,17 @@ let refreshes: number;
 /** The query strings `onDidChangeSearch` gave, in order. */
 let searches: string[];
 
+/** A key as the server signs a pill (`<payload>.<mac>`, the payload base64url JSON) with `label`; its mac is none. */
+function keyOf(label: string): string {
+  const json = new TextEncoder().encode(JSON.stringify({ condition: 'x', label }));
+  return `${btoa(String.fromCharCode(...json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.mac`;
+}
+
+/** The pill of `keyOf(label)`, as `/pill` answers it. */
+function pill(label: string) {
+  return { key: keyOf(label), label };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   query = new QueryHost(window);
@@ -98,19 +109,20 @@ describe('QueryHost', () => {
     expect(refreshes).toBe(2);
   });
 
-  it('takes the structured filters from the URL’s f, the value everything after the second colon', () => {
-    query.load({ search: '?f=status:eq:500&f=path:ne:/api:v2&f=host:gt:a&f=:eq:a&f=host:eq' });
+  it('takes the pills from the URL’s f as they are, each labelled as its key says; an empty f none', () => {
+    query.load({ search: `?f=${keyOf('status = 500')}&f=&f=status:eq:500&f=${keyOf('path ≠ /api')}` });
     expect(query.filters.chips).toEqual([
-      { kind: 'field', fieldId: 'status', op: 'eq', value: '500' },
-      { kind: 'field', fieldId: 'path', op: 'ne', value: '/api:v2' },
+      { kind: 'pill', key: keyOf('status = 500'), label: 'status = 500' },
+      { kind: 'pill', key: 'status:eq:500', label: 'status:eq:500' },
+      { kind: 'pill', key: keyOf('path ≠ /api'), label: 'path ≠ /api' },
     ]);
   });
 
   it('takes one chip per f and sql in the URL’s order; an old sql written by appending is one chip, an empty one none', () => {
-    query.load({ search: '?sql=a+%0AAND+b&f=host:eq:x&sql=&sql=duration+%3E+2000' });
+    query.load({ search: `?sql=a+%0AAND+b&f=${keyOf('host = x')}&sql=&sql=duration+%3E+2000` });
     expect(query.filters.chips).toEqual([
       { kind: 'sql', sql: 'a \nAND b' },
-      { kind: 'field', fieldId: 'host', op: 'eq', value: 'x' },
+      { kind: 'pill', key: keyOf('host = x'), label: 'host = x' },
       { kind: 'sql', sql: 'duration > 2000' },
     ]);
   });
@@ -118,14 +130,14 @@ describe('QueryHost', () => {
   it('writes and sends the chips in their order, f and sql interleaved, and reads them back', () => {
     query.load({ search: '?tab=2' });
     query.filters.add('duration > 2000');
-    query.filters.add('host', 'ne', 'a');
+    query.filters.add(pill('host ≠ a'));
     query.filters.add("level != 'info'");
     vi.advanceTimersByTime(200);
     const written = new URLSearchParams(searches.at(-1));
     expect([...written]).toEqual([
       ['tab', '2'],
       ['sql', 'duration > 2000'],
-      ['f', 'host:ne:a'],
+      ['f', keyOf('host ≠ a')],
       ['sql', "level != 'info'"],
     ]);
     expect([...query.requestParams()].slice(1)).toEqual([...written].slice(1));
@@ -135,14 +147,14 @@ describe('QueryHost', () => {
   });
 
   it('replaces a chip in its place; a SQL chip of only spaces removes it, the same chip again changes nothing', () => {
-    query.load({ search: '?sql=a&f=host:eq:x&sql=b' });
+    query.load({ search: `?sql=a&f=${keyOf('host = x')}&sql=b` });
     refreshes = 0;
     query.filters.replace(0, { kind: 'sql', sql: 'c' });
-    query.filters.replace(1, { kind: 'field', fieldId: 'host', op: 'ne', value: 'y' });
-    query.filters.replace(1, { kind: 'field', fieldId: 'host', op: 'ne', value: 'y' });
+    query.filters.replace(1, { kind: 'pill', ...pill('host ≠ y') });
+    query.filters.replace(1, { kind: 'pill', ...pill('host ≠ y') });
     expect(query.filters.chips).toEqual([
       { kind: 'sql', sql: 'c' },
-      { kind: 'field', fieldId: 'host', op: 'ne', value: 'y' },
+      { kind: 'pill', ...pill('host ≠ y') },
       { kind: 'sql', sql: 'b' },
     ]);
     query.filters.replace(2, { kind: 'sql', sql: ' ' });
@@ -151,40 +163,29 @@ describe('QueryHost', () => {
     expect(refreshes).toBe(3);
   });
 
-  it('writes the structured filters into the URL as one f each, and reads them back', () => {
+  it('sends the pills as one f each, their keys', () => {
     query.load();
-    query.filters.add('status', 'eq', '500');
-    query.filters.add('path', 'ne', '/api:v2');
-    vi.advanceTimersByTime(200);
-    expect(new URLSearchParams(searches.at(-1)).getAll('f')).toEqual(['status:eq:500', 'path:ne:/api:v2']);
-    const written = query.filters.chips;
-    query.load({ search: searches.at(-1) });
-    expect(query.filters.chips).toEqual(written);
-  });
-
-  it('sends the structured filters as one f each', () => {
-    query.load();
-    query.filters.add('status', 'eq', '500');
-    query.filters.add('host', 'ne', 'a');
+    query.filters.add(pill('status = 500'));
+    query.filters.add(pill('host ≠ a'));
     const sent = query.requestParams();
     expect([...sent.keys()]).toEqual(['time', 'f', 'f']);
-    expect(sent.getAll('f')).toEqual(['status:eq:500', 'host:ne:a']);
+    expect(sent.getAll('f')).toEqual([keyOf('status = 500'), keyOf('host ≠ a')]);
   });
 
-  it('adds a structured filter once, removes a chip by its index and clears them all', () => {
+  it('adds a pill once (by its key), removes a chip by its index and clears them all', () => {
     query.load();
     query.filters.add('status >= 500');
     refreshes = 0;
-    query.filters.add('host', 'eq', 'a');
-    query.filters.add('host', 'eq', 'a');
-    query.filters.add('host', 'ne', 'b');
-    query.filters.add('path', 'eq', '/api');
+    query.filters.add(pill('host = a'));
+    query.filters.add({ key: keyOf('host = a'), label: 'another label' });
+    query.filters.add(pill('host ≠ b'));
+    query.filters.add(pill('path = /api'));
     expect(refreshes).toBe(3);
     query.filters.remove(2);
     expect(query.filters.chips).toEqual([
       { kind: 'sql', sql: 'status >= 500' },
-      { kind: 'field', fieldId: 'host', op: 'eq', value: 'a' },
-      { kind: 'field', fieldId: 'path', op: 'eq', value: '/api' },
+      { kind: 'pill', ...pill('host = a') },
+      { kind: 'pill', ...pill('path = /api') },
     ]);
     query.filters.clear();
     expect(query.filters.chips).toEqual([]);
@@ -192,10 +193,10 @@ describe('QueryHost', () => {
   });
 
   it('removes every chip a predicate holds for in one change, and none that is not there', () => {
-    query.load({ search: '?sql=a+LIKE+%27x%25%27&f=host:eq:a&sql=a+LIKE+%27y%25%27' });
+    query.load({ search: `?sql=a+LIKE+%27x%25%27&f=${keyOf('host = a')}&sql=a+LIKE+%27y%25%27` });
     refreshes = 0;
     query.filters.remove((chip) => chip.kind === 'sql');
-    expect(query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }]);
+    expect(query.filters.chips).toEqual([{ kind: 'pill', ...pill('host = a') }]);
     query.filters.remove((chip) => chip.kind === 'sql');
     query.filters.remove(5);
     expect(refreshes).toBe(1);
@@ -354,19 +355,19 @@ describe('QueryHost', () => {
 
 describe('parseSearch and formatSearch', () => {
   it('read the state of a query string, the default for what it lacks', () => {
-    expect(parseSearch('?time=custom&range=now-6h+to+now&f=host:eq:a&f=bad&refresh=30&wp=%7B%22path%22%3A%22x%22%7D', '1h')).toEqual({
+    expect(parseSearch(`?time=custom&range=now-6h+to+now&f=${keyOf('host = a')}&f=&refresh=30&wp=%7B%22path%22%3A%22x%22%7D`, '1h')).toEqual({
       range: 'custom',
       custom: 'now-6h to now',
       autoRefresh: 30,
-      chips: [{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }],
+      chips: [{ kind: 'pill', ...pill('host = a') }],
       params: { path: 'x' },
     });
     expect(parseSearch('', '1h')).toEqual({ range: '1h', custom: '', autoRefresh: undefined, chips: [], params: {} });
   });
 
   it('write it back, leaving out the default and keeping the other keys', () => {
-    const state = parseSearch('?time=3h&sql=a&f=host:ne:b', '1h');
-    expect(formatSearch(state, '1h', '?tab=x&time=6h')).toBe('?tab=x&time=3h&sql=a&f=host%3Ane%3Ab');
+    const state = parseSearch('?time=3h&sql=a&f=k.mac', '1h');
+    expect(formatSearch(state, '1h', '?tab=x&time=6h')).toBe('?tab=x&time=3h&sql=a&f=k.mac');
     expect(formatSearch(parseSearch('', '1h'), '1h', '?sql=a')).toBe('');
   });
 });

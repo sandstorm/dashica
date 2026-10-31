@@ -3,7 +3,6 @@ package widget
 import (
 	"slices"
 
-	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
@@ -65,7 +64,7 @@ func (b *Table) Query() sql.SqlQueryable {
 
 func (b *Table) explicitId() string { return b.id }
 
-// dimensions are its own fields, by whose alias filter.Apply interprets a filter: its GROUP BY fields as it selects
+// dimensions are its own fields, those holding categories the ones it makes pills of (/pill): its GROUP BY fields as it selects
 // them (by alias, else by definition: `GroupBy(sql.Field("host"))` is the select `JSONExtractString(attrs, 'host') AS
 // host`), or all its select fields when it has no GROUP BY (raw rows); for a builder query only, since a SQL file's
 // output columns are only in its text.
@@ -92,22 +91,4 @@ func (b *Table) dimensions() []sql.SqlField {
 		}
 	}
 	return out
-}
-
-// tableComputed is what the server computes for a table when the page is mounted.
-type tableComputed struct {
-	// categories are the columns whose cells a click selects, by name: the aliases of its dimensions that hold
-	// categories (sql.IsCategory).
-	categories []string
-}
-
-// computeProps names its category columns.
-func (b *Table) computeProps(*rendering.DashboardContext) (tableComputed, error) {
-	var categories []string
-	for _, field := range b.dimensions() {
-		if sql.IsCategory(field) {
-			categories = append(categories, field.Alias())
-		}
-	}
-	return tableComputed{categories: categories}, nil
 }

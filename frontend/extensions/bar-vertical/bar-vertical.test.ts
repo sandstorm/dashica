@@ -8,6 +8,8 @@ import { filters } from '../filters/filters';
 import { barVertical } from './bar-vertical';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The fields the server lets each chart here filter by (page.json's `filterable`). */
+const filterable = ['status', 'host', 'region'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
@@ -28,7 +30,7 @@ const escape = () => (document.activeElement as HTMLElement).dispatchEvent(new K
 describe('barVertical', () => {
   it('draws the widget’s data once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
-    const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
@@ -36,7 +38,7 @@ describe('barVertical', () => {
 
   it('sorts the categories by their measure when asked, descending for sortReverse', async () => {
     testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [2, 30] });
-    const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' }, sortReverse: true }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' }, sortReverse: true }, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     const ticks = [...el.querySelectorAll('[aria-label="x-axis tick label"] text')].map((tick) => tick.textContent);
     expect(ticks).toEqual(['500', '200']);
@@ -45,7 +47,7 @@ describe('barVertical', () => {
   describe('a click on a bar', () => {
     const bars = (el: HTMLElement) => [...el.querySelectorAll<SVGRectElement>('g[aria-label="bar"] rect')];
     const byStatus = (more: object = {}) =>
-      ({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', ...more }) as const;
+      ({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable, ...more }) as const;
 
     it('offers to filter by or exclude its category, also as the only candidate; choosing "Filter" adds the filter at once', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
@@ -56,8 +58,8 @@ describe('barVertical', () => {
       expect(testbed.query.filters.chips).toEqual([]);
       await testbed.choose('Filter status = 500');
       expect(testbed.choices()).toEqual([]);
-      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'eq', value: '500' }]);
-      expect(testbed.requests.at(-1)!.searchParams.getAll('f')).toEqual(['status:eq:500']);
+      expect(testbed.query.filters.chips).toEqual([testbed.pill('status', 'eq', '500')]);
+      expect(testbed.requests.at(-1)!.searchParams.getAll('f')).toEqual([testbed.pill('status', 'eq', '500').key]);
     });
 
     it('offers each category of its row in the order of x, fill, fx, fy', async () => {
@@ -68,7 +70,7 @@ describe('barVertical', () => {
       await clickMark(bars(el).at(-1)!);
       expect(testbed.candidates()).toEqual(['status = 500', 'host = b', 'region = us']);
       await testbed.choose('Filter host = b');
-      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'eq', value: 'b' }]);
+      expect(testbed.query.filters.chips).toEqual([testbed.pill('host', 'eq', 'b')]);
     });
 
     it('offers again on the next click, on the same bar and on another: Plot does not pin its tip', async () => {
@@ -82,7 +84,7 @@ describe('barVertical', () => {
       await clickMark(bars(el)[0]);
       expect(testbed.candidates()).toEqual(['status = 200']);
       await testbed.choose('Exclude status = 200');
-      expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '200' }]);
+      expect(testbed.query.filters.chips).toEqual([testbed.pill('status', 'ne', '200')]);
     });
 
     it('stops a mouse’s pointerdown on a bar, on which Plot would pin its tip, and lets a touch or pen pass', async () => {

@@ -457,7 +457,7 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
  * tooltips that can be pinned. With `selectRecords`, a checkbox in front of each row (and one for all) ticks it, each
  * change calling `selectRecords` with the ticked rows. With `offerFilters`, a click on a cell of a column in
- * `props.categories` offers its value, its column's name the field id; a NULL offers nothing, and a Map, Array or
+ * `filterable` (the widget's, page.json) offers its value, its column's name the field id; a NULL offers nothing, and a Map, Array or
  * Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows the menu
  * `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
  * `TableHeaderMenuContext`); extensions add their entries there (the `table` extension: SQL filters, auto-size).
@@ -465,7 +465,12 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
 export function drawTable(
   queryResult: QueryResult,
   props: TableProps,
-  { offerFilters, selectRecords, showMenu }: { offerFilters?: WidgetContext['offerFilters']; selectRecords?: WidgetContext['selectRecords']; showMenu?: ShowTableMenu } = {},
+  {
+    offerFilters,
+    filterable = [],
+    selectRecords,
+    showMenu,
+  }: { offerFilters?: WidgetContext['offerFilters']; filterable?: readonly string[]; selectRecords?: WidgetContext['selectRecords']; showMenu?: ShowTableMenu } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
@@ -476,13 +481,13 @@ export function drawTable(
 
   // With `offerFilters`, a click on a cell of a category column offers its value (see the cellClick handler below)
   const filtering = offerFilters !== undefined;
-  const categories = new Set(
+  const categoryColumns = new Set(
     (queryResult?.schema?.fields ?? [])
-      .filter((field: any) => props.categories?.includes(field.name))
+      .filter((field: any) => filterable.includes(field.name))
       .filter((field: any) => !DataType.isMap(field) && !DataType.isList(field) && !DataType.isFixedSizeList(field) && !DataType.isStruct(field))
       .map((field: any) => field.name as string),
   );
-  const filterable = (fieldName: string) => filtering && categories.has(fieldName);
+  const filters = (fieldName: string) => filtering && categoryColumns.has(fieldName);
 
   // Build columns with timestamp formatting
   const columns: ColumnDefinition[] = [];
@@ -516,13 +521,13 @@ export function drawTable(
           el.innerHTML = `${time} &nbsp; <span class="d-table__date">${date}</span>`;
           return el;
         },
-        cssClass: filterable(field.name) ? 'd-table__filterable' : undefined,
+        cssClass: filters(field.name) ? 'd-table__filterable' : undefined,
       });
     } else {
       columns.push({
         title: field.name,
         field: field.name,
-        cssClass: filterable(field.name) ? 'd-table__filterable' : undefined,
+        cssClass: filters(field.name) ? 'd-table__filterable' : undefined,
       });
     }
   });
@@ -648,7 +653,7 @@ export function drawTable(
   tabulatorTable.on("cellClick", (e: UIEvent, cell: CellComponent) => {
     const fieldName = cell.getField();
     const value = cell.getValue();
-    if (!offerFilters || !filterable(fieldName) || value === null || value === undefined) return;
+    if (!offerFilters || !filters(fieldName) || value === null || value === undefined) return;
     offerFilters(cell.getElement(), [{ fieldId: fieldName, value: String(value) }]);
   });
 

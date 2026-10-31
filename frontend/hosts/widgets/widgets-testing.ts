@@ -15,7 +15,8 @@ import { WidgetsHost, type RenderedWidget, type WidgetRecord, type WidgetStatus 
  * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
- * shown, `choices()` / `candidates()` / `choose` what `ctx.offerFilters` offers (in its quick pick "Filter").
+ * shown, `choices()` / `candidates()` / `choose` what `ctx.offerFilters` offers (in its quick pick "Filter"); every
+ * `<dataUrl>/pill` answers a pill whose key names its field, op and value (`pill` gives the chip it adds).
  * `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
  * `RenderedWidget` whose status and records the test sets.
  */
@@ -46,6 +47,10 @@ export function widgetTestbed() {
     const parsed = new URL(url, location.origin);
     requests.push(parsed);
     const answer = answers.get(parsed.pathname);
+    if (!answer && parsed.pathname.endsWith('/pill')) {
+      const [field, op, value] = ['field', 'op', 'value'].map((key) => parsed.searchParams.get(key) ?? '');
+      return Response.json(fakePill(field, op, value));
+    }
     return answer ? answer() : new Response('not found', { status: 404 });
   });
   vi.stubGlobal(
@@ -89,6 +94,8 @@ export function widgetTestbed() {
       option.el.click();
       await settle();
     },
+    /** The chip a choice of `field` `op` `value` adds: the pill `<dataUrl>/pill` answers here. */
+    pill: (field: string, op: 'eq' | 'ne', value: string) => ({ kind: 'pill' as const, ...fakePill(field, op, value) }),
     /** The page shown, for the extensions that read it. */
     page,
     /** The URLs fetched, in order. */
@@ -133,6 +140,11 @@ export function widgetTestbed() {
       history.replaceState(null, '', '/');
     },
   };
+}
+
+/** The pill the testbed's `/pill` answers: a key that is no signed one, and the label the server writes. */
+function fakePill(field: string, op: string, value: string): { key: string; label: string } {
+  return { key: `test-pill:${field}:${op}:${value}`, label: `${field} ${op === 'ne' ? '≠' : '='} ${value}` };
 }
 
 /** Lets the pending fetches, Arrow decoding and draws finish. */

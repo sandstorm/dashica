@@ -7,6 +7,8 @@ import { clickMark } from '../chart-library/plot-testing';
 import { timeBar } from './time-bar';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The fields the server lets each chart here filter by (page.json's `filterable`). */
+const filterable = ['level', 'region'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
@@ -21,7 +23,7 @@ afterEach(() => {
 describe('timeBar', () => {
   it('draws the widget’s data once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { time: [Date.UTC(2026, 9, 29, 10), Date.UTC(2026, 9, 29, 10, 15)], cnt: [3, 5] }, { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from: Date.UTC(2026, 9, 29, 10), to: Date.UTC(2026, 9, 29, 11) }) });
-    const { el } = testbed.render({ type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time', xBucketSizeMs: 900000 }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time', xBucketSizeMs: 900000 }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable });
     testbed.resize(640);
     testbed.scrollIntoView();
     await settle();
@@ -39,7 +41,7 @@ describe('timeBar', () => {
     const props = { x: { kind: 'expr', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' }, fill: { kind: 'enum', alias: 'level' } } as const;
     const render = (more: object = {}) => {
       testbed.serve('/p/shop/api/1/query', rows, range);
-      return testbed.render({ type: 'timeBar', props, dataUrl: '/p/shop/api/1', ...more }).el;
+      return testbed.render({ type: 'timeBar', props, dataUrl: '/p/shop/api/1', filterable, ...more }).el;
     };
     const inView = async () => {
       testbed.resize(640);
@@ -54,7 +56,7 @@ describe('timeBar', () => {
       await clickMark(bars(el)[1]);
       expect(testbed.candidates()).toEqual(['level = error']);
       await testbed.choose('Filter level = error');
-      expect(testbed.query.filters.chips).toContainEqual({ kind: 'field', fieldId: 'level', op: 'eq', value: 'error' });
+      expect(testbed.query.filters.chips).toContainEqual(testbed.pill('level', 'eq', 'error'));
     });
 
     it('on the drag area offers the bar Plot points at below it, again on the next click', async () => {
@@ -65,7 +67,7 @@ describe('timeBar', () => {
       await clickMark(bars(el)[2], overlay());
       expect(testbed.candidates()).toEqual(['level = info']);
       await testbed.choose('Filter level = info');
-      expect(testbed.query.filters.chips).toContainEqual({ kind: 'field', fieldId: 'level', op: 'eq', value: 'info' });
+      expect(testbed.query.filters.chips).toContainEqual(testbed.pill('level', 'eq', 'info'));
       await clickMark(bars(el)[1], overlay());
       expect(testbed.candidates()).toEqual(['level = error']);
     });

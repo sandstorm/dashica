@@ -1,6 +1,6 @@
 // See QueryApi in query.ts.
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { FieldFilter, FilterChip, FilterOp, FiltersModel, ParamsModel, QueryApi, TimeModel } from './query';
+import type { FilterChip, FiltersModel, ParamsModel, Pill, QueryApi, TimeModel } from './query';
 
 /**
  * The `QueryApi` of one tab, holding the state of a query string (the tab's URL's): `load` takes the state from one,
@@ -46,7 +46,7 @@ export class QueryHost implements QueryApi {
   }
 
   /**
-   * Takes the state from `search` (`?time=1h&f=host:eq:a`), for a page about to be shown or after the browser's back
+   * Takes the state from `search` (`?time=1h&f=<key>`), for a page about to be shown or after the browser's back
    * and forward; what it lacks is the default (`defaultTime`: the page's time range, else 24h). Fires every model's
    * `onDidChange` and one `onDidRequestRefresh`.
    */
@@ -141,7 +141,7 @@ export class QueryHost implements QueryApi {
   }
 }
 
-/** What a query string (`?time=1h&f=host:eq:a&sql=…&wp=…&refresh=30`) says about the query state. */
+/** What a query string (`?time=1h&f=<key>&sql=…&wp=…&refresh=30`) says about the query state. */
 export interface QueryState {
   readonly range: string;
   /** The custom range; '' unless `range` is `custom`. */
@@ -154,8 +154,8 @@ export interface QueryState {
 
 /**
  * The state `search` holds; what it lacks is the default (`defaultTime` for the range). Each `f` and `sql` is one chip,
- * in their order; an `f` the server would refuse (not `<id>:eq:<value>` or `<id>:ne:<value>`), an `sql` of only spaces
- * and a `wp` that is no JSON object of strings are left out.
+ * in their order; an empty `f`, an `sql` of only spaces and a `wp` that is no JSON object of strings are left out. An
+ * `f` is kept as it is, whatever it holds: the server checks its signature.
  */
 export function parseSearch(search: string, defaultTime = DEFAULT_TIME): QueryState {
   const url = new URLSearchParams(search);
@@ -252,10 +252,10 @@ class FiltersState extends Model implements FiltersModel {
   }
 
   add(condition: string): void;
-  add(fieldId: string, op: FilterOp, value: string): void;
-  add(conditionOrFieldId: string, op?: FilterOp, value?: string): void {
+  add(pill: Pill): void;
+  add(conditionOrPill: string | Pill): void {
     const added: FilterChip =
-      op === undefined || value === undefined ? { kind: 'sql', sql: conditionOrFieldId } : { kind: 'field', fieldId: conditionOrFieldId, op, value };
+      typeof conditionOrPill === 'string' ? { kind: 'sql', sql: conditionOrPill } : { kind: 'pill', key: conditionOrPill.key, label: conditionOrPill.label };
     if (isEmpty(added) || this.chips.some((chip) => sameChip(chip, added))) return;
     this.#setChips([...this.chips, added]);
   }
@@ -283,7 +283,7 @@ class FiltersState extends Model implements FiltersModel {
 
 function sameChip(a: FilterChip, b: FilterChip): boolean {
   if (a.kind === 'sql') return b.kind === 'sql' && a.sql === b.sql;
-  return b.kind === 'field' && a.fieldId === b.fieldId && a.op === b.op && a.value === b.value;
+  return b.kind === 'pill' && a.key === b.key;
 }
 
 /** A SQL chip of only spaces: it filters nothing, the server leaves it out. */
@@ -295,27 +295,33 @@ function isEmpty(chip: FilterChip): boolean {
 function appendChips(url: URLSearchParams, chips: readonly FilterChip[]): void {
   for (const chip of chips) {
     if (chip.kind === 'sql') url.append('sql', chip.sql);
-    else url.append('f', formatFieldFilter(chip));
+    else url.append('f', chip.key);
   }
 }
 
-/** The chip of the URL's entry `key`=`value`; `undefined` for another key, an unreadable `f`, an `sql` of only spaces. */
+/** The chip of the URL's entry `key`=`value`; `undefined` for another key, an empty `f`, an `sql` of only spaces. */
 function parseChip(key: string, value: string): FilterChip | undefined {
-  if (key === 'f') return parseFieldFilter(value);
+  if (key === 'f' && value !== '') return { kind: 'pill', key: value, label: pillLabel(value) };
   if (key === 'sql' && value.trim() !== '') return { kind: 'sql', sql: value };
   return undefined;
 }
 
-/** `host:ne:a` as the server reads an `f`: the value is everything after the second colon. */
-function formatFieldFilter({ fieldId, op, value }: FieldFilter): string {
-  return `${fieldId}:${op}:${value}`;
-}
-
-/** The filter of an `f` (`host:ne:a`); `undefined` without an id, a second colon, or an op `eq` / `ne`. */
-function parseFieldFilter(text: string): FieldFilter | undefined {
-  const [fieldId, op, ...value] = text.split(':');
-  if (!fieldId || (op !== 'eq' && op !== 'ne') || value.length === 0) return undefined;
-  return { kind: 'field', fieldId, op, value: value.join(':') };
+/**
+ * The label a pill's key carries (`customer = acme`): its key is `<payload>.<mac>`, the payload the pill as JSON in
+ * base64url (lib/dashboard/filter, `Sign`); the key itself when it has none.
+ */
+export function pillLabel(key: string): string {
+  const dot = key.indexOf('.');
+  if (dot < 0) return key;
+  try {
+    const payload = key.slice(0, dot).replace(/-/g, '+').replace(/_/g, '/');
+    const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0));
+    const { label } = JSON.parse(new TextDecoder().decode(bytes)) as { label?: unknown };
+    if (typeof label === 'string' && label) return label;
+  } catch {
+    // not a pill's key: the server refuses it, the chip shows it as it is
+  }
+  return key;
 }
 
 class ParamsState extends Model implements ParamsModel {

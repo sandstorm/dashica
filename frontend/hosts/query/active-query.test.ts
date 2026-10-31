@@ -15,7 +15,7 @@ let events: string[];
 beforeEach(() => {
   shop = new QueryHost(window);
   checkout = new QueryHost(window);
-  shop.load({ search: '?time=1h&f=host:eq:a' });
+  shop.load({ search: '?time=1h&f=pill-host-a' });
   checkout.load({ search: '?time=6h' });
   tabsChanged = new EventEmitter<void>();
   source = { activeQuery: shop, onDidChangeTabs: tabsChanged.event };
@@ -41,14 +41,14 @@ const switchTo = (tab: QueryHost) => {
 describe('activeQuery', () => {
   it('reads and changes the active tab’s state', () => {
     expect(query.time.range).toBe('1h');
-    expect(query.filters.chips).toEqual([{ kind: 'field', fieldId: 'host', op: 'eq', value: 'a' }]);
-    query.filters.add('status', 'eq', '500');
+    expect(query.filters.chips).toEqual([{ kind: 'pill', key: 'pill-host-a', label: 'pill-host-a' }]);
+    query.filters.add({ key: 'pill-status-500', label: 'status = 500' });
     query.filters.add('path LIKE \'/api%\'');
-    query.filters.replace(0, { kind: 'field', fieldId: 'host', op: 'ne', value: 'a' });
+    query.filters.replace(0, { kind: 'pill', key: 'pill-host-not-a', label: 'host ≠ a' });
     query.params.set('path', '/x');
     expect(shop.filters.chips).toEqual([
-      { kind: 'field', fieldId: 'host', op: 'ne', value: 'a' },
-      { kind: 'field', fieldId: 'status', op: 'eq', value: '500' },
+      { kind: 'pill', key: 'pill-host-not-a', label: 'host ≠ a' },
+      { kind: 'pill', key: 'pill-status-500', label: 'status = 500' },
       { kind: 'sql', sql: "path LIKE '/api%'" },
     ]);
     expect(shop.params.values).toEqual({ path: '/x' });

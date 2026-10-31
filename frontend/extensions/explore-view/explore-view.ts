@@ -35,7 +35,7 @@ export const exploreView: Extension = {
           onDidChangeHash: context.onDidChangeHash,
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
-          offerFilters: (at, candidates) => widgets.offerFilters(at, candidates, context.query),
+          offerFilters: (at, candidates) => widgets.offerFilters(at, candidates, context.query, widget as ChartWithRows),
         });
         return {
           dispose: () => {

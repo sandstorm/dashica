@@ -37,7 +37,8 @@ test('a click on a bar offers to filter by its category or exclude it; "Filter" 
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toContainText('=');
-    await expect(page).toHaveURL(/[?&]f=[^&]+(:|%3A)eq(:|%3A)/);
+    // the URL holds the pill's signed key, `<payload>.<mac>`
+    await expect(page).toHaveURL(/[?&]f=[\w-]+\.[\w-]+/);
 });
 
 test('"Exclude" adds the category as ≠', async ({page}) => {

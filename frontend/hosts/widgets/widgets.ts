@@ -2,7 +2,7 @@ import type { Table } from 'apache-arrow';
 import type { Disposable } from '../../core/disposable/disposable';
 import type { Event } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
-import type { FilterOp, QueryApi } from '../query/query';
+import type { QueryApi } from '../query/query';
 import type { MenuAnchor } from '../ui/ui';
 
 /**
@@ -26,11 +26,12 @@ export interface WidgetsApi {
   render(el: HTMLElement, widget: WidgetNode, state: QueryApi): Disposable;
   /**
    * Offers, in a quick pick "Filter" at `at`, to filter by each of `candidates` ("status = 500" with a filter icon) or
-   * to exclude it (the same with a minus icon), in order; choosing one adds it to `state`'s filters at once. Nothing
-   * without candidates. For a view of a chart outside the page's widgets (the Explore view), as `offerFilters` of a
-   * widget's context.
+   * to exclude it (the same with a minus icon), in order, those of them whose field `widget` names `filterable`;
+   * choosing one asks `widget`'s `/pill` for its pill and adds it to `state`'s filters (a failed answer adds none, it
+   * goes to the console). Nothing without such candidates. For a view of a chart outside the page's widgets (the
+   * Explore view), as `offerFilters` of a widget's context.
    */
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi): void;
+  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[], state: QueryApi, widget: PillSource): void;
   /**
    * The active tab's active widget, the same object as long as it is rendered; `undefined` while the viewer has not
    * pressed or focused in a widget with data of that tab, or after it was removed.
@@ -64,9 +65,15 @@ export type WidgetStatus =
   | { readonly kind: 'done'; readonly rows: number; readonly ms: number; readonly diagnostics: Diagnostics }
   | { readonly kind: 'error'; readonly message: string; readonly ms: number };
 
+/** The widget whose `<dataUrl>/pill` makes the pills a click offers, and the aliases of its fields that make one. */
+export interface PillSource {
+  readonly dataUrl: string;
+  readonly filterable?: readonly string[];
+}
+
 /** A category's value a click offers to filter by (a bar's category, its fill, a table cell). */
 export interface FilterCandidate {
-  /** The alias of the clicked field's column (`host`), the id of a filter on it. */
+  /** The alias of the clicked field's column (`host`), the field its widget's `/pill` makes the pill of. */
   readonly fieldId: string;
   readonly value: string;
 }
@@ -97,11 +104,9 @@ export interface WidgetContext {
    * cell's column and value). The chart frame's "More" shows `widget/context`, a table's cell `table/cell`.
    */
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
-  /** Adds the structured filter `fieldId` `op` `value` to the page (`fieldId`: a column's alias). */
-  addFilter(fieldId: string, op: FilterOp, value: string): void;
   /**
    * Offers to filter by or exclude each of `candidates` at `at` (a click's point, a cell), as `WidgetsApi.offerFilters`
-   * with the widget's query state: choosing one adds the filter at once.
+   * with the widget's query state and the widget's own pills: choosing one adds the pill at once.
    */
   offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
   /**
@@ -134,9 +139,9 @@ export type QueryResult = Table & {
   dashicaDiagnostics?: Diagnostics;
 };
 
-/** What a chart tells about one answer: the filters it does not interpret, or that it did not run. */
+/** What a chart tells about one answer: the pills it does not apply, or that it did not run. */
 export interface Diagnostics {
-  /** The ids of the page's structured filters the chart ignores (`['host']`), in the order of the URL. */
+  /** The labels of the page's pills the chart ignores (`['customer = acme']`: on another table), in the order of the URL. */
   readonly ignored?: readonly string[];
   /** Why the chart did not run; then its result has no rows. */
   readonly skipped?: string;

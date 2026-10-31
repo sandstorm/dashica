@@ -81,7 +81,7 @@ describe('table', () => {
 
   it('offers the value of a clicked cell by its column’s name; "Exclude" adds it as ≠', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['path', 'status'] }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] });
     await inView();
 
     const cell = cellAt(el, 'status', 1);
@@ -90,12 +90,12 @@ describe('table', () => {
     expect(testbed.choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
     await testbed.choose('Exclude status = 500');
 
-    expect(testbed.query.filters.chips).toEqual([{ kind: 'field', fieldId: 'status', op: 'ne', value: '500' }]);
+    expect(testbed.query.filters.chips).toEqual([testbed.pill('status', 'ne', '500')]);
   });
 
   it('offers nothing from a NULL cell', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', null], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['path'] }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
     await inView();
 
     cellAt(el, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -104,7 +104,7 @@ describe('table', () => {
 
   it('offers only in its category columns: a measure, or a table without categories, offers nothing', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], cnt: [3] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['path'] }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
     await inView();
 
     const cnt = cellAt(el, 'cnt', 0);
@@ -116,7 +116,7 @@ describe('table', () => {
 
   it('offers nothing in a list column, even one named a category', async () => {
     testbed.serve('/p/shop/api/1/query', new Table({ tags: vectorFromArray([['a', 'b']], new List(new Field('item', new Utf8(), true))) }));
-    const { el } = testbed.render({ type: 'table', props: { height: 500, categories: ['tags'] }, dataUrl: '/p/shop/api/1' });
+    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['tags'] });
     await inView();
 
     const tags = cellAt(el, 'tags', 0);
