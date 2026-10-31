@@ -426,15 +426,17 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
     beside it), fetches its `/sql` with the active tab's query state and opens a blank tab on its connection with that
     SQL and those parameters in the hash, so it runs at once *(proposed)*; a chart that does not run (204) gives an
     empty editor.
-- **D11 Schema view (step 8h, ✅ 2026-10-31):** a left side panel "Schema": a tree connection › database › table, the
-  shown page's connections first, the others below. A table opens structured as DataGrip shows it: columns with type,
+- **D11 Schema view (step 8h, ✅ 2026-10-31; views since workbench step 9x, D32):** a left side panel "Schema": a tree
+  connection › database › table as two views, "On this page" (exactly the tables the shown page's charts read) and
+  "All connections" (every connection), each closable, its state kept; "Show comments" in the panel's "…". A table opens structured as DataGrip shows it: columns with type,
   default and comment; engine, ORDER BY, PARTITION BY, primary key, TTL, skip indices. One cached query set per
   connection on `system.tables`, `system.columns` and `system.data_skipping_indices`, refreshable from the view. The
   same data feeds the editor's autocomplete (D12). Built as: `GET /schema.json?connection=<name>` answers
-  `clickhouse.Schema` (`{databases: [{name, tables: [{name, engine, sortingKey, partitionKey, primaryKey, ttl, comment,
+  `clickhouse.Schema` (`{database, databases: [{name, tables: [{name, engine, sortingKey, partitionKey, primaryKey, ttl, comment,
   columns, skipIndices}]}]}`, generated into the TS types), kept on the connection's client until `&refresh=1`; the
   TTL is cut from `engine_full` (system.tables has no TTL column); the connections come from `workbench.json`'s
-  `connections`, a page's from its nodes' `connection`. The view and `/schema.json` are part of Explore: without
+  `connections`, a page's tables from its nodes' `table` and `connection` (a `table` without database in the
+  connection's own, the answer's `database`). The view and `/schema.json` are part of Explore: without
   `explore.enabled` there is no panel and the handler answers 404 *(proposed)*. Every database the user sees is
   listed, `system` included; a table opens in place in the tree; "Refresh" is in the panel's "…" *(proposed)*.
 - **D12 SQL editor (step 8j):** CodeMirror 6, `@codemirror/lang-sql` with a ClickHouse dialect (`SQLDialect.define`),

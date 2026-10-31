@@ -10,7 +10,7 @@ import (
 )
 
 func TestAssembleSchema_GroupsTheRowsByDatabaseAndTable(t *testing.T) {
-	schema := assembleSchema(
+	schema := assembleSchema("default",
 		[]schemaTableRow{
 			{Database: "default", Name: "http_logs", Engine: "MergeTree", EngineFull: "MergeTree PARTITION BY toDate(timestamp) ORDER BY (host, timestamp) TTL timestamp + toIntervalDay(30) SETTINGS index_granularity = 8192", SortingKey: "host, timestamp", PartitionKey: "toDate(timestamp)", PrimaryKey: "host, timestamp", Comment: "requests"},
 			{Database: "default", Name: "http_logs_view", Engine: "View"},
@@ -27,7 +27,7 @@ func TestAssembleSchema_GroupsTheRowsByDatabaseAndTable(t *testing.T) {
 
 	got, err := json.Marshal(schema)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"databases": [
+	require.JSONEq(t, `{"database": "default", "databases": [
 		{"name": "default", "tables": [
 			{"name": "http_logs", "engine": "MergeTree", "sortingKey": "host, timestamp", "partitionKey": "toDate(timestamp)",
 			 "primaryKey": "host, timestamp", "ttl": "timestamp + toIntervalDay(30)", "comment": "requests",
@@ -44,9 +44,9 @@ func TestAssembleSchema_GroupsTheRowsByDatabaseAndTable(t *testing.T) {
 }
 
 func TestAssembleSchema_WithoutTablesHasNoDatabases(t *testing.T) {
-	got, err := json.Marshal(assembleSchema(nil, nil, nil))
+	got, err := json.Marshal(assembleSchema("logs", nil, nil, nil))
 	require.NoError(t, err)
-	require.JSONEq(t, `{"databases": []}`, string(got))
+	require.JSONEq(t, `{"database": "logs", "databases": []}`, string(got))
 }
 
 func TestTableTtl_IsWhatStandsBetweenTtlAndSettings(t *testing.T) {
@@ -70,7 +70,7 @@ func TestManager_ConnectionsAreTheConfiguredNamesSorted(t *testing.T) {
 }
 
 func TestSchemaColumns_TheColumnsOfOneTable(t *testing.T) {
-	schema := assembleSchema(
+	schema := assembleSchema("default",
 		[]schemaTableRow{{Database: "default", Name: "http_logs"}, {Database: "logs", Name: "http_logs"}},
 		[]schemaColumnRow{{Database: "default", Table: "http_logs", Name: "host", Type: "String"}, {Database: "logs", Table: "http_logs", Name: "path", Type: "String"}},
 		nil,

@@ -9,6 +9,9 @@ import (
 // Schema is what a connection holds, as the Schema view shows it (docs/2026-10-30-perspective.md §4.8): its databases
 // with their tables, each with its columns, keys, TTL and skip indices, as ClickHouse's system tables say.
 type Schema struct {
+	// Database is the connection's own database (dashica_config's `database`): the one a table named without database
+	// is in, as page.json's `table` names it (filter.ShortName).
+	Database string `json:"database"`
 	// Databases by name, each with its tables by name.
 	Databases []SchemaDatabase `json:"databases"`
 }
@@ -135,15 +138,15 @@ func (c *Client) Schema(ctx context.Context, refresh bool) (Schema, error) {
 	if err != nil {
 		return Schema{}, fmt.Errorf("query system.data_skipping_indices: %w", err)
 	}
-	schema := assembleSchema(tables.Data, columns.Data, indices.Data)
+	schema := assembleSchema(c.serverConfig.Database, tables.Data, columns.Data, indices.Data)
 	c.schemaCached = &schema
 	return schema, nil
 }
 
-// assembleSchema is the Schema of the rows of the query set, each sorted by database and table as the queries sort
-// them: a database per database of `tables`, its tables in their order, each with its columns and skip indices. A
+// assembleSchema is the Schema of the connection whose own database is `database` from the rows of the query set,
+// each sorted by database and table as the queries sort them: a database per database of `tables`, its tables in their order, each with its columns and skip indices. A
 // column or index of a table not among `tables` (a temporary one) is left out.
-func assembleSchema(tables []schemaTableRow, columns []schemaColumnRow, indices []schemaSkipIndexRow) Schema {
+func assembleSchema(database string, tables []schemaTableRow, columns []schemaColumnRow, indices []schemaSkipIndexRow) Schema {
 	type key struct{ database, table string }
 	columnsOf := map[key][]SchemaColumn{}
 	for _, c := range columns {
@@ -155,7 +158,7 @@ func assembleSchema(tables []schemaTableRow, columns []schemaColumnRow, indices 
 		k := key{i.Database, i.Table}
 		indicesOf[k] = append(indicesOf[k], SchemaSkipIndex{Name: i.Name, Type: i.Type, Expression: i.Expr, Granularity: i.Granularity})
 	}
-	schema := Schema{Databases: []SchemaDatabase{}}
+	schema := Schema{Database: database, Databases: []SchemaDatabase{}}
 	for _, t := range tables {
 		if n := len(schema.Databases); n == 0 || schema.Databases[n-1].Name != t.Database {
 			schema.Databases = append(schema.Databases, SchemaDatabase{Name: t.Database, Tables: []SchemaTable{}})

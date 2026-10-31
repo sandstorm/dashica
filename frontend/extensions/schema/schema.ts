@@ -2,57 +2,164 @@ import { html } from 'htl';
 import { Database, RefreshCw, createElement } from 'lucide';
 import type { PageJson, Schema, SchemaTable, WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
+import { createView } from '../../hosts/ui/ui';
 import './schema.css';
 
 /**
  * The left side panel "Schema", only with Explore enabled (`workbench.json`'s `explore`: it is part of Explore,
- * Perspective concept §4.8): a tree connection › database › table of the ClickHouse connections of dashica_config
- * (`workbench.json`'s `connections`), the shown page's connections (its charts' `connection`) first, the others below.
- * A connection's databases are asked from `/schema.json` when it is opened the first time; a table opens to what
- * DataGrip shows of one: its columns (type, default, comment), engine, ORDER BY, PARTITION BY, primary key, TTL and
- * skip indices. The server keeps each connection's schema; "Refresh" in the panel's "…" asks it again for the
- * connections opened so far. A tree element stays as the viewer left it (open or closed) when another page is shown.
+ * Perspective concept §4.8), as two views: "On this page", the tables the shown page's charts read (`page.json`'s
+ * `table` and `connection` of each chart) as connection › database › table, drawn anew for each page shown; and "All
+ * connections", the tree connection › database › table of every ClickHouse connection of dashica_config
+ * (`workbench.json`'s `connections`). A connection's schema is asked from `/schema.json` once (`Schemas`), by "On this
+ * page" while the panel shows, by a connection of "All connections" when it is opened the first time; a table opens to
+ * what DataGrip shows of one: its columns (type, default, comment), engine, ORDER BY, PARTITION BY, primary key, TTL
+ * and skip indices. The server keeps each connection's schema; "Refresh" in the panel's "…" asks it again for the
+ * connections asked so far, "Show comments" there shows or hides the columns' and tables' comments (kept in
+ * `globalState`, as whether a view is closed). A tree element of "All connections" stays as the viewer left it (open
+ * or closed) when another page is shown.
  */
 export const schema: Extension = {
   id: 'schema',
-  activate({ ui, page, commands, subscriptions }) {
+  activate({ ui, page, commands, globalState, subscriptions }) {
     if (!page.workbench.explore) return;
     const panel = ui.registerSidePanel('schema', { label: 'Schema', icon: createElement(Database).outerHTML, order: 30 });
-    const connections = new Map(page.workbench.connections.map((name) => [name, connectionNode(name)]));
-    const draw = () => {
-      const { shown, others } = orderConnections(page.workbench.connections, pageConnections(page.current));
-      const group = (label: string, names: readonly string[]) =>
-        names.length === 0 ? '' : html`<div class="d-schema__group">${label}</div>${names.map((name) => connections.get(name)!.element)}`;
-      panel.body.replaceChildren(html`<div class="d-schema">
-        ${group('On this page', shown)}${group(shown.length === 0 ? 'Connections' : 'Other connections', others)}
-      </div>`);
+    const schemas = new Schemas();
+    const connections = page.workbench.connections.map((name) => connectionNode(name, schemas));
+    const onPage: HTMLElement = html`<div class="d-schema__tree"></div>`;
+    const root: HTMLElement = html`<div class="d-schema">
+      ${createView({ id: 'page', title: 'On this page', state: globalState, body: onPage })}
+      ${createView({
+        id: 'all',
+        title: 'All connections',
+        state: globalState,
+        body: html`<div class="d-schema__tree">${connections.length === 0 ? html`<div class="d-schema__hint">No connections.</div>` : connections.map((c) => c.element)}</div>`,
+      })}
+    </div>`;
+    panel.body.replaceChildren(root);
+
+    let showComments = globalState.get('showComments', true);
+    const drawComments = () => root.classList.toggle('d-schema--no-comments', !showComments);
+    drawComments();
+
+    /** The page "On this page" shows; `null` before it showed one. */
+    let drawnFor: PageJson | undefined | null = null;
+    const drawPage = (again = false) => {
+      if (!panel.visible || (!again && drawnFor === page.current)) return;
+      drawnFor = page.current;
+      onPage.replaceChildren(...drawPageTables(page.workbench.connections, pageTables(page.current), schemas));
     };
-    draw();
+    drawPage();
     subscriptions.push(
       panel,
-      page.onDidChangePage(draw),
-      commands.registerCommand('schema.refresh', () => Promise.all([...connections.values()].map((connection) => connection.refresh()))),
+      page.onDidChangePage(() => drawPage()),
+      panel.onDidChangeVisibility(() => drawPage()),
+      commands.registerCommand('schema.refresh', async () => {
+        await Promise.all(schemas.asked.map((name) => schemas.get(name, true).catch(() => undefined)));
+        drawnFor = null;
+        drawPage();
+        await Promise.all(connections.map((connection) => connection.refresh()));
+      }),
       ui.registerMenuItem('panel/schema', { command: 'schema.refresh', title: 'Refresh', icon: createElement(RefreshCw).outerHTML }),
+      commands.registerCommand('schema.toggleComments', () => {
+        showComments = !showComments;
+        drawComments();
+        return globalState.update('showComments', showComments);
+      }),
+      ui.registerMenuItem('panel/schema', { command: 'schema.toggleComments', title: 'Show comments', toggled: () => showComments, group: 'view' }),
     );
   },
 };
 
-/** The connections the charts of `current` run on, each once, in page order; none without a page. */
-export function pageConnections(current: PageJson | undefined): string[] {
-  const found = new Set<string>();
+/** A table a chart of the shown page reads: its connection and its name as `page.json`'s `table` gives it (`http_logs`, `logs.http_logs`). */
+export interface PageTable {
+  readonly connection: string;
+  readonly table: string;
+}
+
+/** The tables the charts of `current` read, each once, in page order; none without a page. */
+export function pageTables(current: PageJson | undefined): PageTable[] {
+  const found = new Map<string, PageTable>();
   const walk = (nodes: readonly WidgetNode[]) => {
     for (const node of nodes) {
-      if ('connection' in node && node.connection) found.add(node.connection);
+      if ('table' in node && node.table) {
+        const connection = node.connection || 'default';
+        found.set(`${connection}\u0000${node.table}`, { connection, table: node.table });
+      }
       if ('children' in node && node.children) walk(Object.values(node.children));
     }
   };
   walk(current?.widgets ?? []);
-  return [...found];
+  return [...found.values()];
 }
 
-/** `all` (dashica_config's, sorted) split into those `onPage` names, in `all`'s order, and the others. */
-export function orderConnections(all: readonly string[], onPage: readonly string[]): { shown: string[]; others: string[] } {
-  return { shown: all.filter((name) => onPage.includes(name)), others: all.filter((name) => !onPage.includes(name)) };
+/**
+ * Of `schema`, the databases and tables `names` say (`page.json`'s short form: `<database>.<table>`, or `<table>` in
+ * the connection's own database), in the schema's order; `missing`: the names it does not have.
+ */
+export function onlyTables(schema: Schema, names: readonly string[]): { schema: Schema; missing: string[] } {
+  const wanted = new Map(
+    names.map((name) => {
+      const dot = name.indexOf('.');
+      return [dot < 0 ? `${schema.database}.${name}` : name, name];
+    }),
+  );
+  const databases = schema.databases
+    .map((database) => ({ ...database, tables: database.tables.filter((table) => wanted.delete(`${database.name}.${table.name}`)) }))
+    .filter((database) => database.tables.length > 0);
+  return { schema: { ...schema, databases }, missing: [...wanted.values()] };
+}
+
+/**
+ * "On this page" for `tables`: per connection, in `all`'s order (dashica_config's; a connection it does not name is
+ * left out), a tree element connection › database › table, open down to the tables, filled once `schemas` answered;
+ * a failed answer shows its error in place. A hint for a page whose charts read no table.
+ */
+export function drawPageTables(all: readonly string[], tables: readonly PageTable[], schemas: Schemas): HTMLElement[] {
+  const shown = all.filter((name) => tables.some((table) => table.connection === name));
+  if (shown.length === 0) return [html`<div class="d-schema__hint">No chart of this page reads a table.</div>`];
+  return shown.map((name) => {
+    const body: HTMLElement = html`<div class="d-schema__children"><span class="d-spinner"></span></div>`;
+    const names = tables.filter((table) => table.connection === name).map((table) => table.table);
+    schemas.get(name).then(
+      (schema) => {
+        const { schema: only, missing } = onlyTables(schema, names);
+        body.replaceChildren(
+          ...(only.databases.length > 0 ? drawDatabases(only, true) : []),
+          ...missing.map((table) => html`<div class="d-schema__hint">${table}: not in the schema.</div>`),
+        );
+      },
+      (error: unknown) => void body.replaceChildren(errorNotice(error)),
+    );
+    return html`<details class="d-schema__node" data-testid="schema-connection" open>
+      <summary class="d-schema__summary">${createElement(Database, { width: 14, height: 14, 'aria-hidden': 'true' })}<span class="d-schema__name">${name}</span></summary>
+      ${body}
+    </details>`;
+  });
+}
+
+/**
+ * Each connection's schema from `/schema.json`, asked once and shared by the views; a failed answer is forgotten, so
+ * the next `get` asks again.
+ */
+export class Schemas {
+  readonly #asked = new Map<string, Promise<Schema>>();
+
+  /** The schema of `connection`, asked the first time; `refresh`: asked again, the server too. */
+  get(connection: string, refresh = false): Promise<Schema> {
+    const known = this.#asked.get(connection);
+    if (known && !refresh) return known;
+    const asking = fetchSchema(connection, refresh);
+    this.#asked.set(connection, asking);
+    asking.catch(() => {
+      if (this.#asked.get(connection) === asking) this.#asked.delete(connection);
+    });
+    return asking;
+  }
+
+  /** The connections asked so far (a failed one not). */
+  get asked(): string[] {
+    return [...this.#asked.keys()];
+  }
 }
 
 /** What `/schema.json` answers for `connection`; `refresh`: the server asks ClickHouse again. A failed answer throws its text. */
@@ -63,40 +170,45 @@ export async function fetchSchema(connection: string, refresh = false): Promise<
 }
 
 /**
- * The tree element of the connection `name`, closed; opened the first time it asks its schema and shows its
- * databases. `refresh` asks it again (the server too) once it was asked, else nothing. A failed answer shows its error
- * in place; the next opening asks again.
+ * The tree element of the connection `name` in "All connections", closed; opened the first time it asks `schemas`
+ * and shows its databases. `refresh` draws it again from `schemas` once it was opened, else nothing. A failed answer
+ * shows its error in place; the next opening asks again.
  */
-function connectionNode(name: string): { element: HTMLDetailsElement; refresh(): Promise<void> } {
+function connectionNode(name: string, schemas: Schemas): { element: HTMLDetailsElement; refresh(): Promise<void> } {
   const body: HTMLElement = html`<div class="d-schema__children"></div>`;
   const element: HTMLDetailsElement = html`<details class="d-schema__node" data-testid="schema-connection">
     <summary class="d-schema__summary">${createElement(Database, { width: 14, height: 14, 'aria-hidden': 'true' })}<span class="d-schema__name">${name}</span></summary>
     ${body}
   </details>`;
-  /** Asked once (or asking); `undefined` until it is opened, again after a failure. */
-  let asked: Promise<void> | undefined;
-  const load = (refresh: boolean) => {
+  /** Drawn (or drawing); `false` until it is opened, again after a failure. */
+  let loaded = false;
+  const load = () => {
+    loaded = true;
     body.replaceChildren(html`<span class="d-spinner"></span>`);
-    asked = fetchSchema(name, refresh).then(
+    return schemas.get(name).then(
       (schema) => void body.replaceChildren(...drawDatabases(schema)),
       (error: unknown) => {
-        asked = undefined;
-        body.replaceChildren(html`<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div>`);
+        loaded = false;
+        body.replaceChildren(errorNotice(error));
       },
     );
-    return asked;
   };
   element.addEventListener('toggle', () => {
-    if (element.open && !asked) void load(false);
+    if (element.open && !loaded) void load();
   });
-  return { element, refresh: () => (asked ? load(true) : Promise.resolve()) };
+  return { element, refresh: () => (loaded ? load() : Promise.resolve()) };
 }
 
-/** A closed tree element per database of `schema`, its tables in it; a hint for a connection without any. */
-export function drawDatabases(schema: Schema): HTMLElement[] {
+/** A failed answer's text as an error notice. */
+function errorNotice(error: unknown): HTMLElement {
+  return html`<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div>`;
+}
+
+/** A tree element per database of `schema`, closed unless `open`, its tables in it; a hint for a connection without any. */
+export function drawDatabases(schema: Schema, open = false): HTMLElement[] {
   if (schema.databases.length === 0) return [html`<div class="d-schema__hint">No tables.</div>`];
   return schema.databases.map(
-    (database) => html`<details class="d-schema__node">
+    (database) => html`<details class="d-schema__node" open=${open}>
       <summary class="d-schema__summary"><span class="d-schema__name">${database.name}</span><span class="d-schema__note">${database.tables.length}</span></summary>
       <div class="d-schema__children">${database.tables.map(drawTable)}</div>
     </details>`,
@@ -105,7 +217,8 @@ export function drawDatabases(schema: Schema): HTMLElement[] {
 
 /**
  * A closed tree element of `table`, as DataGrip shows a table: its columns (name, type, default, comment), then its
- * engine, ORDER BY, PARTITION BY, primary key, TTL and comment (each only when it has one), then its skip indices.
+ * engine, ORDER BY, PARTITION BY, primary key, TTL and comment (each only when it has one), then its skip indices. The
+ * comments (`d-schema__comment`, `d-schema__table-comment`) are what "Show comments" hides.
  */
 export function drawTable(table: SchemaTable): HTMLElement {
   const keys: [string, string][] = [
@@ -130,7 +243,12 @@ export function drawTable(table: SchemaTable): HTMLElement {
         )}
       </ul>
       <dl class="d-schema__keys">
-        ${keys.filter(([, value]) => value).map(([key, value]) => html`<dt class="d-schema__key">${key}</dt><dd class="d-schema__value">${value}</dd>`)}
+        ${keys
+          .filter(([, value]) => value)
+          .map(([key, value]) => {
+            const comment = key === 'Comment' ? ' d-schema__table-comment' : '';
+            return html`<dt class=${`d-schema__key${comment}`}>${key}</dt><dd class=${`d-schema__value${comment}`}>${value}</dd>`;
+          })}
       </dl>
       ${table.skipIndices.length === 0
         ? ''
