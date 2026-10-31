@@ -3,6 +3,9 @@ import { ChevronRight, createElement } from 'lucide';
 import type { Memento } from '../../extension-host/extension-host';
 import './view.css';
 
+/** The views drawn so far: each body's id (`d-view-3`), unique in the page. */
+let drawn = 0;
+
 /**
  * A view of a panel: a header (a chevron, the title, while closed its description, then its actions) above a body
  * the header opens and closes; several stand one below the other and scroll with the panel, each header staying at
@@ -14,7 +17,7 @@ import './view.css';
 export function createView(options: ViewOptions): HTMLElement {
   const { id, title, description, actions = [], state, body } = options;
   const key = `views.${id}.collapsed`;
-  const bodyEl: HTMLElement = html`<div class="d-view__body" id=${`d-view-${Math.random().toString(36).slice(2, 8)}`}>${body}</div>`;
+  const bodyEl: HTMLElement = html`<div class="d-view__body" id=${`d-view-${++drawn}`}>${body}</div>`;
   const set = (collapsed: boolean) => {
     view.classList.toggle('d-view--collapsed', collapsed);
     toggle.setAttribute('aria-expanded', String(!collapsed));

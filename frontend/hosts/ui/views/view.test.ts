@@ -22,6 +22,8 @@ describe('createView', () => {
     expect(view.querySelector('h2 > button.d-view__toggle .d-view__title')!.textContent).toBe('Favorites');
     expect(toggle(view).getAttribute('aria-expanded')).toBe('true');
     expect(toggle(view).getAttribute('aria-controls')).toBe(body(view).id);
+    expect(body(view).id).toMatch(/^d-view-\d+$/);
+    expect(body(draw()).id).not.toBe(body(view).id);
     expect(body(view).hidden).toBe(false);
     expect(body(view).textContent).toBe('the entries');
   });
