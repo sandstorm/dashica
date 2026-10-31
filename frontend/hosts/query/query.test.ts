@@ -389,9 +389,13 @@ describe('pillLabel and pillButton', () => {
 describe('pillField', () => {
   const host = { connection: 'default', table: 'default.http_logs', field: 'host', op: 'ne', value: "O'Brien" };
 
-  it("reads the table, field, op and shown value of a field's pill, an empty value when the key has none", () => {
+  it("reads the table, field, op and shown value of a field's pill, an empty value too", () => {
     expect(pillField(keyOf("host ≠ O'Brien", host))).toEqual(host);
-    expect(pillField(keyOf('host = ', { ...host, op: 'eq', value: undefined }))).toEqual({ ...host, op: 'eq', value: '' });
+    expect(pillField(keyOf('host = ', { ...host, op: 'eq', value: '' }))).toEqual({ ...host, op: 'eq', value: '' });
+  });
+
+  it('reads none from a key without a value, signed before pills carried it', () => {
+    expect(pillField(keyOf('host = acme', { ...host, op: 'eq', value: undefined }))).toBeUndefined();
   });
 
   it("reads none from a button's pill, a key without a field or op, or one without a payload", () => {

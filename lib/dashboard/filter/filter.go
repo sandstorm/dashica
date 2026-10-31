@@ -65,9 +65,10 @@ type Pill struct {
 	// table, field or op.
 	Button string `json:"button,omitempty"`
 	// Value is the value the field shows ("acme"), by which the filter bar edits the pill (a new op or value asks the
-	// field's chart for a new one); for a button, the value written in for its `...` ("500"), as typed, empty for one
-	// without.
-	Value string `json:"value,omitempty"`
+	// field's chart for a new one), always in the key, empty ones too, so a key signed before pills carried it
+	// (without "value") reads as not editable; for a button, the value written in for its `...` ("500"), as typed,
+	// empty for one without.
+	Value string `json:"value"`
 }
 
 // ErrCannotFilter: the field holds no categories (a count, a time bucket), so it makes no pill.

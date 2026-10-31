@@ -82,6 +82,19 @@ func TestSignAndOpen_GiveThePillBack(t *testing.T) {
 	}
 }
 
+func TestSign_PutsAnEmptyValueIntoTheKey(t *testing.T) {
+	key, err := Sign(secret, pill(t, httpLogs, sql.Field("host"), "eq", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _, _ := strings.Cut(key, ".")
+	b, _ := base64.RawURLEncoding.DecodeString(payload)
+	var fields map[string]any
+	if err := json.Unmarshal(b, &fields); err != nil || fields["value"] != "" {
+		t.Errorf("payload %s: want \"value\": \"\"", b)
+	}
+}
+
 func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
 	key, _ := Sign(secret, pill(t, httpLogs, sql.Field("status"), "eq", "500"))
 	payload, signature, _ := strings.Cut(key, ".")

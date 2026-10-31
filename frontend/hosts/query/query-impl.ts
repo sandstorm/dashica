@@ -329,13 +329,14 @@ export function pillButton(key: string): { readonly button: string; readonly val
 /**
  * The field a pill's key filters by, as its chart made it (`<dataUrl>/pill`): its table, the field's alias, the op and
  * the value the field shows, by which the filter bar makes it again with another op or value; `undefined` for a
- * button's pill and a key without a field.
+ * button's pill, a key without a field, and one without a value (signed before pills carried it, so it cannot be made
+ * again: an empty value is `""`).
  */
 export function pillField(key: string): PillField | undefined {
   const { connection, table, field, op, value, button } = payloadOf(key);
   if (button || typeof connection !== 'string' || typeof table !== 'string' || typeof field !== 'string' || !field) return undefined;
-  if (op !== 'eq' && op !== 'ne') return undefined;
-  return { connection, table, field, op, value: typeof value === 'string' ? value : '' };
+  if ((op !== 'eq' && op !== 'ne') || typeof value !== 'string') return undefined;
+  return { connection, table, field, op, value };
 }
 
 /** The payload of a pill's key, as JSON (`Sign`); empty for a key without one. */
