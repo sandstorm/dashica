@@ -72,8 +72,9 @@ export interface ExploreViewOptions {
 
 /**
  * Fills `el` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's result",
- * the chart's Diagnostics, "SQL" when the answer allows it, "Reset", "Close"), the SQL editor, the notes of the config
- * mapping, and `<perspective-viewer>`. Following the chart (no `xsql` in the tab's hash) it shows the chart's result
+ * the chart's Diagnostics, "SQL" closing and opening the editor when the answer allows editing, else a note that it
+ * is off, "Reset", "Close"), the SQL editor (open from the start), the notes of the config mapping, and
+ * `<perspective-viewer>`. Following the chart (no `xsql` in the tab's hash) it shows the chart's result
  * with the page's query state and the editor the chart's SQL with that state written in, both fetched again on each
  * `onDidRequestRefresh`. Run puts the editor's text into the hash (`xsql`): the view then shows that SQL's rows, which
  * the page's time range and filters do not change, until "Reset to the chart's query". It keeps the config the viewer
@@ -116,7 +117,8 @@ export function persistable(config: ViewerConfig): ViewerConfig {
 class ExploreView {
   readonly #status: HTMLElement = html`<span class="d-explore-view__status"></span>`;
   readonly #ignored: HTMLElement = html`<span class="d-badge" hidden></span>`;
-  readonly #sqlButton: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="false" hidden data-testid="explore-view-sql">SQL</button>`;
+  readonly #sqlButton: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="true" hidden data-testid="explore-view-sql">SQL</button>`;
+  readonly #sqlOff: HTMLElement = html`<span class="d-explore-view__status" hidden data-testid="explore-view-sql-off">SQL editing is off (explore.enabled)</span>`;
   readonly #sqlText: HTMLTextAreaElement = html`<textarea
     class="d-field d-field--full d-field--mono d-explore-view__sql-text"
     rows="8"
@@ -143,6 +145,9 @@ class ExploreView {
   /** The chart's SQL as last fetched, written into the editor; `undefined` before. */
   #materialized: string | undefined;
   #loadingSql: AbortController | undefined;
+  /** The editor is open, as "SQL" toggles it; it shows once the server allows editing (`#sqlAllowed`) or while edited. */
+  #sqlOpen = true;
+  #sqlAllowed = false;
   #pointer = { x: 0, y: 0 };
 
   constructor(
@@ -154,7 +159,7 @@ class ExploreView {
     const close: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-close">Close</button>`;
     reset.onclick = () => void this.#reset();
     close.onclick = () => options.close();
-    this.#sqlButton.onclick = () => this.#setSqlOpen(this.#sqlPanel.hidden);
+    this.#sqlButton.onclick = () => this.#setSqlOpen(!this.#sqlOpen);
     const run: HTMLButtonElement = html`<button class="d-button d-button--primary" type="button" data-testid="explore-view-run">Run</button>`;
     run.onclick = () => this.#run();
     this.#sqlText.addEventListener('keydown', (event) => {
@@ -172,7 +177,7 @@ class ExploreView {
     el.replaceChildren(html`<div class="d-explore-view" data-testid="explore-view">
       <div class="d-explore-view__bar">
         <h2 class="d-explore-view__title">Explore: ${title}</h2>
-        ${this.#status}${this.#ignored}
+        ${this.#status}${this.#ignored}${this.#sqlOff}
         <span class="d-explore-view__actions">${this.#sqlButton}${reset}${close}</span>
       </div>
       ${this.#sqlPanel}${this.#editedNote}${this.#notes}${this.#body}
@@ -221,7 +226,8 @@ class ExploreView {
       return;
     }
     if (loading.signal.aborted) return;
-    this.#sqlButton.hidden = !answer.sqlEditable && this.#edited === undefined;
+    this.#sqlAllowed = answer.sqlEditable;
+    this.#showSqlPanel();
     const ignored = answer.diagnostics.ignored ?? [];
     this.#ignored.hidden = ignored.length === 0;
     this.#ignored.textContent = `ignores ${ignored.join(', ')}`;
@@ -315,9 +321,19 @@ class ExploreView {
   }
 
   #setSqlOpen(open: boolean): void {
-    this.#sqlPanel.hidden = !open;
-    this.#sqlButton.setAttribute('aria-pressed', String(open));
-    if (open && this.#edited === undefined) void this.#loadSql();
+    this.#sqlOpen = open;
+    this.#showSqlPanel();
+  }
+
+  /** Shows the editor while it is open and editing is allowed or the hash holds an edit; on showing, the chart's SQL. */
+  #showSqlPanel(): void {
+    const allowed = this.#sqlAllowed || this.#edited !== undefined;
+    const wasHidden = this.#sqlPanel.hidden;
+    this.#sqlButton.hidden = !allowed;
+    this.#sqlButton.setAttribute('aria-pressed', String(this.#sqlOpen));
+    this.#sqlOff.hidden = allowed;
+    this.#sqlPanel.hidden = !(allowed && this.#sqlOpen);
+    if (wasHidden && !this.#sqlPanel.hidden && this.#edited === undefined) void this.#loadSql();
   }
 
   /** Run: the editor's text into the tab's hash; the chart's SQL as fetched last follows the chart again. */
@@ -333,7 +349,6 @@ class ExploreView {
     this.#editedNote.hidden = !edited;
     if (edited) {
       this.#sqlText.value = this.#edited!;
-      this.#sqlButton.hidden = false;
       this.#setSqlOpen(true);
     } else if (this.#materialized !== undefined) this.#sqlText.value = this.#materialized;
     this.#showSqlNote();

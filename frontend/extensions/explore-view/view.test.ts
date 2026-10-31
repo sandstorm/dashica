@@ -170,7 +170,7 @@ describe('renderExploreView', () => {
   it('fetches the chart’s result with the page’s query state', async () => {
     open();
     await settle();
-    expect(requests).toEqual(['/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa']);
+    expect(requests[0]).toBe('/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa');
     expect(tables.map((t) => t.data)).toEqual(['rows-1']);
     expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: Requests');
     expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('3 rows of the chart’s result');
@@ -281,16 +281,16 @@ describe('renderExploreView', () => {
     expect([...el.querySelectorAll('.d-explore-view__notes li')].map((li) => li.textContent)).toEqual(['`fill` (`status`) is not a column of the chart’s result']);
   });
 
-  it('opens the SQL editor with the chart’s SQL as the server writes it for the page’s state, and again on a refresh', async () => {
+  it('shows the SQL editor from the start, with the chart’s SQL as the server writes it for the page’s state, and again on a refresh', async () => {
     open();
+    await settle();
     await settle();
     const button = find<HTMLButtonElement>('explore-view-sql');
     expect(button.hidden).toBe(false);
-    expect(find('explore-view-sql-panel').hidden).toBe(true);
-    button.click();
-    await settle();
     expect(button.getAttribute('aria-pressed')).toBe('true');
-    expect(requests.at(-1)).toBe('/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa');
+    expect(find('explore-view-sql-panel').hidden).toBe(false);
+    expect(find('explore-view-sql-off').hidden).toBe(true);
+    expect(requests).toEqual(['/p/shop/api/3/rows?time=1h&f=host%3Aeq%3Aa', '/p/shop/api/3/sql?time=1h&f=host%3Aeq%3Aa']);
     expect(sqlText().value).toBe('SELECT time=1h');
     query.time.setRange('3h');
     await settle();
@@ -298,17 +298,37 @@ describe('renderExploreView', () => {
     expect(find('explore-view-edited').hidden).toBe(true);
   });
 
-  it('offers no SQL editor when the server does not allow it (Explore not enabled)', async () => {
+  it('closes the editor with "SQL", asking for no SQL while closed, and opens it again', async () => {
+    open();
+    await settle();
+    await settle();
+    const button = find<HTMLButtonElement>('explore-view-sql');
+    button.click();
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(find('explore-view-sql-panel').hidden).toBe(true);
+    const asked = requests.length;
+    query.time.setRange('3h');
+    await settle();
+    expect(requests.slice(asked)).toEqual(['/p/shop/api/3/rows?time=3h&f=host%3Aeq%3Aa']);
+    button.click();
+    await settle();
+    expect(find('explore-view-sql-panel').hidden).toBe(false);
+    expect(sqlText().value).toBe('SELECT time=3h');
+  });
+
+  it('offers no SQL editor when the server does not allow it, saying it is off (explore.enabled)', async () => {
     answer = () => new Response('rows-1');
     open();
     await settle();
     expect(find<HTMLButtonElement>('explore-view-sql').hidden).toBe(true);
+    expect(find('explore-view-sql-panel').hidden).toBe(true);
+    expect(find('explore-view-sql-off').hidden).toBe(false);
+    expect(requests.some((url) => url.includes('/sql'))).toBe(false);
   });
 
   it('runs the edited SQL through the tab’s hash: its rows in a new viewer, the note, the limit; Reset goes back', async () => {
     open();
     await settle();
-    find<HTMLButtonElement>('explore-view-sql').click();
     await settle();
     schema = { timestamp: 'datetime', status: 'integer', host: 'string' };
     type('SELECT * FROM http_logs');
@@ -350,7 +370,6 @@ describe('renderExploreView', () => {
   it('follows the chart again when Run gets the chart’s SQL unchanged', async () => {
     open();
     await settle();
-    find<HTMLButtonElement>('explore-view-sql').click();
     await settle();
     find<HTMLButtonElement>('explore-view-run').click();
     expect(navigations).toEqual(['#explore=3']);
@@ -359,7 +378,6 @@ describe('renderExploreView', () => {
   it('runs with Cmd/Ctrl+Enter in the editor', async () => {
     open();
     await settle();
-    find<HTMLButtonElement>('explore-view-sql').click();
     await settle();
     type('SELECT 2');
     sqlText().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true }));
@@ -369,7 +387,6 @@ describe('renderExploreView', () => {
   it('keeps a draft over a refresh, saying it was not run', async () => {
     open();
     await settle();
-    find<HTMLButtonElement>('explore-view-sql').click();
     await settle();
     expect(find('explore-view-sql-note').textContent).toBe('');
     type('SELECT draft');
@@ -385,7 +402,6 @@ describe('renderExploreView', () => {
       url.searchParams.has('xsql') ? new Response('Code: 62. DB::Exception: Syntax error', { status: 500 }) : serve('rows-1')(url);
     open();
     await settle();
-    find<HTMLButtonElement>('explore-view-sql').click();
     await settle();
     type('SELEC 1');
     find<HTMLButtonElement>('explore-view-run').click();
@@ -399,7 +415,6 @@ describe('renderExploreView', () => {
     answer = (url) => (url.pathname.endsWith('/sql') ? new Response('Explore is not enabled', { status: 404 }) : serve('rows-1')(url));
     open();
     await settle();
-    find<HTMLButtonElement>('explore-view-sql').click();
     await settle();
     expect(find('explore-view-sql-panel').querySelector('.d-notice--error')!.textContent).toBe('404 Explore is not enabled');
   });
