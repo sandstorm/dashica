@@ -2,7 +2,7 @@
 // Tests for add-filter.ts: the page's filterable tables (filterableTables), the chart that makes a pill again
 // (fieldSource), "add filter" through table, column or computed field, operator (of its type) and value to the pill of
 // its chart (addFilter), the field step's table columns from the schema and computed fields, its advanced "SQL
-// condition…" while SQL chips are taken, a time's value in an input box at the edge of the time range (askValue), the
+// condition…" while SQL chips are taken (asked in the SQL editor's input box), a time's value in an input box at the edge of the time range (askValue), the
 // value's quick pick asking the server as the text changes (pickValue), and the requests of /values, /type and
 // /columns (fetchValues, fetchType, fetchColumns).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,9 @@ import { QueryHost } from '../../hosts/query/query';
 import { FILTERS } from './chips';
 import { TIME, presetRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
-import { addFilter, askValue, fetchColumns, fetchType, fetchValues, fieldSource, filterableTables, pickValue, type Column } from './add-filter';
+import { EditorView } from '@codemirror/view';
+import { showSqlInputBox } from '../sql-library/sql-editor';
+import { addFilter, askValue, fetchColumns, fetchType, fetchValues, fieldSource, filterableTables, pickValue, type AskSql, type Column } from './add-filter';
 import { OP_ICONS } from './ops';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default', computed: string[] = []) =>
@@ -138,7 +140,7 @@ describe('addFilter', () => {
   it('asks table, computed field, operator and value, and adds the pill of the field’s chart', async () => {
     values = (search) => ['admin', 'login'].filter((v) => v.includes(search));
     query.set(TIME, presetRange('1h'));
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, false);
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor);
 
     await pick('default.http_logs default', 'audit logs');
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toContain('host'));
@@ -160,7 +162,7 @@ describe('addFilter', () => {
   });
 
   it('groups the fields into the table’s columns, from the schema, and the computed fields, each once', async () => {
-    void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchor, false);
+    void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchor);
 
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host']));
     expect(headings()).toEqual(['Table columns', 'Computed fields']);
@@ -170,7 +172,7 @@ describe('addFilter', () => {
   it('lists the charts’ plain fields as columns when the schema is not to be had, its message at the heading', async () => {
     columns = {};
     values = () => ['500'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, false);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
 
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['status', 'timestamp', 'host']));
     expect(headings()).toEqual([expect.stringContaining('502: query system.tables: unreachable'), 'Computed fields']);
@@ -185,7 +187,7 @@ describe('addFilter', () => {
 
   it('asks a column’s values and pill by `column`, its type from the schema without /type', async () => {
     values = () => ['bob'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, false);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
 
     await vi.waitFor(() => expect(options()).toHaveLength(4));
     options()[2].click();
@@ -200,7 +202,7 @@ describe('addFilter', () => {
   });
 
   it('offers a time’s operators, ≥ and ≤ first, and asks its value in an input box at the time range’s edge', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, false);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
 
     await vi.waitFor(() => expect(options()).toHaveLength(4));
     options()[0].click();
@@ -218,7 +220,7 @@ describe('addFilter', () => {
   });
 
   it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor, false);
+    void addFilter(quickInput, query, filterableTables([audit]), anchor);
 
     await pick('action LowCardinality(String)');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -227,7 +229,7 @@ describe('addFilter', () => {
   });
 
   it('asks no table when the page has one, and adds nothing on Escape', async () => {
-    const done = addFilter(quickInput, query, filterableTables([audit]), anchor, false);
+    const done = addFilter(quickInput, query, filterableTables([audit]), anchor);
 
     await pick('action LowCardinality(String)');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -239,35 +241,40 @@ describe('addFilter', () => {
 });
 
 describe('addFilter with SQL chips taken', () => {
-  const input = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+  /** The SQL input box with the SQL editor of codemirror.ts, as the filters extension asks. */
+  const askSql: AskSql = (options) => showSqlInputBox(quickInput, async () => (await import('../sql-library/codemirror')).sqlEditors, options);
+  /** The SQL editor in the open box, once it is there. */
+  const editor = () => EditorView.findFromDOM(host.querySelector<HTMLElement>('.d-workbench__quick-pick .cm-editor')!)!;
 
-  it('ends the table’s pick with "SQL condition…", which asks the condition in an input box and adds a SQL chip', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, true);
+  it('ends the table’s pick with "SQL condition…", which asks the condition in the SQL editor’s input box and adds a SQL chip', async () => {
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, askSql);
 
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['default.http_logs default', 'audit logs', expect.stringContaining('SQL condition…')]));
     expect(headings()).toEqual(['Advanced']);
     options()[2].click();
     await vi.waitFor(() => expect(options()).toHaveLength(0));
-    input().value = 'duration > 2000';
-    input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(host.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
+    expect(editor().contentDOM.getAttribute('aria-label')).toBe('SQL condition');
+    editor().dispatch({ changes: { from: 0, insert: 'duration > 2000' } });
+    editor().contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     await done;
 
     expect(query.get(FILTERS)).toEqual([{ kind: 'sql', sql: 'duration > 2000' }]);
   });
 
   it('ends the field’s pick with it on a page of one table, and is the only entry without one', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor, true);
+    void addFilter(quickInput, query, filterableTables([audit]), anchor, askSql);
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['action LowCardinality(String)', expect.stringContaining('SQL condition…')]));
-    void addFilter(quickInput, query, [], anchor, true);
+    void addFilter(quickInput, query, [], anchor, askSql);
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual([expect.stringContaining('SQL condition…')]));
   });
 
   it('adds nothing on Escape in the input box', async () => {
-    const done = addFilter(quickInput, query, [], anchor, true);
+    const done = addFilter(quickInput, query, [], anchor, askSql);
     await vi.waitFor(() => expect(options()).toHaveLength(1));
     options()[0].click();
-    await vi.waitFor(() => expect(options()).toHaveLength(0));
-    input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(host.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
+    editor().contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await done;
 
     expect(query.get(FILTERS)).toEqual([]);

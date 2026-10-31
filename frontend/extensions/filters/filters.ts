@@ -7,24 +7,27 @@ import type { QueryApi } from '../../hosts/query/query';
 import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../hosts/ui/ui';
 import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
-import { addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type FilterableTable } from './add-filter';
+import { SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type AskSql, type FilterableTable } from './add-filter';
 import { fetchPill, offerFilters } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
+import { Schemas } from '../sql-library/schemas';
+import { completionOf, loadSqlEditors, showSqlInputBox, type SqlCompletion } from '../sql-library/sql-editor';
 import './filters.css';
 
 /**
  * The filters of a page, kept in its tab's query state (`FILTERS`: `?f=<key>&sql=…`), and the filter
  * bar of a page that has one (`page.json`'s `filterBar`): it shows one chip per filter, a pill
  * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
- * SQL chip's text edits it. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
+ * SQL chip's text asks a new one below the chip. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
  * offers the ops of its type (`opsOf`: `=` / `≠`, for a number or a time also `<` `≤` `>` `≥`), one on its value asks
  * a new one (as "Add filter" does); each edit asks a chart of the page on the pill's table with that field, for a
  * column's pill any chart on it (`fieldSource`), for the pill again and puts it in the chip's place. A pill no chart
  * of the page makes, and a
  * button's pill outside its page, can only be removed. "Add filter"'s advanced entry "SQL condition…" adds a SQL chip
- * (§3.15 D26). Both only while the server takes SQL chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a
- * SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
+ * (§3.15 D26). Both ask in the input box with sql-library's SQL editor (D12: ClickHouse's words, and with Explore on
+ * the names of the page's first table's connection, `conditionCompletion`). Both only while the server takes SQL
+ * chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
  * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
  * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
  * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on a column
@@ -38,7 +41,13 @@ import './filters.css';
 export const filters: Extension = {
   id: 'filters',
   activate({ ui, page, query, commands, subscriptions }) {
-    const { sqlEnabled } = page.workbench;
+    const { sqlEnabled, explore } = page.workbench;
+    // the names a SQL condition completes: the schema is part of Explore (/schema.json only with explore.enabled)
+    const schemas = explore ? new Schemas() : undefined;
+    const askSql: AskSql | undefined = sqlEnabled
+      ? (options) =>
+          showSqlInputBox(ui, loadSqlEditors, { ...options, completion: conditionCompletion(schemas, filterableTables(page.current?.widgets ?? [])) })
+      : undefined;
     subscriptions.push(
       commands.registerCommand('filters.offer', (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
         offerFilters(ui, query, at, candidates, source),
@@ -54,9 +63,8 @@ export const filters: Extension = {
         bar.dispose();
         bar = undefined;
       }
-      filterBar.focusEditor();
     };
-    const filterBar = new FilterBar(query, ui, sqlEnabled, showBar);
+    const filterBar = new FilterBar(query, ui, askSql);
     const showForPage = () => {
       filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : [], page.current?.filterBar ? filterableTables(page.current.widgets) : []);
       showBar();
@@ -92,6 +100,20 @@ export function buttonCondition(queryPart: string, value: string): string {
 }
 
 /**
+ * What a SQL condition on the page with `tables` completes: the schema of its first table's connection, that table's
+ * columns also alone (a condition goes into the WHERE of every query, most read that table); `undefined` without
+ * `schemas` (Explore off) or a table, and while the schema does not answer.
+ */
+export function conditionCompletion(schemas: Pick<Schemas, 'get'> | undefined, tables: readonly FilterableTable[]): Promise<SqlCompletion | undefined> | undefined {
+  const first = tables[0];
+  if (!schemas || !first) return undefined;
+  return schemas.get(first.connection).then(
+    (schema) => completionOf(schema, first.table),
+    () => undefined,
+  );
+}
+
+/**
  * The pill of the filter button with `...` whose page answers at `url` (`page.json`'s `url`, `<page>/button?i=<index>`)
  * for `value`: the server writes the value in as a string literal and signs it.
  */
@@ -103,9 +125,8 @@ async function fetchButtonPill(url: string, value: string): Promise<Pill> {
 }
 
 /**
- * The filter bar's content (`el`): `chips`, "Add filter" for the page's filterable tables (and, while `sqlEnabled`, a
- * SQL condition) and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only while
- * `sqlEnabled`. `onDidChangeWanted` is called when an edit starts or ends without a change of the chips.
+ * The filter bar's content (`el`): `chips`, "Add filter" for the page's filterable tables (and, with `askSql`, a SQL
+ * condition) and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only with `askSql`.
  */
 class FilterBar {
   readonly #chips: HTMLElement = html`<div class="d-filter-bar__chips" hidden></div>`;
@@ -117,27 +138,22 @@ class FilterBar {
   readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}</div>`;
   #pageButtons: readonly FilterButton[] = [];
   #tables: readonly FilterableTable[] = [];
-  /** The index of the SQL chip being edited. */
-  #editing: number | undefined;
-  /** The field of the chip being edited, focused once it is in the document. */
-  #editor: HTMLElement | undefined;
 
   constructor(
     /** The state the values of "Add filter" and of a pill's edit are asked for in. */
     private readonly query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
     /** Asks for the value of a button's `...`, and "Add filter"'s table, field, operator and value. */
     private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
-    /** The server takes SQL chips (filters.sqlEnabled). */
-    private readonly sqlEnabled: boolean,
-    private readonly onDidChangeWanted: () => void,
+    /** Asks for a SQL condition, while the server takes SQL chips (filters.sqlEnabled). */
+    private readonly askSql: AskSql | undefined,
   ) {
-    if (sqlEnabled) this.#add.title = "Add a filter on a column or field of the page's tables, or a SQL condition";
-    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.sqlEnabled));
+    if (askSql) this.#add.title = "Add a filter on a column or field of the page's tables, or a SQL condition";
+    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.askSql));
   }
 
   /** Whether "Add filter" has something to offer: a table the page's charts read, or a SQL condition. */
   get #adds(): boolean {
-    return this.#tables.length > 0 || this.sqlEnabled;
+    return this.#tables.length > 0 || this.askSql !== undefined;
   }
 
   /** Whether the filter bar has something to show: a chip, the page's buttons, or "Add filter". */
@@ -149,29 +165,16 @@ class FilterBar {
   setButtons(buttons: readonly FilterButton[], tables: readonly FilterableTable[]): void {
     this.#pageButtons = buttons;
     this.#tables = tables;
-    this.#editing = undefined;
     this.show();
   }
 
-  /** Draws the chips and the buttons; an edit of a chip ends, the model changed under it. */
+  /** Draws the chips and the buttons. */
   show(): void {
-    this.#editing = undefined;
-    this.#draw();
-  }
-
-  /** Focuses the field of the chip being edited, once the bar is in the document. */
-  focusEditor(): void {
-    if (this.#editor?.isConnected) this.#editor.focus();
-    this.#editor = undefined;
-  }
-
-  #draw(): void {
     const chips = this.query.get(FILTERS);
-    this.#editor = undefined;
     // a button's pill shows as the button pressed, not as a chip
     const ofButton = chips.map((chip) => buttonOf(chip, this.#pageButtons));
     const shown = chips.flatMap((chip, index) =>
-      ofButton[index] ? [] : [this.#editing === index && chip.kind === 'sql' ? this.#editorOf(chip, index) : this.#chipOf(chip, index)],
+      ofButton[index] ? [] : [this.#chipOf(chip, index)],
     );
     if (this.#adds) shown.push(this.#add);
     this.#chips.hidden = shown.length === 0;
@@ -206,12 +209,12 @@ class FilterBar {
     const made = chip.kind === 'pill' ? pillField(chip.key) : undefined;
     const source = made && fieldSource(this.#tables, made);
     if (chip.kind === 'pill' && made && source) return this.#pillOf(chip, index, made, source);
-    const edit = chip.kind === 'sql' && this.sqlEnabled ? () => this.#edit(index) : undefined;
+    const edit = chip.kind === 'sql' && this.askSql ? (event: MouseEvent) => void this.#editSql(chip, index, event.currentTarget as HTMLElement) : undefined;
     const label = chip.kind === 'sql' ? 'SQL:' : '';
     const value = chip.kind === 'sql' ? chip.sql.replace(/\s+/g, ' ') : pillLabel(chip.key);
     const whole = chip.kind === 'sql' ? chip.sql : value;
     const title =
-      chip.kind === 'sql' && !this.sqlEnabled
+      chip.kind === 'sql' && !this.askSql
         ? `${whole}\nSQL filters are not enabled (filters.sqlEnabled)`
         : made
           ? `${whole}\n${made.column ? `No chart of this page reads ${made.table}` : `No chart of this page filters ${made.table} by ${made.field}`}, so it can only be removed`
@@ -305,43 +308,14 @@ class FilterBar {
   }
 
   /**
-   * The SQL chip `chip` at `index` in edit mode: its text in a textarea (Shift+Enter a new
-   * line). Enter or leaving the field applies, Escape cancels.
+   * Asks a new text for the SQL chip `chip` at `index` in the SQL input box below `el` (the chip), its text filled in
+   * and selected, and puts it in the chip's place unless another chip is there meanwhile; an empty text removes the
+   * chip, Escape or a press elsewhere keeps it.
    */
-  #editorOf(chip: SqlFilter, index: number): HTMLElement {
-    const field: HTMLTextAreaElement = html`<textarea
-      class="d-field d-field--full d-field--mono"
-      placeholder="e.g., status = 'active' AND region IN ('us-east', 'eu-west')"
-      aria-label="SQL filter"
-      rows="2"></textarea>`;
-    field.value = chip.sql;
-    const done = (apply: boolean) => {
-      if (this.#editing !== index) return;
-      this.#editing = undefined;
-      const before = this.query.get(FILTERS);
-      if (apply) this.#replace(index, { kind: 'sql', sql: field.value });
-      // the chips did not change (cancelled, empty, the same again), so no `onDidChange` draws them
-      if (this.query.get(FILTERS) === before) {
-        this.#draw();
-        this.onDidChangeWanted();
-      }
-    };
-    field.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') done(false);
-      else if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        done(true);
-      }
-    });
-    field.addEventListener('blur', () => done(true));
-    this.#editor = field;
-    return html`<span class="d-filter-chip d-filter-chip--editing" data-testid="filter-chip-editor">${field}</span>`;
-  }
-
-  #edit(editing: number): void {
-    this.#editing = editing;
-    this.#draw();
-    this.onDidChangeWanted();
+  async #editSql(chip: SqlFilter, index: number, el: HTMLElement): Promise<void> {
+    const anchor = el.closest<HTMLElement>('.d-filter-chip') ?? el;
+    const sql = await this.askSql?.({ title: 'SQL filter', prompt: SQL_PROMPT, placeholder: SQL_PLACEHOLDER, value: chip.sql, anchor });
+    if (sql !== undefined && this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'sql', sql });
   }
 
   /**

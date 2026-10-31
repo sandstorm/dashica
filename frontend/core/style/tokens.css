@@ -21,6 +21,12 @@
   --color-hover: color-mix(in srgb, var(--color-text) 7%, transparent);
   --color-highlight: #fde68a;
   --color-backdrop-shimmer: color-mix(in srgb, var(--color-text) 6%, transparent);
+  /* the parts of SQL in the SQL editor (sql-library) */
+  --color-code-keyword: #8250df;
+  --color-code-name: #0550ae;
+  --color-code-string: #0a3069;
+  --color-code-number: #953800;
+  --color-code-comment: #6e7781;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -78,6 +84,11 @@
     --color-danger: #f87171;
     --color-success: #4ade80;
     --color-highlight: #b45309;
+    --color-code-keyword: #d2a8ff;
+    --color-code-name: #79c0ff;
+    --color-code-string: #a5d6ff;
+    --color-code-number: #ffa657;
+    --color-code-comment: #8b949e;
     --shadow-popover: 0 6px 20px rgb(0 0 0 / 0.5);
     --shadow-overlay: 4px 0 16px rgb(0 0 0 / 0.5);
   }

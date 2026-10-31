@@ -1,6 +1,6 @@
 # Workbench — application shell and extensions (technical concept)
 
-Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j; D25 (pill ops by the field's type) done as 9k; D29 (a readable, short pill key) done as 9q. Branch `feature/workbench` in `dashica-src`; merges to
+Status: concept agreed 2026-10-28; steps 1–5b done (2026-10-30), next step 6; tabs decided 2026-10-31 and done (§3.4.1, step 7a ✅, not yet run in a browser); the batch D1–D15 decided 2026-10-31, planned as steps 8a–8m (§3.14); D16–D18 and D12 as steps 9a–9d (§3.15), 9a–9c done; D19 (records by command) done as 9e; D20 (the click's filter UI by command) done as 9f; D21 (a pill's key read by the filters extension) done as 9g; D22 (`ChartFrame` and the shared helpers into extension libraries) done as 9h; D23 (full-height left side, the global "…" in the rail, no Dashica icon) done as 9i; D24 (the query state registered by key, per extension) done as 9j; D25 (pill ops by the field's type) done as 9k; D29 (a readable, short pill key) done as 9q; D12 (the SQL editor, also for the SQL condition) done as 9d and 9aa. Branch `feature/workbench` in `dashica-src`; merges to
 `main` as a whole at the end (§5).
 
 ## 1. Context and goal
@@ -459,7 +459,9 @@ frame (`ChartFrame`, §3.6), the column check
 through `DrawOptions.onTimeSelect`, as on the legacy page; step 7 turns it into a selection, §3.8) and the table (`drawTable`: the widget type `table`, the Debug panel). `widget-library` holds `widgetTitle` (a widget's
 title, else its type), `time-library` `formatTime` (an end of a custom range, as `customRange` takes it) and, since 9j, the specs of the
 query states `time` and `refresh` (§3.7)
-(9h, §3.15 D22).
+(9h, §3.15 D22); `sql-library` the SQL editor (CodeMirror 6, its own bundle loaded on first use), the completion of a
+schema and the store of the connections' schemas (`Schemas`), shared by the Explore view, the filters and the Schema
+view (9d, §3.15 D12).
 
 | Host | Offers |
 |---|---|
@@ -1002,11 +1004,14 @@ file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, ale
   A structured chip shows `id`, `=` / `≠`, value; a SQL chip shows `SQL:` and its text on one line (cut with an
   ellipsis, the whole text in its `title`). × removes a chip (`remove(index)`).
   - **Adding** (since 9o, §3.15 D26): "Add filter"'s advanced entry "SQL condition…" asks the condition in an input
-    box (`showInputBox`, one line) and adds it at the end of the chips; Escape or an empty text adds none. Until 9o the
+    box (`showInputBox`; since 9aa its field the SQL editor, `showSqlInputBox`, Shift+Enter a new line) and adds it at
+    the end of the chips; Escape or an empty text adds none. Until 9o the
     funnel in the top bar opened a new, empty SQL chip in edit mode instead. The funnel's dot (marked while a SQL filter was set) goes:
     the chips show what is set. (proposed)
   - **Editing, the same for every chip** (proposed): a click on a chip's text puts it in edit mode in its place, one
-    chip at a time. A SQL chip edits its text in a textarea (`d-field--mono`, Shift+Enter a new line); a structured
+    chip at a time. A SQL chip edits its text in a textarea (`d-field--mono`, Shift+Enter a new line; since 9aa in the
+    SQL input box below the chip instead, its text filled in and selected: Enter applies, an empty text removes the
+    chip, Escape or a press elsewhere keeps it *(proposed)*); a structured
     chip edits its value in an input, and a click on its `=` / `≠` flips the op. Enter or leaving the field applies it
     (`replace(index, chip)`), Escape cancels it, an empty SQL text removes the chip. The URL changes once per applied
     edit, not per keystroke.
@@ -1119,9 +1124,12 @@ interface UiApi {
 
   showQuickPick<T>(items: (T | QuickPickSeparator)[], o?: { title?; placeholder?; anchor?; menu? }): Promise<T | undefined>;
                                           // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s)
-  showInputBox(o?: { title?; prompt?; placeholder?; value?; valueSelection?; validateInput?; anchor? }): Promise<string | undefined>;
+  showInputBox(o?: { title?; prompt?; placeholder?; value?; valueSelection?; validateInput?; anchor?; field? }): Promise<string | undefined>;
                                           // a button's `...`; validateInput(value): string (an error, Enter blocked) or
-                                          // { message, severity: Info | Error } below the field, live (9z, D37)
+                                          // { message, severity: Info | Error } below the field, live (9z, D37);
+                                          // field: an InputBoxField of the caller's in place of the text field, e.g.
+                                          // the SQL editor (element, input, value, select, focus, onDidChangeValue,
+                                          // onDidAccept; 9aa)
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
   showInformationMessage / showWarningMessage / showErrorMessage(message: string, ...items): Promise<…>;
@@ -1455,8 +1463,8 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 - **D11 Schema view (8h, ✅ 2026-10-31):** a left side panel "Schema", a tree connection › database › table; a table
   opens structured as DataGrip does; one cached query set per connection, refreshable; the same data feeds the
   editor's autocomplete. Part of Explore: only with `explore.enabled` *(proposed)*; built as Perspective §4.8 says.
-- **D12 SQL editor (8j):** CodeMirror 6 (`@codemirror/lang-sql`, a ClickHouse dialect by `SQLDialect.define`, its
-  `schema` from D11), loaded only when Explore opens.
+- **D12 SQL editor (8j; built in 9d and 9aa, ✅ 2026-10-31, §3.15):** CodeMirror 6 (`@codemirror/lang-sql`, a ClickHouse dialect by `SQLDialect.define`, its
+  `schema` from D11), loaded only when Explore opens (and when a SQL condition is asked, §3.15).
 - **D13 Explore (8k):** Perspective's settings panel opens with the view; "Reset" asks for confirmation first (✅ step 8k:
   `toggleConfig(true)`, `confirmReset` in the quick pick; Perspective §4.8).
 - **D14 View pop-out (8l, ✅ 2026-10-31):** a side panel view pops out into its own tab, bound to the widget it showed
@@ -1471,7 +1479,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 
 ### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D30, D31, D32, D33, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch. Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D30, D31, D32, D33, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch (9d, 9aa). Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1492,7 +1500,32 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   table and that field (`page.json`: `table` + `filterable`) and replaces the chip in place (same position). Combined
   pills stay separate chips, each editable. A pill no widget of the page can make again can only be removed; its
   tooltip says why.
-- **D12 SQL editor (9d):** as §3.14 says.
+- **D12 SQL editor (9d, ✅ 2026-10-31; 9aa):** as §3.14 says, and one editor for both places that take SQL (maintainer
+  on D26: "this SQL snippet input should also use codemirror -> same infra"). Built: `frontend/extensions/sql-library/`
+  (a library, §3.5): `codemirror.ts` is the entry of a bundle of its own, `public/dist/sql-editor.js`
+  (frontendBuild.mjs), which `loadSqlEditors` imports on first use, as Perspective's (a dashboard loads none of it);
+  `SqlEditors.create({ value, placeholder, label, testId, enterAccepts, completion })` gives a `SqlEditor` (`value`,
+  `setCompletion`, `dispose`, and the `InputBoxField` of `showInputBox`). CodeMirror 6 with history, brackets,
+  `autocompletion` and ClickHouse's dialect (`CLICKHOUSE`, `SQLDialect.define`: its keywords, types and common
+  functions, backticks and double quotes for identifiers, single-quoted strings with backslash escapes, `#` comments);
+  a keyword completes in capitals, a type or function as ClickHouse writes it (`keywordCompletion`); colours from new
+  tokens `--color-code-*` (tokens.css, light and dark), its look as the page's fields (`EditorView.theme` on tokens).
+  Completion of the schema (`completionOf(schema, table)`: database › table › columns with type and comment, the
+  connection's database the default, a page table's columns also alone) from `/schema.json`, so only with
+  `explore.enabled`; `Schemas` moved from the Schema view into the library. The Explore view's editor (in place of its
+  textarea, Cmd / Ctrl+Enter runs): the chart's connection and table, a blank Explore's picked connection, followed on
+  each pick (9d). The filter bar's "SQL condition…" and a SQL chip's edit: `showSqlInputBox(ui, editors, …)`, the input
+  box with the editor as its field (`InputBoxOptions.field`; Enter takes the text, Shift+Enter a new line, an Escape the
+  completion takes leaves the box open), completing the names of the page's first table's connection, that table's
+  columns also alone (`conditionCompletion`), while Explore is on (9aa). *(proposed)* A SQL chip is no longer edited
+  inline in the chip but in that input box below it (Escape or a press elsewhere keeps the chip; leaving no longer
+  applies); a condition completes one table's columns alone (lang-sql has one default table), the first the page's
+  charts read; each place keeps its own `Schemas` (the server caches the schema; the Schema view's "Refresh" does not
+  reach an open editor's completion); while the editor's bundle does not load, the condition is asked in the plain
+  input box and Explore shows "The SQL editor did not load" in the editor's place; identifiers count as case
+  insensitive for completion only, so a completed `Status` gets no quotes. `@lezer/highlight` (CodeMirror's `tags`) is
+  imported as the dependency of `@codemirror/language` it is: listing it in package.json needs `npm install` (the lock
+  file), which this step could not run.
 - **D19 Records by command (9e, decided after 9c):** records are the table's own; Details hears of them by command,
   the VS Code way. `RenderedWidget` / `WidgetContext` keep only what every widget with data has; `records`,
   `onDidChangeRecords`, `selectRecords` and "selecting records makes a widget active" go. The table keeps its ticked
@@ -1549,10 +1582,11 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   (next to the time range), which added a SQL chip, goes. "Add filter"'s first quick pick (the tables, or the fields
   of a page with one table) ends with "SQL condition…" under the heading "Advanced", only while `filters.sqlEnabled` is
   on; it asks the condition in an input box (`showInputBox`) and adds it as a SQL chip. Editing an existing SQL chip
-  stays in the filter bar (its textarea), also only with the flag on. *(proposed)* With the flag on, "Add filter" shows
-  on every page with `filterBar`, and with it the filter bar, also without a filterable chart (then "SQL condition…" is
-  its only entry), so that a SQL chip can be added on any such page; the input box is one line (no Shift+Enter, as the
-  chip's textarea has).
+  stays in the filter bar (its textarea; since 9aa the same SQL input box below the chip), also only with the flag on.
+  *(proposed)* With the flag on, "Add filter" shows on every page with `filterBar`, and with it the filter bar, also
+  without a filterable chart (then "SQL condition…" is its only entry), so that a SQL chip can be added on any such
+  page; the input box is one line (no Shift+Enter, as the chip's textarea has; since 9aa both are the SQL editor, which
+  has Shift+Enter).
 - **D27 Table columns and computed fields; no constants (9p, decided 2026-10-31; maintainer, on "Add filter"'s field
   list of `mv_oekokiste_shop` with `'darkred'`, `orange` and `darkorange` in it: "missing fields from schema of
   table… maybe this needs grouping like 'table fields' and 'computed fields' … and static things like 'darkred' should
@@ -1996,7 +2030,8 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9x ✅ | **D32 the Schema view's views** (§3.15, Perspective §4.8): Go `clickhouse.Schema.Database` (the connection's own database, `assembleSchema(database, …)`); the `schema` extension: views "On this page" (`pageTables`, `onlyTables`, `drawPageTables`: the page's tables, connection › database › table, drawn while the panel shows and for each page) and "All connections" (every connection, asked when opened), `createView` with `globalState`; `Schemas` (each connection's schema asked once, shared, a failure forgotten); "Show comments" (`schema.toggleComments`, toggled, `globalState` `showComments`, `d-schema--no-comments`); `pageConnections` / `orderConnections` gone. Files: `lib/clickhouse/schema{,_test}.go`, `frontend/extensions/schema/schema.{ts,css,test.ts}`, `e2e/schema-view.spec.ts`. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox; Playwright written, not run), deviations: the step's id is 9x, as 9s was taken by D30; the connection's database in `/schema.json`; "On this page" fetches while the panel shows, drawn open to the tables; comments hidden by CSS; a missing table hinted *(all proposed)* | the page's tables at a glance |
 | 9y ✅ 2026-10-31 | **D33 a popped-out view's tab without page bars** (§3.4.6, §3.15): `PageHost.showsPoppedView`; `UiHost.showPageBars(shown)` withholds the top bar's and the filter bar's items (`Bar.withhold`, the tab bar stays); `createWorkbench` calls it on each change of the tabs; tests: `bar.test.ts`, `page.test.ts`, `workbench.test.ts`, e2e `pop-out.spec.ts` (written, not run) | *(proposed)* time range and auto refresh hidden as well, not greyed; id 9y (9t taken by D31) |
 | 9z ✅ 2026-10-31 | **D37 the input box validates** (§3.8, §3.11, §3.15): `InputBoxOptions.valueSelection` / `validateInput` (`InputBoxValidationMessage`, `InputBoxValidationSeverity`), the message below the field (`d-workbench__quick-pick-message`, `--error`, `aria-invalid`); a `...` filter button's box named after it, its condition previewed (`buttonCondition`), an empty value refused, a pressed button's value selected. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,css,test.ts}`, `frontend/extensions/filters/filters.{ts,test.ts}`, `e2e/filter-chips.spec.ts` (written, not run) | *(proposed)* synchronous `validateInput`, `Info` / `Error` only, title not shown; id 9z (9x taken by D32) |
-| 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
+| 9d ✅ 2026-10-31 | **D12 SQL editor** (§3.14, §3.15, step 8j; Perspective §4.8): `frontend/extensions/sql-library/` (`sql-editor.ts`: `SqlEditors`, `SqlEditor`, `SqlCompletion`, `loadSqlEditors`, `completionOf`, `showSqlInputBox`; `codemirror.ts`: the bundle `public/dist/sql-editor.js`, `CLICKHOUSE` by `SQLDialect.define`, `sqlEditors`; `schemas.ts`: `Schemas` / `fetchSchema` moved from `schema.ts`), the bundle in frontendBuild.mjs, tokens `--color-code-*`; the Explore view's editor in place of its textarea (`ExploreViewOptions.sqlEditors` / `schema`, Cmd / Ctrl+Enter runs, the chart's or the picked connection's names completed). Files: `frontend/extensions/sql-library/*`, `frontend/extensions/explore-view/{view,explore-view}.ts`, `explore-view.css`, `view.test.ts`, `frontend/extensions/schema/schema.ts`, `frontend/core/style/tokens.css`, `frontendBuild.mjs`, `e2e/explore-view.spec.ts` (written, not run). ✅ (vitest, typecheck, top comments green; the bundle not built, Playwright not run) | *(proposed)* one `Schemas` per place, the editor's error in its place, identifiers case insensitive for completion, `@lezer/highlight` not listed in package.json (§3.15 D12) |
+| 9aa ✅ 2026-10-31 | **D12 / D26 the SQL condition in the SQL editor** (§3.8, §3.11, §3.15): `InputBoxOptions.field` / `InputBoxField` (`QuickInput.showInputBox` shows the caller's field, describes and validates it, takes it on `onDidAccept`; an Escape the field took itself stays the field's); `AskSql`, `SQL_PROMPT`, `SQL_PLACEHOLDER` and `addFilter(…, askSql?)` in place of `sqlEnabled`; `FilterBar` asks a SQL chip's new text in that box below the chip (`#editSql`; `#editorOf`, `#editing`, `focusEditor`, `onDidChangeWanted` and `.d-filter-chip--editing` gone); `conditionCompletion`. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,test.ts}`, `frontend/extensions/filters/{filters,add-filter}.{ts,test.ts}`, `filters.css`. ✅ (vitest, typecheck, top comments green) | *(proposed)* the chip edited in the box, not inline; one default table; the plain box while the bundle does not load; id 9aa (9m taken by a BUGFIX, every letter used) |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

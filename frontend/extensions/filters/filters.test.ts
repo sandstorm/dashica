@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Tests for filters.ts: the filter bar per page, the chips (pills and SQL, added, SQL ones edited, removed), no
+// Tests for filters.ts: the filter bar per page, the chips (pills and SQL, added, SQL ones edited in the SQL editor's input box,
+// removed), what a SQL condition completes (conditionCompletion), no
 // funnel in the top bar, the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
 // button's value asked for in an input box (the condition it makes below the field, buttonCondition; an empty one
 // refused), made a pill by its page and shown beside it, a new value in its chip's
@@ -11,11 +12,19 @@
 // click's `filters.offer` adding the pill chosen to the tab shown.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { PageJson, WorkbenchJson } from '../../generated/zz_generated.dashica';
+import type { PageJson, Schema, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
 import { FILTERS, addChip, replaceChip, type FilterChip } from './chips';
-import { buttonCondition, buttonOf, filters } from './filters';
+import type { InputBoxField } from '../../hosts/ui/ui';
+import { buttonCondition, buttonOf, conditionCompletion, filters } from './filters';
+import { filterableTables } from './add-filter';
+
+// the SQL editor's bundle, which the browser loads from public/dist, from its source
+vi.mock('../sql-library/sql-editor', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../sql-library/sql-editor')>()),
+  loadSqlEditors: async () => (await import('../sql-library/codemirror')).sqlEditors,
+}));
 
 let query: QueryHost;
 let topBar: HTMLElement;
@@ -25,7 +34,7 @@ let ui: object;
 let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
-let asked: { title?: string; prompt?: string; placeholder?: string; value?: string; validateInput?: (value: string) => unknown; anchor?: unknown }[];
+let asked: { title?: string; prompt?: string; placeholder?: string; value?: string; validateInput?: (value: string) => unknown; anchor?: unknown; field?: InputBoxField }[];
 /** The quick picks shown (all cancelled, unless `picked` names the label to choose): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
 let picked: string | undefined;
@@ -135,7 +144,6 @@ const button = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>('.
 const values = (title: string) => [...bar.querySelectorAll<HTMLButtonElement>(`[aria-label="${title}"] .d-filter-button__value`)];
 /** "Add filter", when the bar shows it. */
 const add = () => [...bar.querySelectorAll<HTMLButtonElement>('.d-filter-bar__chips button')].find((b) => b.textContent === 'Add filter');
-const editor = () => bar.querySelector<HTMLTextAreaElement | HTMLInputElement>('[data-testid=filter-chip-editor] textarea, [data-testid=filter-chip-editor] input');
 const chips = () => [...bar.querySelectorAll<HTMLElement>('[data-testid=filter-chip]')];
 const chipText = (chip: HTMLElement) =>
   ['label', 'field', 'op', 'value']
@@ -143,9 +151,26 @@ const chipText = (chip: HTMLElement) =>
     .filter((text) => text !== '')
     .join(' ');
 const key = (field: Element, k: string, init: KeyboardEventInit = {}) => field.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...init }));
-const type = (text: string) => {
-  editor()!.value = text;
-};
+
+describe('conditionCompletion', () => {
+  const schema: Schema = { database: 'default', databases: [{ name: 'default', tables: [] }] };
+  const tables = filterableTables([
+    { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'], table: 'http_logs', connection: 'logs' },
+  ] as PageJson['widgets']);
+
+  it('completes the names of the first table’s connection, that table the default', async () => {
+    const asked: string[] = [];
+    const schemas = { get: async (connection: string) => (asked.push(connection), schema) };
+    expect(await conditionCompletion(schemas, tables)).toEqual({ schema: { default: {} }, defaultSchema: 'default', defaultTable: 'http_logs' });
+    expect(asked).toEqual(['logs']);
+  });
+
+  it('completes no names without the schema (Explore off), without a table, or while the schema fails', async () => {
+    expect(conditionCompletion(undefined, tables)).toBeUndefined();
+    expect(conditionCompletion({ get: async () => schema }, [])).toBeUndefined();
+    expect(await conditionCompletion({ get: () => Promise.reject(new Error('404')) }, tables)).toBeUndefined();
+  });
+});
 
 describe('buttonCondition', () => {
   it('writes the value in for each `...` as a ClickHouse string literal, `\\` and `\'` escaped with a backslash', () => {
@@ -279,6 +304,9 @@ describe('filters', () => {
     await vi.waitFor(() => expect(held()).toEqual([{ kind: 'sql', sql: "method = 'POST'" }]));
     expect(picks).toEqual([{ labels: ['— Advanced', 'SQL condition…'], anchor: add() }]);
     expect(asked).toEqual([expect.objectContaining({ title: 'SQL condition', anchor: add() })]);
+    // the SQL editor is the box's field
+    expect(asked[0].field!.input.getAttribute('aria-label')).toBe('SQL condition');
+    expect(asked[0].field!.element.classList).toContain('cm-editor');
     answer = undefined;
     add()!.click();
     answer = '  ';
@@ -288,27 +316,28 @@ describe('filters', () => {
     expect(held()).toHaveLength(1);
   });
 
-  it('edits a SQL chip in place: Enter or leaving the field applies, Escape cancels, an empty text removes it', () => {
+  it('edits a SQL chip in the SQL editor’s input box below it, its text filled in: the answer in its place, Escape keeps it, an empty text removes it', async () => {
     query.load({ search: `?${f(keyOf('host = a'))}&sql=status+%3E%3D+400` });
+    answer = 'status >= 500';
+    const chip = chips()[1];
+    chip.querySelector<HTMLElement>('.d-filter-chip__value')!.click();
+    await vi.waitFor(() => expect(held()[1]).toEqual({ kind: 'sql', sql: 'status >= 500' }));
+    expect(asked).toEqual([expect.objectContaining({ title: 'SQL filter', anchor: chip })]);
+    expect(asked[0].field!.value).toBe('status >= 400');
+    answer = undefined;
+    chips()[1].querySelector<HTMLElement>('.d-filter-chip__label')!.click();
+    await vi.waitFor(() => expect(asked).toHaveLength(2));
+    await Promise.resolve();
+    expect(held()[1]).toEqual({ kind: 'sql', sql: 'status >= 500' });
+    answer = '';
     chips()[1].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
-    expect(editor()!.value).toBe('status >= 400');
-    type('status >= 500');
-    key(editor()!, 'Escape');
-    expect(held()[1]).toEqual({ kind: 'sql', sql: 'status >= 400' });
-    chips()[1].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
-    type('status >= 300');
-    editor()!.dispatchEvent(new Event('blur'));
-    expect(held()[1]).toEqual({ kind: 'sql', sql: 'status >= 300' });
-    chips()[1].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
-    type('');
-    key(editor()!, 'Enter');
-    expect(held()).toEqual([chipOf('host = a')]);
+    await vi.waitFor(() => expect(held()).toEqual([chipOf('host = a')]));
   });
 
   it('does not edit a pill without a field: its condition is the server’s', () => {
     addPill(pill('host = a'));
     chips()[0].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
-    expect(editor()).toBeNull();
+    expect(asked).toEqual([]);
     expect(chips()[0].querySelector('.d-filter-chip__op, .d-filter-chip__label, button.d-filter-chip__value')).toBeNull();
     expect(chips()[0].classList).toContain('d-filter-chip--pill');
   });
@@ -531,7 +560,7 @@ describe('filters with SQL filters off', () => {
   it('shows a link’s SQL chip, not edited, saying why; its × removes it', () => {
     query.load({ search: '?sql=status+%3E%3D+400' });
     chips()[0].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
-    expect(editor()).toBeNull();
+    expect(asked).toEqual([]);
     expect(chips()[0].title).toBe('status >= 400\nSQL filters are not enabled (filters.sqlEnabled)');
     chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove status >= 400"]')!.click();
     expect(held()).toEqual([]);

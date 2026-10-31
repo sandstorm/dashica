@@ -19,9 +19,9 @@ import {
 /**
  * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `host` (a new
  * one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the top in
- * the middle; an input box's validation message below its field. Escape or a mouse press elsewhere hides it; hiding
- * gives the focus back to where it was. A menu's box (`menu`) marks the element it is anchored at, its opener,
- * `aria-expanded` while it is open.
+ * the middle; an input box's validation message below its field (its own one-line field, or the caller's,
+ * `InputBoxOptions.field`). Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was.
+ * A menu's box (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
  */
 export class QuickInput {
   #open: Open | null = null;
@@ -67,37 +67,51 @@ export class QuickInput {
 
   showInputBox(options: InputBoxOptions = {}): Promise<string | undefined> {
     const name = options.title ?? 'Input';
-    const field = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" aria-label=${name} placeholder=${options.placeholder ?? ''}>`;
-    field.value = options.value ?? '';
+    const { field } = options;
+    // a field of the caller's (a SQL editor), else the one-line text field
+    const own = field ? undefined : html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" placeholder=${options.placeholder ?? ''}>`;
+    if (own) own.value = options.value ?? '';
+    const input = field?.input ?? own!;
+    const text = () => field?.value ?? own!.value;
     const message = html`<div class="d-workbench__quick-pick-message" id=${uniqueId('dashica-input-box-message')} aria-live="polite" hidden></div>`;
     const prompt = options.prompt ? html`<div class="d-workbench__quick-pick-hint" id=${uniqueId('dashica-input-box')}>${options.prompt}</div>` : null;
-    field.setAttribute('aria-describedby', prompt ? `${message.id} ${prompt.id}` : message.id);
-    const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field}${message}${prompt}</div>`;
+    input.setAttribute('aria-label', name);
+    input.setAttribute('aria-describedby', prompt ? `${message.id} ${prompt.id}` : message.id);
+    const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field?.element ?? own}${message}${prompt}</div>`;
     // shows what `validateInput` says of the text in the field; whether Enter takes it
     const validate = (): boolean => {
-      const said = validation(options.validateInput?.(field.value));
+      const said = validation(options.validateInput?.(text()));
       message.textContent = said?.message ?? '';
       message.hidden = !said;
       const error = said?.severity === InputBoxValidationSeverity.Error;
       message.classList.toggle('d-workbench__quick-pick-message--error', error);
-      if (error) field.setAttribute('aria-invalid', 'true');
-      else field.removeAttribute('aria-invalid');
+      if (error) input.setAttribute('aria-invalid', 'true');
+      else input.removeAttribute('aria-invalid');
       return !error;
     };
     return new Promise((resolve) => {
       let value: string | undefined;
-      field.addEventListener('input', validate);
-      field.addEventListener('keydown', (event) => {
+      const accept = () => {
+        if (!validate()) return;
+        value = text();
+        if (this.#open?.box === box) this.#open.close();
+      };
+      const listening = field ? [field.onDidChangeValue(validate), field.onDidAccept(accept)] : [];
+      own?.addEventListener('input', validate);
+      own?.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
-        if (!validate()) return;
-        value = field.value;
-        if (this.#open?.box === box) this.#open.close();
+        accept();
       });
       validate();
-      this.#present(box, field, () => resolve(value), options.anchor);
-      const [start, end] = options.valueSelection ?? [0, field.value.length];
-      field.setSelectionRange(start, end);
+      const hidden = () => {
+        for (const listener of listening) listener.dispose();
+        resolve(value);
+      };
+      this.#present(box, field ?? own!, hidden, options.anchor);
+      const [start, end] = options.valueSelection ?? [0, text().length];
+      if (field) field.select(start, end);
+      else own!.setSelectionRange(start, end);
     });
   }
 
@@ -114,7 +128,7 @@ export class QuickInput {
    * Shows `box` (hiding an open one) at `anchor` and focuses `focus`, `opener` expanded meanwhile; Escape, a press
    * outside or `close` remove it and call `onHide`.
    */
-  #present(box: HTMLElement, focus: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined, opener?: Element): void {
+  #present(box: HTMLElement, focus: { focus(): void }, onHide: () => void, anchor: MenuAnchor | undefined, opener?: Element): void {
     this.#open?.close();
     const doc = this.host.ownerDocument;
     const previous = doc.activeElement;
@@ -122,7 +136,8 @@ export class QuickInput {
       if (!event.composedPath().includes(box)) close();
     };
     const onkeydown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      // a key the field took itself (its completion's Escape) stays the field's
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
       event.preventDefault();
       event.stopPropagation();
       close();

@@ -1,6 +1,5 @@
-/* See FilterBar in filters.ts: the chips, pills and SQL, a field's pill with its operator and value as buttons, a SQL
-   one in edit mode, and the bar's buttons, tinted
-   while pressed (aria-pressed, see controls.css), a pressed one with `...` joined to its values. */
+/* See FilterBar in filters.ts: the chips, pills and SQL, a field's pill with its operator and value as buttons, and
+   the bar's buttons, tinted while pressed (aria-pressed, see controls.css), a pressed one with `...` joined to its values. */
 .d-filter-bar {
   display: flex;
   flex: 1;
@@ -76,15 +75,6 @@ button.d-filter-chip__value:hover {
 button.d-filter-chip__value:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -1px;
-}
-
-/* a SQL chip in edit mode: its textarea across the bar */
-.d-filter-chip--editing {
-  flex-basis: 100%;
-  height: auto;
-  padding: 0;
-  border: none;
-  background: transparent;
 }
 
 .d-filter-chip__remove {

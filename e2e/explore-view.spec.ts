@@ -5,7 +5,8 @@
 // tab, Back shows the dashboard's tab, the viewer opens with its settings panel, a changed config is kept per chart
 // until Reset, which asks first (Cancel keeps it); the global "…" menu's "Explore"
 // opens a blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from
-// chart…" one with a chart's SQL (§4.8, D10). All of it needs `explore.enabled` (workbench.json's `explore`), else
+// chart…" one with a chart's SQL (§4.8, D10); the SQL editor is CodeMirror's, loaded with the view, highlighting and
+// completing (D12). All of it needs `explore.enabled` (workbench.json's `explore`), else
 // every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
@@ -52,7 +53,7 @@ test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY,
     // open from the start
     await expect(view.getByTestId('explore-view-sql')).toHaveAttribute('aria-pressed', 'true');
     const text = view.getByTestId('explore-view-sql-text');
-    await expect(text).toHaveValue(/GROUP BY/);
+    await expect(text).toHaveText(/GROUP BY/);
     const sql = await text.inputValue();
     expect(sql).not.toContain('{{DASHICA_FILTERS}}');
     await expect(view.getByTestId('explore-view-parameters')).toContainText('{__from}');
@@ -68,13 +69,13 @@ test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY,
 
     await page.reload();
     await expect(view.getByTestId('explore-view-edited')).toBeVisible();
-    await expect(view.getByTestId('explore-view-sql-text')).not.toHaveValue(/GROUP BY/);
+    await expect(view.getByTestId('explore-view-sql-text')).not.toHaveText(/GROUP BY/);
 
     await view.getByTestId('explore-view-sql-reset').click();
     await expect(page).not.toHaveURL(/exploreSql=/);
     await expect(view.getByTestId('explore-view-edited')).toBeHidden();
     await expect(view.locator('.d-explore-view__status')).toHaveText(/rows of the chart’s result$/);
-    await expect(view.getByTestId('explore-view-sql-text')).toHaveValue(/GROUP BY/);
+    await expect(view.getByTestId('explore-view-sql-text')).toHaveText(/GROUP BY/);
 });
 
 test('an edited query that fails shows ClickHouse’s message, the editor keeping the text', async ({page}) => {
@@ -84,7 +85,7 @@ test('an edited query that fails shows ClickHouse’s message, the editor keepin
     await text.fill('SELEC 1');
     await view.getByTestId('explore-view-run').click();
     await expect(view.locator('.d-explore-view__body .d-notice--error')).toContainText('Syntax error');
-    await expect(text).toHaveValue('SELEC 1');
+    await expect(text).toHaveText('SELEC 1');
     await text.fill('INSERT INTO FUNCTION null(\'a UInt8\') VALUES (1)');
     await view.getByTestId('explore-view-run').click();
     // refused before it runs: the transport describes the text as a subquery, where an INSERT is a syntax error
@@ -96,7 +97,19 @@ test('loads Perspective only for the view', async ({page}) => {
     page.on('request', (request) => requested.push(new URL(request.url()).pathname));
     await page.goto(`${PAGE}?time=168h`);
     await expect(page.locator('.d-chart-frame').first()).toBeVisible();
-    expect(requested.filter((path) => path.includes('perspective'))).toEqual([]);
+    expect(requested.filter((path) => path.includes('perspective') || path.includes('sql-editor'))).toEqual([]);
+});
+
+test('the SQL editor highlights the chart’s SQL and completes a column of its table', async ({page}) => {
+    const view = await openExplore(page);
+    const text = view.getByTestId('explore-view-sql-text');
+    await expect(text).toHaveText(/GROUP BY/);
+    await expect(view.locator('.d-explore-view__sql-text .cm-editor')).toBeVisible();
+    // ClickHouse's dialect: a keyword is a highlighted span of its own
+    await expect(text.locator('span', {hasText: /^GROUP$/}).first()).toBeVisible();
+    await text.fill('SELECT ');
+    await text.press('Control+Space');
+    await expect(view.locator('.cm-tooltip-autocomplete')).toBeVisible();
 });
 
 test('a link with the hash opens the view, with the link’s time range', async ({page}) => {
@@ -163,7 +176,7 @@ test('the global "…" menu’s "Explore" opens a blank Explore: a connection, a
     await expect(view.locator('.d-explore-view__title')).toHaveText('Explore');
     await expect(page).toHaveURL(/#explore=&connection=[^&]+$/);
     await expect(tabs(page)).toHaveCount(2);
-    await expect(view.getByTestId('explore-view-sql-text')).toHaveValue('');
+    await expect(view.getByTestId('explore-view-sql-text')).toHaveText('');
     await expect(view.getByTestId('explore-view-connection')).toBeVisible();
 
     await view.getByTestId('explore-view-sql-text').fill('SELECT number FROM system.numbers LIMIT 5');
@@ -172,7 +185,7 @@ test('the global "…" menu’s "Explore" opens a blank Explore: a connection, a
     await ran;
     await expect(view.locator('.d-explore-view__status')).toHaveText('5 rows');
     await page.reload();
-    await expect(page.getByTestId('explore-view').getByTestId('explore-view-sql-text')).toHaveValue('SELECT number FROM system.numbers LIMIT 5');
+    await expect(page.getByTestId('explore-view').getByTestId('explore-view-sql-text')).toHaveText('SELECT number FROM system.numbers LIMIT 5');
 });
 
 test('"Start from chart…" opens a blank Explore with the picked chart’s SQL, run with its parameters', async ({page}) => {
@@ -184,7 +197,7 @@ test('"Start from chart…" opens a blank Explore with the picked chart’s SQL,
     await ran;
     const view = page.getByTestId('explore-view');
     await expect(view.locator('.d-explore-view__title')).toHaveText('Explore');
-    await expect(view.getByTestId('explore-view-sql-text')).toHaveValue(/GROUP BY/);
+    await expect(view.getByTestId('explore-view-sql-text')).toHaveText(/GROUP BY/);
     await expect(view.getByTestId('explore-view-parameters')).toContainText('{__from}');
     await expect(view.locator('perspective-viewer')).toBeVisible();
 });

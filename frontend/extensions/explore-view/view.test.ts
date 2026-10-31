@@ -3,12 +3,16 @@
 // state, their description, the settings panel open, the config from the chart or kept per chart, Reset once confirmed, a refresh, the SQL editor (following
 // the chart, its parameters listed, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a
 // click on a group row; a blank Explore (its connection picker, Run on the picked connection, a chart's SQL from the
-// hash).
+// hash); the SQL editor completing the connection's names, or saying it did not load.
+import { EditorView } from '@codemirror/view';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
+import type { Schema } from '../../generated/zz_generated.dashica';
+import { sqlEditors } from '../sql-library/codemirror';
+import type { SqlEditors } from '../sql-library/sql-editor';
 import { TIME, presetRange, type TimeRange } from '../time-library/time-state';
 import type { ViewerConfig } from './mapping';
 import {
@@ -31,6 +35,23 @@ const widget = {
   dataUrl: '/p/shop/api/3',
   rowsUrl: '/p/shop/api/3/rows',
 } as ChartWithRows;
+
+/** The SQL editors of codemirror.ts, each one made kept in `madeEditors`, its `setCompletion` watched. */
+let madeEditors: ReturnType<SqlEditors['create']>[] = [];
+const editors: SqlEditors = {
+  create: (options) => {
+    const editor = sqlEditors.create(options);
+    vi.spyOn(editor, 'setCompletion');
+    madeEditors.push(editor);
+    return editor;
+  },
+};
+/** The connections whose schema the view asked, and the schema each answers: one table `t_<connection>`. */
+let schemasAsked: string[] = [];
+const schemaOf = (connection: string): Schema => ({
+  database: 'default',
+  databases: [{ name: 'default', tables: [{ name: `t_${connection}`, engine: '', sortingKey: '', partitionKey: '', primaryKey: '', ttl: '', comment: '', columns: [], skipIndices: [] }] }],
+});
 
 /** What the fake Perspective was asked. */
 let tables: { data: string; replaced: string[]; deleted: boolean }[];
@@ -119,6 +140,8 @@ const serve = (result: string) => (url: URL) => {
 };
 
 beforeEach(() => {
+  madeEditors = [];
+  schemasAsked = [];
   query = new QueryHost();
   // sent along from here on, as by the time-range extension
   query.get(TIME);
@@ -160,6 +183,8 @@ function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
     query,
     state,
     perspective: async () => perspective,
+    sqlEditors: async () => editors,
+    schema: async (connection) => (schemasAsked.push(connection), schemaOf(connection)),
     hash: () => hash,
     onDidChangeHash: hashChanged.event,
     navigate: (to) => {
@@ -175,12 +200,13 @@ function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
 
 const openBlank = () => open({ widget: undefined });
 const find = <T extends HTMLElement>(testId: string) => el.querySelector<T>(`[data-testid="${testId}"]`)!;
-const sqlText = () => find<HTMLTextAreaElement>('explore-view-sql-text');
-/** Types `text` into the SQL editor. */
-const type = (text: string) => {
-  sqlText().value = text;
-  sqlText().dispatchEvent(new Event('input'));
-};
+/** The SQL editor's text element, and its CodeMirror view. */
+const sqlText = () => find<HTMLElement>('explore-view-sql-text');
+const sqlView = () => EditorView.findFromDOM(sqlText().closest<HTMLElement>('.cm-editor')!)!;
+/** The text in the SQL editor. */
+const sqlValue = () => sqlView().state.doc.toString();
+/** Types `text` into the SQL editor, in place of its text. */
+const type = (text: string) => sqlView().dispatch({ changes: { from: 0, to: sqlView().state.doc.length, insert: text } });
 
 /** Lets the fetches and Perspective's promises settle. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -323,10 +349,10 @@ describe('renderExploreView', () => {
     expect(button.getAttribute('aria-pressed')).toBe('true');
     expect(find('explore-view-sql-panel').hidden).toBe(false);
     expect(requests).toEqual(['/p/shop/api/3/sql?time=1h', '/p/shop/api/3/rows?time=1h']);
-    expect(sqlText().value).toBe('SELECT time=1h');
+    expect(sqlValue()).toBe('SELECT time=1h');
     query.set(TIME, presetRange('3h'));
     await settle();
-    expect(sqlText().value).toBe('SELECT time=3h');
+    expect(sqlValue()).toBe('SELECT time=3h');
     expect(find('explore-view-edited').hidden).toBe(true);
   });
 
@@ -345,7 +371,7 @@ describe('renderExploreView', () => {
     button.click();
     await settle();
     expect(find('explore-view-sql-panel').hidden).toBe(false);
-    expect(sqlText().value).toBe('SELECT time=3h');
+    expect(sqlValue()).toBe('SELECT time=3h');
   });
 
   it('lists the values of the chart’s parameters beside the editor, fetched again on a refresh', async () => {
@@ -383,7 +409,7 @@ describe('renderExploreView', () => {
     expect(navigations.at(-1)).toBe('#explore=3');
     expect(requests.slice(-2).sort()).toEqual(['/p/shop/api/3/rows?time=1h', '/p/shop/api/3/sql?time=1h']);
     expect(tables.at(-1)!.data).toBe('rows-1');
-    expect(sqlText().value).toBe('SELECT time=1h');
+    expect(sqlValue()).toBe('SELECT time=1h');
     expect(find('explore-view-edited').hidden).toBe(true);
   });
 
@@ -393,7 +419,7 @@ describe('renderExploreView', () => {
     await settle();
     expect(requests).toEqual(['/p/shop/api/3/rows?exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1']);
     expect(find('explore-view-sql-panel').hidden).toBe(false);
-    expect(sqlText().value).toBe('SELECT {v:UInt8}');
+    expect(sqlValue()).toBe('SELECT {v:UInt8}');
     expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
     query.set(TIME, presetRange('3h'));
     await settle();
@@ -406,6 +432,27 @@ describe('renderExploreView', () => {
     await settle();
     find<HTMLButtonElement>('explore-view-run').click();
     expect(navigations).toEqual(['#explore=3']);
+  });
+
+  it('has the SQL editor complete the names of the chart’s connection, its table the default', async () => {
+    open({ widget: { ...widget, connection: 'logs', table: 'logs.http_logs' } as ChartWithRows });
+    await settle();
+    await settle();
+    expect(schemasAsked).toEqual(['logs']);
+    expect(madeEditors).toHaveLength(1);
+    expect(madeEditors[0].setCompletion).toHaveBeenCalledWith(expect.objectContaining({ defaultSchema: 'logs', defaultTable: 'http_logs' }));
+  });
+
+  it('says so in the editor’s place when the SQL editor does not load', async () => {
+    view = renderExploreView(el, {
+      widget, connections: ['default'], query, state, perspective: async () => perspective,
+      sqlEditors: () => Promise.reject(new Error('404 sql-editor.js')),
+      schema: async () => schemaOf('default'),
+      hash: () => hash, onDidChangeHash: hashChanged.event, navigate: () => undefined, close: () => undefined,
+      offerFilters: () => undefined, confirmReset: async () => false,
+    });
+    await settle();
+    expect(el.querySelector('.d-explore-view__sql-text')!.textContent).toBe('The SQL editor did not load: 404 sql-editor.js');
   });
 
   it('runs with Cmd/Ctrl+Enter in the editor', async () => {
@@ -426,7 +473,7 @@ describe('renderExploreView', () => {
     expect(find('explore-view-sql-note').textContent).toBe('not run');
     query.set(TIME, presetRange('3h'));
     await settle();
-    expect(sqlText().value).toBe('SELECT draft');
+    expect(sqlValue()).toBe('SELECT draft');
     expect(find('explore-view-sql-note').textContent).toBe('not run');
   });
 
@@ -440,7 +487,7 @@ describe('renderExploreView', () => {
     find<HTMLButtonElement>('explore-view-run').click();
     await settle();
     expect(el.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 62. DB::Exception: Syntax error');
-    expect(sqlText().value).toBe('SELEC 1');
+    expect(sqlValue()).toBe('SELEC 1');
     expect(find('explore-view-sql-panel').hidden).toBe(false);
   });
 
@@ -531,7 +578,7 @@ describe('renderExploreView of a blank Explore', () => {
     expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore');
     expect(find<HTMLSelectElement>('explore-view-connection').value).toBe('logs');
     expect([...find<HTMLSelectElement>('explore-view-connection').options].map((option) => option.value)).toEqual(['default', 'logs']);
-    expect(sqlText().value).toBe('');
+    expect(sqlValue()).toBe('');
     expect(el.querySelector('.d-explore-view__body')!.textContent).toBe('Write a query; Run shows its rows.');
     expect(find('explore-view-edited').hidden).toBe(true);
   });
@@ -548,6 +595,18 @@ describe('renderExploreView of a blank Explore', () => {
     expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: Object.keys(schema) })]);
     expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
     expect(find('explore-view-edited').hidden).toBe(true);
+  });
+
+  it('has the SQL editor complete the names of the picked connection, and of the one picked next', async () => {
+    openBlank();
+    await settle();
+    expect(schemasAsked).toEqual(['logs']);
+    const picker = find<HTMLSelectElement>('explore-view-connection');
+    picker.value = 'default';
+    picker.dispatchEvent(new Event('change'));
+    await settle();
+    expect(schemasAsked).toEqual(['logs', 'default']);
+    expect(madeEditors[0].setCompletion).toHaveBeenLastCalledWith(expect.objectContaining({ schema: { default: { t_default: [] } } }));
   });
 
   it('runs the query again on the connection picked next, the pick in the hash', async () => {
@@ -568,7 +627,7 @@ describe('renderExploreView of a blank Explore', () => {
     openBlank();
     await settle();
     expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1']);
-    expect(sqlText().value).toBe('SELECT {v:UInt8}');
+    expect(sqlValue()).toBe('SELECT {v:UInt8}');
     expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
   });
 

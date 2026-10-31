@@ -5,7 +5,7 @@ Status: **draft (2026-10-30); simplified (2026-10-31, after the maintainer's not
 in an editor, and an edited query runs as it is written; this replaces "Remove grouping" (§4.7). Decided 2026-10-31
 as well (§4.8, workbench §3.14 D8–D13): placeholders instead of literals, `exploreSql`, Explore off means off (✅ built
 2026-10-31, step 8g; the Schema view in step 8h; a global "Explore" without a chart in step 8i; the settings panel
-open and Reset asking in step 8k); planned: CodeMirror.**
+open and Reset asking in step 8k; CodeMirror in step 9d of the workbench, 2026-10-31).**
 
 Builds on the workbench concept (`docs/2026-10-28-workbench.md`: §3.8 selections, §6 "Explore rebuilt", "drill to
 detail", "Perspective instead of the Tabulator table").
@@ -264,8 +264,8 @@ Since 2026-10-31 (§4.7; proposed where §4.7 says so):
 
 *Step 8g (§4.8, ✅ 2026-10-31) changed this section: the editor shows the chart's parameter placeholders, not their
 values, which are listed beside it and sent again on Run, and `InlineParameters` is gone (D9); `xsql` is `exploreSql`
-(D9); the handlers check Explore themselves, and the view exists only with Explore enabled (D8). Planned: the textarea
-becomes CodeMirror (D12). The maintainer's quote below is the decision before; D9 reverses it for the parameters.*
+(D9); the handlers check Explore themselves, and the view exists only with Explore enabled (D8). Since workbench step 9d the textarea
+is CodeMirror (D12). The maintainer's quote below is the decision before; D9 reverses it for the parameters.*
 
 Maintainer: "EXPLORE IS SHOWING THE MATERIALIZED SQL AND PEOPLE CAN START ADJUSTING IT FULLY ... SO NOT
 DASHICA_FILTERS PLACEHOLDER". The Explore view gets a SQL editor, prefilled with **the chart's query exactly as it
@@ -296,7 +296,7 @@ with it the gap it had: SQL-file charts had no toggle, now every chart, builder 
 - **The view says so while edited:** a note above the viewer, "Edited query: the page's time range and filters do
   not apply", and the button "Reset to the chart's query". The top bar and filter bar stay as they are (the chips
   still apply to the dashboard's tab, and to this one after Reset).
-- **The editor:** a plain `<textarea>` (`d-field d-field--full d-field--mono`, as the filter bar's SQL field was): the
+- **The editor:** (since workbench step 9d CodeMirror, §4.8 D12; until then:) a plain `<textarea>` (`d-field d-field--full d-field--mono`, as the filter bar's SQL field was): the
   repository has no code editor (no CodeMirror, Monaco or the old Explore's editor in `package.json` or
   `frontend/`). A panel above the viewer, open from the start (since 2026-10-31: behind a button nobody found it); the
   toolbar's "SQL" (`aria-pressed`) closes and opens it, and it opens by itself while edited (proposed). (Since step 8g
@@ -386,7 +386,7 @@ only the greyed "Explore". Playwright (`e2e/explore-view.spec.ts`, skipped while
 editor open with `{__from}` listed, delete the `GROUP BY`, Run (more rows, the note, `exploreSql` and `param___from`
 in the URL), reload (still edited), Reset.
 
-### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, D10 in step 8i, D13 in step 8k, D12 planned)
+### 4.8 The batch of 2026-10-31: Explore (decided 2026-10-31; D8, D9 ✅ built 2026-10-31 in step 8g, D11 in step 8h, D10 in step 8i, D13 in step 8k, D12 in workbench step 9d)
 
 The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each step rewrites what it changes above.
 
@@ -441,7 +441,10 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   listed, `system` included; a table opens in place in the tree; "Refresh" is in the panel's "…" *(proposed)*.
 - **D12 SQL editor (step 8j):** CodeMirror 6, `@codemirror/lang-sql` with a ClickHouse dialect (`SQLDialect.define`),
   its `schema` option fed by the Schema data; loaded only when Explore opens (with the Perspective bundle). Replaces
-  the `<textarea>` of §4.7.
+  the `<textarea>` of §4.7. ✅ 2026-10-31 in workbench step 9d (workbench §3.15 D12): `frontend/extensions/sql-library/`,
+  its own bundle `public/dist/sql-editor.js` imported when the view opens (not with the Perspective bundle, so the
+  filter bar's SQL condition can load it alone *(proposed)*); the schema option from `/schema.json` of the chart's
+  connection (its table the default table) or the blank Explore's picked one; Cmd / Ctrl+Enter runs, as before.
 - **D13 Viewer (step 8k, ✅ 2026-10-31):** Perspective's settings panel opens when the view opens; "Reset" asks for
   confirmation first. Built: each new viewer gets `toggleConfig(true)` after its config is restored (Perspective's
   documented call); the kept config leaves out `settings`, so the panel opens every time, whatever it was when the
@@ -518,7 +521,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
    tests and Playwright written, not run, deviations in §4.8); ✅ 8h D11 (Schema view, 2026-10-31, the same checks,
    deviations in §4.8); ✅ 8i D10 (global "…" menu, blank Explore, `/rows?connection=`, 2026-10-31, the same checks,
    deviations in §4.8); ✅ 8k D13 (settings panel open, Reset asks; 2026-10-31, vitest, typecheck, top comments
-   green, Playwright written, not run, deviations in §4.8); planned, not built: 8j D12 (CodeMirror).
+   green, Playwright written, not run, deviations in §4.8); ✅ 8j D12 (CodeMirror) as workbench step 9d (2026-10-31, vitest, typecheck, top comments green, the bundle not built, Playwright written, not run).
 
 ## 7. Open questions
 

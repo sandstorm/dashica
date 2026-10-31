@@ -4,6 +4,8 @@ import { QuickPickItemKind, type QuickPickItem, type QuickPickSeparator, type Ui
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
 import { offerFiltersOf } from '../chart-library/filter-on-click';
+import { Schemas } from '../sql-library/schemas';
+import { loadSqlEditors } from '../sql-library/sql-editor';
 import { editedQueryKeys, fetchSql, sqlRequest, type EditedQuery } from './rows';
 import { chartTitle, renderExploreView, type ChartWithRows, type Perspective } from './view';
 import './explore-view.css';
@@ -21,7 +23,8 @@ import './explore-view.css';
  * exclude it (the command `filters.offer`). The global menu's "Explore" opens a blank Explore in a new tab
  * (`#explore=&connection=<name>`): a connection picker and an empty editor, run on that connection
  * (`/rows?connection=…`); its "Start from chart…" opens one with the SQL and parameters of a chart of the shown page,
- * run at once. Perspective loads on first use (`loadPerspective`).
+ * run at once. Perspective loads on first use (`loadPerspective`), and so does the SQL editor (sql-library's
+ * `loadSqlEditors`, CodeMirror 6 with ClickHouse's dialect), which completes the names of the connection's schema.
  */
 export const exploreView: Extension = {
   id: 'exploreView',
@@ -30,6 +33,8 @@ export const exploreView: Extension = {
       subscriptions.push(commands.registerCommand(EXPLORE_ENTRY.command, () => {}, EXPLORE_NOT_ENABLED), ui.registerMenuItem('workbench/global', EXPLORE_ENTRY));
       return;
     }
+    // the schemas the editors complete from, asked once per connection, shared by the Explore tabs
+    const schemas = new Schemas();
     subscriptions.push(
       page.registerPageRenderer('explore', (el, shown, context) => {
         const id = new URLSearchParams(context.hash.slice(1)).get('explore') ?? '';
@@ -44,6 +49,8 @@ export const exploreView: Extension = {
           query: context.query,
           state: globalState,
           perspective: () => loadPerspective(el.ownerDocument, PERSPECTIVE_URL),
+          sqlEditors: () => loadSqlEditors(),
+          schema: (connection) => schemas.get(connection),
           hash: () => context.hash,
           onDidChangeHash: context.onDidChangeHash,
           navigate: (hash) => void page.navigate(hash),

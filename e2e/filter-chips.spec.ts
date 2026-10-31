@@ -1,7 +1,8 @@
 // Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b, 9c and 9r): a link's `f`
 // and `sql` show as chips in their order, a chart whose query ignores a pill says so and is drawn muted until the
 // pointer is on it, an unsigned pill fails the
-// charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26), a chip's × removes it from the URL, a pill's operator and value are edited in
+// charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26) and a SQL chip's text is asked anew, both in the SQL
+// editor's input box (D12, 9aa), a chip's × removes it from the URL, a pill's operator and value are edited in
 // place on a page whose charts filter its table, a filter button toggles in place as a signed pill, without a chip; a
 // button with `...` asks its value (the condition it makes shown below the field, an empty one refused), shows it
 // beside it and takes a new one in its place (the current value selected).
@@ -150,13 +151,15 @@ test('a link with two `sql` shows two SQL chips; "Add filter"’s "SQL condition
     await expect(page).not.toHaveURL(/sql=1(\+|%20)%3D/);
 });
 
-test('a SQL chip is edited in place', async ({page, request}) => {
+test('a SQL chip is edited in the SQL editor’s input box below it', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
     test.skip(!workbench.sqlEnabled, 'SQL chips are off (filters.sqlEnabled)');
     await page.goto(`${PAGE}?sql=${encodeURIComponent('1 = 1')}`);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await chips.first().locator('.d-filter-chip__value').click();
     const field = page.getByRole('textbox', {name: 'SQL filter'});
+    await expect(field).toBeFocused();
+    await expect(page.locator('.d-workbench__quick-pick .cm-editor')).toBeVisible();
     await field.fill('1 = 2');
     await field.press('Enter');
     await expect(chips.first()).toHaveText(/SQL:\s*1 = 2/);

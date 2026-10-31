@@ -60,11 +60,14 @@
   align-items: flex-start;
 }
 
+/* where the SQL editor goes (sql-library): at least eight lines high, growing with its text up to half the view, then
+   scrolling */
 .d-explore-view__sql-text {
   flex: 1;
   min-width: 0;
-  resize: vertical;
 }
+.d-explore-view__sql-text .cm-editor { min-height: calc(8 * var(--leading) * var(--text-sm)); max-height: 50vh; }
+.d-explore-view__sql-text .cm-scroller { overflow: auto; }
 
 /* the placeholders' values, a name and its value per row */
 .d-explore-view__parameters {

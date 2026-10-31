@@ -1,12 +1,13 @@
 // See exploreView in explore-view.ts.
 import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
-import type { ChartSql, WidgetNode } from '../../generated/zz_generated.dashica';
+import type { ChartSql, Schema, WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { FilterCandidate } from '../../hosts/widgets/widgets';
+import { completionOf, type SqlEditor, type SqlEditors } from '../sql-library/sql-editor';
 import { widgetTitle } from '../widget-library/widget-title';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';
 import {
@@ -71,6 +72,10 @@ export interface ExploreViewOptions {
   /** Keeps the viewer's config per chart and mode for this viewer (`stateKey`). */
   readonly state: Memento;
   readonly perspective: () => Promise<Perspective>;
+  /** The SQL editor's bundle (sql-library), loaded with the view. */
+  readonly sqlEditors: () => Promise<SqlEditors>;
+  /** The schema of a connection (`/schema.json`), whose names the editor completes. */
+  readonly schema: (connection: string) => Promise<Schema>;
   /**
    * The tab's hash (`#explore=3`, `#explore=3&exploreSql=…&param_…` while the SQL is edited; a blank Explore's
    * `#explore=&connection=default`), as it is now.
@@ -90,8 +95,9 @@ export interface ExploreViewOptions {
 
 /**
  * Fills `el` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's result",
- * the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor (open from the
- * start) with the values of its parameters beside it, the notes of the config mapping, and `<perspective-viewer>`
+ * the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor (sql-library's,
+ * loaded with the view, completing the names of the connection's schema; open from the start) with the values of its
+ * parameters beside it, the notes of the config mapping, and `<perspective-viewer>`
  * with its settings panel open. Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result
  * with the page's query state and the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`)
  * kept and their values listed, both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the
@@ -164,12 +170,13 @@ class ExploreView {
   readonly #status: HTMLElement = html`<span class="d-explore-view__status"></span>`;
   readonly #ignored: HTMLElement = html`<span class="d-badge" hidden></span>`;
   readonly #sqlButton: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="true" data-testid="explore-view-sql">SQL</button>`;
-  readonly #sqlText: HTMLTextAreaElement = html`<textarea
-    class="d-field d-field--full d-field--mono d-explore-view__sql-text"
-    rows="8"
-    spellcheck="false"
-    aria-label="SQL"
-    data-testid="explore-view-sql-text"></textarea>`;
+  /** Where the SQL editor goes once its bundle loaded. */
+  readonly #sqlHost: HTMLElement = html`<div class="d-explore-view__sql-text"><span class="d-spinner"></span></div>`;
+  /** The SQL editor; `undefined` while its bundle loads (or did not), its text meanwhile `#draft`. */
+  #editor: SqlEditor | undefined;
+  #draft = '';
+  /** The connection whose names the editor completes (or is about to). */
+  #completing: string | undefined;
   readonly #sqlNote: HTMLElement = html`<span class="d-explore-view__status" data-testid="explore-view-sql-note"></span>`;
   readonly #parameters: HTMLElement = html`<dl class="d-explore-view__parameters" aria-label="Parameters" data-testid="explore-view-parameters"></dl>`;
   readonly #sqlError: HTMLElement = html`<div class="d-notice d-notice--error" hidden></div>`;
@@ -210,25 +217,19 @@ class ExploreView {
     this.#sqlButton.onclick = () => this.#setSqlOpen(!this.#sqlOpen);
     const run: HTMLButtonElement = html`<button class="d-button d-button--primary" type="button" data-testid="explore-view-run">Run</button>`;
     run.onclick = () => this.#run();
-    this.#sqlText.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        this.#run();
-      }
-    });
-    this.#sqlText.addEventListener('input', () => this.#showSqlNote());
     const backToChart = () => options.navigate(withEditedQuery(options.hash(), undefined));
     const resetSql: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-sql-reset">Reset to the chart’s query</button>`;
     resetSql.onclick = backToChart;
     this.#editedNote.append('Edited query: the page’s time range and filters do not apply. ', resetSql);
     this.#sqlPanel.append(
-      html`<div class="d-explore-view__sql-edit">${this.#sqlText}${this.#parameters}</div>`,
+      html`<div class="d-explore-view__sql-edit">${this.#sqlHost}${this.#parameters}</div>`,
       html`<div class="d-explore-view__sql-bar">${run}${this.#sqlNote}</div>`,
       this.#sqlError,
     );
     this.#connection.replaceChildren(...options.connections.map((name) => html`<option value=${name}>${name}</option>`));
     this.#connection.value = pickedConnection(options.hash(), options.connections);
     this.#connection.onchange = () => options.navigate(withConnection(options.hash(), this.#connection.value));
+    void this.#createEditor();
     el.replaceChildren(html`<div class="d-explore-view" data-testid="explore-view">
       <div class="d-explore-view__bar">
         <h2 class="d-explore-view__title">${options.widget ? `Explore: ${title}` : title}</h2>
@@ -257,8 +258,59 @@ class ExploreView {
     this.#loading?.abort();
     this.#loadingSql?.abort();
     this.#listening.dispose();
+    this.#editor?.dispose();
     void this.#shown?.viewer.delete().then(() => this.#shown?.table.delete());
     this.el.replaceChildren();
+  }
+
+  /**
+   * Puts the SQL editor in its place once its bundle loaded, with the text meanwhile (`#draft`): Cmd / Ctrl+Enter
+   * runs it; it completes the names of the chart's connection (its table's columns also alone), a blank Explore's
+   * those of the picked one (`#complete`). A bundle that does not load says so in the editor's place.
+   */
+  async #createEditor(): Promise<void> {
+    let editors: SqlEditors;
+    try {
+      editors = await this.options.sqlEditors();
+    } catch (error) {
+      this.#sqlHost.replaceChildren(html`<div class="d-notice d-notice--error">The SQL editor did not load: ${error instanceof Error ? error.message : String(error)}</div>`);
+      return;
+    }
+    if (this.#disposed) return;
+    const editor = editors.create({ label: 'SQL', testId: 'explore-view-sql-text', value: this.#draft });
+    editor.onDidAccept(() => this.#run());
+    editor.onDidChangeValue(() => this.#showSqlNote());
+    this.#editor = editor;
+    this.#sqlHost.replaceChildren(editor.element);
+    this.#complete();
+  }
+
+  /** The editor's text (`#draft` while it loads). */
+  get #text(): string {
+    return this.#editor?.value ?? this.#draft;
+  }
+
+  set #text(text: string) {
+    if (this.#editor) this.#editor.value = text;
+    else this.#draft = text;
+  }
+
+  /** The connection the editor's SQL runs on: the chart's, else the picked one. */
+  #runsOn(): string {
+    return this.options.widget ? (this.options.widget.connection ?? 'default') : this.#connection.value;
+  }
+
+  /** Lets the editor complete the names of `#runsOn`'s schema once it answered (none while it fails), the chart's table the default. */
+  #complete(): void {
+    if (!this.#editor) return;
+    const connection = this.#runsOn();
+    this.#completing = connection;
+    this.options.schema(connection).then(
+      (schema) => {
+        if (!this.#disposed && connection === this.#runsOn()) this.#editor?.setCompletion(completionOf(schema, this.options.widget?.table));
+      },
+      () => undefined,
+    );
   }
 
   /**
@@ -374,9 +426,9 @@ class ExploreView {
     }
     if (loading.signal.aborted || this.#edited !== undefined) return;
     this.#sqlError.hidden = true;
-    const draft = this.#sqlText.value !== (this.#chartSql?.sql ?? '') && this.#sqlText.value !== '';
+    const draft = this.#text !== (this.#chartSql?.sql ?? '') && this.#text !== '';
     this.#chartSql = chartSql;
-    if (!draft) this.#sqlText.value = chartSql.sql;
+    if (!draft) this.#text = chartSql.sql;
     this.#showParameters();
     this.#showSqlNote();
   }
@@ -399,7 +451,7 @@ class ExploreView {
    * fetched last); the chart's SQL as fetched last follows the chart again.
    */
   #run(): void {
-    const text = this.#sqlText.value;
+    const text = this.#text;
     const following = this.#edited === undefined && text === this.#chartSql?.sql;
     this.options.navigate(withEditedQuery(this.options.hash(), following ? undefined : { sql: text, parameters: this.#shownParameters() }));
   }
@@ -424,9 +476,9 @@ class ExploreView {
     const edited = this.#edited !== undefined;
     this.#editedNote.hidden = !edited || !this.options.widget;
     if (edited) {
-      this.#sqlText.value = this.#edited!.sql;
+      this.#text = this.#edited!.sql;
       this.#setSqlOpen(true);
-    } else if (this.#chartSql !== undefined) this.#sqlText.value = this.#chartSql.sql;
+    } else if (this.#chartSql !== undefined) this.#text = this.#chartSql.sql;
     this.#showParameters();
     this.#showSqlNote();
   }
@@ -434,7 +486,7 @@ class ExploreView {
   /** "not run" while the editor's text is not the SQL whose rows are shown. */
   #showSqlNote(): void {
     const shown = this.#edited?.sql ?? this.#chartSql?.sql;
-    this.#sqlNote.textContent = shown !== undefined && this.#sqlText.value !== shown ? 'not run' : '';
+    this.#sqlNote.textContent = shown !== undefined && this.#text !== shown ? 'not run' : '';
   }
 
   /**
@@ -443,6 +495,7 @@ class ExploreView {
    */
   #hashChanged(): void {
     this.#connection.value = pickedConnection(this.options.hash(), this.options.connections);
+    if (this.#completing !== this.#runsOn()) this.#complete();
     const edited = editedQuery(this.options.hash());
     const otherRows = (edited === undefined) !== (this.#edited === undefined);
     if (!sameQuery(edited, this.#edited)) {

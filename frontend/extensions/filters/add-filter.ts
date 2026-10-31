@@ -68,18 +68,18 @@ export function fieldSource(
  * computed fields (`fieldItems`), an op of its type (`opsOf`, in a menu; a column's type from the schema, a field's from its
  * chart's `/type` in `query`'s state, asked once the field is chosen, which reads no values, so a time's are never
  * asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
- * chips of `query`. While `sqlEnabled` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
- * under "Advanced" (its only entry while no chart filters a table), which asks the condition in an input box
- * (`addSqlCondition`). Escape at any step adds nothing; a failed `/pill` goes to the console.
+ * chips of `query`. With `askSql` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
+ * under "Advanced" (its only entry while no chart filters a table), which asks the condition in the SQL input box
+ * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` goes to the console.
  */
 export async function addFilter(
   ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox'>,
   query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
   tables: readonly FilterableTable[],
   anchor: MenuAnchor,
-  sqlEnabled: boolean,
+  askSql?: AskSql,
 ): Promise<void> {
-  const advanced: readonly (SqlItem | QuickPickSeparator)[] = sqlEnabled
+  const advanced: readonly (SqlItem | QuickPickSeparator)[] = askSql
     ? [{ kind: QuickPickItemKind.Separator, label: 'Advanced' }, { label: 'SQL condition…', description: 'every query’s WHERE', sql: true }]
     : [];
   let table = tables.length === 1 ? tables[0] : undefined;
@@ -88,7 +88,7 @@ export async function addFilter(
       [...tables.map((t) => ({ label: t.table, description: t.connection, table: t })), ...advanced],
       { anchor, title: 'Add filter', placeholder: tables.length > 0 ? 'The table to filter' : undefined },
     );
-    if (first && 'sql' in first) return addSqlCondition(ui, query, anchor);
+    if (first && 'sql' in first) return addSqlCondition(askSql!, query, anchor);
     table = first?.table;
     if (!table) return;
   }
@@ -96,7 +96,7 @@ export async function addFilter(
     [...(await fieldItems(table, query.requestParams())), ...(tables.length === 1 ? advanced : [])],
     { anchor, title: 'Add filter', placeholder: `A column or field of ${table.table}` },
   );
-  if (field && 'sql' in field) return addSqlCondition(ui, query, anchor);
+  if (field && 'sql' in field) return addSqlCondition(askSql!, query, anchor);
   if (!field) return;
   const { ref, widget } = field;
   // the type decides the ops; a failed answer leaves it unknown (= and ≠), the value step shows the message
@@ -158,16 +158,23 @@ interface SqlItem extends QuickPickItem {
 }
 
 /**
- * Asks for a SQL condition (`duration > 2000`) in an input box at `anchor` and adds it to the chips of `query` as a SQL
+ * Asks for SQL (a condition) in an input box at `options.anchor`, while the server takes SQL chips (filters.sqlEnabled):
+ * the filters extension's SQL editor in it (`showSqlInputBox`). Resolves with the text, or `undefined` without.
+ */
+export type AskSql = (options: { readonly title: string; readonly prompt?: string; readonly placeholder?: string; readonly value?: string; readonly anchor: MenuAnchor }) => Promise<string | undefined>;
+
+/** The line below a SQL condition's field. */
+export const SQL_PROMPT = 'Added to the WHERE of every query of the page; Shift+Enter for a new line';
+
+/** A SQL condition's field while it is empty. */
+export const SQL_PLACEHOLDER = "e.g., status = 'active' AND region IN ('us-east', 'eu-west')";
+
+/**
+ * Asks for a SQL condition (`duration > 2000`) by `askSql` at `anchor` and adds it to the chips of `query` as a SQL
  * chip; nothing on Escape or a text of only spaces.
  */
-async function addSqlCondition(ui: Pick<UiApi, 'showInputBox'>, query: Pick<QueryApi, 'get' | 'set'>, anchor: MenuAnchor): Promise<void> {
-  const sql = await ui.showInputBox({
-    title: 'SQL condition',
-    prompt: 'Added to the WHERE of every query of the page',
-    placeholder: "e.g., status = 'active' AND region IN ('us-east', 'eu-west')",
-    anchor,
-  });
+async function addSqlCondition(askSql: AskSql, query: Pick<QueryApi, 'get' | 'set'>, anchor: MenuAnchor): Promise<void> {
+  const sql = await askSql({ title: 'SQL condition', prompt: SQL_PROMPT, placeholder: SQL_PLACEHOLDER, anchor });
   if (sql !== undefined) query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'sql', sql }));
 }
 

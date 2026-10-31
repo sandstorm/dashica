@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// Tests for quick-input.ts (createQuickPick, showQuickPick, showInputBox with its validation message and selection).
+// Tests for quick-input.ts (createQuickPick, showQuickPick, showInputBox with its validation message and selection, and
+// with a field of the caller's).
 import { afterEach, describe, expect, it } from 'vitest';
-import { InputBoxValidationSeverity, QuickPickItemKind } from '../ui';
+import { EventEmitter } from '../../../core/event-emitter/event-emitter';
+import { InputBoxValidationSeverity, QuickPickItemKind, type InputBoxField } from '../ui';
 import { QuickInput } from './quick-input';
 
 afterEach(() => document.body.replaceChildren());
@@ -280,6 +282,60 @@ describe('showInputBox', () => {
     const { quickInput, key, field } = setup();
     const asked = quickInput.showInputBox();
     key(field(), 'Escape');
+    expect(await asked).toBeUndefined();
+  });
+
+  /** A field of the caller's: a text area as its input, its events fired by the test, the selection asked kept. */
+  function callerField(text: string) {
+    const input = document.createElement('textarea');
+    input.value = text;
+    const changed = new EventEmitter<void>();
+    const accepted = new EventEmitter<void>();
+    const selected: [number, number][] = [];
+    const field: InputBoxField = {
+      element: Object.assign(document.createElement('div'), { className: 'caller-field' }),
+      input,
+      get value() {
+        return input.value;
+      },
+      select: (start, end) => void selected.push([start, end]),
+      focus: () => input.focus(),
+      onDidChangeValue: changed.event,
+      onDidAccept: accepted.event,
+    };
+    field.element.append(input);
+    return { field, input, changed, accepted, selected };
+  }
+
+  it('shows a field of the caller’s in place of its own: focused, named and described, its text selected, checked on each change, taken when it accepts', async () => {
+    const { host, button, quickInput, box } = setup();
+    button.focus();
+    const { field, input, changed, accepted, selected } = callerField('a = 1');
+    const asked = quickInput.showInputBox({ title: 'SQL condition', prompt: 'Added to the WHERE', field, validateInput: (value) => (value === '' ? 'Enter a condition.' : null) });
+    expect(box()!.querySelector('.caller-field')).toBe(field.element);
+    expect(box()!.querySelector('input')).toBeNull();
+    expect([document.activeElement, input.getAttribute('aria-label'), described(host, input)]).toEqual([input, 'SQL condition', 'Added to the WHERE']);
+    expect(selected).toEqual([[0, 5]]);
+    input.value = '';
+    changed.fire();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    accepted.fire();
+    expect(box()).not.toBeNull();
+    input.value = 'a = 2';
+    changed.fire();
+    accepted.fire();
+    expect(await asked).toBe('a = 2');
+    expect([box(), document.activeElement]).toEqual([null, button]);
+  });
+
+  it('leaves an Escape the caller’s field took itself (its completion closing), and hides on any other', async () => {
+    const { quickInput, key, box } = setup();
+    const { field, input } = callerField('x');
+    const asked = quickInput.showInputBox({ field });
+    input.addEventListener('keydown', (event) => event.preventDefault(), { once: true });
+    key(input, 'Escape');
+    expect(box()).not.toBeNull();
+    key(input, 'Escape');
     expect(await asked).toBeUndefined();
   });
 });

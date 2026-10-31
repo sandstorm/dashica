@@ -30,6 +30,16 @@ await esbuild.build({
     publicPath: "/public/dist",
 });
 
+// The SQL editor, CodeMirror 6 (frontend/extensions/sql-library/codemirror.ts), loaded on first use as an ES module
+// (loadSqlEditors): public/dist/sql-editor.js; its styles are CodeMirror's own, injected by it.
+await esbuild.build({
+    entryPoints: { "sql-editor": "frontend/extensions/sql-library/codemirror.ts" },
+    outdir: outDir,
+    bundle: true,
+    format: "esm",
+    minify: true,
+});
+
 // Build the embedded Speedscope viewer (served per-widget by SpeedscopeLink).
 // The build output is consumed by speedscope_viewer/embed.go via //go:embed.
 if (!fs.existsSync(path.join(speedscopeSrcDir, "node_modules"))) {

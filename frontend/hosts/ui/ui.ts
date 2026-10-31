@@ -138,6 +138,32 @@ export interface InputBoxOptions {
   readonly validateInput?: (value: string) => string | InputBoxValidationMessage | undefined | null;
   /** Where the box opens, as `QuickPickOptions.anchor`. */
   readonly anchor?: MenuAnchor;
+  /**
+   * A field of its own in place of the one-line text field (a SQL editor, `showSqlInputBox` in sql-library); its maker
+   * gives it its text and placeholder, so `value` and `placeholder` are not used, and disposes it once the box resolved.
+   */
+  readonly field?: InputBoxField;
+}
+
+/**
+ * A field `showInputBox` shows in place of its text field: the box focuses it, describes its `input` by its message and
+ * prompt, takes its text on `onDidAccept` (Escape and a press elsewhere hide the box as usual) and checks it on
+ * `onDidChangeValue`. A key the field takes itself (its completion's Escape) is default prevented, so the box leaves it.
+ */
+export interface InputBoxField {
+  /** What the box shows, its message below it. */
+  readonly element: HTMLElement;
+  /** The element the keys go to (its role `textbox`): named, described and marked `aria-invalid` by the box. */
+  readonly input: HTMLElement;
+  /** The text in it. */
+  readonly value: string;
+  /** Selects [start, end) of its text. */
+  select(start: number, end: number): void;
+  focus(): void;
+  /** Fires on each change of its text. */
+  readonly onDidChangeValue: Event<void>;
+  /** Fires when its own key takes the text (Enter, unless its completion took the key). */
+  readonly onDidAccept: Event<void>;
 }
 
 /** What `InputBoxOptions.validateInput` says of a text, and whether it lets Enter through (`severity`). */
