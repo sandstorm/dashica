@@ -47,6 +47,10 @@ export class UiHost implements UiApi {
     return this.#layout.addBottomPanel(id, options);
   }
 
+  showOverContent(element: HTMLElement): Disposable {
+    return this.#layout.showOverContent(element);
+  }
+
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable {
     return this.#bars[bar].add(element, placement);
   }

@@ -15,7 +15,7 @@ export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
   readonly #renderers = new Map<WidgetType, WidgetRenderer<any>>();
   readonly #selectionBar: FloatingBar<Selection>;
-  #selection: { selection: Selection; owner: RenderedWidget; listening: Disposable } | undefined;
+  #selection: { selection: Selection; owner: RenderedWidget | undefined; listening: Disposable } | undefined;
 
   constructor(
     private readonly query: QueryApi,
@@ -32,8 +32,12 @@ export class WidgetsHost implements WidgetsApi {
     return this.#selection?.selection;
   }
 
-  /** Selects `selection` of `owner`, ending the one before. */
-  select(owner: RenderedWidget, selection: Selection): void {
+  select(selection: Selection): void {
+    this.selectOf(undefined, selection);
+  }
+
+  /** Selects `selection` of `owner` (`undefined`: of no rendered widget), ending the one before. */
+  selectOf(owner: RenderedWidget | undefined, selection: Selection): void {
     this.clearSelection();
     const doc = selection.anchor.ownerDocument;
     // the click that selected is past the document already; the next one, wherever it lands, ends the selection
@@ -123,7 +127,7 @@ class RenderedWidget implements WidgetContext, WidgetMenuContext {
 
   select(selection: Omit<Selection, 'widgetId'>): void {
     const widgetId = 'dataUrl' in this.widget ? this.widget.dataUrl.split('/').pop()! : '';
-    this.host.select(this, { ...selection, widgetId });
+    this.host.selectOf(this, { ...selection, widgetId });
   }
 
   choose(at: MenuAnchor, candidates: readonly Omit<Selection, 'widgetId'>[]): void {

@@ -275,3 +275,25 @@ func (b *SqlQuery) SelectFields() []SqlField {
 func (b *SqlQuery) GroupByFields() []SqlField {
 	return b.groupBy
 }
+
+// Ungrouped is `q` without its grouping, the original rows a chart on it aggregates: its From, Where, database and
+// filter handling, all columns (SELECT *), the newest first (ORDER BY timestamp DESC) when it takes the page's time
+// range, which filters on `timestamp`, and at most `limit` of them. False for a SQL file or string, whose grouping is in
+// its text.
+func Ungrouped(q SqlQueryable, limit int) (*SqlQuery, bool) {
+	b, ok := q.(*SqlQuery)
+	if !ok {
+		return nil, false
+	}
+	rows := &SqlQuery{
+		from:              b.from,
+		where:             slices.Clip(b.where),
+		database:          b.database,
+		shouldSkipFilters: b.shouldSkipFilters,
+		limit:             limit,
+	}
+	if !b.shouldSkipFilters {
+		rows.orderBy = []SqlField{Field("timestamp DESC")}
+	}
+	return rows, true
+}

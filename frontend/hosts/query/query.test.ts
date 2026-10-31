@@ -159,6 +159,17 @@ describe('QueryHost', () => {
     expect(urlParams()).toEqual({ refresh: '30' });
   });
 
+  it('keeps the hash when it writes the URL', () => {
+    history.replaceState(null, '', '/p/shop#explore=3');
+    query.load({ defaultTime: '1h' });
+    query.time.setRange('3h');
+    vi.advanceTimersByTime(200);
+    expect(location.search + location.hash).toBe('?time=3h#explore=3');
+    query.time.setRange('1h');
+    vi.advanceTimersByTime(200);
+    expect(location.pathname + location.search + location.hash).toBe('/p/shop#explore=3');
+  });
+
   it('writes a custom range with the viewer’s local time', () => {
     query.load();
     query.time.setCustom(formatTime(new Date(2026, 9, 29, 10, 0)), formatTime(new Date(2026, 9, 29, 12, 30)));

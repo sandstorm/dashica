@@ -16,6 +16,20 @@ await esbuild.build({
     bundle: true,
 });
 
+// Perspective for the Explore view (frontend/extensions/explore-view/perspective.ts), loaded by the view on first use
+// as an ES module: public/dist/perspective.js and perspective.css, its wasm files beside them under stable names,
+// fetched from /public/dist (the Go server embeds public/dist and serves .wasm as application/wasm).
+await esbuild.build({
+    entryPoints: { perspective: "frontend/extensions/explore-view/perspective.ts" },
+    outdir: outDir,
+    bundle: true,
+    format: "esm",
+    minify: true,
+    loader: { ".wasm": "file" },
+    assetNames: "[name]",
+    publicPath: "/public/dist",
+});
+
 // Build the embedded Speedscope viewer (served per-widget by SpeedscopeLink).
 // The build output is consumed by speedscope_viewer/embed.go via //go:embed.
 if (!fs.existsSync(path.join(speedscopeSrcDir, "node_modules"))) {

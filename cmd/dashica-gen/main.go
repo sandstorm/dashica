@@ -109,6 +109,8 @@ type widgetInfo struct {
 	ComputedFields []fieldInfo
 	// HasData: it has a Query or a Handler method, so Mount gives it a data URL (withQuery, withHandler).
 	HasData bool
+	// HasQuery: it has a Query method, so Mount gives it a rows URL (withQuery).
+	HasQuery bool
 }
 
 // fieldCategory names how a field is (de)serialized and rendered. It is the

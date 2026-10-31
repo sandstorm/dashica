@@ -83,7 +83,8 @@ export const page = {
               "alias": "cnt"
             }
           },
-          "dataUrl": "/p/shop/api/1"
+          "dataUrl": "/p/shop/api/1",
+          "rowsUrl": "/p/shop/api/1/rows"
         },
         "b": {
           "type": "timeLine",
@@ -100,7 +101,8 @@ export const page = {
               "alias": "cnt"
             }
           },
-          "dataUrl": "/p/shop/api/2"
+          "dataUrl": "/p/shop/api/2",
+          "rowsUrl": "/p/shop/api/2/rows"
         }
       }
     },
@@ -124,7 +126,8 @@ export const page = {
               "alias": "cnt"
             }
           },
-          "dataUrl": "/p/shop/api/3"
+          "dataUrl": "/p/shop/api/3",
+          "rowsUrl": "/p/shop/api/3/rows"
         },
         "1": {
           "type": "barHorizontal",
@@ -139,7 +142,8 @@ export const page = {
               "alias": "path"
             }
           },
-          "dataUrl": "/p/shop/api/4"
+          "dataUrl": "/p/shop/api/4",
+          "rowsUrl": "/p/shop/api/4/rows"
         },
         "2": {
           "type": "timeHeatmap",
@@ -155,7 +159,8 @@ export const page = {
             },
             "yBucketSize": 100
           },
-          "dataUrl": "/p/shop/api/5"
+          "dataUrl": "/p/shop/api/5",
+          "rowsUrl": "/p/shop/api/5/rows"
         },
         "3": {
           "type": "timeHeatmapOrdinal",
@@ -170,12 +175,14 @@ export const page = {
               "alias": "status"
             }
           },
-          "dataUrl": "/p/shop/api/6"
+          "dataUrl": "/p/shop/api/6",
+          "rowsUrl": "/p/shop/api/6/rows"
         },
         "4": {
           "type": "stats",
           "props": {},
-          "dataUrl": "/p/shop/api/shop_stats"
+          "dataUrl": "/p/shop/api/shop_stats",
+          "rowsUrl": "/p/shop/api/shop_stats/rows"
         },
         "5": {
           "type": "table",
@@ -184,7 +191,8 @@ export const page = {
             "limit": 100,
             "title": "Latest"
           },
-          "dataUrl": "/p/shop/api/7"
+          "dataUrl": "/p/shop/api/7",
+          "rowsUrl": "/p/shop/api/7/rows"
         }
       }
     },

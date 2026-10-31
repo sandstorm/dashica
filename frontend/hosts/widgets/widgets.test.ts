@@ -179,6 +179,15 @@ describe('WidgetsHost', () => {
       expect(testbed.floatingBar()).toBeNull();
     });
 
+    it('takes a selection on a view of a chart outside the page’s widgets, which ends on Escape as well', () => {
+      testbed.render(byStatus);
+      testbed.widgets.select({ ...statusBar('500'), widgetId: '3' });
+      expect(testbed.widgets.selection).toMatchObject({ widgetId: '3', value: '500' });
+      expect(entries()).toEqual(['Filter by']);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(testbed.widgets.selection).toBeUndefined();
+    });
+
     it('pops up candidates to choose from, in order, also a single one; choosing one selects it; none change nothing', () => {
       testbed.render(byStatus);
       const anchor = bar();

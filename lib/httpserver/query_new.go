@@ -27,59 +27,85 @@ type QueryHandler struct {
 // (X-Dashica-Diagnostics). Every filter's value is bound (filter.Param). A skipped chart answers 204 without asking
 // ClickHouse. An unreadable custom range is ResolveTimeRange's error.
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	return qh.answerArrow(queryObj, state, diagnostics, nil, w, r)
+}
+
+// answerArrow is HandleQuery with `cast` as the Arrow query's QueryOptions.Cast.
+func (qh QueryHandler) answerArrow(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, cast func(column, columnType string) string, w http.ResponseWriter, r *http.Request) error {
 	WriteDiagnostics(w, diagnostics)
 	if diagnostics.Skipped != "" {
 		w.WriteHeader(http.StatusNoContent)
 		return nil
 	}
+	p, err := qh.prepare(queryObj, state)
+	if err != nil {
+		return err
+	}
+	p.opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
+	p.opts.Cast = cast
+	p.writeHeaders(w)
+	if err := p.client.QueryToHandler(r.Context(), p.query, p.opts, w); err != nil {
+		return fmt.Errorf("clickhouse query: %w", err)
+	}
+	return nil
+}
+
+// prepared is a query as a handler sends it to ClickHouse: its client, its SQL with the window and SQL filter of the
+// request and its auto buckets rebaked, its options with the parameters bound.
+type prepared struct {
+	client *clickhouse.Client
+	query  string
+	opts   clickhouse.QueryOptions
+	// timeRange is the resolved window, nil for a query that skips filters; filterClause its WHERE
+	timeRange    *querying2.TimeRange
+	filterClause string
+	// bucketSizeMs is the size of its auto buckets, nil without
+	bucketSizeMs *int64
+}
+
+// prepare is `queryObj` filtered by `state` as HandleQuery, HandleRows and HandleDebug send it: its window and SQL
+// filter unless it skips filters, the form values and every filter's value bound.
+func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (prepared, error) {
 	serverId := queryObj.Database()
 	if serverId == "" {
 		serverId = "default"
 	}
 	client, err := qh.ClickhouseClientManager.GetClient(serverId)
 	if err != nil {
-		return fmt.Errorf("get clickhouse client: %w", err)
+		return prepared{}, fmt.Errorf("get clickhouse client: %w", err)
 	}
+	p := prepared{client: client, opts: clickhouse.DefaultQueryOptions()}
+	p.opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates (which is used in date picker by browser)
 
-	opts := clickhouse.DefaultQueryOptions()
-	opts.Settings["output_format_arrow_compression_method"] = "none" // compression not supported by arrow JS
-	opts.Settings["date_time_input_format"] = "best_effort"          // support ISO 8601 dates (which is used in date picker by browser)
-
-	maps.Copy(opts.Parameters, state.Params)
-	bindFilters(opts.Parameters, state)
+	maps.Copy(p.opts.Parameters, state.Params)
+	bindFilters(p.opts.Parameters, state)
 
 	q := queryObj
-	var resolvedTimeRange *querying2.TimeRange
 	if !queryObj.ShouldSkipFilters() {
-		resolvedTimeRange, err = state.ResolveTimeRange(time.Now())
-		if err != nil {
-			return err
+		if p.timeRange, err = state.ResolveTimeRange(time.Now()); err != nil {
+			return prepared{}, err
 		}
-		q = queryObj.With(sql.Where(state.SqlClause(resolvedTimeRange)))
-		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
-		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
-		// so that charts also show the full range if they have no data at beginning or end
-		WriteResolvedTimeRange(w, resolvedTimeRange)
+		p.filterClause = state.SqlClause(p.timeRange)
+		q = queryObj.With(sql.Where(p.filterClause))
+		p.opts.Parameters["__from"] = fmt.Sprintf("%d", *p.timeRange.From/1000)
+		p.opts.Parameters["__to"] = fmt.Sprintf("%d", *p.timeRange.To/1000)
+		q, p.bucketSizeMs = q.AdjustBuckets(p.timeRange.WidthS())
 	}
+	if p.query, err = sql.BuildWithFS(q, qh.FileSystem); err != nil {
+		return prepared{}, fmt.Errorf("building SQL query: %w", err)
+	}
+	return p, nil
+}
 
-	var bucketSizeMs *int64
-	if resolvedTimeRange != nil {
-		q, bucketSizeMs = q.AdjustBuckets(resolvedTimeRange.WidthS())
+// writeHeaders tells the client the window (so that charts also show the full range if they have no data at
+// beginning or end) and the bucket size, each when there is one.
+func (p prepared) writeHeaders(w http.ResponseWriter) {
+	if p.timeRange != nil {
+		WriteResolvedTimeRange(w, p.timeRange)
 	}
-	query, err := sql.BuildWithFS(q, qh.FileSystem)
-	if err != nil {
-		return fmt.Errorf("building SQL query: %w", err)
+	if p.bucketSizeMs != nil {
+		w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *p.bucketSizeMs))
 	}
-	if bucketSizeMs != nil {
-		w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *bucketSizeMs))
-	}
-
-	err = client.QueryToHandler(r.Context(), query, opts, w)
-	if err != nil {
-		return fmt.Errorf("clickhouse query: %w", err)
-	}
-
-	return nil
 }
 
 type DebugInfo struct {
@@ -103,49 +129,18 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, state QueryState, 
 		w.Header().Set("Content-Type", "application/json")
 		return json.NewEncoder(w).Encode(debugInfo)
 	}
-	serverId := queryObj.Database()
-	if serverId == "" {
-		serverId = "default"
-	}
-	client, err := qh.ClickhouseClientManager.GetClient(serverId)
+	p, err := qh.prepare(queryObj, state)
 	if err != nil {
-		return fmt.Errorf("get clickhouse client: %w", err)
+		return err
 	}
-
-	opts := clickhouse.DefaultQueryOptions()
-	opts.Settings["date_time_input_format"] = "best_effort" // support ISO 8601 dates
-
-	maps.Copy(opts.Parameters, state.Params)
-	bindFilters(opts.Parameters, state)
-
-	q := queryObj
-	var resolvedTimeRange *querying2.TimeRange
-
-	if !queryObj.ShouldSkipFilters() {
-		resolvedTimeRange, err = state.ResolveTimeRange(time.Now())
-		if err != nil {
-			return err
-		}
-		filterClause := state.SqlClause(resolvedTimeRange)
-		q = queryObj.With(sql.Where(filterClause))
-		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
-		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
-
-		debugInfo.Stats["resolvedTimeRange"] = resolvedTimeRange
-		debugInfo.Stats["filterClause"] = filterClause
+	client, query, opts := p.client, p.query, p.opts
+	if p.timeRange != nil {
+		debugInfo.Stats["resolvedTimeRange"] = p.timeRange
+		debugInfo.Stats["filterClause"] = p.filterClause
 	}
 	debugInfo.Stats["parameters"] = opts.Parameters
-
-	var bucketSizeMs *int64
-	if resolvedTimeRange != nil {
-		q, bucketSizeMs = q.AdjustBuckets(resolvedTimeRange.WidthS())
-	}
-	query, err := sql.BuildWithFS(q, qh.FileSystem)
-	if err != nil {
-		return fmt.Errorf("building SQL query: %w", err)
-	}
-	if bucketSizeMs != nil {
-		debugInfo.Stats["bucketSizeMs"] = *bucketSizeMs
+	if p.bucketSizeMs != nil {
+		debugInfo.Stats["bucketSizeMs"] = *p.bucketSizeMs
 	}
 
 	debugInfo.Query = query

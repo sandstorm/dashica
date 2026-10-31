@@ -28,8 +28,9 @@ func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
 		// the wire forms of fields and colors from their Go DTOs, a named string type with constants as their union
 		"export interface SqlFieldProps {\n  /** Kind tells a category, which a click selects, from a count (a measure). */\n  kind: 'expr' | 'count' | 'enum' | 'autoBucket';\n  /** Alias is the field's column in the query result. */\n  alias: string;",
 		"export interface ColorScale {\n  legend: boolean;",
-		// widget.Node per widget type: a data URL for a widget with a handler, children for a container
-		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string }",
+		// widget.Node per widget type: a data URL for a widget with a handler, a rows URL for a chart, children for a
+		// container
+		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string; rowsUrl?: string }",
 		"  | { type: 'speedscopeLink'; props: SpeedscopeLinkProps; dataUrl: string }",
 		"  | { type: 'grid'; props: GridProps; children?: Record<string, WidgetNode> }",
 		"  | { type: 'markdown'; props: MarkdownProps }",

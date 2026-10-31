@@ -72,6 +72,8 @@ type Dependencies struct {
 	AlertResultStore        *alerting2.AlertResultStore
 	AlertEvaluator          *alerting2.AlertEvaluator
 	AlertManager            *alerting2.AlertManager
+	// ExploreEnabled: a chart's handler serves its rows without grouping (config.ExploreConfig).
+	ExploreEnabled bool
 }
 
 // MenuGroup is a group of the dashboards menu ("Shop"), as RegisterDashboardGroup starts it.

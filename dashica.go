@@ -129,6 +129,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertResultStore:        alertResultStore,
 		AlertEvaluator:          alertEvaluator,
 		AlertManager:            alertManager,
+		ExploreEnabled:          cfg.Explore.Enabled,
 	}
 
 	return newDashicaImpl(cfg, logger, mux, deps)

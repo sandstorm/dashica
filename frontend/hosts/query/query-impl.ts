@@ -100,7 +100,7 @@ export class QueryHost implements QueryApi {
     else this.refresh();
   }
 
-  /** Writes the state into the URL a moment after the last change, as a new history entry when it changed. */
+  /** Writes the state into the URL a moment after the last change, as a new history entry when it changed; the hash stays. */
   #writeUrlSoon(): void {
     clearTimeout(this.#urlWrite);
     this.#urlWrite = setTimeout(() => {
@@ -119,7 +119,7 @@ export class QueryHost implements QueryApi {
       if (Object.keys(this.params.values).length > 0) url.set('wp', JSON.stringify(this.params.values));
       else url.delete('wp');
       const search = url.toString();
-      if (search !== location.search.replace(/^\?/, '')) history.pushState(history.state, '', search ? `?${search}` : location.pathname);
+      if (search !== location.search.replace(/^\?/, '')) history.pushState(history.state, '', (search ? `?${search}` : location.pathname) + location.hash);
       this.#search = location.search;
     }, URL_WRITE_DELAY_MS);
   }

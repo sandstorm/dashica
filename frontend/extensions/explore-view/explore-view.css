@@ -1,0 +1,117 @@
+/* See explore-view.ts: the Explore view over the content, its bar, notes and the viewer filling the rest; the viewer's
+   --psp-* variables taken from the tokens, so light and dark apply. */
+.d-explore-view__host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.d-explore-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.d-explore-view__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: calc(var(--control-height) + 2 * var(--space-2));
+  padding: 0 var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.d-explore-view__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.d-explore-view__status {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.d-explore-view__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.d-explore-view__notes {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-1) calc(var(--space-3) + var(--space-4));
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.d-explore-view__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.d-explore-view__message {
+  margin: auto;
+}
+
+.d-explore-view__body > .d-notice {
+  margin: var(--space-4);
+}
+
+/* Where a click on the viewer selected a value: the floating bar sits next to it. */
+.d-explore-view__anchor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.d-explore-view__body perspective-viewer.d-explore-view__viewer {
+  flex: 1;
+  min-height: 0;
+  color-scheme: light dark;
+  --psp--color: var(--color-text);
+  color: var(--psp--color);
+  --psp--background-color: var(--color-surface);
+  --psp-active--color: var(--color-accent);
+  --psp-active--background: var(--color-accent-subtle);
+  --psp-inactive--color: var(--color-text-muted);
+  --psp-inactive--border-color: var(--color-border);
+  --psp-error--color: var(--color-danger);
+  --psp-placeholder--background: var(--color-backdrop-shimmer);
+  --psp-dropdown--box-shadow: var(--shadow-popover);
+  --psp-interface-monospace--font-family: var(--font-mono);
+  --psp-button--font-size: var(--text-md);
+  --psp-column-selector--font-size: var(--text-sm);
+  --psp-charts--tooltip--background: var(--color-surface-raised);
+  --psp-charts--tooltip--color: var(--color-text);
+  --psp-charts--tooltip--border-color: var(--color-border-strong);
+  --psp-charts--gridline--color: var(--color-border);
+  --psp-charts--axis-ticks--color: var(--color-text-muted);
+  --psp-charts--axis-lines--color: var(--color-border-strong);
+  --psp-charts--legend--color: var(--color-text);
+  --psp-charts--legend--background: var(--color-surface);
+  --psp-datagrid--border-color: var(--color-border);
+  --psp-datagrid--hover--border-color: var(--color-border-strong);
+  --psp-openlayers--element--background: var(--color-surface);
+  font-family: var(--font-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  .d-explore-view__body perspective-viewer.d-explore-view__viewer {
+    --psp-calendar--filter: invert(1);
+    --psp-input--filter: invert(1);
+    --psp-warning--color: var(--color-surface);
+    --psp-warning--background: var(--color-text);
+  }
+}

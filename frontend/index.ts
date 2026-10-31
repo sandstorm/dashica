@@ -12,6 +12,7 @@ import { collapsible } from './extensions/collapsible/collapsible';
 import { dashboardPage } from './extensions/dashboard-page/dashboard-page';
 import { dashboards } from './extensions/dashboards/dashboards';
 import { debug } from './extensions/debug/debug';
+import { exploreView } from './extensions/explore-view/explore-view';
 import { filters } from './extensions/filters/filters';
 import { grid } from './extensions/grid/grid';
 import { heatmap } from './extensions/heatmap/heatmap';
@@ -35,6 +36,7 @@ const EXTENSIONS: readonly Extension[] = [
   refresh,
   filters,
   debug,
+  exploreView,
   chartLink,
   dashboardPage,
   grid,

@@ -14,6 +14,11 @@ export interface UiApi {
   registerSidePanel(id: string, options: SidePanelOptions): Panel;
   /** Adds a panel below the content with its tab; one shows at a time. */
   registerBottomPanel(id: string, options: BottomPanelOptions): Panel;
+  /**
+   * Lays `element` over the content region until disposed, filling it, while the page beneath stays as it is (its
+   * scroll position, its charts) and takes no focus. One at a time: a new one replaces the one shown.
+   */
+  showOverContent(element: HTMLElement): Disposable;
   /** Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item. */
   registerBarItem(bar: 'title' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
   /**

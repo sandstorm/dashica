@@ -51,6 +51,9 @@ type QueryOptions struct {
 	Settings    map[string]string // Clickhouse settings
 	Parameters  map[string]string // Query parameters
 	Compression bool              // Enable compression
+	// Cast is what each result column of an Arrow query is sent as: the expression for its name in backquotes and its
+	// ClickHouse type ("toString(`attrs`)"), "" to send it as it is. nil casts what Arrow cannot carry to String.
+	Cast func(column, columnType string) string
 }
 
 // DefaultQueryOptions returns the default query options

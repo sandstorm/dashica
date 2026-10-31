@@ -31,6 +31,14 @@ type Config struct {
 	DevMode  bool           `koanf:"dev_mode"`
 	Auth     AuthConfig     `koanf:"auth"`
 	Alerting AlertingConfig `koanf:"alerting"`
+	Explore  ExploreConfig  `koanf:"explore"`
+}
+
+// ExploreConfig is what the Explore view may show beyond what the charts show.
+type ExploreConfig struct {
+	// Enabled: every viewer may see a builder chart's rows without its grouping, the raw rows of its table
+	// ("Remove grouping"); off by default, since they may hold personal data the chart aggregates away.
+	Enabled bool `koanf:"enabled"`
 }
 
 type ServerConfig struct {
@@ -224,6 +232,8 @@ func PrintConfig(config *Config) {
 		fmt.Printf("  Username: %s\n", config.Auth.Username)
 		fmt.Printf("  Password: %s\n", maskSecret(config.Auth.Password))
 	}
+
+	fmt.Printf("explore.enabled: %v\n", config.Explore.Enabled)
 
 	fmt.Println("Alerting Configuration:")
 	fmt.Printf("  helvetikit_alerting_url: %s\n", config.Alerting.HelvetikitAlertingUrl)

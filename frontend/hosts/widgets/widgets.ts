@@ -21,6 +21,11 @@ export interface WidgetsApi {
   render(el: HTMLElement, widget: WidgetNode): Disposable;
   /** What the viewer selected on a chart, one at a time; `undefined` while nothing is. */
   readonly selection: Selection | undefined;
+  /**
+   * Selects `selection` in place of any other, on a view of the chart `selection.widgetId` outside the page's widgets
+   * (the Explore view); it ends as one on a chart does.
+   */
+  select(selection: Selection): void;
   /** Ends the selection; its floating bar goes away. */
   clearSelection(): void;
 }
