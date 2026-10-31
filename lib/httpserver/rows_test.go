@@ -54,7 +54,7 @@ func TestEditedParameters_AreTheParamKeysOfTheRequest(t *testing.T) {
 
 func TestExploreHandlers_AnswerErrExploreNotEnabledBeforeAnyQuery(t *testing.T) {
 	// no ClickHouse manager: a handler that got past its check would panic
-	qh := QueryHandler{}
+	qh := QueryHandler{Config: &config.Config{}}
 	chart := sql.New(sql.From("http_logs"))
 	r := httptest.NewRequest(http.MethodGet, "/sql?time=1h", nil)
 
@@ -69,8 +69,8 @@ func TestExploreHandlers_AnswerErrExploreNotEnabledBeforeAnyQuery(t *testing.T) 
 // askConnectionRows is what a ConnectionRowsHandler on a config with the connection "default" (whose ClickHouse is not
 // asked: every case answers before) answers `target`.
 func askConnectionRows(exploreEnabled bool, target string) *httptest.ResponseRecorder {
-	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}}
-	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), ExploreEnabled: exploreEnabled}
+	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}, Explore: config.ExploreConfig{Enabled: exploreEnabled}}
+	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec

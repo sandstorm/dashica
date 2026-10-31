@@ -25,7 +25,8 @@ import (
 // with a 500).
 func ask(chart withQuery, explore bool, target string) *httptest.ResponseRecorder {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), ExploreEnabled: explore, FilterSecret: testSecret, SqlEnabled: true,
+	cfg := &config.Config{ClickHouse: unreachable, Explore: config.ExploreConfig{Enabled: explore}, Filters: config.FiltersConfig{Secret: string(testSecret), SqlEnabled: true}}
+	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg,
 		FileSystem: fstest.MapFS{"by_status.sql": {Data: []byte("SELECT status, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY status")}}}
 	rec := httptest.NewRecorder()
 	queryHandler(deps, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))

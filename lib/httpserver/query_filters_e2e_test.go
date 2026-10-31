@@ -34,9 +34,9 @@ func queryStatusRows(t *testing.T, op sql.Op, value string) (*httptest.ResponseR
 func queryStatusRowsBy(t *testing.T, field string, op sql.Op, value string) (*httptest.ResponseRecorder, error) {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
-	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
-	state, err := ParseQueryState(r, true)
+	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -69,9 +69,9 @@ func TestHandleQuery_AButtonsQuotedValueComparesAUInt16ColumnAsANumber(t *testin
 	// >= '1000', as a number neither is
 	for value, want := range map[string][]string{"300": {"hit-500"}, "1000": nil} {
 		cfg, _ := testServer.LoadTestingConfig(t)
-		qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+		qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 		r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
-		state, _ := ParseQueryState(r, false)
+		state, _ := ParseQueryState(r)
 		button, err := filter.NewButton("Status >= …", "status >= ...", value)
 		if err != nil {
 			t.Fatal(err)
@@ -129,10 +129,10 @@ func TestHandleQuery_AValueWithQuotesStaysOneLiteral(t *testing.T) {
 
 func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
 	cfg, _ := testServer.LoadTestingConfig(t)
-	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	for search, want := range map[string]string{"": `{"type":"UInt16","values":["200","500"]}`, "50": `{"type":"UInt16","values":["500"]}`, "x": `{"type":"UInt16","values":[]}`} {
 		r := httptest.NewRequest(http.MethodGet, "/values?time=1h", nil)
-		state, err := ParseQueryState(r, true)
+		state, err := ParseQueryState(r)
 		if err != nil {
 			t.Fatalf("ParseQueryState: %v", err)
 		}

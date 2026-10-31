@@ -88,8 +88,10 @@ func TestMount_ServesTheQueryAChartRunsWithItsOwnAdjustments(t *testing.T) {
 		TitleField(sql.Field("currency"))
 	// /debug answers the built query; its EXPLAINs fail against the unreachable server and stay unchecked.
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
+	cfg := &config.Config{ClickHouse: unreachable}
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
-		ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()),
+		ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()),
+		Config:                  cfg,
 	}}
 	mux := http.NewServeMux()
 	nodes, err := Widgets{table, stats}.Mount(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop/api"))

@@ -27,7 +27,6 @@ type Config struct {
 	// DevMode:
 	// - disables File System embed (=hot reloading during development)
 	// - adds Observable Framework Reverse proxy (to prevent CORS) towards the Observable Framework server (=hot reloading of notebooks during dev)
-	// - enables /api/debug-calculate-alerts
 	DevMode  bool           `koanf:"dev_mode"`
 	Auth     AuthConfig     `koanf:"auth"`
 	Alerting AlertingConfig `koanf:"alerting"`
@@ -42,8 +41,8 @@ type FiltersConfig struct {
 	// required (CheckFilterSecret). Never in a checked-in file: set it as FILTERS__SECRET.
 	Secret string `koanf:"secret"`
 	// SqlEnabled: the page's SQL chips (`?sql=`) go into every query's WHERE, and the filter bar lets the viewer type
-	// them; off by default, since a SQL chip is the viewer's own SQL. Off, every handler that reads the query state
-	// answers a `sql` with 400 (httpserver.ParseQueryState). FILTERS__SQLENABLED=true sets it from the environment.
+	// them; off by default, since a SQL chip is the viewer's own SQL. Off, every query a SQL chip would enter answers
+	// it with 400 (httpserver.QueryState.SqlClause). FILTERS__SQLENABLED=true sets it from the environment.
 	SqlEnabled bool `koanf:"sqlEnabled"`
 }
 

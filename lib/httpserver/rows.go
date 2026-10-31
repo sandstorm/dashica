@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
@@ -34,9 +35,9 @@ const ExploreRowLimit = 100_000
 // chart's), in the Arrow of HandleRows: read-only (an HTTP GET and `readonly=2`, so ClickHouse refuses writes and
 // changes of `readonly` with READONLY), at most `limit` rows, said in X-Dashica-Rows-Limit. The limit is a LIMIT around
 // the text (`SELECT * FROM (\n<text>\n) LIMIT <limit>`): exact, out of reach of the text's own SETTINGS, and its
-// subqueries run in full. ErrExploreNotEnabled unless qh.ExploreEnabled; an empty text is a QueryStateError.
+// subqueries run in full. ErrExploreNotEnabled unless explore.enabled (qh.Config); an empty text is a QueryStateError.
 func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, params map[string]string, limit int, w http.ResponseWriter, r *http.Request) error {
-	if !qh.ExploreEnabled {
+	if !qh.Config.Explore.Enabled {
 		return ErrExploreNotEnabled
 	}
 	text, err := editedText(text)
@@ -57,12 +58,12 @@ func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, 
 // name; 400 for an empty text.
 type ConnectionRowsHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
-	// ExploreEnabled: it answers (explore.enabled).
-	ExploreEnabled bool
+	// Config is the loaded dashica_config, read only: it answers while explore.enabled is on.
+	Config *config.Config
 }
 
 func (h ConnectionRowsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !h.ExploreEnabled {
+	if !h.Config.Explore.Enabled {
 		http.Error(w, ErrExploreNotEnabled.Error(), http.StatusNotFound)
 		return
 	}

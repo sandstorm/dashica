@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sandstorm/dashica/lib/config"
 )
 
 func TestParseTimeExpr(t *testing.T) {
@@ -65,10 +68,22 @@ func TestSqlClause(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			if got := parseQueryState(t, tt.query).SqlClause(newTimeRange(from, to)); got != tt.want {
-				t.Errorf("SqlClause = %q, want %q", got, tt.want)
+			got, err := parseQueryState(t, tt.query).SqlClause(newTimeRange(from, to), config.FiltersConfig{SqlEnabled: true})
+			if err != nil || got != tt.want {
+				t.Errorf("SqlClause = %q, %v, want %q", got, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestSqlClause_SqlChipsOnlyWhileSqlFiltersAreOn(t *testing.T) {
+	window := newTimeRange(time.Now().Add(-time.Hour), time.Now())
+	if _, err := parseQueryState(t, "time=1h&sql=status+%3E%3D+500").SqlClause(window, config.FiltersConfig{}); !errors.Is(err, ErrSqlNotEnabled) {
+		t.Errorf("off: err = %v, want ErrSqlNotEnabled", err)
+	}
+	// without a chip there is nothing to refuse; an empty `sql`, as a page without chips may send it, is no chip
+	if got, err := parseQueryState(t, "time=1h&sql=").SqlClause(window, config.FiltersConfig{}); err != nil || got != TimeClause(window) {
+		t.Errorf("off, no chip: %q, %v", got, err)
 	}
 }
 
@@ -142,17 +157,12 @@ func TestTimeRangeHandler(t *testing.T) {
 	}
 }
 
-func TestTimeRangeHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
+func TestTimeRangeHandler_TakesASqlChipItDoesNotApply(t *testing.T) {
 	target := "/time-range?" + url.Values{"time": {"1h"}, "sql": {"status >= 500"}}.Encode()
 	rec := httptest.NewRecorder()
 	TimeRangeHandler{}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
-		t.Errorf("off: %d %s", rec.Code, rec.Body)
-	}
-	rec = httptest.NewRecorder()
-	TimeRangeHandler{SqlEnabled: true}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	if rec.Code != http.StatusOK {
-		t.Errorf("on: %d %s", rec.Code, rec.Body)
+		t.Errorf("%d %s", rec.Code, rec.Body)
 	}
 }
 

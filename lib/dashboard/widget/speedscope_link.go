@@ -59,8 +59,8 @@ func (s *SpeedscopeLink) explicitId() string { return s.id }
 
 // serveSpeedscope runs the query and streams the result as space-delimited CSV — the format
 // Speedscope's profileURL ingestor expects. It takes the page's filters as a chart does: the window, the SQL chips
-// and the pills on its table and of the filter buttons (filter.Apply); a pill not signed with deps.FilterSecret is a
-// 400.
+// and the pills on its table and of the filter buttons (filter.Apply); a pill not signed with filters.secret, or a SQL
+// chip while filters.sqlEnabled is off, is a 400.
 func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http.ResponseWriter, r *http.Request) error {
 	client, err := deps.ClickhouseClientManager.GetClient("default")
 	if err != nil {
@@ -72,12 +72,12 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 	opts.Settings["format_custom_field_delimiter"] = " "
 	opts.Settings["date_time_input_format"] = "best_effort"
 
-	state, err := httpserver.ParseQueryState(r, deps.SqlEnabled)
+	state, err := httpserver.ParseQueryState(r)
 	if err != nil {
 		return err
 	}
 	maps.Copy(opts.Parameters, state.Params)
-	pills, err := openPills(deps.FilterSecret, state.Pills)
+	pills, err := openPills(deps.Config.Filters, state.Pills)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,11 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 		if err != nil {
 			return err
 		}
-		q = query.With(sql.Where(state.SqlClause(resolvedTimeRange)))
+		clause, err := state.SqlClause(resolvedTimeRange, deps.Config.Filters)
+		if err != nil {
+			return err
+		}
+		q = query.With(sql.Where(clause))
 		opts.Parameters["__from"] = fmt.Sprintf("%d", *resolvedTimeRange.From/1000)
 		opts.Parameters["__to"] = fmt.Sprintf("%d", *resolvedTimeRange.To/1000)
 	}

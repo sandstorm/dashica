@@ -11,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	querying2 "github.com/sandstorm/dashica/lib/httpserver/querying"
@@ -20,8 +21,9 @@ type QueryHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
 	Logger                  zerolog.Logger
 	FileSystem              fs.ReadFileFS
-	// ExploreEnabled: HandleSql and HandleEditedRows answer (explore.enabled); else ErrExploreNotEnabled.
-	ExploreEnabled bool
+	// Config is the loaded dashica_config, read only: HandleSql and HandleEditedRows answer while explore.enabled is
+	// on (else ErrExploreNotEnabled), every query takes SQL chips while filters.sqlEnabled is (SqlClause).
+	Config *config.Config
 }
 
 // HandleQuery answers `queryObj` as Arrow, filtered by `state` (ParseQueryState of `r`): its window and its SQL
@@ -65,7 +67,8 @@ type prepared struct {
 }
 
 // prepare is `queryObj` filtered by `state` as HandleQuery, HandleRows and HandleDebug send it: its window and SQL
-// filter unless it skips filters, the form values bound.
+// filter unless it skips filters, the form values bound; ErrSqlNotEnabled for SQL chips while filters.sqlEnabled is
+// off.
 func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (prepared, error) {
 	client, err := qh.client(queryObj)
 	if err != nil {
@@ -81,7 +84,9 @@ func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (pre
 		if p.timeRange, err = state.ResolveTimeRange(time.Now()); err != nil {
 			return prepared{}, err
 		}
-		p.filterClause = state.SqlClause(p.timeRange)
+		if p.filterClause, err = state.SqlClause(p.timeRange, qh.Config.Filters); err != nil {
+			return prepared{}, err
+		}
 		q = queryObj.With(sql.Where(p.filterClause))
 		p.opts.Parameters["__from"] = fmt.Sprintf("%d", *p.timeRange.From/1000)
 		p.opts.Parameters["__to"] = fmt.Sprintf("%d", *p.timeRange.To/1000)
@@ -114,9 +119,9 @@ type ChartSql struct {
 
 // HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state` and the parameters
 // bound to it, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
-// chart answers 204; ErrExploreNotEnabled unless qh.ExploreEnabled.
+// chart answers 204; ErrExploreNotEnabled unless explore.enabled (qh.Config).
 func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
-	if !qh.ExploreEnabled {
+	if !qh.Config.Explore.Enabled {
 		return ErrExploreNotEnabled
 	}
 	WriteDiagnostics(w, diagnostics)

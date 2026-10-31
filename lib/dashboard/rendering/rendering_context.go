@@ -72,14 +72,10 @@ type Dependencies struct {
 	AlertResultStore        *alerting2.AlertResultStore
 	AlertEvaluator          *alerting2.AlertEvaluator
 	AlertManager            *alerting2.AlertManager
-	// ExploreEnabled: a chart's handler serves its SQL and runs the SQL the viewer edited (config.ExploreConfig); the
-	// handlers check it themselves (httpserver.ErrExploreNotEnabled).
-	ExploreEnabled bool
-	// FilterSecret signs and checks the page's pills (config.FiltersConfig, filter.Sign).
-	FilterSecret []byte
-	// SqlEnabled: the handlers take the page's SQL chips (filters.sqlEnabled); else a `sql` is a 400
-	// (httpserver.ParseQueryState).
-	SqlEnabled bool
+	// Config is the loaded dashica_config, read only. The handlers check its settings where they apply: explore.enabled
+	// in the Explore handlers (httpserver.ErrExploreNotEnabled), filters.sqlEnabled where SQL chips enter a query
+	// (httpserver.QueryState.SqlClause), filters.secret where pills are signed and opened (filter.Sign, filter.Open).
+	Config *config.Config
 }
 
 // MenuGroup is a group of the dashboards menu ("Shop"), as RegisterDashboardGroup starts it.

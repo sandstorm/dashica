@@ -40,23 +40,20 @@ func (e *QueryStateError) Error() string {
 	return e.Reason
 }
 
-// ErrSqlNotEnabled is what ParseQueryState answers a `sql` with while filters.sqlEnabled is off, before any query.
+// ErrSqlNotEnabled is what SqlClause answers SQL chips with while filters.sqlEnabled is off, before any query.
 var ErrSqlNotEnabled = &QueryStateError{"SQL filters are not enabled (filters.sqlEnabled)"}
 
 // ParseQueryState reads the query state of `r`: `time`, `range`, each `f` and each `sql` (an empty one left out) and
 // `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a missing `time`, a `time` that is
-// neither a Go duration nor `custom`, a `wp` that is not such an object, a `sql` unless `sqlEnabled`
-// (filters.sqlEnabled; ErrSqlNotEnabled). An unreadable `range` is ResolveTimeRange's error.
-func ParseQueryState(r *http.Request, sqlEnabled bool) (QueryState, error) {
+// neither a Go duration nor `custom`, a `wp` that is not such an object. An unreadable `range` is ResolveTimeRange's
+// error; SQL chips while filters.sqlEnabled is off are SqlClause's, where they would enter a query.
+func ParseQueryState(r *http.Request) (QueryState, error) {
 	query := r.URL.Query()
 	s := QueryState{Time: query.Get("time"), Range: query.Get("range")}
 	for _, chip := range query["sql"] {
 		if strings.TrimSpace(chip) != "" {
 			s.Sql = append(s.Sql, chip)
 		}
-	}
-	if len(s.Sql) > 0 && !sqlEnabled {
-		return QueryState{}, ErrSqlNotEnabled
 	}
 	if s.Time == "" {
 		return QueryState{}, &QueryStateError{"time range missing: want `time=<Go duration>` or `time=custom&range=<from> to <to>`"}

@@ -43,7 +43,7 @@ the SQL authors write, and the features built on ClickHouse system tables.
 | Arrow to the browser | `QueryToHandler` streams the response body unchanged (`io.Copy`) | ClickHouse writes the Arrow IPC stream itself. Dashica never builds Arrow in Go |
 | Arrow in the frontend | `frontend/hosts/widgets/widgets.ts` (`QueryResult = Table & {...}`), `widgets-impl.ts` (`fetchQueryResult` → `Arrow.tableFromIPC(response)`) | every chart extension (`bar-vertical`, `time-line`, `heatmap`, `stats`, ...) reads an Arrow `Table`; database-neutral, as long as the server sends Arrow |
 | Arrow compatibility | `lib/clickhouse/arrow_compat.go` (`ensureArrowCompatible`) | `DESCRIBE (<query>)`, then `SELECT * REPLACE(toString(c) AS c)` for JSON / Dynamic / Variant columns |
-| Client selection | `clickhouse.Manager.GetClient(alias)`, `sql.OnDatabase(alias)`, `config.Config.ClickHouse` map | every alias is a ClickHouse server. Callers: `query_new.go` (by alias), and `"default"` hard-coded in `schema_table.go`, `speedscope_link.go`, `alert_detail.go`, `explore/*`, `alerting/*`, `httpserver/schema.go`, `query-alert-chart.go` |
+| Client selection | `clickhouse.Manager.GetClient(alias)`, `sql.OnDatabase(alias)`, `config.Config.ClickHouse` map | every alias is a ClickHouse server. Callers: `query_new.go` (by alias), and `"default"` hard-coded in `schema_table.go`, `speedscope_link.go`, `alert_detail.go`, `explore/*`, `alerting/*`, `httpserver/schema.go` |
 
 The frontend needs no change for other databases: it reads Arrow and the `Dashica-*` headers. The headers stay the
 same; `clickhouseSummary` is simply absent.

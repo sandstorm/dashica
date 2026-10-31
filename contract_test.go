@@ -55,11 +55,11 @@ func everyWidget() *dashboard.Builder {
 func TestContract_Golden(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	mux := http.NewServeMux()
-	d := newDashicaImpl(&config.Config{}, logger, mux, rendering.Dependencies{
+	d := newDashicaImpl(logger, mux, rendering.Dependencies{
 		ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger),
 		Logger:                  logger,
-		// signs the filter buttons' pills in page.json; fixed, so the golden file stays the same
-		FilterSecret: []byte("a test secret of at least thirty-two bytes"),
+		// its secret signs the filter buttons' pills in page.json; fixed, so the golden file stays the same
+		Config: &config.Config{Filters: config.FiltersConfig{Secret: "a test secret of at least thirty-two bytes"}},
 	})
 	d.RegisterDashboardGroup("Shop").RegisterDashboard("/p/shop", everyWidget())
 

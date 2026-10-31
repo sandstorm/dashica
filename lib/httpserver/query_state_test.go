@@ -16,7 +16,7 @@ import (
 // parseQueryState is the query state of a request with the query string `query`; it fails the test on an error.
 func parseQueryState(t *testing.T, query string) QueryState {
 	t.Helper()
-	s, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+query, nil), true)
+	s, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+query, nil))
 	if err != nil {
 		t.Fatalf("ParseQueryState(%q): %v", query, err)
 	}
@@ -74,27 +74,12 @@ func TestParseQueryState_SaysWhatIsWrong(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+tt.query.Encode(), nil), true)
+			_, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+tt.query.Encode(), nil))
 			var bad *QueryStateError
 			if !errors.As(err, &bad) || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("ParseQueryState: err = %v, want a QueryStateError saying %s", err, tt.want)
 			}
 		})
-	}
-}
-
-func TestParseQueryState_ASqlChipOnlyWhileSqlFiltersAreOn(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/query?"+url.Values{"time": {"1h"}, "sql": {"status >= 500"}}.Encode(), nil)
-	if _, err := ParseQueryState(r, false); !errors.Is(err, ErrSqlNotEnabled) {
-		t.Errorf("off: err = %v, want ErrSqlNotEnabled", err)
-	}
-	if s, err := ParseQueryState(r, true); err != nil || len(s.Sql) != 1 {
-		t.Errorf("on: %+v, %v", s, err)
-	}
-	// an empty `sql`, as a page without chips may send it, is no chip
-	empty := httptest.NewRequest(http.MethodGet, "/query?time=1h&sql=", nil)
-	if _, err := ParseQueryState(empty, false); err != nil {
-		t.Errorf("off, an empty sql: %v", err)
 	}
 }
 

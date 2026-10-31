@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/sandstorm/dashica/lib/clickhouse"
+	"github.com/sandstorm/dashica/lib/config"
 )
 
 // SchemaHandler answers `GET /schema.json?connection=<name>` with the clickhouse.Schema of that connection of
@@ -15,12 +16,13 @@ import (
 // any query) and for a connection dashica_config does not name.
 type SchemaHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
-	// ExploreEnabled: it answers (explore.enabled); the Schema view is part of Explore.
-	ExploreEnabled bool
+	// Config is the loaded dashica_config, read only: it answers while explore.enabled is on; the Schema view is part
+	// of Explore.
+	Config *config.Config
 }
 
 func (h SchemaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !h.ExploreEnabled {
+	if !h.Config.Explore.Enabled {
 		http.Error(w, ErrExploreNotEnabled.Error(), http.StatusNotFound)
 		return
 	}

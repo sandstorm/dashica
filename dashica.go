@@ -133,20 +133,18 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertResultStore:        alertResultStore,
 		AlertEvaluator:          alertEvaluator,
 		AlertManager:            alertManager,
-		ExploreEnabled:          cfg.Explore.Enabled,
-		FilterSecret:            []byte(cfg.Filters.Secret),
-		SqlEnabled:              cfg.Filters.SqlEnabled,
+		Config:                  cfg,
 	}
 
-	return newDashicaImpl(cfg, logger, mux, deps)
+	return newDashicaImpl(logger, mux, deps)
 }
 
 // newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range, /schema.json (the Schema view's,
 // httpserver.SchemaHandler), /rows (a blank Explore tab's query, httpserver.ConnectionRowsHandler) and the start page
 // "/", and no dashboards yet.
-func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
+func newDashicaImpl(logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
 	d := &DashicaImpl{
-		cfg:              cfg,
+		cfg:              deps.Config,
 		log:              logger,
 		handler:          mux,
 		handlerCollector: handler_collector.NewValidatingCollector(mux, logger),
@@ -155,14 +153,14 @@ func newDashicaImpl(cfg *config.Config, logger zerolog.Logger, mux *http.ServeMu
 	if err := d.handlerCollector.Handle("/workbench.json", http.HandlerFunc(d.serveWorkbenchJson)); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /workbench.json")
 	}
-	if err := d.handlerCollector.Handle("/time-range", httpserver.TimeRangeHandler{SqlEnabled: deps.SqlEnabled}); err != nil {
+	if err := d.handlerCollector.Handle("/time-range", httpserver.TimeRangeHandler{}); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /time-range")
 	}
-	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, ExploreEnabled: deps.ExploreEnabled}
+	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, Config: deps.Config}
 	if err := d.handlerCollector.Handle("/schema.json", schema); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /schema.json")
 	}
-	rows := httpserver.ConnectionRowsHandler{ClickhouseClientManager: deps.ClickhouseClientManager, ExploreEnabled: deps.ExploreEnabled}
+	rows := httpserver.ConnectionRowsHandler{ClickhouseClientManager: deps.ClickhouseClientManager, Config: deps.Config}
 	if err := d.handlerCollector.Handle("/rows", rows); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to register /rows")
 	}
@@ -179,7 +177,7 @@ type WorkbenchJson struct {
 	// Explore: the Explore view is on (explore.enabled); else the client leaves it out, and its endpoints answer 404.
 	Explore bool `json:"explore"`
 	// SqlEnabled: the filter bar lets the viewer type SQL chips (filters.sqlEnabled); else it offers none, and every
-	// handler answers a `sql` with 400.
+	// query a SQL chip would enter answers it with 400.
 	SqlEnabled bool `json:"sqlEnabled"`
 	// Connections are the names of the ClickHouse connections of dashica_config, sorted: the Schema view's tree.
 	Connections []string `json:"connections"`
@@ -196,7 +194,7 @@ func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request)
 		connections = []string{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.ExploreEnabled, SqlEnabled: d.deps.SqlEnabled, Connections: connections}); err != nil {
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.Config.Explore.Enabled, SqlEnabled: d.deps.Config.Filters.SqlEnabled, Connections: connections}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

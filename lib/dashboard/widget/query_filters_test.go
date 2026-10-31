@@ -23,10 +23,12 @@ import (
 var testSecret = []byte("a test secret of at least thirty-two bytes")
 
 // testDeps are the dependencies of a chart's handler on a ClickHouse that is unreachable (the EXPLAINs of /debug fail
-// and stay unchecked), its connection "default" on the database "default", the pills signed with testSecret.
+// and stay unchecked), its connection "default" on the database "default", the pills signed with testSecret, SQL chips
+// and Explore off.
 func testDeps() rendering.Dependencies {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
-	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: unreachable}, zerolog.Nop()), FilterSecret: testSecret}
+	cfg := &config.Config{ClickHouse: unreachable, Filters: config.FiltersConfig{Secret: string(testSecret)}}
+	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
 }
 
 // askPath is the answer of `chart`'s handler to `path` (with its query string).
@@ -178,16 +180,20 @@ func TestQueryHandler_ATamperedPillIsABadRequest(t *testing.T) {
 func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
 	chip := "&sql=" + url.QueryEscape("status >= 500")
+	// Explore on, so that /sql gets to the query
+	ask := func(sqlEnabled bool, path string) *httptest.ResponseRecorder {
+		deps := testDeps()
+		deps.Config.Explore.Enabled, deps.Config.Filters.SqlEnabled = true, sqlEnabled
+		rec := httptest.NewRecorder()
+		queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
+		return rec
+	}
 	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status", "/type?time=1h&field=status"} {
-		if rec := askPath(bar, path+chip); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
+		if rec := ask(false, path); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
 			t.Errorf("off, %s: %d %s", path, rec.Code, rec.Body)
 		}
 		// on, the same request passes: the ClickHouse of testDeps is unreachable
-		deps := testDeps()
-		deps.SqlEnabled = true
-		rec := httptest.NewRecorder()
-		queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
-		if rec.Code == http.StatusBadRequest {
+		if rec := ask(true, path); rec.Code == http.StatusBadRequest {
 			t.Errorf("on, %s: %d %s", path, rec.Code, rec.Body)
 		}
 	}
@@ -202,6 +208,24 @@ func TestQueryHandler_AButtonsPillAppliesWithoutATable(t *testing.T) {
 		if got := debug(t, chart, key); !strings.Contains(got.query, "(duration_ms >= '500')") || got.diagnostics != "" {
 			t.Errorf("%s: %+v", name, got)
 		}
+	}
+}
+
+func TestSpeedscope_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
+	link := NewSpeedscopeLink(sql.New(sql.From("http_logs")))
+	target := "/speedscope-query?time=1h&sql=" + url.QueryEscape("status >= 500")
+	rec := httptest.NewRecorder()
+	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
+		t.Errorf("off: %d %s", rec.Code, rec.Body)
+	}
+	// on, the same request passes: the ClickHouse of testDeps is unreachable
+	deps := testDeps()
+	deps.Config.Filters.SqlEnabled = true
+	rec = httptest.NewRecorder()
+	link.Handler(deps).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	if rec.Code == http.StatusBadRequest {
+		t.Errorf("on: %d %s", rec.Code, rec.Body)
 	}
 }
 

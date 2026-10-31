@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/httpserver/querying"
 )
 
@@ -84,12 +85,16 @@ func newTimeRange(from, to time.Time) *querying.TimeRange {
 
 // SqlClause is the condition the query state adds to a query's WHERE: the window `timeRange` (TimeClause) and each
 // SQL chip in its own parentheses, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500) AND (a OR b)`.
-func (s QueryState) SqlClause(timeRange *querying.TimeRange) string {
+// SQL chips while `filters` takes none (filters.sqlEnabled off) are ErrSqlNotEnabled, a 400 before any query.
+func (s QueryState) SqlClause(timeRange *querying.TimeRange, filters config.FiltersConfig) (string, error) {
+	if len(s.Sql) > 0 && !filters.SqlEnabled {
+		return "", ErrSqlNotEnabled
+	}
 	clause := TimeClause(timeRange)
 	for _, chip := range s.Sql {
 		clause += " AND (" + chip + ")"
 	}
-	return clause
+	return clause, nil
 }
 
 // TimeClause is the condition of the window `timeRange` alone, `timestamp >= 1761724800 AND timestamp <= 1761746400`,
@@ -108,14 +113,12 @@ func WriteResolvedTimeRange(w http.ResponseWriter, timeRange *querying.TimeRange
 
 // TimeRangeHandler serves the window of the request's query state (ParseQueryState, as every data handler reads it)
 // at now, as `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be read. The time picker asks it before it applies
-// a range, and for the window it shifts or zooms out.
-type TimeRangeHandler struct {
-	// SqlEnabled is filters.sqlEnabled: without it a `sql` is a 400 here too (ParseQueryState).
-	SqlEnabled bool
-}
+// a range, and for the window it shifts or zooms out. It applies no SQL chip, so it takes one also while
+// filters.sqlEnabled is off.
+type TimeRangeHandler struct{}
 
 func (h TimeRangeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	state, err := ParseQueryState(r, h.SqlEnabled)
+	state, err := ParseQueryState(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

@@ -533,9 +533,10 @@ client owns the UI, the server only binds.
 
 ✅ (step 6.1) **The request carries the page URL's own keys:** `time`, `range`, `sql`, `wp` (no JSON parameters
 `filters` / `params`). `requestParams()` sends `time` also when it is the page's default, since the server does not
-know the page's default. `httpserver.ParseQueryState(r, sqlEnabled)` reads them once per request; a missing `time`, a
-`time` that is neither a Go duration nor `custom`, a `wp` that is not a JSON object of strings, or a `sql` while
-`filters.sqlEnabled` is off (§3.15, step 9a) fails the request with that reason (chart error, 400 from `/time-range` and the alert widgets). A chart with `FromFileWithoutFilters` /
+know the page's default. `httpserver.ParseQueryState(r)` reads them once per request; a missing `time`, a
+`time` that is neither a Go duration nor `custom`, or a `wp` that is not a JSON object of strings fails the request
+with that reason (chart error, 400 from `/time-range` and the alert widgets). A `sql` while `filters.sqlEnabled` is off
+(§3.15, step 9a) fails it where the chip would enter the query (`QueryState.SqlClause`, since step 9v). A chart with `FromFileWithoutFilters` /
 `SkipFilters()` still needs `time` in its request, but its query ignores it.
 
 ✅ (2026-10-30, with the time picker) **The time range is resolved once per request, in Go:**
@@ -633,7 +634,8 @@ the server made:
   key (`pillLabel`, since 9g in the `filters` extension's `pill-key.ts`, §3.15 D21); nothing reads the label as SQL.
 - **`filters.secret`** (`config.FiltersConfig`) is checked by `dashica.New`, not by `LoadConfig`, so the db tools in
   `cmd/` and the test server load configs without it; *(proposed)* it must have at least 32 characters
-  (`openssl rand -hex 32`). `rendering.Dependencies.FilterSecret` carries it to the handlers.
+  (`openssl rand -hex 32`). The handlers read it from the config injected as `rendering.Dependencies.Config` (since
+  step 9v; before, a copied `FilterSecret`).
 - **A table** is `filter.Table{Connection, Name}`: the query's connection (`OnDatabase`, else `default`) and its
   `sql.From` / `sql.Table`, a name without database in that connection's database from `dashica_config`
   (`clickhouse.Manager.Database`), so `full_logs` and `monitoring.full_logs` on Solarwatt are one table. A From that
@@ -1437,8 +1439,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
-  separate from `explore.enabled`. Off, every handler that reads the query state answers a `sql` with 400 before any
-  query, and the filter bar offers no way to type SQL. On, the SQL chips work as before (§3.8).
+  separate from `explore.enabled`. Off, every query a SQL chip would enter answers it with 400 before any query
+  (since 9v, D35; in 9a every handler that reads the query state), and the filter bar offers no way to type SQL. On,
+  the SQL chips work as before (§3.8).
 - **D17 Filter buttons signed (9b):** a dashboard filter button becomes a signed chip (the HMAC and secret of the
   pills), so it works with D16 off. A button without `...`: `page.json` carries its condition already signed, and
   pressing it puts that key into the URL. A button with `...`: the typed value goes to the page's own server side
@@ -1505,6 +1508,11 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   chart's time value offers `≥` and `≤` it (beside `=` / `≠`); the table cell menu's time windows (±5 minutes …) stay.
   A pill's op button opens a quick pick of its type's ops. `FilterAs(func(op sql.Op, value string) string)`; the
   default condition `(<expression>) <op> <quoted value>`.
+- **D35 The config injected, not copied flags (9v, decided 2026-10-31; maintainer: "the handler needs access to the
+  config; it can then check at the various positions whether SQL is allowed and throw otherwise"):**
+  `rendering.Dependencies` carries the loaded config instead of `ExploreEnabled`, `FilterSecret` and `SqlEnabled`;
+  `ParseQueryState(r)` only reads the request; the SQL-chip check sits where a chip enters a query. A middleware and a
+  request-reading service in the dependencies were rejected.
 
 ✅ **Built in 9k (2026-10-31): the ops by type**, with these details and deviations:
 
@@ -1562,21 +1570,29 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `FILTERS__SQLENABLED=true`: the env provider lowercases the key, and the decoding matches it regardless of case).
   *(proposed)* Not both: the file's camel-case key and the environment's lowercase one are two keys to `koanf`, and
   the file's wins; the checked-in `*-production.yaml` therefore only name it in a comment. The local configs of
-  `mise run generate-config` turn it on, so the e2e specs with SQL chips keep running. `rendering.Dependencies.SqlEnabled`
-  carries it to the handlers, `workbench.json`'s `sqlEnabled` to the client.
-- **Checked where the query state is read:** `httpserver.ParseQueryState(r, sqlEnabled)` answers a non-empty `sql`
-  with `ErrSqlNotEnabled` (a `QueryStateError`, so 400: "SQL filters are not enabled (filters.sqlEnabled)") while it
-  is off; an empty `sql` is no chip. So a chart's `/query`, `/debug`, `/rows`, `/sql` and `/values`, Speedscope, the
-  alert widgets and `/time-range` (now `httpserver.TimeRangeHandler{SqlEnabled}`) all refuse it before any query, also
-  those that never apply a SQL chip *(proposed: one rule for every reader of the query state)*. Speedscope's handler
-  answers a query state it cannot read with 400 (`httpError`), not 500.
+  `mise run generate-config` turn it on, so the e2e specs with SQL chips keep running. The handlers read it from the
+  config injected as `rendering.Dependencies.Config` (since 9v; in 9a a copied `Dependencies.SqlEnabled`),
+  `workbench.json`'s `sqlEnabled` carries it to the client.
+- **Checked where a SQL chip enters a query** (since 9v, D35; in 9a in `ParseQueryState(r, sqlEnabled)`, so also
+  the handlers that never apply one refused it): `QueryState.SqlClause(timeRange, cfg.Filters)` answers a non-empty
+  `sql` with `ErrSqlNotEnabled` (a `QueryStateError`, so 400: "SQL filters are not enabled (filters.sqlEnabled)")
+  while it is off; an empty `sql` is no chip. So a chart's `/query`, `/debug`, `/rows`, `/sql`, `/values` and `/type`
+  (`QueryHandler.prepare`) and Speedscope refuse it before any query; `/time-range` and the alert widgets, which
+  apply no SQL chip, take it. Speedscope's handler answers a query state it cannot read with 400 (`httpError`), not
+  500.
+- **Handlers get the config injected; no copied flags** (9v, D35): `rendering.Dependencies.Config` is the loaded
+  `*config.Config`, read only, nothing request-specific; the handlers outside `Dependencies` have it as a field
+  (`QueryHandler`, `SchemaHandler`, `ConnectionRowsHandler`; `TimeRangeHandler` needs none). Each checks the setting
+  where it applies: `explore.enabled` in the Explore handlers, `filters.sqlEnabled` in `SqlClause`, `filters.secret`
+  where pills are signed and opened.
 - **The client:** without `sqlEnabled` the filter bar has no funnel, a SQL chip of a link is not edited (only ×; its
   tooltip says "SQL filters are not enabled (filters.sqlEnabled)"), and the table's cell menu has no SQL entries
   ("Filter: Contains this value", the time windows). The filter buttons still added SQL chips until D17, so
   while the flag was off a pressed button failed the charts with 400 *(proposed: for one step)*; since 9b they add
   signed pills and work with the flag off.
-- **Tests:** Go `config` (the flag from the file and from the environment), `httpserver` (`ParseQueryState` off and
-  on, an empty `sql`; `/time-range` off and on), `widget` (every data endpoint of a chart 400 off, past the check on),
+- **Tests:** Go `config` (the flag from the file and from the environment), `httpserver` (`SqlClause` off and on, an
+  empty `sql`; `/time-range` takes a chip, since 9v), `widget` (every data endpoint of a chart and Speedscope 400 off,
+  past the check on),
   `dashica` (`workbench.json` says it); vitest: the filter bar off (no funnel, a SQL chip not edited, pills and "Add
   filter" stay), the table's cell menu off.
 
@@ -1778,6 +1794,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9l ✅ | **BUGFIX "Add filter" reads no values for the type** (§3.15 D25): Go `sql.ValueType(q, field)` (a builder query's base selecting `<definition> AS __type` with `WHERE 0` added, no GROUP BY, ORDER BY or LIMIT; a SQL file's or string's result in a subquery with `WHERE 0`), `<dataUrl>/type?field=…` (`valuesHandler` with the query maker as a parameter: `sql.Values` for `/values`, `sql.ValueType` for `/type`, the same 422 / 400 checks, `{type, values: []}`); client: `fetchType` (the type and the resolved time range), "Add filter" asks `/type` before the op instead of `/values`, so picking a time runs no `GROUP BY` over its distinct values; a category's values are asked in the value step. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet`, Go tests without ClickHouse green; whether ClickHouse reads nothing for `WHERE 0`, and whether it still runs a SQL file's subquery, not checked: the sandbox blocks ClickHouse), deviations: a separate `/type` endpoint rather than a flag on `/values`; a category field now asks twice (`/type`, then `/values`), the first one reading no rows *(all proposed)* | a time field's type without a scan |
 | 9m ✅ | **BUGFIX a click's DateTime64(6) keeps its µs** (§3.15 D25): `pillValue` writes a `DateTime64(P)` with P fraction digits, at least 3 and at most 6 (`2026-10-31T10:00:00.123456Z`), from the ms fraction apache-arrow 21 reads a Timestamp in µs or ns as (`divideBigInts`), rounded to the µs with a carry into the next ms; before, `toISOString` cut it to the ms, so `≤` excluded the clicked row and `=` matched nothing. ✅ 2026-10-31 (vitest, typecheck, top comments green; the test reads its values through apache-arrow's own Timestamp vectors), deviations: a `DateTime64(7…9)` compares to the µs, rounded (a JS number carries a ms fraction to about 0.25 µs), so a click on a ns value may still miss itself with `=` *(proposed)* | a clicked µs time matches its row |
 | 9n ✅ | **BUGFIX concept §3.8 on the key**: the key's payload is the whole pill (connection, table, field, op, condition, label, value, type; a button's its condition, label, button and value), signed; the client reads the label and what it edits by from the key, not from `/pill`'s `label`. ✅ 2026-10-31 (text only) | the concept says what the key holds |
+| 9v ✅ | **D35 the config injected, not copied flags** (§3.15): `rendering.Dependencies.Config` (`*config.Config`, read only) replaces `ExploreEnabled`, `FilterSecret` and `SqlEnabled`; `QueryHandler`, `SchemaHandler` and `ConnectionRowsHandler` get `Config` as a field, `TimeRangeHandler` no field; `httpserver.ParseQueryState(r)` only reads the request; `QueryState.SqlClause(timeRange, cfg.Filters)` answers SQL chips with `ErrSqlNotEnabled` (400) while `filters.sqlEnabled` is off, so `/query`, `/debug`, `/rows`, `/sql`, `/values`, `/type` and Speedscope refuse them and `/time-range` and the alert widgets take them; `newDashicaImpl` takes the config from `deps.Config`; the unused `queryAlertsHandler`, `queryAlertChartHandler` and `debugCalculateAlertsHandler` deleted. ✅ 2026-10-31 (vitest, typecheck, top comments, `go vet` here and in the outer repo with and without `-tags solarwatt`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox), deviations: the check is a parameter of `SqlClause` (the one place a chip goes into a WHERE) rather than a separate call at each handler; a chart's `/sql` with Explore off is a 404 before the SQL-chip 400 *(both proposed)* | one source of the settings |
 | 9d | **D12 SQL editor** (§3.14, step 8j): CodeMirror 6 with a ClickHouse dialect, autocomplete from the schema data, loaded with Explore (Perspective §4.8) | highlighting and completion |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 

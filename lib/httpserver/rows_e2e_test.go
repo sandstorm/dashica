@@ -29,9 +29,9 @@ const caddyRows = `values('timestamp DateTime64(3), customer_project String, sta
 func rowsOf(t *testing.T, query sql.SqlQueryable, queryString string) (*httptest.ResponseRecorder, error) {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
-	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop()}
+	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	r := httptest.NewRequest(http.MethodGet, "/rows?"+queryString, nil)
-	state, err := ParseQueryState(r, true)
+	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -52,11 +52,12 @@ func TestHandleRows_AChartsResultWithItsBucketSize(t *testing.T) {
 	}
 }
 
-// handler is a QueryHandler on the testing config's ClickHouse, Explore enabled.
+// handler is a QueryHandler on the testing config's ClickHouse, Explore and SQL chips enabled.
 func handler(t *testing.T) QueryHandler {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
-	return QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), ExploreEnabled: true}
+	cfg.Explore.Enabled, cfg.Filters.SqlEnabled = true, true
+	return QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 }
 
 // editedRows answers the edited query `text` with the parameters `params` on the default connection, with the row
@@ -70,7 +71,7 @@ func editedRows(t *testing.T, text string, params map[string]string, limit int) 
 // chartSql is what HandleSql answers for `chart` with the query state of `r`.
 func chartSql(t *testing.T, chart sql.SqlQueryable, r *http.Request) ChartSql {
 	t.Helper()
-	state, err := ParseQueryState(r, true)
+	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestHandleSql_ItsParametersSentAgainAreTheValuesTheChartBinds(t *testing.T)
 			chart := sql.FromStringWithoutFilters("SELECT " + p + " = " + p + " AS same, " + p + " AS v")
 			r := httptest.NewRequest(http.MethodGet, "/sql?time=1h&wp="+url.QueryEscape(`{"v":"`+strings.ReplaceAll(tt.value, `\`, `\\`)+`"}`), nil)
 			answer := chartSql(t, chart, r)
-			state, _ := ParseQueryState(r, true)
+			state, _ := ParseQueryState(r)
 			bound := httptest.NewRecorder()
 			if err := handler(t).HandleRows(chart, state, filter.Diagnostics{}, bound, r); err != nil {
 				t.Fatalf("HandleRows: %v", err)
@@ -181,7 +182,8 @@ func TestHandleEditedRows_AnswersExactlyTheLimitWithoutAnError(t *testing.T) {
 
 func TestConnectionRowsHandler_AnswersTheQueryWithItsParametersReadOnly(t *testing.T) {
 	cfg, _ := testServer.LoadTestingConfig(t)
-	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), ExploreEnabled: true}
+	cfg.Explore.Enabled = true
+	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
 	ask := func(text string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/rows?"+url.Values{"connection": {"default"}, "exploreSql": {text}, "param_v": {"dashica-blank"}}.Encode(), nil))

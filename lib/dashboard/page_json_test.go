@@ -26,7 +26,7 @@ func serve(t *testing.T, d Dashboard) *http.ServeMux {
 	connections := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
 		ClickhouseClientManager: clickhouse.NewManager(&config.Config{ClickHouse: connections}, zerolog.Nop()),
-		FilterSecret:            testSecret,
+		Config:                  &config.Config{Filters: config.FiltersConfig{Secret: string(testSecret)}},
 	}}
 	if _, err := d.CollectHandlers(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)
