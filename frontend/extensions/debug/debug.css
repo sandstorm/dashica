@@ -1,21 +1,12 @@
-/* See debug.ts: the left side panel "Debug" (the active widget's title, then its views one below the other) and the
-   status bar's item (the active widget's title, rows, time, error, one after another). */
+/* See debug.ts: the left side panel "Debug" (the active widget's views one below the other) and the status bar's item
+   (the active widget's rows, time, error, one after another). */
 .d-debug {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.d-debug__title {
-  padding: var(--space-2) var(--space-3);
-  overflow: hidden;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.d-debug__title + .d-spinner {
+.d-debug > .d-spinner {
   margin: var(--space-2) var(--space-3);
 }
 
@@ -85,10 +76,6 @@
   content: '·';
   padding: 0 var(--space-2);
   color: var(--color-text-muted);
-}
-
-.d-debug-status__part--title {
-  font-weight: var(--weight-bold);
 }
 
 .d-debug-status__part--muted {

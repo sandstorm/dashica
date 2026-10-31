@@ -3,7 +3,7 @@ import { instance as viz } from '@viz-js/viz';
 import { Bug, createElement } from 'lucide';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import { widgetTitle, type ActiveWidget, type WidgetStatus } from '../../hosts/widgets/widgets';
+import type { ActiveWidget, WidgetStatus } from '../../hosts/widgets/widgets';
 import { hasQueries } from '../../hosts/page/page';
 import { createView, registerBarItemWhile, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
@@ -14,9 +14,9 @@ import './debug.css';
  * shows, as views, what the widget queried: the SQL as sent, its stats, ClickHouse's EXPLAIN (plan, pipeline as a
  * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
  * a table. It asks `/debug` only while it is shown: on showing, on another active widget, and when that widget's query
- * answered or failed, not when its records change. The status bar says the widget's title, rows, query time, its
- * error or the filters it ignores, on every page but the start page; a click on it opens the panel, as the chart
- * menu's "Debug" (`widget/context`) does.
+ * answered or failed, not when its records change. Which widget it is tells its outline, not the panel. The status bar
+ * says the widget's rows, query time, its error or the filters it ignores, on every page but the start page; a click
+ * on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
  */
 export const debug: Extension = {
   id: 'debug',
@@ -74,8 +74,7 @@ interface DebugInfo {
 
 /** Fills `el` with what `active` queried, as views (their state in `state`); a failed request shows its error there. */
 async function showDebug(el: HTMLElement, active: ActiveWidget, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
-  const title = html`<h2 class="d-debug__title">${widgetTitle(active.widget)}</h2>`;
-  el.replaceChildren(html`<div class="d-debug">${title}<span class="d-spinner"></span></div>`);
+  el.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
   let info: DebugInfo;
   try {
     const response = await fetch(active.url('/debug'), { signal });
@@ -83,7 +82,7 @@ async function showDebug(el: HTMLElement, active: ActiveWidget, showMenu: ShowTa
     info = await response.json();
   } catch (error) {
     if (signal.aborted) return;
-    el.replaceChildren(html`<div class="d-debug">${title}<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div></div>`);
+    el.replaceChildren(html`<div class="d-debug"><div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div></div>`);
     return;
   }
   if (signal.aborted) return;
@@ -92,7 +91,6 @@ async function showDebug(el: HTMLElement, active: ActiveWidget, showMenu: ShowTa
   const result: HTMLElement = html`<div class="d-debug__result"></div>`;
   const view = (id: string, name: string, body: Node, collapsed = false) => createView({ id, title: name, collapsed, state, body: html`<div class="d-debug__content">${body}</div>` });
   el.replaceChildren(html`<div class="d-debug">
-    ${title}
     ${view('query', 'Query', pre(info.query))}
     ${view(
       'stats',
@@ -124,35 +122,34 @@ async function showDebug(el: HTMLElement, active: ActiveWidget, showMenu: ShowTa
   await showPipeline(pipeline, info.explainPipeline);
 }
 
-/** Fills the status bar's item with what `active` is (title) and how its last query went; a hint without one. */
+/** Fills the status bar's item with how `active`'s last query went; a hint without one. */
 function drawStatus(el: HTMLElement, active: ActiveWidget | undefined): void {
   const parts = statusParts(active);
   el.replaceChildren(...parts.map(({ text, tone }) => html`<span class=${`d-debug-status__part d-debug-status__part--${tone}`}>${text}</span>`));
   el.title = active ? `${active.status.kind === 'error' ? `${active.status.message}\n` : ''}Show Debug` : 'Show Debug';
 }
 
-/** One piece of the status bar's item: its text and how it reads (`title` bold, `error` red, `muted`). */
+/** One piece of the status bar's item: its text and how it reads (`error` red, `muted`). */
 export interface StatusPart {
   readonly text: string;
-  readonly tone: 'title' | 'plain' | 'muted' | 'error';
+  readonly tone: 'plain' | 'muted' | 'error';
 }
 
-/** What the status bar says about `active`: its title, then rows and time, its error (its first line), or the filters it ignores. */
+/** What the status bar says about `active`: rows and time, its error (its first line), or the filters it ignores. */
 export function statusParts(active: ActiveWidget | undefined): readonly StatusPart[] {
   if (!active) return [{ text: 'No active chart', tone: 'muted' }];
-  const title: StatusPart = { text: widgetTitle(active.widget), tone: 'title' };
   const { status } = active;
   switch (status.kind) {
     case 'idle':
-      return [title, { text: 'not queried yet', tone: 'muted' }];
+      return [{ text: 'not queried yet', tone: 'muted' }];
     case 'loading':
-      return [title, { text: 'querying…', tone: 'muted' }];
+      return [{ text: 'querying…', tone: 'muted' }];
     case 'error':
-      return [title, { text: shorten(status.message), tone: 'error' }, { text: `${status.ms} ms`, tone: 'muted' }];
+      return [{ text: shorten(status.message), tone: 'error' }, { text: `${status.ms} ms`, tone: 'muted' }];
     case 'done': {
       const { ignored = [], skipped } = status.diagnostics;
-      if (skipped) return [title, { text: `skipped: ${skipped}`, tone: 'muted' }];
-      const parts: StatusPart[] = [title, { text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' }, { text: `${status.ms} ms`, tone: 'plain' }];
+      if (skipped) return [{ text: `skipped: ${skipped}`, tone: 'muted' }];
+      const parts: StatusPart[] = [{ text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' }, { text: `${status.ms} ms`, tone: 'plain' }];
       if (ignored.length > 0) parts.push({ text: `ignores ${ignored.join(', ')}`, tone: 'muted' });
       return parts;
     }

@@ -123,7 +123,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 | Filter bar | above the content, between the side panels, only while it has something to show: one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable and editable; the page's filter buttons as toggles, a pressed one shown as its chip; the funnel button in the title bar adds a SQL chip (step 7b, §3.8) |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the active widget's selected records, a view each, §3.4.5); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
-| Status bar | the active widget's title, rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
+| Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
   resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
@@ -353,15 +353,15 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
 - **Innermost widget with data** *(proposed)*: a press inside a chart inside a grid makes the chart active (the closest
   element with `data-data-url`); containers, markdown and form inputs never become active.
 - **Debug is a left side panel** (rail button "Debug", a bug icon, after "Dashboards"; one left panel shows at a
-  time): the active widget's title, then views (§3.4.2): Query (the SQL as sent), Stats (ClickHouse's stats and the
+  time): the active widget's views (§3.4.2), without its title (its outline tells which widget; since 2026-10-31): Query (the SQL as sent), Stats (ClickHouse's stats and the
   summary of the chart's answer, closed), EXPLAIN plan, Pipeline (graph and steps, closed), Syntax (closed), Result (the
   last result as a table); their collapsed state in the extension's `globalState` *(proposed)*. It asks
   `<dataUrl>/debug` only while it is shown: when shown, when another widget becomes active, and when the active
   widget's query answered or failed (a query state change queries the chart again); while that query runs it keeps
   what it shows, and a change of its records alone (the same status value as when it asked) asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
   panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
-- **Status bar:** one item of the `debug` extension, there on every page but "/": the active widget's title, then "1,234
-  rows · 87 ms", "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red;
+- **Status bar:** one item of the `debug` extension, there on every page but "/": the active widget's "1,234
+  rows · 87 ms" (not its title, since 2026-10-31), "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red;
   the whole message in the tooltip); "No active chart" without one. A click opens Debug *(proposed)*. The status bar so
   always shows *(proposed)*, but on the start page (§3.4.3); the page-wide query counts of the sketch (`query-status`)
   are not built.

@@ -91,10 +91,11 @@ const settle = async () => {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
-function chart(widgetStatus: WidgetStatus, title = 'Requests'): ActiveWidget {
+/** A chart with the data under `/p/shop/api/<api>`. */
+function chart(widgetStatus: WidgetStatus, api = 1): ActiveWidget {
   return {
-    widget: { type: 'timeBar', props: { title, x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: '/p/shop/api/1' } as ActiveWidget['widget'],
-    url: (path) => `/p/shop/api/1${path}?time=24h`,
+    widget: { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: `/p/shop/api/${api}` } as ActiveWidget['widget'],
+    url: (path) => `/p/shop/api/${api}${path}?time=24h`,
     lastResult: undefined,
     status: widgetStatus,
     records: [],
@@ -127,7 +128,6 @@ describe('debug', () => {
     showPanel();
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
-    expect(body.querySelector('.d-debug__title')!.textContent).toBe('Requests');
     expect([...body.querySelectorAll('.d-view__title')].map((title) => title.textContent)).toEqual(['Query', 'Stats', 'EXPLAIN plan', 'Pipeline', 'Syntax', 'Result']);
     expect(body.querySelector('pre')!.textContent).toBe('SELECT count() FROM http_logs');
     expect(body.textContent).toContain('ReadFromMergeTree (default.http_logs)');
@@ -143,16 +143,15 @@ describe('debug', () => {
     expect(requested).toHaveLength(2);
 
     // another widget, though still loading
-    active = chart({ kind: 'loading' }, 'Errors');
+    active = chart({ kind: 'loading' }, 2);
     activeChanged.fire();
     await settle();
-    expect(requested).toHaveLength(3);
-    expect(body.querySelector('.d-debug__title')!.textContent).toBe('Errors');
+    expect(requested).toEqual(['/p/shop/api/1/debug?time=24h', '/p/shop/api/1/debug?time=24h', '/p/shop/api/2/debug?time=24h']);
 
     // hidden: nothing more
     panel.visible = false;
     visibility.fire();
-    active = chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 'Hosts');
+    active = chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 3);
     activeChanged.fire();
     expect(requested).toHaveLength(3);
   });
@@ -184,7 +183,7 @@ describe('debug', () => {
     expect(status.textContent).toBe('No active chart');
     active = chart({ kind: 'done', rows: 1234, ms: 87, diagnostics: { ignored: ['host'] } });
     activeChanged.fire();
-    expect([...status.children].map((part) => part.textContent)).toEqual(['Requests', '1,234 rows', '87 ms', 'ignores host']);
+    expect([...status.children].map((part) => part.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host']);
     status.click();
     expect(panel.shown).toBe(1);
   });
@@ -204,14 +203,14 @@ describe('statusParts', () => {
   const texts = (widgetStatus: WidgetStatus) => statusParts(chart(widgetStatus)).map((part) => `${part.tone}:${part.text}`);
 
   it('says how the last query went', () => {
-    expect(texts({ kind: 'idle' })).toEqual(['title:Requests', 'muted:not queried yet']);
-    expect(texts({ kind: 'loading' })).toEqual(['title:Requests', 'muted:querying…']);
-    expect(texts({ kind: 'done', rows: 1, ms: 3, diagnostics: {} })).toEqual(['title:Requests', 'plain:1 row', 'plain:3 ms']);
-    expect(texts({ kind: 'done', rows: 0, ms: 2, diagnostics: { skipped: 'needs host' } })).toEqual(['title:Requests', 'muted:skipped: needs host']);
+    expect(texts({ kind: 'idle' })).toEqual(['muted:not queried yet']);
+    expect(texts({ kind: 'loading' })).toEqual(['muted:querying…']);
+    expect(texts({ kind: 'done', rows: 1, ms: 3, diagnostics: {} })).toEqual(['plain:1 row', 'plain:3 ms']);
+    expect(texts({ kind: 'done', rows: 0, ms: 2, diagnostics: { skipped: 'needs host' } })).toEqual(['muted:skipped: needs host']);
   });
 
   it('shortens an error to its first line', () => {
-    const [, error] = statusParts(chart({ kind: 'error', message: `Code: 60. ${'x'.repeat(100)}\nStack trace`, ms: 40 }));
+    const [error] = statusParts(chart({ kind: 'error', message: `Code: 60. ${'x'.repeat(100)}\nStack trace`, ms: 40 }));
     expect(error.tone).toBe('error');
     expect(error.text).toHaveLength(80);
     expect(error.text.endsWith('…')).toBe(true);
