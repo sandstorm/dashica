@@ -69,7 +69,7 @@ function show(shown: PageJson | undefined): void {
 
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
-  query = new QueryHost(window);
+  query = new QueryHost();
   query.load();
   topBar = document.body.appendChild(document.createElement('div'));
   bar = document.body.appendChild(document.createElement('div'));

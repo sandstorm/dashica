@@ -152,8 +152,7 @@ export class PageHost implements PageApi {
     const el = this.content.appendChild(this.browserWindow.document.createElement('div'));
     el.className = 'd-workbench__tab-page';
     el.hidden = id !== this.#list.active;
-    const query = new QueryHost(this.browserWindow, this.#states);
-    query.setShown(!el.hidden);
+    const query = new QueryHost(this.#states);
     const hashChanged = new EventEmitter<void>();
     const context: PageContext = {
       query,
@@ -201,13 +200,11 @@ export class PageHost implements PageApi {
     if (switched && hidden) {
       hidden.scrollTop = hidden.el.scrollTop;
       hidden.el.hidden = true;
-      hidden.query.setShown(false);
     }
     const shown = this.#active();
     if (switched) {
       shown.el.hidden = false;
       shown.el.scrollTop = shown.scrollTop;
-      shown.query.setShown(true);
     }
     this.#writeAddressBar(history);
     this.#save();

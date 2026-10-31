@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for QueryHost: the state from and into a query string (parseSearch, formatSearch), the filter chips,
-// what each change asks of the widgets, auto refresh paused while hidden or not shown; the states extensions register
+// what each change asks of the widgets; the states extensions register
 // (registerState): read from the URL, written into it, sent, shared by the tabs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryHost, QueryStates, formatSearch, parseSearch, type QueryStateSpec } from './query';
@@ -23,7 +23,7 @@ function pill(label: string) {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  query = new QueryHost(window);
+  query = new QueryHost();
   refreshes = 0;
   searches = [];
   query.onDidRequestRefresh(() => refreshes++);
@@ -38,20 +38,10 @@ afterEach(() => {
 /** The keys of the query string given last. */
 const urlParams = () => Object.fromEntries(new URLSearchParams(searches.at(-1) ?? ''));
 
-function setHidden(hidden: boolean): void {
-  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
-  document.dispatchEvent(new Event('visibilitychange'));
-}
-
-afterEach(() => {
-  delete (document as { hidden?: boolean }).hidden;
-});
-
 describe('QueryHost', () => {
   it('takes the state from the URL, the page default for a missing time range', () => {
-    query.load({ search: '?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D&refresh=30', defaultTime: '168h' });
+    query.load({ search: '?sql=status+%3E%3D+500&wp=%7B%22path%22%3A%22%5E%2Fapi%22%7D', defaultTime: '168h' });
     expect(query.time.range).toBe('168h');
-    expect(query.time.autoRefresh).toBe(30);
     expect(query.filters.chips).toEqual([{ kind: 'sql', sql: 'status >= 500' }]);
     expect(query.params.values).toEqual({ path: '^/api' });
     expect(refreshes).toBe(1);
@@ -85,14 +75,12 @@ describe('QueryHost', () => {
     expect(query.requestParams().toString()).toBe('time=24h');
   });
 
-  it('asks the widgets to query again when the time, the filter or a param changes, but not for auto refresh', () => {
+  it('asks the widgets to query again when the time, the filter or a param changes', () => {
     query.load();
     refreshes = 0;
     query.time.setRange('1h');
     query.filters.add('status >= 500');
     query.params.set('path', '^/api');
-    expect(refreshes).toBe(3);
-    query.time.setAutoRefresh(30);
     expect(refreshes).toBe(3);
   });
 
@@ -221,14 +209,14 @@ describe('QueryHost', () => {
   it('gives the query string after a pause, leaving out what is the default', () => {
     query.load({ defaultTime: '1h' });
     query.time.setRange('3h');
-    query.time.setAutoRefresh(30);
+    query.filters.add('a');
     expect(searches).toEqual([]);
     vi.advanceTimersByTime(200);
-    expect(urlParams()).toEqual({ time: '3h', refresh: '30' });
+    expect(urlParams()).toEqual({ time: '3h', sql: 'a' });
     query.time.setRange('1h');
-    query.time.setAutoRefresh(undefined);
+    query.filters.clear();
     vi.advanceTimersByTime(200);
-    expect(searches).toEqual(['?time=3h&refresh=30', '']);
+    expect(searches).toEqual(['?time=3h&sql=a', '']);
   });
 
   it('keeps the other keys of the query string it was loaded from, and gives nothing for a state as loaded', () => {
@@ -264,102 +252,6 @@ describe('QueryHost', () => {
     vi.advanceTimersByTime(200);
     expect(searches).toEqual([]);
     expect(query.filters.chips).toEqual([]);
-  });
-
-  it('refreshes every interval while auto refresh is on', () => {
-    query.load();
-    refreshes = 0;
-    query.time.setAutoRefresh(30);
-    vi.advanceTimersByTime(60_000);
-    expect(refreshes).toBe(2);
-    query.time.setAutoRefresh(undefined);
-    vi.advanceTimersByTime(60_000);
-    expect(refreshes).toBe(2);
-  });
-
-  it('skips the auto refresh while the tab is hidden and refreshes once when it is shown again', () => {
-    query.load();
-    query.time.setAutoRefresh(30);
-    refreshes = 0;
-    setHidden(true);
-    vi.advanceTimersByTime(90_000);
-    expect(refreshes).toBe(0);
-    setHidden(false);
-    expect(refreshes).toBe(1);
-    vi.advanceTimersByTime(30_000);
-    expect(refreshes).toBe(2);
-  });
-
-  it('ticks a whole interval after the refresh when the tab is shown again', () => {
-    query.load();
-    query.time.setAutoRefresh(30);
-    refreshes = 0;
-    setHidden(true);
-    vi.advanceTimersByTime(35_000);
-    setHidden(false);
-    expect(refreshes).toBe(1);
-    vi.advanceTimersByTime(29_999);
-    expect(refreshes).toBe(1);
-    vi.advanceTimersByTime(1);
-    expect(refreshes).toBe(2);
-  });
-
-  it('waits for the next tick when none came while the tab was hidden', () => {
-    query.load();
-    query.time.setAutoRefresh(30);
-    refreshes = 0;
-    setHidden(true);
-    vi.advanceTimersByTime(10_000);
-    setHidden(false);
-    expect(refreshes).toBe(0);
-  });
-
-  it('forgets a skipped tick when auto refresh is turned off', () => {
-    query.load();
-    query.time.setAutoRefresh(30);
-    refreshes = 0;
-    setHidden(true);
-    vi.advanceTimersByTime(30_000);
-    query.time.setAutoRefresh(undefined);
-    setHidden(false);
-    expect(refreshes).toBe(0);
-  });
-
-  it('skips the auto refresh while its tab is not shown and refreshes once when it is shown again', () => {
-    query.load();
-    query.time.setAutoRefresh(30);
-    refreshes = 0;
-    query.setShown(false);
-    vi.advanceTimersByTime(90_000);
-    expect(refreshes).toBe(0);
-    query.setShown(true);
-    expect(refreshes).toBe(1);
-    vi.advanceTimersByTime(29_999);
-    expect(refreshes).toBe(1);
-    vi.advanceTimersByTime(1);
-    expect(refreshes).toBe(2);
-  });
-
-  it('stays paused while its tab is not shown, though the browser tab is shown again', () => {
-    query.load();
-    query.time.setAutoRefresh(30);
-    refreshes = 0;
-    query.setShown(false);
-    setHidden(true);
-    vi.advanceTimersByTime(30_000);
-    setHidden(false);
-    expect(refreshes).toBe(0);
-    query.setShown(true);
-    expect(refreshes).toBe(1);
-  });
-
-  it('refreshes nothing when its tab is shown again without a skipped tick (no auto refresh)', () => {
-    query.load();
-    refreshes = 0;
-    query.setShown(false);
-    vi.advanceTimersByTime(90_000);
-    query.setShown(true);
-    expect(refreshes).toBe(0);
   });
 });
 
@@ -429,8 +321,8 @@ describe('registered states', () => {
 
   it('keeps a state for every tab sharing the registered states, each tab with its own value', () => {
     const states = new QueryStates();
-    const shop = new QueryHost(window, states);
-    const checkout = new QueryHost(window, states);
+    const shop = new QueryHost(states);
+    const checkout = new QueryHost(states);
     shop.registerState('colors', colorsSpec(true));
     shop.load({ search: '?colors=red' });
     checkout.load({ search: '?colors=blue' });
@@ -454,14 +346,13 @@ describe('registered states', () => {
 
 describe('parseSearch and formatSearch', () => {
   it('read the state of a query string, the default for what it lacks', () => {
-    expect(parseSearch(`?time=custom&range=now-6h+to+now&f=${keyOf('host = a')}&f=&refresh=30&wp=%7B%22path%22%3A%22x%22%7D`, '1h')).toEqual({
+    expect(parseSearch(`?time=custom&range=now-6h+to+now&f=${keyOf('host = a')}&f=&wp=%7B%22path%22%3A%22x%22%7D`, '1h')).toEqual({
       range: 'custom',
       custom: 'now-6h to now',
-      autoRefresh: 30,
       chips: [{ kind: 'pill', ...pill('host = a') }],
       params: { path: 'x' },
     });
-    expect(parseSearch('', '1h')).toEqual({ range: '1h', custom: '', autoRefresh: undefined, chips: [], params: {} });
+    expect(parseSearch('', '1h')).toEqual({ range: '1h', custom: '', chips: [], params: {} });
   });
 
   it('write it back, leaving out the default and keeping the other keys', () => {

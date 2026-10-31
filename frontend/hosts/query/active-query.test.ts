@@ -15,8 +15,8 @@ let events: string[];
 beforeEach(() => {
   // one tab's registrations are every tab's
   const states = new QueryStates();
-  shop = new QueryHost(window, states);
-  checkout = new QueryHost(window, states);
+  shop = new QueryHost(states);
+  checkout = new QueryHost(states);
   shop.load({ search: '?time=1h&f=pill-host-a' });
   checkout.load({ search: '?time=6h' });
   tabsChanged = new EventEmitter<void>();

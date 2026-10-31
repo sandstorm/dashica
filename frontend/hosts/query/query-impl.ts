@@ -31,8 +31,7 @@ export class QueryStates {
 
 /**
  * The `QueryApi` of one tab, holding the state of a query string (the tab's URL's): `load` takes the state from one,
- * `onDidChangeSearch` gives the query string of the state after a change, which the tab puts into its URL. Auto
- * refresh pauses while the tab is not shown (`setShown`) or the browser tab is hidden.
+ * `onDidChangeSearch` gives the query string of the state after a change, which the tab puts into its URL.
  */
 export class QueryHost implements QueryApi {
   readonly time: TimeState;
@@ -45,36 +44,20 @@ export class QueryHost implements QueryApi {
   readonly onDidChangeSearch = this.#onDidChangeSearch.event;
   #defaultTime = DEFAULT_TIME;
   #searchWrite: ReturnType<typeof setTimeout> | undefined;
-  #autoRefresh: ReturnType<typeof setInterval> | undefined;
-  /**
-   * An auto refresh tick came while paused; the state refreshes once when shown again, the next tick a whole interval
-   * later.
-   */
-  #skippedTick = false;
-  /** Whether its tab is shown (`setShown`). */
-  #shown = true;
   /** The query string that holds the state, as last loaded or given by `onDidChangeSearch`; its other keys stay. */
   #search = '';
   /** The registered states' values read or set here, by id; a state not read since the last load is not in it. */
   readonly #values = new Map<string, HeldState>();
-  readonly #onVisibilityChange = () => this.#catchUp();
 
-  /** `browserWindow`: whose document being hidden pauses auto refresh. `states`: the registered states, all tabs'. */
-  constructor(
-    private readonly browserWindow: Window,
-    private readonly states = new QueryStates(),
-  ) {
-    browserWindow.document.addEventListener('visibilitychange', this.#onVisibilityChange);
-    const changed = (refresh: boolean) => {
+  /** `states`: the registered states, all tabs'. */
+  constructor(private readonly states = new QueryStates()) {
+    const changed = () => {
       this.#writeSearchSoon();
-      if (refresh) this.refresh();
+      this.refresh();
     };
-    this.time = new TimeState((refresh) => {
-      this.#restartAutoRefresh();
-      changed(refresh);
-    });
-    this.filters = new FiltersState(() => changed(true));
-    this.params = new ParamsState(() => changed(true));
+    this.time = new TimeState(changed);
+    this.filters = new FiltersState(changed);
+    this.params = new ParamsState(changed);
   }
 
   /**
@@ -87,11 +70,10 @@ export class QueryHost implements QueryApi {
     this.#defaultTime = defaultTime || DEFAULT_TIME;
     const state = parseSearch(search, this.#defaultTime);
     this.#search = search;
-    this.time.load(state.range, state.custom, state.autoRefresh);
+    this.time.load(state.range, state.custom);
     this.filters.load(state.chips);
     this.params.load(state.params);
     for (const held of this.#values.values()) held.known = false;
-    this.#restartAutoRefresh();
     this.time.fire();
     this.filters.fire();
     this.params.fire();
@@ -116,16 +98,6 @@ export class QueryHost implements QueryApi {
     };
   }
 
-  /**
-   * Whether its tab is shown. While not, an auto refresh tick only counts as skipped, as while the browser tab is
-   * hidden; shown again after one was skipped, it refreshes once and ticks a whole interval later.
-   */
-  setShown(shown: boolean): void {
-    if (shown === this.#shown) return;
-    this.#shown = shown;
-    this.#catchUp();
-  }
-
   refresh(): void {
     this.#onDidRequestRefresh.fire();
   }
@@ -143,8 +115,6 @@ export class QueryHost implements QueryApi {
 
   dispose(): void {
     clearTimeout(this.#searchWrite);
-    clearInterval(this.#autoRefresh);
-    this.browserWindow.document.removeEventListener('visibilitychange', this.#onVisibilityChange);
     this.#onDidRequestRefresh.dispose();
     this.#onDidChangeSearch.dispose();
     for (const held of this.#values.values()) held.changed.dispose();
@@ -188,29 +158,6 @@ export class QueryHost implements QueryApi {
     return text ? `?${text}` : '';
   }
 
-  #paused(): boolean {
-    return !this.#shown || this.browserWindow.document.hidden;
-  }
-
-  /** Refreshes once when a tick was skipped and it is no longer paused. */
-  #catchUp(): void {
-    if (this.#paused() || !this.#skippedTick) return;
-    this.#restartAutoRefresh();
-    this.refresh();
-  }
-
-  #restartAutoRefresh(): void {
-    clearInterval(this.#autoRefresh);
-    this.#skippedTick = false;
-    const seconds = this.time.autoRefresh;
-    if (seconds) this.#autoRefresh = setInterval(() => this.#tick(), seconds * 1000);
-  }
-
-  #tick(): void {
-    if (this.#paused()) this.#skippedTick = true;
-    else this.refresh();
-  }
-
   /** Gives the query string of the state a moment after the last change, when it changed. */
   #writeSearchSoon(): void {
     clearTimeout(this.#searchWrite);
@@ -218,7 +165,6 @@ export class QueryHost implements QueryApi {
       const state: SearchState = {
         range: this.time.range,
         custom: this.time.custom,
-        autoRefresh: this.time.autoRefresh,
         chips: this.filters.chips,
         params: this.params.values,
       };
@@ -245,12 +191,11 @@ function sameEntries(a: QueryEntries, b: QueryEntries): boolean {
   return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && value === b[i][1]);
 }
 
-/** What a query string (`?time=1h&f=<key>&sql=…&wp=…&refresh=30`) says about the query state. */
+/** What a query string (`?time=1h&f=<key>&sql=…&wp=…`) says about the query state. */
 export interface SearchState {
   readonly range: string;
   /** The custom range; '' unless `range` is `custom`. */
   readonly custom: string;
-  readonly autoRefresh: number | undefined;
   /** The filter chips, in the order of their `f` and `sql`. */
   readonly chips: readonly FilterChip[];
   readonly params: Readonly<Record<string, string>>;
@@ -264,18 +209,16 @@ export interface SearchState {
 export function parseSearch(search: string, defaultTime = DEFAULT_TIME): SearchState {
   const url = new URLSearchParams(search);
   const range = url.get('time') || defaultTime;
-  const refresh = Number(url.get('refresh'));
   return {
     range,
     custom: range === 'custom' ? (url.get('range') ?? '') : '',
-    autoRefresh: refresh > 0 ? refresh : undefined,
     chips: [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),
     params: parseParams(url.get('wp')),
   };
 }
 
 /**
- * The query string of `state` (`?time=3h&refresh=30`, '' for none), its other keys taken from `search`; what is the
+ * The query string of `state` (`?time=3h&sql=a`, '' for none), its other keys taken from `search`; what is the
  * default (`defaultTime`, no filter) is left out.
  */
 export function formatSearch(state: SearchState, defaultTime: string, search = ''): string {
@@ -284,8 +227,6 @@ export function formatSearch(state: SearchState, defaultTime: string, search = '
   else url.delete('time');
   if (state.range === 'custom' && state.custom) url.set('range', state.custom);
   else url.delete('range');
-  if (state.autoRefresh) url.set('refresh', String(state.autoRefresh));
-  else url.delete('refresh');
   url.delete('sql');
   url.delete('f');
   appendChips(url, state.chips);
@@ -308,17 +249,14 @@ class Model extends EventEmitter<void> {
 class TimeState extends Model implements TimeModel {
   range = DEFAULT_TIME;
   custom = '';
-  autoRefresh: number | undefined;
 
-  /** `changed(true)`: the queries depend on the change. */
-  constructor(private readonly changed: (refresh: boolean) => void) {
+  constructor(private readonly changed: () => void) {
     super();
   }
 
-  load(range: string, custom: string, autoRefresh: number | undefined): void {
+  load(range: string, custom: string): void {
     this.range = range;
     this.custom = range === 'custom' ? custom : '';
-    this.autoRefresh = autoRefresh;
   }
 
   setRange(range: string): void {
@@ -326,21 +264,14 @@ class TimeState extends Model implements TimeModel {
     this.range = range;
     if (range !== 'custom') this.custom = '';
     this.fire();
-    this.changed(true);
+    this.changed();
   }
 
   setCustom(from: string, to: string): void {
     this.range = 'custom';
     this.custom = `${from} to ${to}`;
     this.fire();
-    this.changed(true);
-  }
-
-  setAutoRefresh(seconds: number | undefined): void {
-    if (seconds === this.autoRefresh) return;
-    this.autoRefresh = seconds;
-    this.fire();
-    this.changed(false);
+    this.changed();
   }
 }
 

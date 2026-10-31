@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for page.ts: the first page, navigate, links, back and forward, a hash on the page, a page that cannot be shown;
 // the tabs: opening, switching, closing, the address bar and history following the active tab, a background tab kept
-// and paused, a switch to a tab without a page, a closed tab's query state disposed, a page kind named in the hash, the
+// and asked nothing, a switch to a tab without a page, a closed tab's query state disposed, a page kind named in the hash, the
 // tabs after a reload, a URL without `page.json`; a popped-out view in a tab of its own, kept in memory only.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
@@ -334,22 +334,15 @@ describe('PageHost', () => {
       expect(rendered).toEqual(['Shop', 'Checkout']);
     });
 
-    it('pauses the auto refresh of a background tab and catches up once when it is shown', async () => {
-      reloadAt('/p/shop?refresh=30');
+    it('asks nothing of a background tab on a change of the tab shown', async () => {
       await host.start();
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-      host.activeQuery.time.setAutoRefresh(undefined);
-      host.activeQuery.time.setAutoRefresh(30);
       const shop = host.activeQuery;
       let refreshes = 0;
       shop.onDidRequestRefresh(() => refreshes++);
       await host.navigate('/p/checkout', { newTab: true });
-      vi.advanceTimersByTime(90_000);
+      host.activeQuery.time.setRange('1h');
+      host.activeQuery.refresh();
       expect(refreshes).toBe(0);
-      host.showTab(host.tabs[0].id);
-      expect(refreshes).toBe(1);
-      vi.advanceTimersByTime(30_000);
-      expect(refreshes).toBe(2);
     });
 
     it('closes a tab: its page taken down, the tab shown before active in place of the entry', async () => {
@@ -367,21 +360,14 @@ describe('PageHost', () => {
       expect(host.tabs).toHaveLength(1);
     });
 
-    it('closes a tab’s query state with it: no auto refresh, no catch-up when the browser tab is shown again', async () => {
+    it('closes a tab’s query state with it: its refresh reaches nobody any more', async () => {
       await host.start();
       await host.navigate('/p/checkout', { newTab: true });
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
       const checkout = host.activeQuery;
-      checkout.time.setAutoRefresh(30);
-      expect(vi.getTimerCount()).toBe(1);
       let refreshes = 0;
       checkout.onDidRequestRefresh(() => refreshes++);
-      const removed = vi.spyOn(document, 'removeEventListener');
       host.closeTab(host.activeTab.id);
-      expect(vi.getTimerCount()).toBe(0);
-      expect(removed.mock.calls.filter(([type]) => type === 'visibilitychange')).toHaveLength(1);
-      vi.advanceTimersByTime(90_000);
-      document.dispatchEvent(new Event('visibilitychange'));
+      checkout.refresh();
       expect(refreshes).toBe(0);
     });
 

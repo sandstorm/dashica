@@ -66,7 +66,7 @@ describe('WidgetsHost', () => {
       return Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child)));
     });
     testbed.widgets.registerWidget('markdown', (_el, _widget, ctx) => (states.push(ctx.state), new Disposable(() => {})));
-    const tab = new QueryHost(window);
+    const tab = new QueryHost();
     const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: {} } } };
     testbed.widgets.render(document.body.appendChild(document.createElement('div')), grid, tab);
     expect(states).toEqual([tab, tab]);
@@ -267,8 +267,8 @@ describe('WidgetsHost', () => {
 
     it('is kept per tab: switching tabs shows that tab’s active widget', () => {
       const tabs = new EventEmitter<void>();
-      const source = { activeQuery: new QueryHost(window), onDidChangeTabs: tabs.event };
-      const other = new QueryHost(window);
+      const source = { activeQuery: new QueryHost(), onDidChangeTabs: tabs.event };
+      const other = new QueryHost();
       const ui = { showContextMenu() {} };
       const widgets = new WidgetsHost(ui, source);
       widgets.registerWidget('timeBar', () => new Disposable(() => {}));

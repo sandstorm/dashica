@@ -21,7 +21,10 @@ export interface QueryApi {
    * while none is registered.
    */
   state<T>(id: string): QueryState<T> | undefined;
-  /** Fires when the widgets should query again: the time, the filter or a param changed, or `refresh` was called. */
+  /**
+   * Fires when the widgets should query again: the time, the filter, a param or a registered state they read changed,
+   * or `refresh` was called.
+   */
   readonly onDidRequestRefresh: Event<void>;
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
   refresh(): void;
@@ -64,15 +67,12 @@ export interface TimeModel {
   readonly range: string;
   /** The custom range as the server reads it (`2026-10-29 10:00 to now-1h`); '' unless `range` is `custom`. */
   readonly custom: string;
-  /** The seconds between two automatic refreshes, paused while the tab or the browser tab is hidden; `undefined`: no auto refresh. */
-  readonly autoRefresh: number | undefined;
   setRange(range: string): void;
   /**
    * Sets the range to `custom`, each end a time as the server reads it: `2026-10-29 10:00` (a selection on a time
    * chart, `time-library/formatTime`) or relative to now, `now-6h` (the time picker).
    */
   setCustom(from: string, to: string): void;
-  setAutoRefresh(seconds: number | undefined): void;
   readonly onDidChange: Event<void>;
 }
 

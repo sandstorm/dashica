@@ -118,7 +118,7 @@ const serve = (result: string) => (url: URL) => {
 };
 
 beforeEach(() => {
-  query = new QueryHost(window);
+  query = new QueryHost();
   query.load({ search: '?time=1h&f=host:eq:a', defaultTime: '24h' });
   tables = [];
   schema = { time: 'datetime', status: 'integer', host: 'string', requests: 'integer' };

@@ -40,7 +40,7 @@ async function pick(...labels: string[]): Promise<void> {
 
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
-  query = new QueryHost(window);
+  query = new QueryHost();
   query.load();
   host = document.body.appendChild(document.createElement('div'));
   anchor = host.appendChild(document.createElement('button'));

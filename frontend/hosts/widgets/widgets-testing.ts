@@ -22,7 +22,7 @@ import { WidgetsHost, type FilterCandidate, type PillSource, type RenderedWidget
  */
 export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
   history.replaceState(null, '', '/p/shop');
-  const query = new QueryHost(window);
+  const query = new QueryHost();
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
   const pageChanged = new EventEmitter<PageJson | undefined>();
   /** The views extensions popped out (`page.popOut`), in order. */

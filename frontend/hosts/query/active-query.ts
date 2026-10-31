@@ -71,12 +71,8 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
     get custom() {
       return active().time.custom;
     },
-    get autoRefresh() {
-      return active().time.autoRefresh;
-    },
     setRange: (range) => active().time.setRange(range),
     setCustom: (from, to) => active().time.setCustom(from, to),
-    setAutoRefresh: (seconds) => active().time.setAutoRefresh(seconds),
     onDidChange: timeChanged.event,
   };
   const filters: FiltersModel = {

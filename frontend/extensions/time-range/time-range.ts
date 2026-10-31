@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement }
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
 import { formatTime } from '../time-library/format-time';
+import { REFRESH_STATE, type AutoRefresh } from '../time-library/refresh-state';
 import './time-range.css';
 
 /**
@@ -12,7 +13,8 @@ import './time-range.css';
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
  * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply
  * asks it (`/time-range`) and shows its reason when it cannot. A range ending at a fixed time does not move, so
- * applying one turns auto refresh off. A selection on a time chart shows here as a custom range.
+ * applying one turns auto refresh off (the query state `refresh`, while the extension that keeps it is there). A
+ * selection on a time chart shows here as a custom range.
  */
 export const timeRange: Extension = {
   id: 'timeRange',
@@ -207,7 +209,7 @@ class TimeRangePicker {
     } finally {
       this.#apply.disabled = false;
     }
-    if (!to.startsWith('now')) this.query.time.setAutoRefresh(undefined);
+    if (!to.startsWith('now')) this.#stopAutoRefresh();
     this.query.time.setCustom(from, to);
     const custom = `${from} to ${to}`;
     void this.globalState.update('recent', [custom, ...this.#recentRanges().filter((range) => range !== custom)].slice(0, 3));
@@ -238,11 +240,16 @@ class TimeRangePicker {
     );
   }
 
+  /** Turns auto refresh off: the range does not move. */
+  #stopAutoRefresh(): void {
+    this.query.state<AutoRefresh>(REFRESH_STATE)?.set(undefined);
+  }
+
   /** Moves the window by its length, back (`-1`) or forward (`1`); a moved window is fixed, so auto refresh goes off. */
   async #shift(direction: -1 | 1): Promise<void> {
     const { from, to } = await resolveTimeRange(this.query.time.range, this.query.time.custom);
     const by = direction * (to - from);
-    this.query.time.setAutoRefresh(undefined);
+    this.#stopAutoRefresh();
     this.query.time.setCustom(formatTime(new Date(from + by)), formatTime(new Date(to + by)));
   }
 
