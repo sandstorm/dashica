@@ -54,7 +54,7 @@ describe('table', () => {
     expect(el.querySelectorAll('.tabulator-cell[tabulator-field="path"]')).toHaveLength(2);
   });
 
-  it('makes the ticked rows its selected records, which makes it active; a new answer starts with none', async () => {
+  it('makes the ticked rows its selected records, which makes it active; a resize keeps them, a new answer starts with none', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
     const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
@@ -67,6 +67,13 @@ describe('table', () => {
     tick(0);
     expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }, { path: '/api', status: 200 }]);
     expect(el.querySelector('.d-record-panel')).toBeNull();
+
+    const drawn = el.querySelector('.tabulator');
+    testbed.resize(480);
+    await settle();
+    expect(el.querySelector('.tabulator')).toBe(drawn);
+    expect(testbed.widgets.active?.records).toEqual([{ path: '/login', status: 500 }, { path: '/api', status: 200 }]);
+    expect(el.querySelectorAll('.tabulator-row input[type=checkbox]:checked')).toHaveLength(2);
 
     testbed.query.refresh();
     await settle();

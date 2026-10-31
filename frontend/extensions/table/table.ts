@@ -1,11 +1,11 @@
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { ChartFrame, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
+import { ChartFrame, type QueryResult, type WidgetContext, type WidgetOf } from '../../hosts/widgets/widgets';
 import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } from '../chart-library/table';
 
 /**
  * The widget type `table`: the result rows (Tabulator) with a search box, filters per column, sticky tooltips that can
- * be pinned. The ticked rows are the widget's selected records (Details shows them); each draw starts with none. A
- * click on a cell selects its value (by its column's name).
+ * be pinned. The ticked rows are the widget's selected records (Details shows them); each answer starts with none.
+ * A click on a cell selects its value (by its column's name).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter, a column header's (`table/header`) size the columns.
  */
@@ -27,17 +27,22 @@ export const table: Extension = {
 };
 
 function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext): ChartFrame {
+  // Tabulator fits a new width itself, and its colors are the page's: one table per answer, its ticks kept on a resize
+  let drawn: { result: QueryResult; table: HTMLElement } | undefined;
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result) => {
-      // the table drawn anew has no row ticked
+      if (drawn?.result === result) return drawn.table;
+      // the table of a new answer has no row ticked
       ctx.selectRecords([]);
-      return drawTable(result, widget.props, {
+      const table = drawTable(result, widget.props, {
         select: (selection) => ctx.select(selection),
         selectRecords: (records) => ctx.selectRecords(records),
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
       });
+      drawn = { result, table };
+      return table;
     },
   });
 }

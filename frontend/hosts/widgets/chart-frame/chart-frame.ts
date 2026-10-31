@@ -11,7 +11,10 @@ export interface ChartFrameOptions {
   readonly title?: string;
   /** The chart's height in pixels, kept while it loads. */
   readonly height?: number;
-  /** The chart for the queried data (an SVG, a table); asked again when the width or the color scheme change. */
+  /**
+   * The chart for the queried data (an SVG, a table); asked again when the width or the color scheme change. The
+   * element it drew last, returned again, stays as it is (its scroll position, what is ticked in it).
+   */
   draw(result: QueryResult, options: DrawOptions): Element | Promise<Element>;
 }
 
@@ -140,7 +143,7 @@ export class ChartFrame {
         onTimeSelect: this.#onTimeSelect,
       });
       if (turn !== this.#drawn) return;
-      this.#body.replaceChildren(chart);
+      if (this.#body.firstElementChild !== chart) this.#body.replaceChildren(chart);
       this.#shimmer.hidden = true;
     } catch (error) {
       if (turn === this.#drawn) this.#showError(error);
