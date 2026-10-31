@@ -180,9 +180,14 @@ class ExploreView {
     this.#body.append(this.#message);
     this.#edited = editedSql(options.hash());
     this.#showEdited();
+    // the page's colour scheme, followed while the view is open
+    const scheme = el.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
+    const restyle = () => void this.#shown?.viewer.restore({ theme: this.#theme() });
+    scheme?.addEventListener('change', restyle);
     this.#listening = Disposable.from(
       options.query.onDidRequestRefresh(() => void this.#load()),
       options.onDidChangeHash(() => this.#hashChanged()),
+      { dispose: () => scheme?.removeEventListener('change', restyle) },
     );
     void this.#load();
   }
@@ -371,15 +376,23 @@ class ExploreView {
     const notes = [...initial.notes];
     if (saved) {
       try {
-        await this.#shown!.viewer.restore(saved);
+        await this.#shown!.viewer.restore({ ...saved, theme: this.#theme() });
         this.#showNotes(notes);
         return;
       } catch (error) {
         notes.push(`the kept view does not fit these rows (${error instanceof Error ? error.message : String(error)}); shown as the chart`);
       }
     }
-    await this.#shown!.viewer.restore(initial.config);
+    await this.#shown!.viewer.restore({ ...initial.config, theme: this.#theme() });
     this.#showNotes(notes);
+  }
+
+  /**
+   * Perspective's theme for the page's colour scheme (tokens.css follows `prefers-color-scheme`): a theme's name, as the
+   * viewer's config documents `theme`; both themes' stylesheets are loaded with Perspective (perspective.ts).
+   */
+  #theme(): string {
+    return this.el.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'Pro Dark' : 'Pro Light';
   }
 
   /** "Reset": the chart's config, the kept one forgotten. */

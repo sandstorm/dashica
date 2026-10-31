@@ -27,6 +27,7 @@ vi.mock('@perspective-dev/viewer', () => ({
 vi.mock('@perspective-dev/viewer-datagrid', () => ({}));
 vi.mock('@perspective-dev/viewer-charts', () => ({}));
 vi.mock('@perspective-dev/viewer/dist/css/pro.css', () => ({}));
+vi.mock('@perspective-dev/viewer/dist/css/pro-dark.css', () => ({}));
 vi.mock('@perspective-dev/server/dist/wasm/perspective-server.wasm', () => ({ default: 'server.wasm' }));
 vi.mock('@perspective-dev/server/dist/wasm/perspective-server.memory64.wasm', () => ({ default: 'server64.wasm' }));
 vi.mock('@perspective-dev/viewer/dist/wasm/perspective-viewer.wasm', () => ({ default: 'viewer.wasm' }));

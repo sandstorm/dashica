@@ -176,6 +176,20 @@ describe('renderExploreView', () => {
     expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('3 rows of the chart’s result');
   });
 
+  it('takes Perspective’s theme of the page’s colour scheme, and follows a change of it', async () => {
+    const changes = new EventTarget();
+    let dark = true;
+    vi.stubGlobal('matchMedia', (query: string) =>
+      Object.assign(changes, { media: query, get matches() { return dark; } }),
+    );
+    open();
+    await settle();
+    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar', theme: 'Pro Dark' })]);
+    dark = false;
+    changes.dispatchEvent(new Event('change'));
+    expect(viewer.restored.at(-1)).toEqual({ theme: 'Pro Light' });
+  });
+
   it('starts with the chart rebuilt from its props', async () => {
     open();
     await settle();
@@ -195,7 +209,7 @@ describe('renderExploreView', () => {
     view.dispose();
     open();
     await settle();
-    expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'] }]);
+    expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
   });
 
   it('shows the chart when the kept config does not fit the rows, with a note', async () => {
@@ -395,11 +409,11 @@ describe('renderExploreView', () => {
     stored.set(stateKey(widget, true), { plugin: 'Datagrid', group_by: ['host'] });
     open();
     await settle();
-    expect(viewer.restored).toEqual([{ plugin: 'Y Line' }]);
+    expect(viewer.restored).toEqual([{ plugin: 'Y Line', theme: 'Pro Light' }]);
     hash = withEditedSql(hash, 'SELECT 1');
     hashChanged.fire();
     await settle();
-    expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'] }]);
+    expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
   });
 
   it('shows the chart’s Diagnostics: the filters it ignores, a skipped chart', async () => {

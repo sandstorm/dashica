@@ -5,6 +5,7 @@ import perspectiveViewer from '@perspective-dev/viewer';
 import '@perspective-dev/viewer-datagrid';
 import '@perspective-dev/viewer-charts';
 import '@perspective-dev/viewer/dist/css/pro.css';
+import '@perspective-dev/viewer/dist/css/pro-dark.css';
 import SERVER_WASM from '@perspective-dev/server/dist/wasm/perspective-server.wasm';
 import SERVER_WASM64 from '@perspective-dev/server/dist/wasm/perspective-server.memory64.wasm';
 import VIEWER_WASM from '@perspective-dev/viewer/dist/wasm/perspective-viewer.wasm';
