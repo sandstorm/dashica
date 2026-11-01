@@ -11,8 +11,8 @@
 }
 
 /*
- * a chart that ignores some of the page's filters: its drawing faded and greyer, the title row and its "ignores …"
- * as they are; at full strength while the pointer is on it, the focus is in it or it is its tab's active widget
+ * a chart with a muted decoration (the filters' "ignores …"): its drawing faded and greyer, the title row and its
+ * badges as they are; at full strength while the pointer is on it, the focus is in it or it is its tab's active widget
  */
 .d-chart-frame--muted .d-chart-frame__stage {
     opacity: var(--opacity-muted);
@@ -63,7 +63,7 @@
     opacity: 1;
 }
 
-/* the chart's title above it, with the filters it ignores beside it (wrapping below a long title) */
+/* the chart's title above it, with its decorations beside it (wrapping below a long title) */
 .d-chart-frame__title {
     display: flex;
     flex-wrap: wrap;
@@ -95,21 +95,15 @@
     stroke: var(--color-border-strong);
 }
 
-/* in the title row: the page's filters the chart does not interpret */
-.d-chart-frame__ignored {
+/* in the title row: the widget's decorations, a badge each */
+.d-chart-frame__decorations {
+    display: contents;
+}
+
+.d-chart-frame__decoration {
     background: var(--color-surface-subtle);
     color: var(--color-text-muted);
     font-weight: var(--weight-normal);
-}
-
-.d-chart-frame__ignored[hidden] {
-    display: none;
-}
-
-/* in place of the chart: why it did not run */
-.d-chart-frame__skipped {
-    padding: var(--space-2);
-    color: var(--color-text-muted);
 }
 
 /* a diagonal shimmer over the chart until it is drawn first */

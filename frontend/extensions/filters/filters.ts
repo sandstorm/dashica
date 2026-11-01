@@ -7,6 +7,7 @@ import type { QueryApi } from '../../hosts/query/query';
 import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../hosts/ui/ui';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type AskSql, type FilterableTable } from './add-filter';
+import { filterDecorationProvider } from './decorations';
 import { fetchPill, offerFilters } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
@@ -36,11 +37,11 @@ import './filters.css';
  * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
  * runs the command `filters.offer` (`(at, candidates, { dataUrl, filterable })`): its quick pick adds the pill chosen to
  * the tab shown (`offerFilters`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
- * condition as a SQL chip.
+ * condition as a SQL chip. A chart's answer is decorated with what it did with the pills (`filterDecorations`).
  */
 export const filters: Extension = {
   id: 'filters',
-  activate({ ui, page, query, commands, subscriptions }) {
+  activate({ ui, page, query, commands, widgets, subscriptions }) {
     const { sqlEnabled, explore } = page.workbench;
     // the names a SQL condition completes: the schema is part of Explore (/schema.json only with explore.enabled)
     const schemas = explore ? new Schemas() : undefined;
@@ -52,6 +53,8 @@ export const filters: Extension = {
       commands.registerCommand(OFFER, (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
         offerFilters(ui, query, at, candidates, source),
       ),
+      // what a chart did with the pills: "ignores host = a" (muted), "skipped: …"
+      widgets.registerDecorationProvider(filterDecorationProvider),
       // a table cell's SQL filters ("Filter: Contains this value")
       commands.registerCommand('filters.addSql', (condition: string) => query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'sql', sql: condition }))),
     );

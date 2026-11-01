@@ -2,8 +2,7 @@
 import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
-import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
-import { diagnosticsOf, type Diagnostics } from '../filter-library/diagnostics';
+import type { QueryResult, WidgetContext, WidgetDecoration } from '../../hosts/widgets/widgets';
 import { formatTime } from '../time-library/format-time';
 import { TIME, customRange } from '../time-library/time-state';
 import './chart-frame.css';
@@ -30,10 +29,12 @@ export interface DrawOptions {
 
 /**
  * A chart in `el` inside the frame every chart has: its title while it loads, a spinner while it queries, the error of
- * a failed query, its menu button (`widget/context`), and what the server says the chart did with the page's filters:
- * "ignores host, path" in its title row, with the chart drawn muted (`d-chart-frame--muted`) until the pointer, the
- * focus or being the active widget brings it back, "skipped: …" in place of it. It queries once the chart scrolls into view, and again on
- * each `onDidRequestRefresh` from then on; an answer to an older query is dropped. A chart's renderer returns it.
+ * a failed query, its menu button (`widget/context`), and the widget's decorations (`ctx.decorations`, whatever
+ * extension made them): a badge each in its title row with its tooltip, the chart drawn muted (`d-chart-frame--muted`)
+ * while one of them says so, until the pointer, the focus or being the active widget brings it back. An answer
+ * without a table (a 204) draws nothing; its decorations say why. It queries once the chart scrolls into view, and
+ * again on each `onDidRequestRefresh` from then on; an answer to an older query is dropped. A chart's renderer
+ * returns it.
  */
 export class ChartFrame {
   readonly #ctx: WidgetContext;
@@ -43,13 +44,12 @@ export class ChartFrame {
   readonly #shimmer: HTMLElement;
   readonly #body: HTMLElement;
   readonly #title: HTMLElement;
-  readonly #ignored: HTMLElement;
-  /** Why the chart did not run, from its last answer; '' while it ran. */
-  #skipped = '';
+  readonly #decorations: HTMLElement;
   readonly #darkScheme: MediaQueryList;
   readonly #intersection: IntersectionObserver;
   readonly #resize: ResizeObserver;
   readonly #onDidRequestRefresh: Disposable;
+  readonly #onDidChangeDecorations: Disposable;
   #visible = false;
   #width = 0;
   #result: QueryResult | undefined;
@@ -66,13 +66,13 @@ export class ChartFrame {
     this.#spinner = html`<div class="d-chart-frame__spinner" title="Refreshing…" hidden><span class="d-spinner"></span></div>`;
     this.#shimmer = html`<div class="d-chart-frame__shimmer"></div>`;
     this.#body = html`<div class="d-chart-frame__body" style=${options.height ? { 'min-height': `${options.height}px` } : {}}></div>`;
-    this.#ignored = html`<span class="d-badge d-chart-frame__ignored" data-testid="chart-ignored-filters" title="Filters of the page this chart does not interpret" hidden></span>`;
+    this.#decorations = html`<span class="d-chart-frame__decorations"></span>`;
     const frame: HTMLElement = (this.#frame = html`<div class="d-chart-frame">
       ${this.#spinner}
       <div class="d-chart-frame__menu">
         <button type="button" class="d-button d-button--icon" title="More" aria-label="More" aria-haspopup="dialog" onclick=${(event: MouseEvent) => ctx.showMenu('widget/context', event.currentTarget as HTMLElement)}>${menuIcon}</button>
       </div>
-      ${(this.#title = html`<h2 class="d-chart-frame__title" hidden=${!options.title}>${options.title ?? ''}${this.#ignored}</h2>`)}
+      ${(this.#title = html`<h2 class="d-chart-frame__title" hidden=${!options.title}>${options.title ?? ''}${this.#decorations}</h2>`)}
       <div class="d-chart-frame__stage">${this.#shimmer}${this.#body}</div>
     </div>`);
     el.replaceChildren(frame);
@@ -86,6 +86,8 @@ export class ChartFrame {
     this.#onDidRequestRefresh = ctx.query.onDidRequestRefresh(() => {
       if (this.#visible) void this.#query();
     });
+    this.#onDidChangeDecorations = ctx.onDidChangeDecorations(() => this.#showDecorations(ctx.decorations));
+    this.#showDecorations(ctx.decorations);
   }
 
   dispose(): void {
@@ -93,6 +95,7 @@ export class ChartFrame {
     this.#resize.disconnect();
     this.#darkScheme.removeEventListener('change', this.#onSchemeChange);
     this.#onDidRequestRefresh.dispose();
+    this.#onDidChangeDecorations.dispose();
     this.#running?.abort();
     this.#drawn++;
   }
@@ -123,11 +126,9 @@ export class ChartFrame {
     this.#spinner.hidden = false;
     try {
       this.#result = await this.#ctx.runQuery(controller.signal);
-      this.#showDiagnostics(diagnosticsOf(this.#result));
       await this.#draw();
     } catch (error) {
       if (controller.signal.aborted) return;
-      this.#showDiagnostics({});
       this.#showError(error);
     } finally {
       if (this.#running === controller) this.#spinner.hidden = true;
@@ -137,8 +138,9 @@ export class ChartFrame {
   async #draw(): Promise<void> {
     if (!this.#result) return;
     const turn = ++this.#drawn;
-    if (this.#skipped) {
-      this.#showMessage('d-chart-frame__skipped', `skipped: ${this.#skipped}`);
+    if (this.#result.numCols === 0) {
+      this.#body.replaceChildren();
+      this.#shimmer.hidden = true;
       return;
     }
     try {
@@ -155,15 +157,14 @@ export class ChartFrame {
     }
   }
 
-  #showDiagnostics({ ignored = [], skipped = '' }: Diagnostics): void {
-    this.#skipped = skipped;
-    this.#ignored.hidden = ignored.length === 0 || skipped !== '';
-    // part of the heading's text only while shown
-    this.#ignored.textContent = this.#ignored.hidden ? '' : `ignores ${ignored.join(', ')}`;
-    // what it draws holds only part of what the page filters
-    this.#frame.classList.toggle('d-chart-frame--muted', !this.#ignored.hidden);
-    // a chart without a title has its row only for the badge
-    this.#title.hidden = !this.#options.title && this.#ignored.hidden;
+  /** A badge per decoration in the title row, its tooltip its hover; muted while one of them says so. */
+  #showDecorations(decorations: readonly WidgetDecoration[]): void {
+    this.#decorations.replaceChildren(
+      ...decorations.map(({ badge, tooltip }) => html`<span class="d-badge d-chart-frame__decoration" data-testid="chart-decoration" title=${tooltip ?? null}>${badge}</span>`),
+    );
+    this.#frame.classList.toggle('d-chart-frame--muted', decorations.some(({ muted }) => muted));
+    // a chart without a title has its row only for the badges
+    this.#title.hidden = !this.#options.title && decorations.length === 0;
   }
 
   #showError(error: unknown): void {

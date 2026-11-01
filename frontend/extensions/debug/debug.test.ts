@@ -7,7 +7,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { CommandOptions } from '../../hosts/commands/commands';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import type { PoppedView } from '../../hosts/page/page';
-import type { QueryResult, WidgetStatus } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetDecoration, WidgetStatus } from '../../hosts/widgets/widgets';
 import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
 import { clickhouseSummaryOf, debug, statusParts } from './debug';
 
@@ -171,7 +171,7 @@ describe('debug', () => {
     showPanel();
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
-    expect([...body.querySelectorAll('.d-view__title')].map((title) => title.textContent)).toEqual(['Query', 'Stats', 'EXPLAIN plan', 'Pipeline', 'Syntax', 'Result']);
+    expect([...body.querySelectorAll('.d-view__title')].map((title) => title.textContent)).toEqual(['Query', 'Decorations', 'Stats', 'EXPLAIN plan', 'Pipeline', 'Syntax', 'Result']);
     expect(body.querySelector('pre')!.textContent).toBe('SELECT count() FROM http_logs');
     expect(body.textContent).toContain('ReadFromMergeTree (default.http_logs)');
     expect(body.textContent).toContain('The chart has not queried yet.');
@@ -199,6 +199,17 @@ describe('debug', () => {
     expect(requested).toHaveLength(3);
   });
 
+  it('lists the active widget’s decorations with their source, drawn anew on each change, asking nothing', async () => {
+    activate(chart({ kind: 'done', rows: 3, ms: 12 }));
+    showPanel();
+    await settle();
+    const decorations = () => body.querySelector('.d-debug__decorations')!;
+    expect(decorations().textContent).toBe('None.');
+    active!.setDecorations([{ badge: 'ignores host = a', tooltip: 'not applied', muted: true, source: 'filters' }]);
+    expect([...decorations().querySelectorAll('tbody td')].map((cell) => cell.textContent)).toEqual(['filters', 'ignores host = a', 'not applied', 'yes']);
+    expect(requested).toHaveLength(1);
+  });
+
   it('asks nothing again when an aborted query puts back its status', async () => {
     activate(chart({ kind: 'done', rows: 3, ms: 12 }));
     showPanel();
@@ -223,23 +234,28 @@ describe('debug', () => {
 
   it('says the active widget’s status in the status bar; a click opens the panel', () => {
     expect(status.textContent).toBe('No active chart');
-    activate(chart({ kind: 'loading' }, 1, answer({ 'X-Dashica-Diagnostics': '{"ignored":["host"]}' })));
+    activate(chart({ kind: 'loading' }));
     expect(status.textContent).toBe('querying…');
     active!.setStatus({ kind: 'done', rows: 1234, ms: 87 });
-    expect([...status.children].map((part) => part.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host']);
+    active!.setDecorations([{ badge: 'ignores host = a', muted: true, source: 'filters' }]);
+    expect([...status.children].map((part) => part.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host = a']);
     status.click();
     expect(panel.shown).toBe(1);
   });
 });
 
 describe('statusParts', () => {
-  const texts = (widgetStatus: WidgetStatus, lastResult?: QueryResult) => statusParts(chart(widgetStatus, 1, lastResult)).map((part) => `${part.tone}:${part.text}`);
+  const texts = (widgetStatus: WidgetStatus, decorations: readonly WidgetDecoration[] = []) => {
+    const widget = chart(widgetStatus);
+    widget.setDecorations(decorations);
+    return statusParts(widget).map((part) => `${part.tone}:${part.text}`);
+  };
 
   it('says how the last query went', () => {
     expect(texts({ kind: 'idle' })).toEqual(['muted:not queried yet']);
     expect(texts({ kind: 'loading' })).toEqual(['muted:querying…']);
     expect(texts({ kind: 'done', rows: 1, ms: 3 })).toEqual(['plain:1 row', 'plain:3 ms']);
-    expect(texts({ kind: 'done', rows: 0, ms: 2 }, answer({ 'X-Dashica-Diagnostics': '{"skipped":"needs host"}' }))).toEqual(['muted:skipped: needs host']);
+    expect(texts({ kind: 'done', rows: 0, ms: 2 }, [{ badge: 'skipped: needs host', source: 'filters' }])).toEqual(['plain:0 rows', 'plain:2 ms', 'muted:skipped: needs host']);
   });
 
   it('shortens an error to its first line', () => {

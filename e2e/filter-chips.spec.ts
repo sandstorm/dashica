@@ -1,5 +1,5 @@
-// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b, 9c and 9r): a link's `f`
-// and `sql` show as chips in their order, a chart whose query ignores a pill says so and is drawn muted until the
+// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b, 9c, 9r and 9af): a link's `f`
+// and `sql` show as chips in their order, a chart whose query ignores a pill says so (its decoration) and is drawn muted until the
 // pointer is on it, an unsigned pill fails the
 // charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26) and a SQL chip's text is asked anew, both in the SQL
 // editor's input box (D12, 9aa), a chip's × removes it from the URL, a pill's operator and value are edited in
@@ -54,7 +54,7 @@ test('a link’s pill shows as a chip, the charts on another table name it as ig
     await expect(chips).toHaveCount(1);
     await expect(chips.first()).toHaveText(pill.label);
 
-    const ignored = page.getByTestId('chart-ignored-filters').first();
+    const ignored = page.getByTestId('chart-decoration').filter({hasText: 'ignores'}).first();
     await expect(ignored).toBeVisible();
     await expect(ignored).toHaveText(`ignores ${pill.label}`);
     await expect(ignored).toHaveCSS('opacity', '1');

@@ -5,13 +5,24 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { ActiveQuerySource, QueryApi } from '../query/query';
 import type { MenuAnchor, UiApi } from '../ui/ui';
-import type { QueryResult, RenderedWidget, WidgetContext, WidgetMenuContext, WidgetRenderer, WidgetsApi, WidgetStatus } from './widgets';
+import type {
+  QueryResult,
+  RenderedWidget,
+  WidgetContext,
+  WidgetDecoration,
+  WidgetDecorationProvider,
+  WidgetMenuContext,
+  WidgetRenderer,
+  WidgetsApi,
+  WidgetStatus,
+} from './widgets';
 import './widgets.css';
 
 /**
  * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). The active widget of each tab is kept
  * under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a `WidgetInstance`:
- * its renderer's context and, as `active`, the widget itself.
+ * its renderer's context and, as `active`, the widget itself. The decoration providers are asked by each instance when
+ * its query answered (`decorate`), and for every rendered instance when one fires.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
@@ -23,6 +34,9 @@ export class WidgetsHost implements WidgetsApi {
   readonly #onDidChangeActive = new EventEmitter<void>();
   readonly onDidChangeActive = this.#onDidChangeActive.event;
   readonly #onDidChangeTabs: Disposable;
+  readonly #providers: WidgetDecorationProvider[] = [];
+  /** The widgets rendered now, asked again when a provider fires. */
+  readonly #rendered = new Set<WidgetInstance>();
 
   constructor(
     private readonly ui: Pick<UiApi, 'showContextMenu'>,
@@ -62,6 +76,37 @@ export class WidgetsHost implements WidgetsApi {
     this.#onDidChangeActive.fire();
   }
 
+  registerDecorationProvider(provider: WidgetDecorationProvider): Disposable {
+    this.#providers.push(provider);
+    const listening = provider.onDidChangeDecorations?.(() => this.#redecorate());
+    this.#redecorate();
+    return new Disposable(() => {
+      listening?.dispose();
+      this.#providers.splice(this.#providers.indexOf(provider), 1);
+      this.#redecorate();
+    });
+  }
+
+  /**
+   * The decorations of `widget` for its answer `result`, of every provider in order; a provider that throws adds
+   * none (its error goes to the console).
+   */
+  decorate(widget: RenderedWidget, result: QueryResult): readonly WidgetDecoration[] {
+    return this.#providers.flatMap((provider) => {
+      try {
+        return provider.provideDecorations(widget, result) ?? [];
+      } catch (error) {
+        console.error('A widget decoration provider failed:', error);
+        return [];
+      }
+    });
+  }
+
+  /** Asks the providers again for each rendered widget. */
+  #redecorate(): void {
+    for (const widget of this.#rendered) widget.redecorate();
+  }
+
   dispose(): void {
     this.#onDidChangeTabs.dispose();
     this.#onDidChangeActive.dispose();
@@ -84,11 +129,13 @@ export class WidgetsHost implements WidgetsApi {
     }
     try {
       const ctx = new WidgetInstance(widget, el, this, query, this.ui);
+      this.#rendered.add(ctx);
       const rendered = renderer(el, widget, ctx);
       const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
         listening.dispose();
         this.deactivate(ctx);
+        this.#rendered.delete(ctx);
         rendered.dispose();
         ctx.dispose();
         el.replaceChildren();
@@ -132,6 +179,9 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   #queries = 0;
   /** The status of the last query that answered or failed, put back when the latest one is aborted. */
   #settled: WidgetStatus = this.#status;
+  #decorations: readonly WidgetDecoration[] = [];
+  readonly #onDidChangeDecorations = new EventEmitter<void>();
+  readonly onDidChangeDecorations = this.#onDidChangeDecorations.event;
 
   constructor(
     readonly widget: WidgetNode,
@@ -146,12 +196,30 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     return this.#status;
   }
 
+  get decorations(): readonly WidgetDecoration[] {
+    return this.#decorations;
+  }
+
+  /** Asks the providers again for the last answer, while that is the status shown; none after a failed query. */
+  redecorate(): void {
+    this.#setDecorations(this.#settled.kind === 'done' && this.lastResult ? this.host.decorate(this, this.lastResult) : []);
+  }
+
+  #setDecorations(decorations: readonly WidgetDecoration[]): void {
+    if (decorations.length === 0 && this.#decorations.length === 0) return;
+    this.#decorations = decorations;
+    this.#onDidChangeDecorations.fire();
+  }
+
   url(path: string): string {
     if (!('dataUrl' in this.widget)) throw new Error(`the widget ${this.widget.type} has no data`);
     return `${this.widget.dataUrl}${path}?${this.query.requestParams()}`;
   }
 
-  /** Queries `/query`; the status tells how the latest call goes, an aborted latest call puts back the last answer's. */
+  /**
+   * Queries `/query`; the status tells how the latest call goes, an aborted latest call puts back the last answer's.
+   * An answer is decorated before its status is told, a failure clears the decorations.
+   */
   async runQuery(signal?: AbortSignal): Promise<QueryResult> {
     const turn = ++this.#queries;
     const started = performance.now();
@@ -161,12 +229,14 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
       result = await fetchQueryResult(this.url('/query'), signal);
     } catch (error) {
       const ms = Math.round(performance.now() - started);
+      if (turn === this.#queries && !signal?.aborted) this.#setDecorations([]);
       if (turn === this.#queries) this.#setStatus(signal?.aborted ? this.#settled : { kind: 'error', message: error instanceof Error ? error.message : String(error), ms });
       throw error;
     }
     if (turn !== this.#queries) return result;
     const ms = Math.round(performance.now() - started);
     this.lastResult = result;
+    this.#setDecorations(this.host.decorate(this, result));
     this.#setStatus({ kind: 'done', rows: result.numRows, ms });
     return result;
   }
@@ -186,9 +256,10 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     this.ui.showContextMenu(menuId, { anchor, title: this.widget.type, context: shown, args: [shown] });
   }
 
-  /** It is removed: its event ends. */
+  /** It is removed: its events end. */
   dispose(): void {
     this.#onDidChangeStatus.dispose();
+    this.#onDidChangeDecorations.dispose();
   }
 }
 

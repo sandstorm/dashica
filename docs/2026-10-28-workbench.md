@@ -366,7 +366,7 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
 - **Innermost widget with data** *(proposed)*: a press inside a chart inside a grid makes the chart active (the closest
   element with `data-data-url`); containers, markdown and form inputs never become active.
 - **Debug is a left side panel** (rail button "Debug", a bug icon, after "Dashboards"; one left panel shows at a
-  time): the active widget's views (§3.4.2), without its title (its outline tells which widget; since 2026-10-31): Query (the SQL as sent), Stats (ClickHouse's stats and the
+  time): the active widget's views (§3.4.2), without its title (its outline tells which widget; since 2026-10-31): Query (the SQL as sent), Decorations (the widget's decorations with their source, badge, tooltip and whether they mute, drawn anew on each `onDidChangeDecorations`; since 9af, §3.15 D38), Stats (ClickHouse's stats and the
   summary of the chart's answer, closed), EXPLAIN plan, Pipeline (graph and steps, closed), Syntax (closed), Result (the
   last result as a table); their collapsed state in the extension's `globalState` *(proposed)*. It asks
   `<dataUrl>/debug` only while it is shown: when shown, when another widget becomes active, and when the active
@@ -375,7 +375,8 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   an aborted query putting back the status it asked for asks nothing *(proposed)*. Without an active widget: "Click a chart to see what it queried." The chart menu's "Debug" opens the
   panel; pressing the menu button made the chart active already, so no `setActive` exists *(proposed)*.
 - **Status bar:** one item of the `debug` extension, there on every page: the active widget's "1,234
-  rows · 87 ms" (not its title, since 2026-10-31), "ignores host", "skipped: …", "querying…" or the first line of its error (at most 80 characters, red;
+  rows · 87 ms" (not its title, since 2026-10-31) followed by its decorations' badges ("ignores host = a", "skipped: …";
+  since 9af, D38, also after the rows of a skipped chart, "0 rows · 2 ms · skipped: …" *(proposed)*), "querying…" or the first line of its error (at most 80 characters, red;
   the whole message in the tooltip); "No active chart" without one. A click opens Debug *(proposed)*. The status bar so
   always shows, on the start page too (§3.4.3); the page-wide query counts of the sketch (`query-status`) are not
   built.
@@ -469,7 +470,7 @@ the command `filters.offer` (`OFFER`), its argument types `FilterCandidate`, `Pi
 |---|---|
 | `commands` | `registerCommand` (with the command's `enablement` / `disabledReason`, 9t), `executeCommand`, `enablement`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
-| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status; it knows nothing of filtering: a click to filter is the `filters` extension's command `filters.offer`, its types in `filter-library` (§3.8, 9f, 9ad); the chart frame is `chart-library`'s (9h) |
+| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status, widget decorations (`registerDecorationProvider`, a widget's `decorations` / `onDidChangeDecorations`, as VS Code's file decorations; 9af, §3.15 D38); it knows nothing of filtering: a click to filter is the `filters` extension's command `filters.offer`, its types in `filter-library` (§3.8, 9f, 9ad); the chart frame is `chart-library`'s (9h) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's; it knows no key: typed keys carry their URL format (`queryKey`, `get` / `set` / `onDidChange`, 9w) |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -502,13 +503,16 @@ ctx.query.onDidRequestRefresh              // time, filter, param or refresh cha
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
 ctx.renderChild(el, child)                 // grid, collapsible
 ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
+ctx.decorations, ctx.onDidChangeDecorations // what providers say about its answer (9af): badges, muted; drawn by ChartFrame
 // click to filter: commands.executeCommand('filters.offer', at, candidates, { dataUrl, filterable }) (§3.8, 9f)
 ```
 
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
 - **Each widget composes itself; the host does not wrap.** Mandatory mechanism sits in `ctx` (`ctx.runQuery()` tracks
   status, so the status bar and Debug work for every widget). The visual chart frame (render once visible, observe
-  size, spinner, error, the chart's Diagnostics §3.8 as "ignores host" (the drawing muted, D28) or "skipped: …", menu button) is **one optional
+  size, spinner, error, the widget's decorations as a badge each with its tooltip, the drawing muted while one says
+  so (D28; since 9af, D38, without knowing what they mean: the `filters` extension's "ignores host = a" and
+  "skipped: …"), nothing drawn for an answer without a table (a 204) *(proposed)*, menu button) is **one optional
   helper**, `new ChartFrame(el, ctx, { draw })` (`chart-library`, since 9h); charts use it in one line, containers and markdown don't.
 - **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write the query key
   `PARAMS` (`widget-library/params-state.ts`, `ctx.query.get(PARAMS)`, since 9w).
@@ -796,7 +800,12 @@ so 500 (as before 6.4). The handler calls the chart's `ApplyFilters`, else `filt
 (since 9ae `diagnosticsOf(result)` in `filter-library`, §3.15 D38) is the header's JSON (`{ignored?, skipped?}`, `{}` without it; a 204 is an empty table); `ChartFrame` shows "ignores
 host, path" in the chart's title row (since 2026-10-31: the frame draws every chart's title, Plot and the table draw
 none), hidden while it ignores none, after a failed query and while skipped, with the chart's drawing muted while
-it shows (D28, since 9r), and "skipped: …" (`d-chart-frame__skipped`) in place of the chart.
+it shows (D28, since 9r), and "skipped: …" (`d-chart-frame__skipped`) in place of the chart. Since 9af (§3.15 D38)
+the `filters` extension shows them as widget decorations (`filters/decorations.ts`, `filterDecorations`): a badge
+"ignores <label>" per ignored pill (muted, tooltip "The chart does not apply the filter <label>"), or for a skipped
+chart only "skipped: <why>" (unmuted); `ChartFrame` draws them as badges (`d-chart-frame__decoration`,
+`data-testid="chart-decoration"`) and the body of a 204 empty *(proposed: one badge per pill, the skipped text as a
+badge rather than in place of the chart)*.
 `FiltersModel.fields` holds `{fieldId, op, value}[]` in the order added; `add(fieldId, op, value)` adds one (once:
 the same id, op and value again is no change), `remove(index)` and `clear()` take them away, and `add(condition)` with
 one argument still adds to the free SQL alone (filter buttons, the table's cell menu until 6.6). The URL holds each as
@@ -1179,12 +1188,21 @@ interface WidgetsApi {
   registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
   readonly active: RenderedWidget | undefined;            // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
   readonly onDidChangeActive: Event<void>;                // another widget or tab, the widget removed
+  registerDecorationProvider(provider: WidgetDecorationProvider): Disposable;   // as registerFileDecorationProvider (9af)
 }                                                         // a click to filter runs `filters.offer` (§3.8, 9f)
+
+interface WidgetDecorationProvider {                      // asked when a widget's answer arrives, all again when it fires
+  provideDecorations(widget: RenderedWidget, result: QueryResult): readonly WidgetDecoration[] | undefined;
+  readonly onDidChangeDecorations?: Event<void>;
+}
+interface WidgetDecoration { badge: string; tooltip?: string; muted?: boolean; source: string }   // only how it shows
 
 interface RenderedWidget {                                // the widget itself, as window.activeTextEditor (step 8b)
   readonly widget: WidgetNode; url(path: string): string; readonly lastResult: QueryResult | undefined;
   readonly status: WidgetStatus;                          // idle | loading | done {rows, ms} | error {message, ms}
   readonly onDidChangeStatus: Event<void>;                // records are the table's own: details.showRecords (§3.4.5, 9e)
+  readonly decorations: readonly WidgetDecoration[];      // of all providers; none before an answer, after a failure
+  readonly onDidChangeDecorations: Event<void>;           // the frame and Debug draw them (9af)
 }
 
 interface WidgetContext {                                 // what a renderer gets; excerpt
@@ -1632,7 +1650,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   shows), `ChartFrame` puts `d-chart-frame--muted` on its frame: its stage (the drawing, not the title row) at
   `--opacity-muted` and `saturate(--saturation-muted)` (tokens, the same on both schemes), the badge at full
   strength. The pointer on it, the focus in it or it being its tab's active widget (`d-widget--active`) draws it at
-  full strength again. A skipped chart ("skipped: …") and a failed query are drawn as before, unmuted.
+  full strength again. A skipped chart ("skipped: …") and a failed query are drawn as before, unmuted. Since 9af (D38)
+  the muted look is driven by the widget's decorations: the `filters` extension's "ignores <label>" ones say `muted`,
+  and `ChartFrame` mutes while any decoration does.
 - **D29 A readable, short pill key (9q, decided 2026-10-31; maintainer: the signed key in `f` is "far too long",
   ~330 characters):** still signed, still in `f` (repeatable), now `<table>.<field><op><value>[~<condition>]~<mac>`
   (`filter.Sign`, `filter.Open`):
@@ -2059,6 +2079,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ac ✅ 2026-11-01 | **BUGFIX a column and a computed field of one name stay two fields** (§3.15 D27): `filter.Apply` groups the pills by table, field, `Column` and op, so `host = web-1` on the column and `host = shop` on `lower(host_name) AS host` are AND-ed, not OR-ed; `/values` and `/type` leave out only the pills of the field asked (`othersThan`: the column's for a column or a field that is just one, else the computed field's). Files: `lib/dashboard/filter/filter{,_test}.go`, `lib/dashboard/widget/widget_common.go`, `query_filters_test.go`. ✅ (`go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox) | |
 | 9ad ✅ 2026-11-01 | **D38 (1) the filter contract into `filter-library`** (§3.5, §3.8, §3.11, §3.15): `frontend/extensions/filter-library/offer.ts` (`OFFER`, `FilterCandidate`, `PillSource`, `OfferFilters`, `offerFiltersOf`, + test) out of `hosts/widgets/widgets.ts` and `chart-library/filter-on-click.ts`; the charts, `table`, the Explore view and the `filters` extension import it; `chart-library/offer-testing.ts` (`recordOffers`) replaces the testbed's `offers` and its fake `filters.offer`. ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* the testbed's fake command left in this step, not in 9ag; the command's id a constant `OFFER` |
 | 9ae ✅ 2026-11-01 | **D38 (2) the widgets host passes the headers through** (§3.4.4, §3.6, §3.8, §3.11, §3.15): `QueryResult` = Arrow `Table & { headers: Headers }` (`fetchQueryResult` reads no header); `WidgetStatus.done` without `diagnostics`; the `dashica*` fields and `clickhouseSummary` gone. Readers next to their users: `filter-library/diagnostics.ts` (`Diagnostics`, `diagnosticsOf`, also for the Explore view's `fetchRows`), `chart-library/candidate.ts` (`columnTypesOf`), `chart-library/time-axis.ts` (`resolvedTimeRangeOf`, `bucketSizeOf`: time bars, time line, alert overview), `alerts.ts` (`thresholdsOf`; `drawTimeBars(…, { offerFilters, thresholds })` draws the lines it is given), `debug.ts` (`clickhouseSummaryOf`); `fakeWidget` takes a `lastResult` (+ tests of each reader). ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* `headers` the fetch's `Headers` itself; ClickHouse's summary read by Debug, its only user; Debug's status bar reads the Diagnostics from `lastResult` until 9af |
+| 9af ✅ 2026-11-01 | **D38 (3) widget decorations** (§3.4.4, §3.5, §3.6, §3.8, §3.11, §3.15): `WidgetsApi.registerDecorationProvider`, `WidgetDecorationProvider`, `WidgetDecoration {badge, tooltip?, muted?, source}`, `Decorated` (`decorations` + `onDidChangeDecorations` on `RenderedWidget` and `WidgetContext`); `WidgetsHost` asks the providers in order when an answer arrives (before the status tells it), clears them on a failure, asks every rendered widget again when a provider fires or is disposed, skips a provider that throws; the `filters` extension's provider (`filters/decorations.ts`: `filterDecorations`, `filterDecorationProvider`); `ChartFrame` draws a badge per decoration (`d-chart-frame__decoration`, `chart-decoration`), muted while one says so, nothing for an answer without columns, and knows no Diagnostics; Debug's view "Decorations" (`decorationList`) and its status bar's badges; `fakeWidget.setDecorations`; `e2e/filter-chips.spec.ts` finds the badge by `chart-decoration` (written, not run). ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run) | *(proposed)* one badge per ignored pill; "skipped: …" a badge, the 204's body empty; the decorations' tooltips' wording; the status bar's badges after rows and time also for a skipped chart; the provider's event `Event<void>` (all widgets asked again) |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

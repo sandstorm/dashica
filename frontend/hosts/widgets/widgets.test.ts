@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Tests for WidgetsHost: rendering by type, the widget context (query, children, menu), the active widget.
+// Tests for WidgetsHost: rendering by type, the widget context (query, children, menu), the active widget, the
+// widget decorations of the registered providers.
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
@@ -7,7 +8,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { TIME, presetRange } from '../../extensions/time-library/time-state';
 import { QueryHost } from '../query/query';
-import { WidgetsHost, type WidgetContext, type WidgetMenuContext } from './widgets';
+import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetContext, type WidgetDecoration, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -281,6 +282,74 @@ describe('WidgetsHost', () => {
       widgets.dispose();
       first.dispose();
       other.dispose();
+    });
+  });
+
+  describe('decorations', () => {
+    let ctx: WidgetContext;
+    const slow: WidgetDecoration = { badge: 'slow', tooltip: 'over a second', source: 'timing' };
+
+    beforeEach(() => {
+      testbed.widgets.registerWidget('timeBar', (_el, _widget, given) => {
+        ctx = given;
+        return new Disposable(() => {});
+      });
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Slow': 'yes' });
+    });
+
+    it('asks every provider in order when an answer arrives, before the status tells it; none before', async () => {
+      const asked: { widget: RenderedWidget; result: QueryResult }[] = [];
+      testbed.widgets.registerDecorationProvider({ provideDecorations: (widget, result) => (asked.push({ widget, result }), result.headers.get('X-Slow') ? [slow] : undefined) });
+      testbed.widgets.registerDecorationProvider({ provideDecorations: () => [{ badge: 'second', muted: true, source: 'other' }] });
+      testbed.render(requests);
+      expect(ctx.decorations).toEqual([]);
+      let seen: readonly WidgetDecoration[] = [];
+      let changes = 0;
+      ctx.onDidChangeDecorations(() => changes++);
+      // the context is the rendered widget, the status event comes after the decorations
+      (ctx as unknown as RenderedWidget).onDidChangeStatus(() => (seen = ctx.decorations));
+      const result = await ctx.runQuery();
+      expect(asked).toEqual([{ widget: ctx, result }]);
+      expect(ctx.decorations).toEqual([slow, { badge: 'second', muted: true, source: 'other' }]);
+      expect(seen).toEqual(ctx.decorations);
+      expect(changes).toBe(1);
+    });
+
+    it('has none after a failed query', async () => {
+      testbed.widgets.registerDecorationProvider({ provideDecorations: () => [slow] });
+      testbed.render(requests);
+      await ctx.runQuery();
+      testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
+      await expect(ctx.runQuery()).rejects.toThrow();
+      expect(ctx.decorations).toEqual([]);
+    });
+
+    it('asks again for every answered widget when a provider fires, and drops its decorations once it is disposed', async () => {
+      const changed = new EventEmitter<void>();
+      let given: readonly WidgetDecoration[] = [slow];
+      const registered = testbed.widgets.registerDecorationProvider({ provideDecorations: () => given, onDidChangeDecorations: changed.event });
+      testbed.render(requests);
+      await ctx.runQuery();
+      given = [{ badge: 'fast', source: 'timing' }];
+      changed.fire();
+      expect(ctx.decorations).toEqual([{ badge: 'fast', source: 'timing' }]);
+      registered.dispose();
+      expect(ctx.decorations).toEqual([]);
+    });
+
+    it('skips a provider that throws', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      testbed.widgets.registerDecorationProvider({
+        provideDecorations: () => {
+          throw new Error('broken');
+        },
+      });
+      testbed.widgets.registerDecorationProvider({ provideDecorations: () => [slow] });
+      testbed.render(requests);
+      await ctx.runQuery();
+      expect(ctx.decorations).toEqual([slow]);
+      expect(logged).toHaveBeenCalled();
+      logged.mockRestore();
     });
   });
 });

@@ -44,6 +44,24 @@
   font-size: var(--text-xs);
 }
 
+/* the Decorations view: a row per decoration */
+.d-debug__decoration-table {
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.d-debug__decoration-table th,
+.d-debug__decoration-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.d-debug__none {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
 .d-debug__result {
   font-size: var(--text-xs);
 }

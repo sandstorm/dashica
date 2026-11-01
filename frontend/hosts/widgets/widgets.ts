@@ -12,7 +12,9 @@ import type { MenuAnchor } from '../ui/ui';
  * themselves into the chart library's `ChartFrame` (title, spinner, error, menu button).
  * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
  * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
- * and the widget itself tells its status with its own event: Debug follows it. What only one widget type has (a
+ * and the widget itself tells its status with its own event: Debug follows it. As VS Code's file decorations, an
+ * extension may decorate a widget's answer (`registerDecorationProvider`): a badge with its tooltip, the drawing muted;
+ * the chart frame and Debug show a widget's decorations without knowing what they mean. What only one widget type has (a
  * table's ticked rows, what a click on a mark offers) is that type's own; it tells other extensions by command (the
  * table: `details.showRecords`).
  */
@@ -32,13 +34,49 @@ export interface WidgetsApi {
   readonly active: RenderedWidget | undefined;
   /** Fires when `active` is another widget: another one pressed, another tab shown, the widget removed. */
   readonly onDidChangeActive: Event<void>;
+  /**
+   * Decorates the widgets' answers until disposed, as VS Code's `window.registerFileDecorationProvider`: the host asks
+   * `provider` when a widget's query answered, and every answered widget again when `provider` fires its
+   * `onDidChangeDecorations`. A widget's decorations are those of all providers, in the order registered.
+   */
+  registerDecorationProvider(provider: WidgetDecorationProvider): Disposable;
+}
+
+/** What decorates the widgets' answers (`WidgetsApi.registerDecorationProvider`). */
+export interface WidgetDecorationProvider {
+  /** The decorations of `widget` for its answer `result`; `undefined` or `[]`: none. */
+  provideDecorations(widget: RenderedWidget, result: QueryResult): readonly WidgetDecoration[] | undefined;
+  /** Fires when its decorations of answers already given may have changed: the host asks it again for each. */
+  readonly onDidChangeDecorations?: Event<void>;
 }
 
 /**
- * A widget with data as it is rendered (`WidgetsApi.active`): what its menu is shown for, and its query's status with
- * the event that tells its change. Its event ends when it is removed.
+ * What is shown on a widget about its answer, as VS Code's `FileDecoration`: only how it shows, not what it means
+ * (the `filters` extension's "ignores customer = acme", muted).
  */
-export interface RenderedWidget extends WidgetMenuContext {
+export interface WidgetDecoration {
+  /** A short text beside the widget's title (`ignores customer = acme`). */
+  readonly badge: string;
+  /** The badge's hover. */
+  readonly tooltip?: string;
+  /** Whether the widget is drawn muted while it has the decoration. */
+  readonly muted?: boolean;
+  /** Who decorates: the id of the provider's extension (`filters`), as Debug lists it. */
+  readonly source: string;
+}
+
+/** A widget's current decorations, and the event that tells their change: an answered query, a provider that fired. */
+export interface Decorated {
+  /** Empty before an answer and after a failed query. */
+  readonly decorations: readonly WidgetDecoration[];
+  readonly onDidChangeDecorations: Event<void>;
+}
+
+/**
+ * A widget with data as it is rendered (`WidgetsApi.active`): what its menu is shown for, its query's status and its
+ * decorations, each with the event that tells its change. Its events end when it is removed.
+ */
+export interface RenderedWidget extends WidgetMenuContext, Decorated {
   readonly status: WidgetStatus;
   /** Fires when its query started, answered or failed. */
   readonly onDidChangeStatus: Event<void>;
@@ -60,8 +98,8 @@ export type WidgetOf<T extends WidgetType> = Extract<WidgetNode, { type: T }>;
 /** Fills `el` with `widget`; disposing the result stops what it started (queries, listeners). `el` is emptied after. */
 export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext) => { dispose(): unknown };
 
-/** What a widget's renderer gets to work with. */
-export interface WidgetContext {
+/** What a widget's renderer gets to work with; its decorations for the chart frame. */
+export interface WidgetContext extends Decorated {
   /**
    * The query state of the widget's tab: a key's value (`query.get(TIME)`), what the handlers read of it
    * (`requestParams`); `query.onDidRequestRefresh`: query again.

@@ -9,12 +9,14 @@
 // input box), each made again by a chart of the page (a column's by the table's first chart), one no chart makes only
 // removed; with SQL filters off
 // (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; a chart
-// click's `filters.offer` adding the pill chosen to the tab shown.
+// click's `filters.offer` adding the pill chosen to the tab shown; the charts' answers decorated with the pills they ignore.
+import { Table } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, Schema, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
+import type { QueryResult, RenderedWidget, WidgetDecorationProvider } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, replaceChip, type FilterChip } from './chips';
 import type { InputBoxField } from '../../hosts/ui/ui';
 import { buttonCondition, buttonOf, conditionCompletion, filters } from './filters';
@@ -40,6 +42,8 @@ let picks: { labels: string[]; anchor: unknown }[];
 let picked: string | undefined;
 /** The commands the extension registered, by id. */
 let commands: Map<string, (...args: any[]) => unknown>;
+/** The widget decoration providers the extension registered. */
+let providers: WidgetDecorationProvider[];
 
 /** The ClickHouse operator a key writes for each sign a label shows. */
 const OPERATORS: Record<string, string> = { '=': '=', '≠': '!=', '<': '<', '≤': '<=', '>': '>', '≥': '>=' };
@@ -127,7 +131,9 @@ beforeEach(() => {
 function activate(sqlEnabled: boolean): void {
   page.workbench.sqlEnabled = sqlEnabled;
   const registry = { registerCommand: (id: string, handler: (...args: any[]) => unknown) => (commands.set(id, handler), { dispose: () => commands.delete(id) }) };
-  filters.activate({ query, page, ui, commands: registry, subscriptions: [] } as unknown as ExtensionContext);
+  providers = [];
+  const widgets = { registerDecorationProvider: (provider: WidgetDecorationProvider) => (providers.push(provider), { dispose() {} }) };
+  filters.activate({ query, page, ui, commands: registry, widgets, subscriptions: [] } as unknown as ExtensionContext);
   show(shop);
 }
 
@@ -604,5 +610,17 @@ describe('filters.offer', () => {
     expect(picks).toEqual([{ labels: ['host = a', 'host = a'], anchor: { x: 10, y: 20 } }]);
     expect(new URL(fetched.at(-1)!, 'http://x').pathname).toBe('/p/shop/api/1/pill');
     expect(held()).toHaveLength(1);
+  });
+});
+
+describe('decorations', () => {
+  beforeEach(() => activate(true));
+
+  it('decorates each chart’s answer with the pills it ignores', () => {
+    expect(providers).toHaveLength(1);
+    const result: QueryResult = Object.assign(new Table(), { headers: new Headers({ 'X-Dashica-Diagnostics': '{"ignored":["host = a"]}' }) });
+    expect(providers[0].provideDecorations({} as RenderedWidget, result)).toEqual([
+      { badge: 'ignores host = a', tooltip: 'The chart does not apply the filter host = a', muted: true, source: 'filters' },
+    ]);
   });
 });

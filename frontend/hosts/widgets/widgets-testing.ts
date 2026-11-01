@@ -9,7 +9,7 @@ import type { Extension, ExtensionContext, Memento } from '../extension-host/ext
 import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost } from '../query/query';
 import { UiHost, type ContextMenuOptions } from '../ui/ui';
-import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetStatus } from './widgets';
+import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetDecoration, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
@@ -17,7 +17,7 @@ import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetStatus }
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
  * shown. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
- * `RenderedWidget` whose status the test sets. `sqlEnabled` is `page.workbench`'s (default on).
+ * `RenderedWidget` whose status and decorations the test sets. `sqlEnabled` is `page.workbench`'s (default on).
  */
 export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
   history.replaceState(null, '', '/p/shop');
@@ -129,17 +129,20 @@ export async function settle(): Promise<void> {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** A `RenderedWidget` whose status the test sets (`setStatus`), telling its change. */
+/** A `RenderedWidget` whose status and decorations the test sets (`setStatus`, `setDecorations`), telling each change. */
 export interface FakeWidget extends RenderedWidget {
   setStatus(status: WidgetStatus): void;
+  setDecorations(decorations: readonly WidgetDecoration[]): void;
 }
 
-/** `widget` as rendered, with `url`, `status` (default: answered, 2 rows) and `lastResult` (default none). */
+/** `widget` as rendered, with `url`, `status` (default: answered, 2 rows), `lastResult` (default none), no decorations. */
 export function fakeWidget(
   widget: WidgetNode,
   { url = (path: string) => path, status = { kind: 'done', rows: 2, ms: 5 }, lastResult }: { url?: (path: string) => string; status?: WidgetStatus; lastResult?: QueryResult } = {},
 ): FakeWidget {
   const statusChanged = new EventEmitter<void>();
+  const decorationsChanged = new EventEmitter<void>();
+  let decorations: readonly WidgetDecoration[] = [];
   return {
     widget,
     url,
@@ -151,6 +154,14 @@ export function fakeWidget(
     setStatus(changed) {
       status = changed;
       statusChanged.fire();
+    },
+    get decorations() {
+      return decorations;
+    },
+    onDidChangeDecorations: decorationsChanged.event,
+    setDecorations(changed) {
+      decorations = changed;
+      decorationsChanged.fire();
     },
   };
 }

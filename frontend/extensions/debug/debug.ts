@@ -3,23 +3,23 @@ import { instance as viz } from '@viz-js/viz';
 import { Bug, SquareArrowOutUpRight, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import type { QueryResult, RenderedWidget } from '../../hosts/widgets/widgets';
+import type { QueryResult, RenderedWidget, WidgetDecoration } from '../../hosts/widgets/widgets';
 import { createView, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
-import { diagnosticsOf } from '../filter-library/diagnostics';
 import { widgetTitle } from '../widget-library/widget-title';
 import './debug.css';
 
 /**
  * The left side panel "Debug" and the status bar's item, both about the active widget (`widgets.active`). The panel
- * shows, as views, what the widget queried: the SQL as sent, its stats, ClickHouse's EXPLAIN (plan, pipeline as a
- * graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and the result it drew last as
- * a table. It follows the active widget's status (`onDidChangeStatus`) and asks `/debug` only while it is shown: on
+ * shows, as views, what the widget queried: the SQL as sent, its decorations with their source (whatever they mean),
+ * its stats, ClickHouse's EXPLAIN (plan, pipeline as a graph and as steps, syntax), from its `<dataUrl>/debug` with its
+ * tab's query state, and the result it drew last as a table. It follows the active widget's status
+ * (`onDidChangeStatus`) and decorations (`onDidChangeDecorations`), and asks `/debug` only while it is shown: on
  * showing, on another active widget, and when that widget's query answered or failed. Which widget it is tells its
  * outline, not the panel. "Pop out" (the panel's menu `panel/debug`, its command enabled while a widget is active)
  * shows the same for the active widget
  * in a tab of its own, which keeps following that widget's status, not the active widget. The status bar
- * says the widget's rows, query time, its error or the filters it ignores ("No active chart" on the start page); a
+ * says the widget's rows, query time and its decorations' badges, or its error ("No active chart" on the start page); a
  * click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
  */
 export const debug: Extension = {
@@ -42,11 +42,13 @@ export const debug: Extension = {
       if (active) showing = followDebug(panel.body, active, showMenu, globalState);
       else panel.body.replaceChildren(html`<div class="d-debug__hint">Click a chart to see what it queried.</div>`);
     };
-    /** The active widget's status, listened to for the status bar. */
+    /** The active widget's status and decorations, listened to for the status bar. */
     let following: Disposable | undefined;
     const follow = () => {
       following?.dispose();
-      following = widgets.active?.onDidChangeStatus(() => drawStatus(status, widgets.active));
+      const active = widgets.active;
+      const redraw = () => drawStatus(status, active);
+      following = active && Disposable.from(active.onDidChangeStatus(redraw), active.onDidChangeDecorations(redraw));
       drawStatus(status, widgets.active);
       showPanel();
     };
@@ -79,23 +81,38 @@ export const debug: Extension = {
 
 /**
  * Shows in `el` what `widget` queried (`showDebug`), and asks again when its query answered or failed. While its query
- * runs, `el` keeps what it shows; an aborted query putting back the status asked for asks nothing.
+ * runs, `el` keeps what it shows; an aborted query putting back the status asked for asks nothing. Its decorations are
+ * drawn anew on each change.
  */
 export function followDebug(el: HTMLElement, widget: RenderedWidget, showMenu: ShowTableMenu, state: Memento): Disposable {
   let loading = new AbortController();
   let asked = widget.status;
-  void showDebug(el, widget, showMenu, state, loading.signal);
+  const decorations: HTMLElement = html`<div class="d-debug__decorations"></div>`;
+  const drawDecorations = () => decorations.replaceChildren(decorationList(widget.decorations));
+  drawDecorations();
+  void showDebug(el, widget, decorations, showMenu, state, loading.signal);
   const listening = widget.onDidChangeStatus(() => {
     if (widget.status.kind === 'loading' || widget.status === asked) return;
     loading.abort();
     loading = new AbortController();
     asked = widget.status;
-    void showDebug(el, widget, showMenu, state, loading.signal);
+    void showDebug(el, widget, decorations, showMenu, state, loading.signal);
   });
+  const decorating = widget.onDidChangeDecorations(drawDecorations);
   return new Disposable(() => {
     loading.abort();
     listening.dispose();
+    decorating.dispose();
   });
+}
+
+/** `decorations` as a table, each its source, badge, tooltip and whether it mutes; "None." without one. */
+export function decorationList(decorations: readonly WidgetDecoration[]): HTMLElement {
+  if (decorations.length === 0) return html`<p class="d-debug__none">None.</p>`;
+  return html`<table class="d-debug__decoration-table">
+    <thead><tr><th>Source</th><th>Badge</th><th>Tooltip</th><th>Muted</th></tr></thead>
+    <tbody>${decorations.map(({ source, badge, tooltip, muted }) => html`<tr><td>${source}</td><td>${badge}</td><td>${tooltip ?? ''}</td><td>${muted ? 'yes' : 'no'}</td></tr>`)}</tbody>
+  </table>`;
 }
 
 /** What `<dataUrl>/debug` answers (httpserver.DebugInfo). */
@@ -109,8 +126,11 @@ interface DebugInfo {
   stats: unknown;
 }
 
-/** Fills `el` with what `active` queried, as views (their state in `state`); a failed request shows its error there. */
-async function showDebug(el: HTMLElement, active: RenderedWidget, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
+/**
+ * Fills `el` with what `active` queried, as views (their state in `state`), `decorations` (its decorations, drawn by
+ * the caller) among them; a failed request shows its error there.
+ */
+async function showDebug(el: HTMLElement, active: RenderedWidget, decorations: HTMLElement, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
   el.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
   let info: DebugInfo;
   try {
@@ -129,6 +149,7 @@ async function showDebug(el: HTMLElement, active: RenderedWidget, showMenu: Show
   const view = (id: string, name: string, body: Node, collapsed = false) => createView({ id, title: name, collapsed, state, body: html`<div class="d-debug__content">${body}</div>` });
   el.replaceChildren(html`<div class="d-debug">
     ${view('query', 'Query', pre(info.query))}
+    ${view('decorations', 'Decorations', decorations)}
     ${view(
       'stats',
       'Stats',
@@ -172,7 +193,7 @@ export interface StatusPart {
   readonly tone: 'plain' | 'muted' | 'error';
 }
 
-/** What the status bar says about `active`: rows and time, its error (its first line), or the filters it ignores. */
+/** What the status bar says about `active`: rows and time with its decorations' badges, or its error (its first line). */
 export function statusParts(active: RenderedWidget | undefined): readonly StatusPart[] {
   if (!active) return [{ text: 'No active chart', tone: 'muted' }];
   const { status } = active;
@@ -183,13 +204,12 @@ export function statusParts(active: RenderedWidget | undefined): readonly Status
       return [{ text: 'querying…', tone: 'muted' }];
     case 'error':
       return [{ text: shorten(status.message), tone: 'error' }, { text: `${status.ms} ms`, tone: 'muted' }];
-    case 'done': {
-      const { ignored = [], skipped } = active.lastResult ? diagnosticsOf(active.lastResult) : {};
-      if (skipped) return [{ text: `skipped: ${skipped}`, tone: 'muted' }];
-      const parts: StatusPart[] = [{ text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' }, { text: `${status.ms} ms`, tone: 'plain' }];
-      if (ignored.length > 0) parts.push({ text: `ignores ${ignored.join(', ')}`, tone: 'muted' });
-      return parts;
-    }
+    case 'done':
+      return [
+        { text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' },
+        { text: `${status.ms} ms`, tone: 'plain' },
+        ...active.decorations.map(({ badge }): StatusPart => ({ text: badge, tone: 'muted' })),
+      ];
   }
 }
 
