@@ -30,7 +30,7 @@ func serve(t *testing.T, d Dashboard) *http.ServeMux {
 	connections := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	cfg := &config.Config{ClickHouse: connections, AppSecret: string(testSecret)}
 	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
-		ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()),
+		ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()),
 		Config:                  cfg,
 		FilterService:           filter.NewFilterService(cfg),
 	}}

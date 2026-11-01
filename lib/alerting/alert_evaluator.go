@@ -15,11 +15,11 @@ import (
 // its TimeProvider says.
 type AlertEvaluator struct {
 	logger            zerolog.Logger
-	clickhouseManager *clickhouse.Manager
+	clickhouseManager *clickhouse.ClientManager
 	timeProvider      config.TimeProvider
 }
 
-func NewAlertEvaluator(logger zerolog.Logger, clickhouseManager *clickhouse.Manager, timeProvider config.TimeProvider) *AlertEvaluator {
+func NewAlertEvaluator(logger zerolog.Logger, clickhouseManager *clickhouse.ClientManager, timeProvider config.TimeProvider) *AlertEvaluator {
 	logger = logger.With().
 		Str(logging.EventDataset, logging.EventDataset_Dashica_Alerting_Evaluator).
 		Logger()

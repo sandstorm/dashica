@@ -15,7 +15,7 @@ import (
 // every case answers before) answers `target`.
 func askSchema(exploreEnabled bool, target string) *httptest.ResponseRecorder {
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}, ExploreEnabled: exploreEnabled}
-	h := SchemaHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
+	h := SchemaHandler{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Config: cfg}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec

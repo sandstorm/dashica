@@ -92,7 +92,7 @@ func TestMount_ServesTheQueryAChartRunsWithItsOwnAdjustments(t *testing.T) {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	cfg := &config.Config{ClickHouse: unreachable}
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
-		ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()),
+		ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()),
 		Config:                  cfg,
 		FilterService:           filter.NewFilterService(cfg),
 	}}

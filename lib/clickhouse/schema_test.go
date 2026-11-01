@@ -65,7 +65,7 @@ func TestTableTtl_IsWhatStandsBetweenTtlAndSettings(t *testing.T) {
 }
 
 func TestManager_ConnectionsAreTheConfiguredNamesSorted(t *testing.T) {
-	m := NewManager(&config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}, "logs": {}}}, zerolog.Nop())
+	m := NewClientManager(&config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}, "logs": {}}}, zerolog.Nop())
 	require.Equal(t, []string{"alert_storage", "default", "logs"}, m.Connections())
 }
 

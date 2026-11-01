@@ -84,7 +84,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.FS(public.FS))))
 
 	timeProvider := config.NewRealTimeProvider()
-	clickhouseClientManager := clickhouse.NewManager(cfg, logger)
+	clickhouseClientManager := clickhouse.NewClientManager(cfg, logger)
 
 	alertTargetClickhouseClient, err := clickhouseClientManager.GetClient("alert_storage")
 	if err != nil {

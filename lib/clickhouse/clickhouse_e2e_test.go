@@ -20,7 +20,7 @@ func TestClickhouseE2E(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	config, _ := testServer.LoadTestingConfig(t)
 
-	clickhouseManager := NewManager(config, logger)
+	clickhouseManager := NewClientManager(config, logger)
 
 	// Create a test context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -51,7 +51,7 @@ func TestClickhouseE2E(t *testing.T) {
 	// assertions.AssertNoGoRoutineLeak(t)
 }
 
-func testQueryJSON(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+func testQueryJSON(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
 	// Define a struct type for our test data
 	type TestResult struct {
 		Value int `json:"value"`
@@ -97,7 +97,7 @@ func findArrowUnsafeColumn(t *testing.T, ctx context.Context, c *Client) string 
 // testArrowJSONColumn proves the transport-level fix: a SELECT * over a table
 // with a JSON column (full_logs.event_original) errors on a raw Arrow query but
 // succeeds through QueryToHandler, which wraps it to cast the column to String.
-func testArrowJSONColumn(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+func testArrowJSONColumn(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
 	c, err := clickhouseManager.GetClient("alert_storage")
 	require.NoError(t, err)
 
@@ -122,7 +122,7 @@ func testArrowJSONColumn(t *testing.T, ctx context.Context, clickhouseManager *M
 
 // testArrowWrapOrdering guards the row-order risk of the outer pass-through
 // SELECT: an ORDER BY inside the wrapped subquery must survive the wrap.
-func testArrowWrapOrdering(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+func testArrowWrapOrdering(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
 	c, err := clickhouseManager.GetClient("alert_storage")
 	require.NoError(t, err)
 
@@ -155,7 +155,7 @@ func testArrowWrapOrdering(t *testing.T, ctx context.Context, clickhouseManager 
 	}
 }
 
-func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
 	dbClient, err := clickhouseManager.GetClient("alert_storage")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -190,7 +190,7 @@ func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *
 
 // testSchema asks the Schema of the testing ClickHouse: full_logs with its ORDER BY, columns and a default, and the
 // system tables; asked again with refresh.
-func testSchema(t *testing.T, ctx context.Context, clickhouseManager *Manager) {
+func testSchema(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
 	dbClient, err := clickhouseManager.GetClient("default")
 	require.NoError(t, err)
 

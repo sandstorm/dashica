@@ -48,7 +48,7 @@ func TestHandleFields_TakesNoSqlChipsAndAFailedDescribeKeepsTheColumns(t *testin
 	// sql_filter_enabled off: a chip that reached the DESCRIBE would be ErrSqlNotEnabled
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}}
 	var logged bytes.Buffer
-	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, Logger: zerolog.New(&logged)}
+	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Config: cfg, Logger: zerolog.New(&logged)}
 	columns := []clickhouse.SchemaColumn{{Name: "host_name", Type: "String"}}
 	rec := httptest.NewRecorder()
 	if err := qh.HandleFields(columns, sql.New(sql.From("http_logs")), []sql.SqlField{sql.Field("lower(host_name)").WithAlias("host")}, state, rec, r); err != nil {

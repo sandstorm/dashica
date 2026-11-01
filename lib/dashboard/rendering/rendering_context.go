@@ -63,7 +63,7 @@ func (c *DashboardContext) DataURL(widget any) string {
 
 // Dependencies are the long-lived services and the loaded config the handlers need; nothing request-specific.
 type Dependencies struct {
-	ClickhouseClientManager *clickhouse.Manager
+	ClickhouseClientManager *clickhouse.ClientManager
 	Logger                  zerolog.Logger
 	TimeProvider            config.TimeProvider
 	FileSystem              fs.ReadFileFS

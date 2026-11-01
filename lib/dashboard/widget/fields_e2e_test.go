@@ -24,7 +24,7 @@ func askClickHouse(t *testing.T, chart withQuery, path string) *httptest.Respons
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
 	cfg.AppSecret = string(testSecret)
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
+	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
 	rec := httptest.NewRecorder()
 	queryHandler(deps, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec

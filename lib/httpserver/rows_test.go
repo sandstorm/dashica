@@ -85,7 +85,7 @@ func TestExploreHandlers_AnswerErrExploreNotEnabledBeforeAnyQuery(t *testing.T) 
 // asked: every case answers before) answers `target`.
 func askConnectionRows(exploreEnabled bool, target string) *httptest.ResponseRecorder {
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}, ExploreEnabled: exploreEnabled}
-	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
+	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Config: cfg}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec

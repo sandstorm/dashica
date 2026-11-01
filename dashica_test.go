@@ -21,7 +21,7 @@ import (
 )
 
 func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
-	d := &DashicaImpl{deps: rendering.Dependencies{Config: &config.Config{}, ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, zerolog.Nop())}}
+	d := &DashicaImpl{deps: rendering.Dependencies{Config: &config.Config{}, ClickhouseClientManager: clickhouse.NewClientManager(&config.Config{}, zerolog.Nop())}}
 	get := func() string {
 		rec := httptest.NewRecorder()
 		d.serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
@@ -44,7 +44,7 @@ func TestWorkbenchJson_SaysWhetherExploreAndSqlFiltersAreEnabledAndTheConnection
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}}}
 	rec := httptest.NewRecorder()
 	cfg.ExploreEnabled, cfg.SqlFilterEnabled = true, true
-	deps := rendering.Dependencies{Config: cfg, ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop())}
+	deps := rendering.Dependencies{Config: cfg, ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop())}
 	(&DashicaImpl{deps: deps}).serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
 
 	if got := rec.Body.String(); got != `{"menu":[],"explore":true,"sqlEnabled":true,"connections":["alert_storage","default"]}`+"\n" {
@@ -55,7 +55,7 @@ func TestWorkbenchJson_SaysWhetherExploreAndSqlFiltersAreEnabledAndTheConnection
 func TestSchemaJson_IsServedAndAnswersNotFoundWhileExploreIsOff(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 	mux := http.NewServeMux()
-	newDashicaImpl(logger, mux, rendering.Dependencies{Config: &config.Config{}, ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger), Logger: logger})
+	newDashicaImpl(logger, mux, rendering.Dependencies{Config: &config.Config{}, ClickhouseClientManager: clickhouse.NewClientManager(&config.Config{}, logger), Logger: logger})
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/schema.json?connection=default", nil))
@@ -69,7 +69,7 @@ func TestWorkbenchJson_ListsEveryPagesOutline(t *testing.T) {
 	mux := http.NewServeMux()
 	d := newDashicaImpl(logger, mux, rendering.Dependencies{
 		Config:                  &config.Config{},
-		ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger),
+		ClickhouseClientManager: clickhouse.NewClientManager(&config.Config{}, logger),
 		FilterService:           filter.NewFilterService(&config.Config{}),
 		Logger:                  logger,
 	})

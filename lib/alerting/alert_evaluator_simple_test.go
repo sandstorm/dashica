@@ -16,7 +16,7 @@ import (
 func TestAlertEvaluatorSimple(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	cfg, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(cfg, logger)
+	clickhouseManager := clickhouse.NewClientManager(cfg, logger)
 	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, config.NewVirtualTimeProvider())
 
 	testCases := []struct {

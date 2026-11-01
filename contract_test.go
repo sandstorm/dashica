@@ -59,7 +59,7 @@ func TestContract_Golden(t *testing.T) {
 	// its secret signs the filter buttons' pills in page.json; fixed, so the golden file stays the same
 	cfg := &config.Config{AppSecret: "a test secret of at least thirty-two bytes"}
 	d := newDashicaImpl(logger, mux, rendering.Dependencies{
-		ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger),
+		ClickhouseClientManager: clickhouse.NewClientManager(&config.Config{}, logger),
 		Logger:                  logger,
 		Config:                  cfg,
 		FilterService:           filter.NewFilterService(cfg),

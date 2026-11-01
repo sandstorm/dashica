@@ -21,7 +21,7 @@ import (
 // information, its rows and SQL for the Explore view, its fields and values for "add filter"; each for the chart's
 // query with the request's pills already applied.
 type QueryHandler struct {
-	ClickhouseClientManager *clickhouse.Manager
+	ClickhouseClientManager *clickhouse.ClientManager
 	Logger                  zerolog.Logger
 	FileSystem              fs.ReadFileFS
 	// Config is the loaded dashica_config, read only: HandleSql and HandleEditedRows answer while explore_enabled is

@@ -15,7 +15,7 @@ import (
 // again. 404 while explore_enabled is off (ErrExploreNotEnabled, before any query) and for a connection dashica_config
 // does not name.
 type SchemaHandler struct {
-	ClickhouseClientManager *clickhouse.Manager
+	ClickhouseClientManager *clickhouse.ClientManager
 	// Config is the loaded dashica_config, read only: it answers while explore_enabled is on; the Schema view is part
 	// of Explore.
 	Config *config.Config

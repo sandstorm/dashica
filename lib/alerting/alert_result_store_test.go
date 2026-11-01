@@ -16,7 +16,7 @@ import (
 func TestAlertResultStore(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	cfg, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(cfg, logger)
+	clickhouseManager := clickhouse.NewClientManager(cfg, logger)
 	clickhouseClient, err := clickhouseManager.GetClient("alert_storage")
 	require.NoError(t, err)
 	currentTime := config.NewVirtualTimeProvider()

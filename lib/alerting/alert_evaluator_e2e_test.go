@@ -18,7 +18,7 @@ func TestAlertEvaluatorE2E(t *testing.T) {
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	cfg, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(cfg, logger)
+	clickhouseManager := clickhouse.NewClientManager(cfg, logger)
 	timeProvider := config.NewVirtualTimeProvider()
 	alertEvaluator := NewAlertEvaluator(logger, clickhouseManager, timeProvider)
 

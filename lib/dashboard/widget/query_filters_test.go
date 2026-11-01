@@ -33,7 +33,7 @@ var testFiles = fstest.MapFS{"colors.sql": {Data: []byte("SELECT host, 'darkred'
 func testDeps() rendering.Dependencies {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	cfg := &config.Config{ClickHouse: unreachable, AppSecret: string(testSecret)}
-	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
+	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
 }
 
 // askPath is the answer of `chart`'s handler to `path` (with its query string).

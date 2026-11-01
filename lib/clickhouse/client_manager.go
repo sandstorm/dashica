@@ -10,8 +10,8 @@ import (
 	"github.com/sandstorm/dashica/lib/config"
 )
 
-// Manager holds a Client per ClickHouse connection of dashica_config, each made on first use (GetClient).
-type Manager struct {
+// ClientManager holds a Client per ClickHouse connection of dashica_config, each made on first use (GetClient).
+type ClientManager struct {
 	config  *config.Config
 	clients map[string]*Client
 	// mutex protecting clients map
@@ -19,9 +19,9 @@ type Manager struct {
 	logger zerolog.Logger
 }
 
-// NewManager creates a new Clickhouse client manager
-func NewManager(config *config.Config, logger zerolog.Logger) *Manager {
-	return &Manager{
+// NewClientManager creates a new Clickhouse client manager
+func NewClientManager(config *config.Config, logger zerolog.Logger) *ClientManager {
+	return &ClientManager{
 		config:  config,
 		clients: make(map[string]*Client),
 		logger:  logger,
@@ -29,7 +29,7 @@ func NewManager(config *config.Config, logger zerolog.Logger) *Manager {
 }
 
 // GetClient returns a client for the specified server ID
-func (cm *Manager) GetClient(serverId string) (*Client, error) {
+func (cm *ClientManager) GetClient(serverId string) (*Client, error) {
 	cm.mu.RLock()
 	client, exists := cm.clients[serverId]
 	cm.mu.RUnlock()
@@ -58,6 +58,6 @@ func (cm *Manager) GetClient(serverId string) (*Client, error) {
 }
 
 // Connections are the names of the ClickHouse connections dashica_config names (`clickhouse.<name>`), sorted.
-func (cm *Manager) Connections() []string {
+func (cm *ClientManager) Connections() []string {
 	return slices.Sorted(maps.Keys(cm.config.ClickHouse))
 }

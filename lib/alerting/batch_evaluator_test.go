@@ -169,7 +169,7 @@ func TestBatchEvaluator_BucketCalculation(t *testing.T) {
 
 	// Create minimal dependencies to initialize BatchEvaluator
 	cfg, _ := testServer.LoadTestingConfig(t)
-	clickhouseManager := clickhouse.NewManager(cfg, logger)
+	clickhouseManager := clickhouse.NewClientManager(cfg, logger)
 	clickhouseClient, err := clickhouseManager.GetClient("alert_storage")
 	require.NoError(t, err)
 	alertResultStore := NewAlertResultStore(logger, clickhouseClient)

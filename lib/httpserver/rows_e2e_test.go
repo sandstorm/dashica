@@ -29,7 +29,7 @@ const caddyRows = `values('timestamp DateTime64(3), customer_project String, sta
 func rowsOf(t *testing.T, query sql.SqlQueryable, queryString string) (*httptest.ResponseRecorder, error) {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
-	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
+	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	r := httptest.NewRequest(http.MethodGet, "/rows?"+queryString, nil)
 	state, err := ParseQueryState(r)
 	if err != nil {
@@ -57,7 +57,7 @@ func handler(t *testing.T) QueryHandler {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
 	cfg.ExploreEnabled, cfg.SqlFilterEnabled = true, true
-	return QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
+	return QueryHandler{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 }
 
 // editedRows answers the edited query `text` with the parameters `params` on the default connection, with the row
@@ -183,7 +183,7 @@ func TestHandleEditedRows_AnswersExactlyTheLimitWithoutAnError(t *testing.T) {
 func TestConnectionRowsHandler_AnswersTheQueryWithItsParametersReadOnly(t *testing.T) {
 	cfg, _ := testServer.LoadTestingConfig(t)
 	cfg.ExploreEnabled = true
-	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
+	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewClientManager(cfg, zerolog.Nop()), Config: cfg}
 	ask := func(text string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/rows?"+url.Values{"connection": {"default"}, "exploreSql": {text}, "param_v": {"dashica-blank"}}.Encode(), nil))

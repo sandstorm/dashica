@@ -56,7 +56,7 @@ func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, 
 // query (read-only, at most ExploreRowLimit rows, the Arrow of HandleRows). 404 while explore_enabled is off
 // (ErrExploreNotEnabled, before any query) and for a connection dashica_config does not name; 400 for an empty text.
 type ConnectionRowsHandler struct {
-	ClickhouseClientManager *clickhouse.Manager
+	ClickhouseClientManager *clickhouse.ClientManager
 	// Config is the loaded dashica_config, read only: it answers while explore_enabled is on.
 	Config *config.Config
 }
