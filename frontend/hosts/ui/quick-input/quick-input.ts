@@ -243,8 +243,9 @@ export class QuickInput {
 type Shown<T extends QuickPickItem> = QuickPickItem & { readonly item: T };
 
 /**
- * The items of `items` that `value` matches (fuzzily, by label, else description), in their order and marked where it
- * matched, each heading while an item of its group is left; all of them, unmarked, while `value` is empty.
+ * The items of `items` that `value` matches (fuzzily, by label, else description, else both read as one: "orders
+ * oekokiste" for "Orders" of "Oekokiste overview"), in their order and marked where it matched, each heading while an
+ * item of its group is left; all of them, unmarked, while `value` is empty.
  */
 function narrow<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], value: string): (Shown<T> | QuickPickSeparator)[] {
   const shown: (Shown<T> | QuickPickSeparator)[] = [];
@@ -254,15 +255,30 @@ function narrow<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator
       heading = item;
       continue;
     }
-    const label = fuzzyMatch(value, item.label);
-    const description = label ? null : item.description ? fuzzyMatch(value, item.description) : null;
-    if (!label && !description) continue;
+    const highlights = value.trim() === '' ? (item.highlights ?? {}) : matchOf(value, item);
+    if (!highlights) continue;
     if (heading) shown.push(heading);
     heading = null;
-    const highlights: QuickPickHighlights = value.trim() === '' ? (item.highlights ?? {}) : label ? { label: label.ranges } : { description: description!.ranges };
     shown.push({ ...item, highlights, item });
   }
   return shown;
+}
+
+/** Where `value` matches `item` (`narrow`): its label, else its description, else both read as one; null: nowhere. */
+function matchOf(value: string, item: QuickPickItem): QuickPickHighlights | null {
+  const label = fuzzyMatch(value, item.label);
+  if (label) return { label: label.ranges };
+  if (!item.description) return null;
+  const description = fuzzyMatch(value, item.description);
+  if (description) return { description: description.ranges };
+  const both = fuzzyMatch(value, `${item.label} ${item.description}`);
+  if (!both) return null;
+  // the description's characters start after the label and the space
+  const start = item.label.length + 1;
+  return {
+    label: both.ranges.filter(([from]) => from < item.label.length).map(([from, to]) => [from, Math.min(to, item.label.length)] as const),
+    description: both.ranges.filter(([, to]) => to > start).map(([from, to]) => [Math.max(from, start) - start, to - start] as const),
+  };
 }
 
 /** Puts `boxContainer` at `anchor` (below an element's left edge, or at a point), inside the viewport; else where its CSS says. */

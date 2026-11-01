@@ -1,4 +1,4 @@
-import type { WidgetNode } from '../../generated/zz_generated.dashica';
+import type { WidgetNode, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { CommandOptions, MenuItem } from '../../hosts/commands/commands';
 import { QuickPickItemKind, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
@@ -21,9 +21,10 @@ import './explore-view.css';
  * first (`confirmReset`). A click on a group row's value of the chart's result shows the chart's data point menu
  * (`widgets.showDataPointMenu`), where the `filters` extension offers to filter the tab by it or exclude it. The global menu's "Explore" opens a blank Explore in a new tab
  * (`#explore=&connection=<name>`): a connection picker and an empty editor, run on that connection
- * (`/rows?connection=…`); its "Explore (from chart…)" opens one with the SQL and parameters of a chart of the shown page,
- * run at once. Perspective loads on first use (`loadPerspective`), and so does the SQL editor (sql-library's
- * `loadSqlEditors`, CodeMirror 6 with ClickHouse's dialect), which completes the names of the connection's schema.
+ * (`/rows?connection=…`); its "Explore (from chart…)" opens one with the SQL, parameters and connection of a chart of
+ * any dashboard (`menuCharts`, the shown one's first), run at once. Perspective loads on first use
+ * (`loadPerspective`), and so does the SQL editor (sql-library's `loadSqlEditors`, CodeMirror 6 with ClickHouse's
+ * dialect), which completes the names of the connection's schema.
  */
 export const exploreView: Extension = {
   id: 'exploreView',
@@ -75,24 +76,27 @@ export const exploreView: Extension = {
         return page.navigate(exploreUrl(page.activeTab.url, widget.dataUrl.split('/').pop()!), { newTab: true });
       }),
     );
-    const charts = () => chartsOf(page.current?.widgets ?? []);
     subscriptions.push(
       commands.registerCommand('exploreView.open', () =>
-        page.navigate(blankExploreUrl(page.activeTab.url, charts()[0]?.connection ?? page.workbench.connections[0] ?? 'default'), { newTab: true }),
+        page.navigate(
+          blankExploreUrl(page.activeTab.url, chartsOf(page.current?.widgets ?? [])[0]?.connection ?? page.workbench.connections[0] ?? 'default'),
+          { newTab: true },
+        ),
       ),
       commands.registerCommand(
         'exploreView.startFromChart',
         async () => {
-          const picked = await ui.showQuickPick(
-            charts().map((chart) => ({ label: chartTitle(chart), description: chart.connection, chart })),
-            { title: 'Explore (from chart…)', placeholder: 'The chart whose SQL the editor starts with' },
-          );
+          const picked = await ui.showQuickPick(menuCharts(page.workbench.menu, new URL(page.activeTab.url, location.origin).pathname), {
+            title: 'Explore (from chart…)',
+            placeholder: 'The chart whose SQL the editor starts with',
+          });
           if (!picked) return;
-          const { sql, parameters } = await fetchSql(sqlRequest(picked.chart.dataUrl, query.requestParams()));
-          const connection = picked.chart.connection ?? page.workbench.connections[0] ?? 'default';
-          return page.navigate(blankExploreUrl(page.activeTab.url, connection, sql === '' ? undefined : { sql, parameters }), { newTab: true });
+          const { connection, sql, parameters } = await fetchSql(sqlRequest(picked.dataUrl, query.requestParams()));
+          // a chart that did not run (204) names no connection: the first one, as "Explore (from scratch)" falls back to
+          const on = connection || (page.workbench.connections[0] ?? 'default');
+          return page.navigate(blankExploreUrl(page.activeTab.url, on, sql === '' ? undefined : { sql, parameters }), { newTab: true });
         },
-        { enablement: () => charts().length > 0, disabledReason: 'The shown page has no chart' },
+        { enablement: () => menuCharts(page.workbench.menu, '').length > 0, disabledReason: 'No dashboard has a chart' },
       ),
       ui.registerMenuItem('workbench/global', EXPLORE_ENTRY),
       ui.registerMenuItem('workbench/global', { command: 'exploreView.startFromChart', title: 'Explore (from chart…)', group: 'explore', order: 1 }),
@@ -167,6 +171,20 @@ export function loadPerspective(doc: Document, url: string): Promise<Perspective
   })();
   loaded.catch(() => (loaded = undefined));
   return loaded;
+}
+
+/**
+ * "Explore (from chart…)"'s items: the charts with rows (a `rowsUrl`) in the outlines of `workbench.json`'s `menu`,
+ * each its title, its dashboard and collapsible group beside it ("Oekokiste overview › Orders"); the charts of the
+ * dashboard at `shownPath` ("/p/shop") first, then the others in menu order.
+ */
+export function menuCharts(menu: WorkbenchJson['menu'], shownPath: string): (QuickPickItem & { readonly dataUrl: string })[] {
+  const entries = menu.flatMap((group) => group.entries);
+  return [...entries.filter((entry) => entry.url === shownPath), ...entries.filter((entry) => entry.url !== shownPath)].flatMap((entry) =>
+    entry.outline
+      .filter((chart) => chart.rowsUrl)
+      .map((chart) => ({ label: chart.title, description: [entry.title, chart.group].filter(Boolean).join(' › '), dataUrl: chart.dataUrl })),
+  );
 }
 
 /** The charts among `widgets` and their children that serve their rows to the view (a `rowsUrl`), in page order. */

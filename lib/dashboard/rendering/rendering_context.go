@@ -101,6 +101,9 @@ type OutlineEntry struct {
 	// DataUrl is where its data is served ("/p/shop/api/3"); its last part is its id, which the link "/p/shop#w=3"
 	// shows.
 	DataUrl string `json:"dataUrl"`
+	// RowsUrl is where it serves its rows ("/p/shop/api/3/rows"), as its node in page.json; empty for a widget without a
+	// query (an alert overview), which "Explore (from chart…)" leaves out.
+	RowsUrl string `json:"rowsUrl,omitempty"`
 	Title   string `json:"title"`
 	// Group is the title of the collapsible group around it; empty outside one.
 	Group string `json:"group"`

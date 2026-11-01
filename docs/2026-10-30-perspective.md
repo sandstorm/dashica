@@ -243,7 +243,7 @@ Since 2026-10-31 (§4.7; proposed where §4.7 says so):
 | Request | Answer |
 |---|---|
 | `GET <dataUrl>/rows?<QueryState>` | the chart's query as at `/query`, Arrow with every column of a plain Arrow type (`clickhouse.PlainArrowCast`: `DateTime*` → `DateTime64(3)`, `Date` → `Date32`, 64-bit+ ints / `Decimal` / `BFloat16` → `Float64`, others → `String`); headers `X-Dashica-Resolved-Time-Range`, `X-Dashica-Bucket-Size`, `X-Dashica-Diagnostics` (`X-Dashica-Sql: editable`, which replaced `X-Dashica-Grouping: removable`, went with step 8g) |
-| `GET <dataUrl>/sql?<QueryState>` | JSON `httpserver.ChartSql` `{sql, parameters}` (since step 8g): the chart's query as `/query` sends it to ClickHouse for this state, its `{name:Type}` placeholders kept, and the values bound to them (`__from`, `__to`, the form values); `X-Dashica-Diagnostics`; 404 when Explore is off (`HandleSql` checks it) |
+| `GET <dataUrl>/sql?<QueryState>` | JSON `httpserver.ChartSql` `{connection, sql, parameters}` (since step 8g; `connection` since workbench step 9bc, D51): the chart's query as `/query` sends it to ClickHouse for this state, its `{name:Type}` placeholders kept, the values bound to them (`__from`, `__to`, the form values), and the ClickHouse connection it runs on (`sql.ConnectionOf`); `X-Dashica-Diagnostics`; 404 when Explore is off (`HandleSql` checks it) |
 | `GET <dataUrl>/rows?exploreSql=<text>&param_<name>=<value>…` | `<text>` run as it is on the chart's ClickHouse connection, each `param_<name>` bound to its placeholder (`EditedParameters`, ClickHouse's HTTP names), read-only, the same casts, at most 100,000 rows; header `X-Dashica-Rows-Limit: 100000`; no QueryState read; 404 when Explore is off (`HandleEditedRows` checks it) |
 | any | 204 for a skipped chart (`X-Dashica-Diagnostics`; not for `exploreSql`), 400 for an unreadable query state, 500 for a ClickHouse error with ClickHouse's message (`Code: 62. DB::Exception: Syntax error …`) |
 
@@ -323,7 +323,8 @@ as for `/query` (ParseQueryState, the pills on its table), then `HandleSql`, whi
 first (`ErrExploreNotEnabled`, a 404, before any query), then `prepare` as for `/query`, which already gives the SQL
 text (`p.query`: the window and the page's filters written in, `{{DASHICA_FILTERS}}` filled, the auto buckets
 rebaked) and every value bound to it (`p.opts.Parameters`: `__from`, `__to`, the form values), and answers both as
-the JSON of `httpserver.ChartSql` `{sql, parameters}` (in the generated TS contract). No round trip through `/debug`
+the JSON of `httpserver.ChartSql` `{connection, sql, parameters}` (in the generated TS contract; `connection` since
+workbench step 9bc, the query's `sql.ConnectionOf`). No round trip through `/debug`
 or ClickHouse; the window is resolved once at the server's now, as for `/query`. The transport's casts
 (`ensureArrowCompatible`, `PlainArrowCast`) and settings are not part of the text: Run applies them again (below).
 The values never become SQL: Run sends them back as parameters, which ClickHouse binds itself, so no escaping of
@@ -433,10 +434,12 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
     all their columns, one viewer config kept for all blank tabs (`view:blank`); no "Reset to the chart's query" and
     no click to filter (edited rows offer none) *(proposed)*.
   - **Menu:** "Explore (from scratch)" (`exploreView.open`) picks the connection of the shown page's first chart, else the first of
-    `workbench.json`'s `connections` *(proposed)*. "Explore (from chart…)" (`exploreView.startFromChart`, greyed while the
-    shown page has no chart with rows) asks in the quick pick for one of the page's charts (title, its connection
-    beside it), fetches its `/sql` with the active tab's query state and opens a blank tab on its connection with that
-    SQL and those parameters in the hash, so it runs at once *(proposed)*; a chart that does not run (204) gives an
+    `workbench.json`'s `connections` *(proposed)*. "Explore (from chart…)" (`exploreView.startFromChart`, greyed while no
+    dashboard has a chart with rows) asks in the quick pick for a chart of any dashboard (since workbench step 9bc,
+    D51: its title, its dashboard and group beside it, the shown dashboard's charts first; until then the shown page's
+    charts with their connection beside them), fetches its `/sql` with the active tab's query state and opens a blank
+    tab on the connection that answer names (`ChartSql.connection`) with that SQL and those parameters in the hash, so
+    it runs at once *(proposed)*; a chart that does not run (204) gives an
     empty editor.
 - **D11 Schema view (step 8h, ✅ 2026-10-31; views since workbench step 9x, D32):** a left side panel "Schema": a tree
   connection › database › table as two views, "On this page" (exactly the tables the shown page's charts read) and

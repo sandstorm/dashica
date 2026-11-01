@@ -13,16 +13,19 @@ export const workbench = {
           "outline": [
             {
               "dataUrl": "/p/shop/api/1",
+              "rowsUrl": "/p/shop/api/1/rows",
               "title": "Requests",
               "group": ""
             },
             {
               "dataUrl": "/p/shop/api/2",
+              "rowsUrl": "/p/shop/api/2/rows",
               "title": "Requests over time",
               "group": ""
             },
             {
               "dataUrl": "/p/shop/api/7",
+              "rowsUrl": "/p/shop/api/7/rows",
               "title": "Latest",
               "group": "Details"
             },

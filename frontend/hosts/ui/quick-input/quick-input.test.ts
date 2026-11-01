@@ -155,6 +155,17 @@ describe('showQuickPick', () => {
     expect([box(), document.activeElement]).toEqual([null, buttonElement]);
   });
 
+  it('narrows by the label and the description read as one when neither alone matches, marking both', async () => {
+    const { hostContainer, quickInput, type, field, options } = setup();
+    void quickInput.showQuickPick([
+      { label: 'Orders', description: 'Oekokiste overview' },
+      { label: 'Orders', description: 'Shop' },
+    ]);
+    type(field(), 'orders oekokiste');
+    expect(options().map((optionElement) => optionElement.textContent)).toEqual(['Orders Oekokiste overview']);
+    expect([...hostContainer.querySelectorAll('mark')].map((markElement) => markElement.textContent)).toEqual(['Orders', 'Oekokiste']);
+  });
+
   it('opens below an element, and resolves with undefined on Escape, a press elsewhere or another box', async () => {
     const { buttonElement, quickInput, key, field, box } = setup();
     buttonElement.getBoundingClientRect = () => ({ left: 5, bottom: 7 }) as DOMRect;

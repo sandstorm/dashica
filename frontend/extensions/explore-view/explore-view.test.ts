@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
-import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica';
+import type { PageJson, WidgetNode, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import type { PageContext, PageRenderer } from '../../hosts/page/page';
 import { QueryHost } from '../../hosts/query/query';
@@ -14,7 +14,7 @@ import { QuickPickItemKind } from '../../hosts/ui/ui';
 import type { CommandOptions } from '../../hosts/commands/commands';
 import { TIME } from '../time-library/time-state';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { blankExploreUrl, chartsOf, confirmReset, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget } from './explore-view';
+import { blankExploreUrl, chartsOf, confirmReset, EXPLORE_NOT_ENABLED, exploreUrl, exploreView, findWidget, menuCharts } from './explore-view';
 
 const chart: WidgetNode = {
   type: 'barVertical',
@@ -26,6 +26,8 @@ const chart: WidgetNode = {
 const markdown: WidgetNode = { type: 'markdown', props: {} };
 const page = { kind: 'dashboard', title: 'Shop', filterBar: true, filterButtons: [], widgets: [{ type: 'grid', props: {}, children: { a: markdown, b: chart } }] } as PageJson;
 
+/** `workbench.json`'s menu: the shop's chart with rows and an alert overview without, the billing's in a group. */
+let menu: WorkbenchJson['menu'];
 let menuItems: { menuId: string; command: string; title?: string; when?: (context: WidgetMenuContext) => boolean }[];
 let commands: Map<string, (context?: WidgetMenuContext) => unknown>;
 /** The options each command was registered with. */
@@ -41,6 +43,22 @@ let subscriptions: { dispose(): unknown }[];
 let closed: number;
 
 beforeEach(() => {
+  menu = [
+    { title: 'Billing', entries: [{ title: 'Billing overview', url: '/p/billing', outline: [{ dataUrl: '/p/billing/api/1', rowsUrl: '/p/billing/api/1/rows', title: 'Invoices', group: 'Details' }] }] },
+    {
+      title: 'Shop',
+      entries: [
+        {
+          title: 'Shop overview',
+          url: '/p/shop',
+          outline: [
+            { dataUrl: '/p/shop/api/1', title: 'Open alerts', group: '' },
+            { dataUrl: '/p/shop/api/3', rowsUrl: '/p/shop/api/3/rows', title: 'By status', group: '' },
+          ],
+        },
+      ],
+    },
+  ];
   menuItems = [];
   commands = new Map();
   options = new Map();
@@ -65,7 +83,7 @@ function activate(explore: boolean): void {
     query,
     globalState: { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} },
     page: {
-      workbench: { menu: [], explore, connections: ['default', 'logs'] },
+      workbench: { menu, explore, connections: ['default', 'logs'] },
       get current() {
         return current;
       },
@@ -141,7 +159,7 @@ describe('exploreView', () => {
     expect(tabContainer.children).toHaveLength(0);
   });
 
-  it('puts "Explore (from scratch)" and "Explore (from chart…)" into the global menu, the second’s command enabled only with a chart on the shown page', () => {
+  it('puts "Explore (from scratch)" and "Explore (from chart…)" into the global menu, the second’s command enabled only while a dashboard has a chart', () => {
     const global = menuItems.filter(({ menuId }) => menuId === 'workbench/global');
     expect(global.map(({ title, command }) => [title, command])).toEqual([
       ['Explore (from scratch)', 'exploreView.open'],
@@ -149,11 +167,13 @@ describe('exploreView', () => {
     ]);
     expect(options.get('exploreView.open')).toBeUndefined();
     const startFromChart = options.get('exploreView.startFromChart')!;
-    expect([startFromChart.enablement!(), startFromChart.disabledReason]).toEqual([true, 'The shown page has no chart']);
-    current = { ...page, widgets: [markdown] };
-    expect(startFromChart.enablement!()).toBe(false);
+    expect([startFromChart.enablement!(), startFromChart.disabledReason]).toEqual([true, 'No dashboard has a chart']);
     current = undefined;
-    expect(startFromChart.enablement!()).toBe(false);
+    expect(startFromChart.enablement!()).toBe(true);
+    menu = [{ title: 'Shop', entries: [{ title: 'Shop overview', url: '/p/shop', outline: [{ dataUrl: '/p/shop/api/1', title: 'Open alerts', group: '' }] }] }];
+    for (const subscription of subscriptions.splice(0).reverse()) subscription.dispose();
+    activate(true);
+    expect(options.get('exploreView.startFromChart')!.enablement!()).toBe(false);
   });
 
   it('opens a blank Explore in a new tab on the connection of the shown page’s first chart, else the first connection', async () => {
@@ -166,13 +186,24 @@ describe('exploreView', () => {
     ]);
   });
 
-  it('starts from a picked chart: a blank Explore on its connection with its SQL and parameters for the tab’s query state', async () => {
+  it('starts from a picked chart of any dashboard, the shown one’s first: a blank Explore on the connection its /sql answers, with its SQL and parameters for the tab’s query state', async () => {
     const asked: string[] = [];
-    vi.stubGlobal('fetch', async (url: string) => (asked.push(url), Response.json({ sql: 'SELECT {__from:DateTime64}', parameters: { __from: '1' } })));
+    vi.stubGlobal('fetch', async (url: string) => (asked.push(url), Response.json({ connection: 'audit', sql: 'SELECT {__from:DateTime64}', parameters: { __from: '1' } })));
     await commands.get('exploreView.startFromChart')!();
-    expect(picks).toEqual([[expect.objectContaining({ label: 'By status', description: 'logs' })]]);
+    expect(picks.map((items) => items.map(({ label, description }) => [label, description]))).toEqual([
+      [
+        ['By status', 'Shop overview'],
+        ['Invoices', 'Billing overview › Details'],
+      ],
+    ]);
     expect(asked).toEqual(['/p/shop/api/3/sql?time=1h']);
-    expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=&connection=logs&exploreSql=SELECT+%7B__from%3ADateTime64%7D&param___from=1', newTab: true }]);
+    expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=&connection=audit&exploreSql=SELECT+%7B__from%3ADateTime64%7D&param___from=1', newTab: true }]);
+  });
+
+  it('starts from a picked chart that did not run (204) with an empty editor on the first connection', async () => {
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
+    await commands.get('exploreView.startFromChart')!();
+    expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=&connection=default', newTab: true }]);
   });
 
   it('renders a blank Explore for the hash #explore= alone, titled "Explore", with a connection picker', () => {
@@ -203,6 +234,16 @@ describe('blankExploreUrl', () => {
   it('replaces the hash of a tab’s URL by a blank Explore on the connection, with an edited query when given', () => {
     expect(blankExploreUrl('/p/shop?time=1h#w=2', 'logs')).toBe('/p/shop?time=1h#explore=&connection=logs');
     expect(blankExploreUrl('/', 'default', { sql: 'SELECT 1', parameters: { v: 'a' } })).toBe('/#explore=&connection=default&exploreSql=SELECT+1&param_v=a');
+  });
+});
+
+describe('menuCharts', () => {
+  it('lists the charts with rows of every dashboard, the shown one’s first, then the others in menu order', () => {
+    expect(menuCharts(menu, '/p/billing').map(({ label, dataUrl }) => [label, dataUrl])).toEqual([
+      ['Invoices', '/p/billing/api/1'],
+      ['By status', '/p/shop/api/3'],
+    ]);
+    expect(menuCharts(menu, '/p/other').map(({ label }) => label)).toEqual(['Invoices', 'By status']);
   });
 });
 

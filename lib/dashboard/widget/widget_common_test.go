@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -116,5 +117,23 @@ func TestMount_RefusesAnUnregisteredWidget(t *testing.T) {
 	_, err := Widgets{unregistered{}}.Mount(&rendering.DashboardContext{}, handler_collector.NewValidatingCollector(http.NewServeMux(), zerolog.Nop()))
 	if !errors.Is(err, ErrWidgetNotRegistered) {
 		t.Errorf("got %v", err)
+	}
+}
+
+func TestOutline_AChartCarriesItsDataUrlAndItsRowsUrlAWidgetWithoutQueryNone(t *testing.T) {
+	nodes := []Node{
+		{Type: "markdown"},
+		{Type: "timeBar", DataURL: "/p/shop/api/1", RowsURL: "/p/shop/api/1/rows", Title: "Requests"},
+		{Type: "collapsibleGroup", Title: "Alerts", Children: map[string]Node{
+			"0": {Type: "alertOverview", DataURL: "/p/shop/api/2", Title: "Open alerts"},
+		}},
+	}
+
+	want := []rendering.OutlineEntry{
+		{DataUrl: "/p/shop/api/1", RowsUrl: "/p/shop/api/1/rows", Title: "Requests"},
+		{DataUrl: "/p/shop/api/2", Title: "Open alerts", Group: "Alerts"},
+	}
+	if got := Outline(nodes); !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v\nwant %+v", got, want)
 	}
 }

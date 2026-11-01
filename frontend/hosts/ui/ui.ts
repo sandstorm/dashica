@@ -38,7 +38,7 @@ export interface UiApi {
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
   /**
    * Shows `items` in a quick pick at `options.anchor` (else at the top in the middle of the workbench); typing narrows
-   * them (fuzzily, by label, else description), a heading shows while an item of its group does. Resolves with the
+   * them (fuzzily, by label, else description, else both read as one), a heading shows while an item of its group does. Resolves with the
    * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
    * elsewhere, another box). Items still to come (a Promise, as a server's answer) open the box at once, busy (its
    * progress line, no "No results") until they are there; when they fail the box hides and the returned Promise

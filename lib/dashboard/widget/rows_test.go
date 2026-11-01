@@ -25,7 +25,7 @@ import (
 // SQL file by_status.sql, on a ClickHouse that is unreachable (a query that gets past the handler's own checks fails
 // with a 500).
 func ask(chart withQuery, explore bool, target string) *httptest.ResponseRecorder {
-	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
+	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}, "logs": {URL: "http://127.0.0.1:1", Database: "logs"}}
 	cfg := &config.Config{ClickHouse: unreachable, Explore: config.ExploreConfig{Enabled: explore}, Filters: config.FiltersConfig{Secret: string(testSecret), SqlEnabled: true}}
 	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg),
 		FileSystem: fstest.MapFS{"by_status.sql": {Data: []byte("SELECT status, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY status")}}}
@@ -126,6 +126,26 @@ func TestSql_KeepsThePlaceholdersOfItsQuery(t *testing.T) {
 	var got httpserver.ChartSql
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || !strings.Contains(got.Sql, "path = {path:String}") || got.Parameters["path"] != "/a'b" {
 		t.Errorf("status %d (%v): %s", rec.Code, err, rec.Body)
+	}
+}
+
+func TestSql_NamesTheConnectionTheChartRunsOn(t *testing.T) {
+	tests := map[string]struct {
+		chart withQuery
+		want  string
+	}{
+		"without a database": {chart: byStatusChart(), want: "default"},
+		"on a database":      {chart: NewBarVertical(sql.New(sql.From("audit"), sql.OnDatabase("logs"))).X(sql.Field("action")).Y(sql.Count()), want: "logs"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			rec := ask(tt.chart, true, "/sql?time=1h")
+
+			var got httpserver.ChartSql
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); rec.Code != http.StatusOK || err != nil || got.Connection != tt.want {
+				t.Errorf("status %d (%v), connection %q, want %q: %s", rec.Code, err, got.Connection, tt.want, rec.Body)
+			}
+		})
 	}
 }
 

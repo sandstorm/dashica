@@ -71,7 +71,8 @@ POST /p/shop/action/<id>           a Go action (§3.9)                          
   inline POST. Both sit behind `ctx.runQuery()` (§3.6).
 - **The outline: what a page holds by title** (decided 2026-10-30). Registering a page produces its description as a
   value: `CollectHandlers` returns the `PageJson` it mounted. Its **outline** is a pure function of that value,
-  `widget.Outline(page.Widgets)`: every widget with data and a title, `{id, title, group}` (the id in its `dataUrl`,
+  `widget.Outline(page.Widgets)`: every widget with data and a title, `{dataUrl, rowsUrl?, title, group}` (since 9bc,
+  §3.15 D51, its `dataUrl` instead of the id in it, which the browser takes from it; `rowsUrl` for a chart with a query;
   `group` the title of the collapsible group around it), in the order the page mounted them. The title comes typed
   from the widget: `dashica-gen` generates `widgetTitle()` from each widget's client field `title` (as it generates
   `marshalProps`), and `Mount` puts it on the Node as `Title` (Go only, `json:"-"`), so `page.json` stays as it is.
@@ -1314,7 +1315,7 @@ Built-in extensions:
 Favorites stay inside `dashboards` (separating them would need a contribution point inside the Dashboards panel).
 
 **Chart titles in search everywhere** (decided 2026-10-30): the charts are the pages' outlines in `workbench.json`
-(§3.2), `{id, title, group}` per menu entry. The builder API stays as it is. A result shows
+(§3.2), `{dataUrl, rowsUrl?, title, group}` per menu entry (until 9bc `{id, title, group}`). The builder API stays as it is. A result shows
 `page › group › title`; pages rank before charts, the current page's charts before other pages' (the same titles
 repeat across template dashboards).
 
@@ -1957,6 +1958,24 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `ctx.showDataPointMenu`, as it does for `showMenu`; the table still hands only its `filterable` category columns'
   cells (its pointer cursor, `d-table__filterable`, and the cell menu's `filtering`), so a table cell's click and
   its cursor agree; `filterOnClick` keeps its name and CSS class.
+- **D51 "Explore (from chart…)" lists every dashboard's charts (9bc, decided 2026-11-01; maintainer: "YES..."):** the
+  pick (`exploreView.startFromChart`) offered only the shown page's charts, each with its connection beside it
+  ("default" on every row). It now lists the charts of every dashboard from `workbench.json`'s menu outlines
+  (`menuCharts`): the label the chart's title, the description its dashboard's title and collapsible group
+  ("Oekokiste overview › Orders"); the shown dashboard's charts first, then the others in menu order; enabled while
+  some dashboard has a chart ("No dashboard has a chart"). The pick fetches `<dataUrl>/sql` with the tab's query state
+  as before, and the server answers the connection with the SQL (`httpserver.ChartSql.Connection`, `sql.ConnectionOf`
+  as the query handler picks its client); the blank Explore opens on it, not on the client's `widget.connection`. For
+  that, first a refactoring: `rendering.OutlineEntry` carries `DataUrl` instead of `Id` (the route cannot be rebuilt
+  from the page URL and the id); search everywhere's `#w=<id>` link takes the id from it. Typing matches the dashboard
+  too: the quick input's `narrow` matches the label, else the description, else (new) both read as one, so "orders
+  oekokiste" finds "Orders" of "Oekokiste overview" (label alone or description alone does not), marking the
+  characters in each; search everywhere's chart search was not reused, as the quick input already has the one matcher
+  and the pick shows label and description apart. *(proposed)* The outline entry also carries `rowsUrl` (empty for a
+  widget without a query: an alert overview, a schema table, a speedscope link), so the pick leaves out what has no
+  `/sql`; `chartsOf` stays, as "Explore (from scratch)" still takes the shown page's first chart's connection; a
+  chart that does not run (204, no body) names no connection (`fetchSql` gives `connection: ''`), so its empty editor
+  opens on the first of `workbench.json`'s connections.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -1986,7 +2005,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   (explore.enabled)"; "Explore (from chart…)" (`exploreView.startFromChart`), Details' and Debug's "Pop out"
   (`details.popOut`, `debug.popOut`). *(proposed)* The hover of an enabled entry is gone with `MenuItem.tooltip`
   (the descriptions of "Explore (from scratch)", "Explore (from chart…)" and the pop-outs; VS Code's menus have none either); the new
-  reasons are "The shown page has no chart", "No records selected" and "No active chart" (Debug's status bar text);
+  reasons are "The shown page has no chart" (since 9bc, D51, "No dashboard has a chart"), "No records selected" and "No active chart" (Debug's status bar text);
   a key of a disabled command is not prevented, so the next binding or the content gets it (VS Code skips such a
   binding); a rail button asks the enablement when it is added and whenever its tooltip may show (pointer enters,
   focus) and on a click, as there is no change event (VS Code's context keys have one), and shows greyed by
@@ -2319,6 +2338,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9az ✅ 2026-11-01 | **BUGFIX a `*filter.FilterService` is named as a service** (docs/conventions.md "Names and types"): `pageButtons` / `buttonHandler`'s parameter and `filter_test.go`'s variable `filters` → `filterService`. Tests: `dashboard`, `filter` unchanged and green | |
 | 9ba ✅ 2026-11-01 | **STYLE the comments D40 / D43 changed, rewrapped at 120 columns**: `filter.Apply`, `widget.Node.Table`, `pillHandler`, `openPills` (`TimeRangeHandler`'s went back to its earlier wrap with 9ax). No code change | STYLE, not BUGFIX: docs/conventions.md keeps comment-only changes in `STYLE:` commits |
 | 9bb ✅ 2026-11-01 | **D46 the data point menu** (§3.5, §3.8, §3.11, §3.15; Perspective §4.4; docs/conventions.md "Known smells"): `WidgetsApi.registerDataPointMenuProvider` / `showDataPointMenu`, `WidgetContext.showDataPointMenu`, `DataPoint`, `DataPointMenuItem`, `DataPointMenuProvider` (`hosts/widgets/widgets{,-impl,-testing}.ts`; `WidgetsHost(ui, commands, tabs)`); a menu's items that turn out none hide the quick pick (`quick-input.ts`); the `filters` extension's `filterMenuProvider`, `addPill`, `filters.addPill` (`filters/offer.ts`, `filters.ts`); `filterOnClick`, `drawTable`, `drawTimeBars`, the chart renderers and the Explore view show the menu (`chart-library/data-point.ts`, was `candidate.ts`); `filter-library/offer.ts`, `chart-library/offer-testing.ts`, `filters.offer` deleted. Tests: `widgets.test.ts` (providers in order, a failing one skipped, items shown, busy, the command run, its error kept in the menu, nothing without items), `quick-input.test.ts`, `filters/offer.test.ts`, `filters.test.ts`, each chart's and the table's test (`widgetTestbed().dataPointMenus`), `view.test.ts`; e2e (written, not run) `bar-selection`, `chart-selection`, `record-details` find "Data point". *(proposed)* the provider gets a `WidgetMenuContext`; the menu's name "Data point"; the table's clickable cells stay its `filterable` ones (D46). Commits 7b0e10b, 9de303b, 0247602 and this one. | |
+| 9bc ✅ 2026-11-01 | **D51 "Explore (from chart…)" lists every dashboard's charts** (§3.2, §3.15; Perspective §4.5, §4.7, §4.8): first `REFACTOR` `rendering.OutlineEntry.DataUrl` instead of `Id` (`widget.Outline`; search everywhere's `chartSearch` takes the id from it; contract golden regenerated); then `menuCharts` in `explore-view.ts` (every dashboard's outline charts with rows, label the title, description "<dashboard> › <group>", the shown dashboard's first), `exploreView.startFromChart` opening the blank Explore on the connection `/sql` answers (`httpserver.ChartSql.Connection`), enabled while some dashboard has a chart; the quick input's `narrow` also matches label and description read as one (`matchOf`). Tests: `TestSql_NamesTheConnectionTheChartRunsOn`, `TestOutline_AChartCarriesItsDataUrlAndItsRowsUrlAWidgetWithoutQueryNone`, `TestWorkbenchJson_ListsEveryPagesOutline`; vitest `explore-view.test.ts` (`menuCharts`, the pick), `quick-input.test.ts`, `chart-search.test.ts`; e2e `explore-view.spec.ts`. *(proposed)* `OutlineEntry.RowsUrl`; `chartsOf` kept for "Explore (from scratch)"; a 204 opens on the first connection. |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

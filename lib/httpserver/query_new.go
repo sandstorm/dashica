@@ -107,9 +107,12 @@ func (qh QueryHandler) client(queryObj sql.SqlQueryable) (*clickhouse.Client, er
 	return client, nil
 }
 
-// ChartSql is what HandleSql answers: the SQL a chart sends to ClickHouse and the values bound to its placeholders,
-// which the Explore view's editor starts from.
+// ChartSql is what HandleSql answers: the SQL a chart sends to ClickHouse, the values bound to its placeholders and
+// the connection it runs on, which the Explore view's editor starts from.
 type ChartSql struct {
+	// Connection is the ClickHouse connection the query runs on, as its client is chosen (sql.ConnectionOf: "default",
+	// "logs"); "Explore (from chart…)" opens its blank Explore on it.
+	Connection string `json:"connection"`
 	// Sql is the query as ClickHouse gets it, its `{name:Type}` placeholders in it ("WHERE path = {path:String}").
 	Sql string `json:"sql"`
 	// Parameters are the values of its placeholders by name ("__from": "1761724800"); an edited query sends them again
@@ -117,8 +120,8 @@ type ChartSql struct {
 	Parameters map[string]string `json:"parameters"`
 }
 
-// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state` and the parameters
-// bound to it, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
+// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, the parameters bound
+// to it and its connection, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
 // chart answers 204; ErrExploreNotEnabled unless explore.enabled (qh.Config).
 func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
 	if !qh.Config.Explore.Enabled {
@@ -134,7 +137,7 @@ func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, di
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(ChartSql{Sql: p.query, Parameters: p.opts.Parameters})
+	return json.NewEncoder(w).Encode(ChartSql{Connection: sql.ConnectionOf(queryObj), Sql: p.query, Parameters: p.opts.Parameters})
 }
 
 // writeHeaders tells the client the window (so that charts also show the full range if they have no data at

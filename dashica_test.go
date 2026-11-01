@@ -95,16 +95,16 @@ func TestWorkbenchJson_ListsEveryPagesOutline(t *testing.T) {
 	}
 	// the grid mounts its areas by name
 	shop := []rendering.OutlineEntry{
-		{DataUrl: "/p/shop/api/1", Title: "Errors"},
-		{DataUrl: "/p/shop/api/2", Title: "Requests"},
+		{DataUrl: "/p/shop/api/1", RowsUrl: "/p/shop/api/1/rows", Title: "Errors"},
+		{DataUrl: "/p/shop/api/2", RowsUrl: "/p/shop/api/2/rows", Title: "Requests"},
 	}
 	for i := range 10 {
-		shop = append(shop, rendering.OutlineEntry{DataUrl: "/p/shop/api/" + strconv.Itoa(i+4), Title: fmt.Sprintf("Table %d", i), Group: "Details"})
+		shop = append(shop, rendering.OutlineEntry{DataUrl: "/p/shop/api/" + strconv.Itoa(i+4), RowsUrl: "/p/shop/api/" + strconv.Itoa(i+4) + "/rows", Title: fmt.Sprintf("Table %d", i), Group: "Details"})
 	}
-	shop = append(shop, rendering.OutlineEntry{DataUrl: "/p/shop/api/slow_requests", Title: "Slow requests", Group: "Slow"})
+	shop = append(shop, rendering.OutlineEntry{DataUrl: "/p/shop/api/slow_requests", RowsUrl: "/p/shop/api/slow_requests/rows", Title: "Slow requests", Group: "Slow"})
 	want := []rendering.MenuGroupEntry{
 		{Title: "/p/shop", Url: "/p/shop", Outline: shop},
-		{Title: "/p/billing", Url: "/p/billing", Outline: []rendering.OutlineEntry{{DataUrl: "/p/billing/api/1", Title: "Invoices"}}},
+		{Title: "/p/billing", Url: "/p/billing", Outline: []rendering.OutlineEntry{{DataUrl: "/p/billing/api/1", RowsUrl: "/p/billing/api/1/rows", Title: "Invoices"}}},
 	}
 	if !reflect.DeepEqual(got.Menu[0].Entries, want) {
 		t.Errorf("entries\n got %+v\nwant %+v", got.Menu[0].Entries, want)

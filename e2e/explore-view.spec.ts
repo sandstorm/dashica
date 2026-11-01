@@ -213,12 +213,15 @@ test('the global "…" menu’s "Explore" opens a blank Explore: a connection, a
     await expect(page.getByTestId('explore-view').getByTestId('explore-view-sql-text')).toHaveText('SELECT number FROM system.numbers LIMIT 5');
 });
 
-test('"Explore (from chart…)" opens a blank Explore with the picked chart’s SQL, run with its parameters', async ({page}) => {
+test('"Explore (from chart…)" lists the charts of every dashboard, the shown one’s first, and opens a blank Explore with the picked chart’s SQL, run with its parameters', async ({page}) => {
     await page.goto(`${PAGE}?time=168h`);
     await page.getByTestId('wb-global-menu').click();
     await page.getByRole('option', {name: 'Explore (from chart…)'}).click();
+    // each chart has its dashboard beside it; the shown page's come first, so the first match is this page's chart
+    const picked = page.getByRole('option', {name: CHART}).first();
+    await expect(picked.locator('.d-workbench__quick-pick-description')).not.toBeEmpty();
     const ran = page.waitForRequest((request) => /\/rows\?connection=[^&]+&exploreSql=.*&param___from=/.test(request.url()));
-    await page.getByRole('option', {name: CHART}).first().click();
+    await picked.click();
     await ran;
     const view = page.getByTestId('explore-view');
     await expect(view.locator('.d-explore-view__title')).toHaveText('Explore');
