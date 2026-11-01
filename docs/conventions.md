@@ -100,8 +100,9 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 - **Full names, never a bare postfix:** `filter.FilterService`, not `filter.Service`.
 - **A field holding a service does not sound like state:** `deps.FilterService`, not `deps.Filters`.
 - **DOM nodes end in `Element` or `Container`:** a field, variable, parameter or property holding one node ends in
-  `Element` (`titleElement`), one that others are put into in `Container` (`badgeContainer`); data never does; no
-  `$` prefix.
+  `Element` (`titleElement`), one that others are put into in `Container` (`badgeContainer`), several in `Elements`
+  (`rowElements`); named by role (a widget renderer's `widgetContainer`, never `el`); data never does; no `$`
+  prefix. A `Document` stays `doc`.
 - **Names say what it does:** a function that returns what providers say is `…Of` (`decorationsOf`), one that draws
   is `draw…`.
 - **Commands out, events back:** changes go in as commands or `set`, `onDid…` events come back. Nobody calls

@@ -67,7 +67,7 @@ export type PageRenderer = (pageContainer: HTMLElement, page: PageJson, context:
 
 /** What a page renderer gets about its tab. */
 export interface PageContext {
-  /** The tab's query state: what its widgets render with (`widgets.render(el, widget, context.query)`). */
+  /** The tab's query state: what its widgets render with (`widgets.render(widgetContainer, widget, context.query)`). */
   readonly query: QueryApi;
   /** The tab's hash (`#w=3`, `#explore=3`; '' for none), as it is now. */
   readonly hash: string;

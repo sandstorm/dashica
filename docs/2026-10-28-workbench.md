@@ -188,7 +188,7 @@ functions on it (`frontend/hosts/page/tabs.ts`), tested without DOM *(proposed)*
   code *(proposed; the alternative, each of them re-subscribing to `page.activeTab.query` on a tab change, repeats
   that in four extensions)*.
 - **Widgets see their own tab.** A page renderer gets its tab's `PageContext` and renders each widget with
-  `widgets.render(el, widget, context.query)`, so `WidgetContext.query` is that tab's `QueryHost`: a chart in a
+  `widgets.render(widgetContainer, widget, context.query)`, so `WidgetContext.query` is that tab's `QueryHost`: a chart in a
   background tab never sees the active tab's changes.
 - **`page.current`, `onDidChangePage`** are the active tab's page: it fires with `page.current` when the active tab
   shows another page, when its page could not be shown (`undefined`), and on every switch to another tab, also to one
@@ -214,9 +214,9 @@ interface PageApi {
   registerPageRenderer(kind: string, renderer: PageRenderer): Disposable;
 }
 interface Tab { readonly id: string; readonly url: string; readonly title: string }
-interface PoppedView { readonly title: string; render(el: HTMLElement): Disposable }
+interface PoppedView { readonly title: string; render(viewContainer: HTMLElement): Disposable }
 
-type PageRenderer = (el: HTMLElement, page: PageJson, context: PageContext) => { dispose(): unknown; readonly title?: string };
+type PageRenderer = (pageContainer: HTMLElement, page: PageJson, context: PageContext) => { dispose(): unknown; readonly title?: string };
 interface PageContext {
   readonly query: QueryApi;                      // the tab's
   readonly hash: string;                         // the tab's hash (`#w=3`, `#explore=3`)
@@ -419,7 +419,7 @@ quick pick "Filter"); the two never mix.
 A side panel's view pops out into a tab of its own, bound to what it showed then: the tab no longer follows the active
 widget. It is kept in memory only.
 
-- **API (`page` host):** `page.popOut({ title, render(el) })` opens a new tab after the active one and shows it (a new
+- **API (`page` host):** `page.popOut({ title, render(viewContainer) })` opens a new tab after the active one and shows it (a new
   history entry, as `navigate(…, { newTab })`). The tab is the active tab's page with `#view=<tab id>`: the page kind
   `view`, which the host renders itself with the view's `render`, the tab titled `title`. It takes the page shown,
   without fetching its `page.json` again *(proposed)*; its time range and filters are the tab's own and change nothing
@@ -494,7 +494,7 @@ collapsible groups are extensions.
 
 ```ts
 widgets.registerWidget('timeBar', renderTimeBar);
-function renderTimeBar(el, widget: WidgetOf<'timeBar'>, ctx): Disposable   // widget: generated type (§3.3)
+function renderTimeBar(widgetContainer, widget: WidgetOf<'timeBar'>, ctx): Disposable   // widget: generated type (§3.3)
 
 ctx.runQuery(): Promise<QueryResult>       // Arrow table; tracks loading / ok / error itself (status bar, Debug)
 result.headers                             // the answer's headers as they came; the host reads none (9ae, D38): each user
@@ -503,7 +503,7 @@ result.headers                             // the answer's headers as they came;
 ctx.query                                  // the tab's QueryApi: get(TIME), set(TIME, v), onDidChange(TIME, l), requestParams (§3.7)
 ctx.query.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
-ctx.renderChild(el, child)                 // grid, collapsible
+ctx.renderChild(childContainer, child)     // grid, collapsible
 ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
 ctx.decorations, ctx.onDidChangeDecorations // what providers say about its answer (9af): badges, muted; drawn by ChartFrame
 // click to filter: commands.executeCommand('filters.offer', at, candidates, { dataUrl, filterable }) (§3.8, 9f)
@@ -515,7 +515,7 @@ ctx.decorations, ctx.onDidChangeDecorations // what providers say about its answ
   size, spinner, error, the widget's decorations as a badge each with its tooltip, the drawing muted while one says
   so (D28; since 9af, D38, without knowing what they mean: the `filters` extension's "ignores host = a" and
   "skipped: …"), nothing drawn for an answer without a table (a 204) *(proposed)*, menu button) is **one optional
-  helper**, `new ChartFrame(el, ctx, { draw })` (`chart-library`, since 9h); charts use it in one line, containers and markdown don't.
+  helper**, `new ChartFrame(widgetContainer, ctx, { draw })` (`chart-library`, since 9h); charts use it in one line, containers and markdown don't.
 - **Form widgets** (`CheckboxGroup`, `TextInput`) are ordinary widget extensions that read and write the query key
   `PARAMS` (`widget-library/params-state.ts`, `ctx.query.get(PARAMS)`, since 9w).
 
@@ -1142,7 +1142,7 @@ interface UiApi {
                                           // its header: name in caps, "…" shows menu panel/<id> ("Hide") (8d)
   registerRailButton(id: string, o: { label: string; icon: string; command: string; side?; alignment?; order? }): Disposable;
                                           // a rail button running a command (search everywhere) (8d)
-  registerBarItem(bar: 'top' | 'filter' | 'status', el: HTMLElement,
+  registerBarItem(bar: 'top' | 'filter' | 'status', itemElement: HTMLElement,
                   o: { alignment: 'left' | 'center' | 'right'; priority?: number }): Disposable;   // top: around the tabs
 
   registerMenuItem<C>(menuId: string, item: MenuItem<C>): Disposable;    // when (shown) / toggled / group / order
@@ -1158,7 +1158,7 @@ interface UiApi {
                                           // a button's `...`; validateInput(value): { message, severity: Info | Error }
                                           // (an Error blocks Enter) or undefined, below the field, live (9z, D37; 9ap, D45);
                                           // field: an InputBoxField of the caller's in place of the text field, e.g.
-                                          // the SQL editor (element, input, value, select, focus, onDidChangeValue,
+                                          // the SQL editor (fieldElement, inputElement, value, select, focus, onDidChangeValue,
                                           // onDidAccept; 9aa)
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
@@ -1167,13 +1167,13 @@ interface UiApi {
 }
 
 interface Panel extends Disposable {
-  readonly body: HTMLElement; readonly visible: boolean;
+  readonly bodyContainer: HTMLElement; readonly visible: boolean;
   show(): void; hide(): void; readonly onDidChangeVisibility: Event<void>;
 }
 
 // a view inside a panel's body (§3.4.2): a pure helper exported from hosts/ui/ui.ts, no registry; the owner places the
 // element and draws it anew; the collapsed state under `views.<id>.collapsed` in `state`, not kept without one
-function createView(o: { id: string; title: string; description?: string; actions?: HTMLElement[];
+function createView(o: { id: string; title: string; description?: string; actionElements?: HTMLElement[];
                          collapsed?: boolean; state?: Memento; body: Node | Node[] }): HTMLElement;
 
 // page — the open tabs and what each shows (§3.4.1)
@@ -1183,8 +1183,8 @@ interface PageApi {
   readonly current: PageJson | undefined;   // the active tab's, from <url>/page.json (generated type); undefined while it loads or failed
   readonly onDidChangePage: Event<PageJson | undefined>;   // with `current`: another page, a failed one, every switch of tabs
   navigate(url: string, o?: { newTab?: boolean }): Promise<void>;   // fetch page.json, pushState, swap the tab's content
-  popOut(view: { title: string; render(el: HTMLElement): Disposable }): Promise<void>;   // a view in a tab, in memory (§3.4.6)
-  registerPageRenderer(kind: string, render: (el: HTMLElement, page: PageJson, context: PageContext) => Disposable): Disposable;
+  popOut(view: { title: string; render(viewContainer: HTMLElement): Disposable }): Promise<void>;   // a view in a tab, in memory (§3.4.6)
+  registerPageRenderer(kind: string, render: (pageContainer: HTMLElement, page: PageJson, context: PageContext) => Disposable): Disposable;
 }                                           // `dashboard` by the extension dashboardPage; a kind in the hash (`#explore=3`)
 
 // query — the state every query depends on (§3.7)
@@ -1203,7 +1203,7 @@ export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), f
 
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
-  registerWidget<T extends WidgetType>(type: T, render: (el: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
+  registerWidget<T extends WidgetType>(type: T, render: (widgetContainer: HTMLElement, w: WidgetOf<T>, ctx: WidgetContext) => Disposable): Disposable;
   readonly active: RenderedWidget | undefined;            // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
   readonly onDidChangeActive: Event<void>;                // another widget or tab, the widget removed
   registerDecorationProvider(provider: WidgetDecorationProvider): Disposable;   // as registerFileDecorationProvider (9af)
@@ -1227,7 +1227,7 @@ interface WidgetContext {                                 // what a renderer get
   readonly state: QueryApi;                               // its tab's query state
   query(signal?: AbortSignal): Promise<QueryResult>;      // sets the widget's status (the latest call only)
   url(path: string): string;
-  renderChild(el: HTMLElement, child: WidgetNode): Disposable;
+  renderChild(childContainer: HTMLElement, child: WidgetNode): Disposable;
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
 }
 
@@ -1873,6 +1873,22 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   edit. *(proposed)* Only the error kind, without items (no caller needs them); an error stays until closed, as VS
   Code's; the text keeps the HTTP status before the server's message (`fetchPill`'s rejection); a SQL chip needs no
   request, so nothing of it can fail this way.
+- **D47 DOM nodes end in `Element` or `Container` (9au, decided 2026-11-01; maintainer, on chart-frame.ts's
+  `#decorations` being the badges' `<span>` while widgets-impl.ts's `#decorations` is the data list: "Element /
+  Container -> good... I'd apply it ANYWHERE, exactly."):** as VS Code names them, a field, variable, parameter or
+  property holding one DOM node ends in `Element` (`titleElement`, `fieldElement`), one others are put into in
+  `Container` (`badgeContainer`, `bodyContainer`); data never does; no `$` prefix (VS Code's `$` creates elements).
+  The rule is in docs/conventions.md ("Names and types"). Applied everywhere in `frontend/` (hosts, workbench,
+  extensions, tests), names by role (`el` → `widgetContainer` for a widget renderer's, `pageContainer` for a page
+  renderer's, `viewContainer` for a popped-out view's; `Panel.body` → `bodyContainer`; `InputBoxField.element` /
+  `input` → `fieldElement` / `inputElement`; `registerBarItem`'s `itemElement`; `createView`'s `actionElements`).
+  The chart frame: `#decorations` → `#badgeContainer`, `#showDecorations` → `#drawDecorations`; the widgets host:
+  `decorate()` → `decorationsOf(widget, result)`, `#redecorate` → `#askProvidersAgain`. Pure renames: DOM ids, CSS
+  classes, `data-testid` values and URL / JSON keys stay; comments naming a renamed identifier follow it.
+  *(proposed)* Several nodes end in `Elements` (`rowElements`, `optionElements`); a `Document` (`doc`,
+  `ownerDocument`) and the search's text node (`node` in `drawTable`) keep their names, being no element;
+  `MenuAnchor`'s `anchor` keeps its name, holding an element or a point; a rendered widget's own `redecorate()` stays;
+  the commits are `REFACTOR:` (docs/conventions.md: renames apart from functional changes).
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2226,6 +2242,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ar ✅ 2026-11-01 | **D45 (c) the Explore entries' names in the concepts** (§3.15; Perspective §4.4, §4.7, §4.8, §8.1): "Explore (from scratch)" and "Explore (from chart…)", as c56c7cc renamed them; the decisions' wording kept, with a note. Files: `docs/2026-10-28-workbench.md`, `docs/2026-10-30-perspective.md` (text only) | |
 | 9as ✅ 2026-11-01 | **D45 (d) a click offers the row the tip shows** (§3.8, §3.15): root cause Plot's tip pointer of a stacked mark (`pointerX` for `barY` / `rectY`, `pointerY` for `barX`) against `filterOnClick`'s `Plot.pointer`; `FilterOnClickOptions.pointer` (`Plot.TipPointer`), each chart's `tip` names it (`time-bars.ts`, `bar-vertical.ts` `"x"`; `bar-horizontal.ts`, `heatmap.ts` `"y"`; `time-line.ts` `"xy"`). Reproduced first in vitest (`time-bar.test.ts`: stacked bars where the next bucket's bar is closer, also faceted; `bar-horizontal.test.ts`: the same by y), `plot-testing.ts` `clickAtPoint`, `anchor` exported. Files: `frontend/extensions/chart-library/{filter-on-click,time-bars,plot-testing}.ts`, `frontend/extensions/{bar-vertical,bar-horizontal,heatmap,time-line}/*.ts`, `time-bar.test.ts`, `bar-horizontal.test.ts` | |
 | 9at ✅ 2026-11-01 | **D45 (e) a failed filter is shown** (§3.8, §3.11, §3.15): `UiApi.showErrorMessage(message): Promise<void>` (`hosts/ui/notifications/notifications.{ts,css,test.ts}`, `Notifications`, in `UiHost`); `showFailed` (`filters/offer.ts`) in `offerFilters`, `addFilter`, the filter bar's `#press` and `#remake`, the console log kept. Tests: `notifications.test.ts`, `offer.test.ts`, `add-filter.test.ts` (a refused `/pill`), `filters.test.ts` (a refused button value, a refused edit) | *(proposed)* error kind only, no items; stays until closed; the HTTP status kept in the text |
+| 9au ✅ 2026-11-01 | **D47 DOM nodes end in `Element` / `Container`** (§3.15; docs/conventions.md "Names and types"): every field, variable, parameter and property in `frontend/**/*.ts` that holds a DOM node renamed by role (e.g. `#body` → `#bodyContainer`, `#title` → `#titleElement`, `#spinner` → `#spinnerElement`, `#frame` → `#frameElement`, a renderer's `el` → `widgetContainer` / `pageContainer` / `viewContainer`, `Panel.body` → `bodyContainer`, `InputBoxField.element` / `input` → `fieldElement` / `inputElement`, `WindowLayout.topBar` → `topBarContainer`), with all users and tests; the chart frame's `#decorations` → `#badgeContainer`, `#showDecorations` → `#drawDecorations`; the widgets host's `decorate()` → `decorationsOf(widget, result)`, `#redecorate` → `#askProvidersAgain`; the sticky tooltip's parts object (data) `TooltipEl` → `Tooltip`, `Pin.el` → `Pin.tooltip`; the concept's API sketches follow. Four commits (hosts and workbench; chart library and widget types; the other extensions; the leftovers with these docs), each green. ✅ 2026-11-01 (vitest, typecheck, top comments green; Playwright not run, no spec names a renamed identifier), deviations: several nodes end in `Elements`; a `Document` and a text node keep their names; `MenuAnchor.anchor` and a rendered widget's `redecorate()` stay; commits `REFACTOR:` *(all proposed)* | one name for what a node is |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

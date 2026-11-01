@@ -72,7 +72,7 @@ const HIDE_DELAY = 300;
 
 // One tooltip DOM element (transient hover tooltip or a pinned one). Owns its
 // own value/JSON/drag state; pin + close behaviour is wired up by the manager.
-interface TooltipEl {
+interface Tooltip {
   rootContainer: HTMLElement;
   headerContainer: HTMLElement;
   jsonButtonElement: HTMLButtonElement;
@@ -84,7 +84,7 @@ interface TooltipEl {
   currentText(): string;
 }
 
-function createTooltipEl(): TooltipEl {
+function createTooltip(): Tooltip {
   // Build the static skeleton with htl (the house style in this file for one-shot DOM);
   // grab element refs afterwards. Behaviour (drag/position/pin) is wired
   // imperatively — see the note in `drawTable()`.
@@ -204,7 +204,7 @@ function positionTooltip(rootContainer: HTMLElement, pointerX: number, pointerY:
 }
 
 interface Pin {
-  el: TooltipEl;
+  tooltip: Tooltip;
   index: number;
   color: string;
   row: RowComponent;
@@ -216,7 +216,7 @@ interface Pin {
 // highlight the source row in a matching color. Re-decorates on every render
 // so markers survive scrolling/filtering (Tabulator recycles row DOM).
 function createTooltipManager(table: Tabulator, notifyRendered: () => void = () => {}) {
-  const transient = createTooltipEl();
+  const transient = createTooltip();
   transient.rootContainer.classList.add('d-sticky-tooltip--transient');
   transient.rootContainer.style.display = 'none';
   document.body.appendChild(transient.rootContainer);
@@ -317,7 +317,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   function removePin(pin: Pin) {
     const i = pins.indexOf(pin);
     if (i >= 0) pins.splice(i, 1);
-    pin.el.rootContainer.remove();
+    pin.tooltip.rootContainer.remove();
     decorate();
   }
 
@@ -326,7 +326,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
     // crossed on its way here (that would pin the wrong column).
     if (!transientCell) return;
     const cell = transientCell;
-    const pinned = createTooltipEl();
+    const pinned = createTooltip();
     pinned.rootContainer.classList.add('d-sticky-tooltip--pinned');
     pinned.pinButtonElement.style.display = 'none'; // already pinned
 
@@ -349,7 +349,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
     pinned.rootContainer.style.right = 'auto';
     pinned.rootContainer.style.bottom = 'auto';
 
-    const pin: Pin = {el: pinned, index, color, row: cell.getRow(), field: cell.getField()};
+    const pin: Pin = {tooltip: pinned, index, color, row: cell.getRow(), field: cell.getField()};
     pins.push(pin);
     pinned.closeButtonElement.addEventListener('click', () => removePin(pin));
 
@@ -668,7 +668,7 @@ export function drawTable(
   // [1]/[2]/… + highlights the row), or drag it around.
   //
   // Markup vs. behaviour — what fits here:
-  //   - Static skeleton is built with htl `html` (see createTooltipEl).
+  //   - Static skeleton is built with htl `html` (see createTooltip).
   //     That's the house style in this file for one-shot DOM.
   //   - Behaviour (drag, viewport-clamped positioning, N independent pins,
   //     live re-decoration on Tabulator renders) is imperative.
