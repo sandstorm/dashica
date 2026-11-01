@@ -6,10 +6,11 @@ import (
 	"github.com/sandstorm/dashica/lib/util"
 )
 
+// TimeRange is a resolved window of a query, as the handlers send it to ClickHouse and in X-Dashica-Resolved-Time-Range.
 type TimeRange struct {
-	// From start time in UNIX milliseconds (inclusive)
+	// From is the start time in UNIX milliseconds (inclusive).
 	From *int64 `json:"from"`
-	// From end time in UNIX milliseconds (exclusive)
+	// To is the end time in UNIX milliseconds (exclusive).
 	To *int64 `json:"to"`
 }
 

@@ -9,7 +9,7 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// ValuesLimit is the number of values `<dataUrl>/values` answers at most (docs/2026-10-28-workbench.md §3.14 D15).
+// ValuesLimit is the number of values `<dataUrl>/values` answers at most.
 const ValuesLimit = 100
 
 // Values is what HandleValues answers: some of a field's values (its type is the chart's /fields', HandleFields).

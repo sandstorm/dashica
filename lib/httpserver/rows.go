@@ -16,8 +16,8 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// ErrExploreNotEnabled is what HandleSql, HandleEditedRows and ConnectionRowsHandler answer while explore_enabled is off, before any query:
-// a 404.
+// ErrExploreNotEnabled is what HandleSql, HandleEditedRows and ConnectionRowsHandler answer while explore_enabled is
+// off, before any query: a 404.
 var ErrExploreNotEnabled = errors.New("Explore is not enabled (explore_enabled)")
 
 // HandleRows answers `queryObj` as HandleQuery does, in Arrow with every column of a plain Arrow type
@@ -52,10 +52,9 @@ func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, 
 }
 
 // ConnectionRowsHandler answers `GET /rows?connection=<name>&exploreSql=<text>&param_<name>=…`, the query of a blank
-// Explore tab, which no chart runs (docs/2026-10-30-perspective.md §4.8): `text` on that connection of dashica_config,
-// as HandleEditedRows answers an edited query (read-only, at most ExploreRowLimit rows, the Arrow of HandleRows). 404
-// while explore_enabled is off (ErrExploreNotEnabled, before any query) and for a connection dashica_config does not
-// name; 400 for an empty text.
+// Explore tab, which no chart runs: `text` on that connection of dashica_config, as HandleEditedRows answers an edited
+// query (read-only, at most ExploreRowLimit rows, the Arrow of HandleRows). 404 while explore_enabled is off
+// (ErrExploreNotEnabled, before any query) and for a connection dashica_config does not name; 400 for an empty text.
 type ConnectionRowsHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
 	// Config is the loaded dashica_config, read only: it answers while explore_enabled is on.
@@ -88,6 +87,18 @@ func (h ConnectionRowsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// EditedParameters are the values an edited query's placeholders are bound to, from the request's `param_<name>`
+// keys (`param___from=1761724800` binds `{__from:DateTime64}`), as ClickHouse's HTTP interface names them.
+func EditedParameters(values url.Values) map[string]string {
+	params := map[string]string{}
+	for key, value := range values {
+		if name, ok := strings.CutPrefix(key, "param_"); ok && name != "" && len(value) > 0 {
+			params[name] = value[0]
+		}
+	}
+	return params
+}
+
 // editedText is `text` without its spaces around and one trailing `;`; a QueryStateError when nothing is left.
 func editedText(text string) (string, error) {
 	text = strings.TrimSuffix(strings.TrimSpace(text), ";")
@@ -111,18 +122,6 @@ func answerEdited(client *clickhouse.Client, text string, params map[string]stri
 		return fmt.Errorf("clickhouse query: %w", err)
 	}
 	return nil
-}
-
-// EditedParameters are the values an edited query's placeholders are bound to, from the request's `param_<name>`
-// keys (`param___from=1761724800` binds `{__from:DateTime64}`), as ClickHouse's HTTP interface names them.
-func EditedParameters(values url.Values) map[string]string {
-	params := map[string]string{}
-	for key, value := range values {
-		if name, ok := strings.CutPrefix(key, "param_"); ok && name != "" && len(value) > 0 {
-			params[name] = value[0]
-		}
-	}
-	return params
 }
 
 // limited is the query `text` with at most `limit` rows: a LIMIT around it, on lines of its own, so a trailing

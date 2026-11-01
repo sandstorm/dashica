@@ -11,9 +11,9 @@ import (
 )
 
 // SchemaHandler answers `GET /schema.json?connection=<name>` with the clickhouse.Schema of that connection of
-// dashica_config (the Schema view's tree, docs/2026-10-30-perspective.md §4.8), kept per connection once asked
-// (Client.Schema); `&refresh=1` asks ClickHouse again. 404 while explore_enabled is off (ErrExploreNotEnabled, before
-// any query) and for a connection dashica_config does not name.
+// dashica_config (the Schema view's tree), kept per connection once asked (Client.Schema); `&refresh=1` asks ClickHouse
+// again. 404 while explore_enabled is off (ErrExploreNotEnabled, before any query) and for a connection dashica_config
+// does not name.
 type SchemaHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
 	// Config is the loaded dashica_config, read only: it answers while explore_enabled is on; the Schema view is part

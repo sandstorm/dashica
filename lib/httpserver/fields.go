@@ -12,8 +12,7 @@ import (
 )
 
 // Fields is what HandleFields answers: the fields a chart filters its table by, each with its ClickHouse type
-// ("DateTime64(3)", "LowCardinality(String)"), by which the filter bar offers the ops it allows
-// (docs/2026-10-28-workbench.md §3.15 D39).
+// ("DateTime64(3)", "LowCardinality(String)"), by which the filter bar offers the ops it allows.
 type Fields struct {
 	// Columns are the columns of the chart's table as the schema of its connection has them.
 	Columns []clickhouse.ResultColumn `json:"columns"`

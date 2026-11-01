@@ -17,6 +17,9 @@ import (
 	querying2 "github.com/sandstorm/dashica/lib/httpserver/querying"
 )
 
+// QueryHandler answers a chart's requests (the widget package's queryHandler mounts it): its data, its debug
+// information, its rows and SQL for the Explore view, its fields and values for "add filter"; each for the chart's
+// query with the request's pills already applied.
 type QueryHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
 	Logger                  zerolog.Logger
@@ -31,6 +34,116 @@ type QueryHandler struct {
 // A skipped chart answers 204 without asking ClickHouse. An unreadable custom range is ResolveTimeRange's error.
 func (qh QueryHandler) HandleQuery(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
 	return qh.answerArrow(queryObj, state, diagnostics, nil, w, r)
+}
+
+// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, the parameters bound to
+// it and its connection, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A
+// skipped chart answers its connection alone (an empty Sql), so "Explore (from chart…)" still opens on it;
+// ErrExploreNotEnabled unless explore_enabled (qh.Config).
+func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	if !qh.Config.ExploreEnabled {
+		return ErrExploreNotEnabled
+	}
+	WriteDiagnostics(w, diagnostics)
+	answer := ChartSql{Connection: sql.ConnectionOf(queryObj), Parameters: map[string]string{}}
+	if diagnostics.Skipped == "" {
+		p, err := qh.prepare(queryObj, state)
+		if err != nil {
+			return err
+		}
+		answer.Sql, answer.Parameters = p.query, p.opts.Parameters
+	}
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(answer)
+}
+
+// HandleDebug returns debug information about the query including the SQL string and EXPLAIN output, filtered as
+// HandleQuery filters it; Stats has the window and SQL filter clause, the bound parameters and `diagnostics`. A
+// skipped chart answers its Stats alone, without asking ClickHouse.
+func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
+	WriteDiagnostics(w, diagnostics)
+	debugInfo := DebugInfo{
+		Stats: map[string]interface{}{"diagnostics": diagnostics},
+	}
+	if diagnostics.Skipped != "" {
+		w.Header().Set("Content-Type", "application/json")
+		return json.NewEncoder(w).Encode(debugInfo)
+	}
+	p, err := qh.prepare(queryObj, state)
+	if err != nil {
+		return err
+	}
+	client, query, opts := p.client, p.query, p.opts
+	if p.timeRange != nil {
+		debugInfo.Stats["resolvedTimeRange"] = p.timeRange
+		debugInfo.Stats["filterClause"] = p.filterClause
+	}
+	debugInfo.Stats["parameters"] = opts.Parameters
+	if p.bucketSizeMs != nil {
+		debugInfo.Stats["bucketSizeMs"] = *p.bucketSizeMs
+	}
+
+	debugInfo.Query = query
+
+	executeExplain := func(explainQuery string) string {
+		explainOpts := clickhouse.DefaultQueryOptions()
+		explainOpts.Format = "TSVRaw" // Plain text format
+		explainOpts.Parameters = opts.Parameters
+		for k, v := range opts.Settings {
+			explainOpts.Settings[k] = v
+		}
+
+		resp, err := client.Query(r.Context(), explainQuery, explainOpts)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Sprintf("Error reading response: %v", err)
+		}
+		return string(body)
+	}
+
+	// 1. EXPLAIN PLAN - shows the query execution plan with details
+	// Options: header=1 (show header), actions=1 (show actions), indexes=1 (show indexes)
+	debugInfo.ExplainPlan = executeExplain("EXPLAIN header = 1, actions = 1, indexes = 1 " + query)
+
+	// 2. EXPLAIN PIPELINE - shows the execution pipeline (similar to EXPLAIN ANALYZE)
+	// Graph version for visualization
+	debugInfo.ExplainPipeline = executeExplain("EXPLAIN PIPELINE graph = 1 " + query)
+	// Text version with details about each step
+	debugInfo.ExplainPipelineText = executeExplain("EXPLAIN PIPELINE compact = 0 " + query)
+
+	// 3. EXPLAIN SYNTAX - shows the optimized query after all transformations
+	debugInfo.ExplainSyntax = executeExplain("EXPLAIN SYNTAX " + query)
+
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(debugInfo)
+}
+
+// ChartSql is what HandleSql answers: the SQL a chart sends to ClickHouse, the values bound to its placeholders and
+// the connection it runs on, which the Explore view's editor starts from.
+type ChartSql struct {
+	// Connection is the ClickHouse connection the query runs on, as its client is chosen (sql.ConnectionOf: "default",
+	// "logs"); "Explore (from chart…)" opens its blank Explore on it.
+	Connection string `json:"connection"`
+	// Sql is the query as ClickHouse gets it, its `{name:Type}` placeholders in it ("WHERE path = {path:String}").
+	Sql string `json:"sql"`
+	// Parameters are the values of its placeholders by name ("__from": "1761724800"); an edited query sends them again
+	// as `param_<name>` (EditedParameters).
+	Parameters map[string]string `json:"parameters"`
+}
+
+// DebugInfo is what HandleDebug answers.
+type DebugInfo struct {
+	Query               string                 `json:"query"`
+	ExplainPlan         string                 `json:"explainPlan"`
+	ExplainPipeline     string                 `json:"explainPipeline"`
+	ExplainPipelineText string                 `json:"explainPipelineText"`
+	ExplainSyntax       string                 `json:"explainSyntax"`
+	Stats               map[string]interface{} `json:"stats"`
 }
 
 // answerArrow is HandleQuery with `cast` as the Arrow query's QueryOptions.Cast.
@@ -107,40 +220,6 @@ func (qh QueryHandler) client(queryObj sql.SqlQueryable) (*clickhouse.Client, er
 	return client, nil
 }
 
-// ChartSql is what HandleSql answers: the SQL a chart sends to ClickHouse, the values bound to its placeholders and
-// the connection it runs on, which the Explore view's editor starts from.
-type ChartSql struct {
-	// Connection is the ClickHouse connection the query runs on, as its client is chosen (sql.ConnectionOf: "default",
-	// "logs"); "Explore (from chart…)" opens its blank Explore on it.
-	Connection string `json:"connection"`
-	// Sql is the query as ClickHouse gets it, its `{name:Type}` placeholders in it ("WHERE path = {path:String}").
-	Sql string `json:"sql"`
-	// Parameters are the values of its placeholders by name ("__from": "1761724800"); an edited query sends them again
-	// as `param_<name>` (EditedParameters).
-	Parameters map[string]string `json:"parameters"`
-}
-
-// HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, the parameters bound
-// to it and its connection, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
-// chart answers its connection alone (an empty Sql), so "Explore (from chart…)" still opens on it; ErrExploreNotEnabled
-// unless explore_enabled (qh.Config).
-func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
-	if !qh.Config.ExploreEnabled {
-		return ErrExploreNotEnabled
-	}
-	WriteDiagnostics(w, diagnostics)
-	answer := ChartSql{Connection: sql.ConnectionOf(queryObj), Parameters: map[string]string{}}
-	if diagnostics.Skipped == "" {
-		p, err := qh.prepare(queryObj, state)
-		if err != nil {
-			return err
-		}
-		answer.Sql, answer.Parameters = p.query, p.opts.Parameters
-	}
-	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(answer)
-}
-
 // writeHeaders tells the client the window (so that charts also show the full range if they have no data at
 // beginning or end) and the bucket size, each when there is one.
 func (p prepared) writeHeaders(w http.ResponseWriter) {
@@ -150,84 +229,4 @@ func (p prepared) writeHeaders(w http.ResponseWriter) {
 	if p.bucketSizeMs != nil {
 		w.Header().Add("X-Dashica-Bucket-Size", fmt.Sprintf("%d", *p.bucketSizeMs))
 	}
-}
-
-type DebugInfo struct {
-	Query               string                 `json:"query"`
-	ExplainPlan         string                 `json:"explainPlan"`
-	ExplainPipeline     string                 `json:"explainPipeline"`
-	ExplainPipelineText string                 `json:"explainPipelineText"`
-	ExplainSyntax       string                 `json:"explainSyntax"`
-	Stats               map[string]interface{} `json:"stats"`
-}
-
-// HandleDebug returns debug information about the query including the SQL string and EXPLAIN output, filtered as
-// HandleQuery filters it; Stats has the window and SQL filter clause, the bound parameters and `diagnostics`. A
-// skipped chart answers its Stats alone, without asking ClickHouse.
-func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
-	WriteDiagnostics(w, diagnostics)
-	debugInfo := DebugInfo{
-		Stats: map[string]interface{}{"diagnostics": diagnostics},
-	}
-	if diagnostics.Skipped != "" {
-		w.Header().Set("Content-Type", "application/json")
-		return json.NewEncoder(w).Encode(debugInfo)
-	}
-	p, err := qh.prepare(queryObj, state)
-	if err != nil {
-		return err
-	}
-	client, query, opts := p.client, p.query, p.opts
-	if p.timeRange != nil {
-		debugInfo.Stats["resolvedTimeRange"] = p.timeRange
-		debugInfo.Stats["filterClause"] = p.filterClause
-	}
-	debugInfo.Stats["parameters"] = opts.Parameters
-	if p.bucketSizeMs != nil {
-		debugInfo.Stats["bucketSizeMs"] = *p.bucketSizeMs
-	}
-
-	debugInfo.Query = query
-
-	// Helper function to execute EXPLAIN variants
-	executeExplain := func(explainQuery string) string {
-		explainOpts := clickhouse.DefaultQueryOptions()
-		explainOpts.Format = "TSVRaw" // Plain text format
-		explainOpts.Parameters = opts.Parameters
-		// Copy settings from original query
-		for k, v := range opts.Settings {
-			explainOpts.Settings[k] = v
-		}
-
-		resp, err := client.Query(r.Context(), explainQuery, explainOpts)
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Sprintf("Error reading response: %v", err)
-		}
-		return string(body)
-	}
-
-	// Execute different EXPLAIN variants for comprehensive debugging
-
-	// 1. EXPLAIN PLAN - shows the query execution plan with details
-	// Options: header=1 (show header), actions=1 (show actions), indexes=1 (show indexes)
-	debugInfo.ExplainPlan = executeExplain("EXPLAIN header = 1, actions = 1, indexes = 1 " + query)
-
-	// 2. EXPLAIN PIPELINE - shows the execution pipeline (similar to EXPLAIN ANALYZE)
-	// Graph version for visualization
-	debugInfo.ExplainPipeline = executeExplain("EXPLAIN PIPELINE graph = 1 " + query)
-	// Text version with details about each step
-	debugInfo.ExplainPipelineText = executeExplain("EXPLAIN PIPELINE compact = 0 " + query)
-
-	// 3. EXPLAIN SYNTAX - shows the optimized query after all transformations
-	debugInfo.ExplainSyntax = executeExplain("EXPLAIN SYNTAX " + query)
-
-	// Return as JSON
-	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(debugInfo)
 }

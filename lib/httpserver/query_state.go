@@ -12,9 +12,9 @@ import (
 )
 
 // QueryState is the page's query state as every data handler reads it, from the keys the page keeps in its own URL
-// (`?time=1h&f=<key>&sql=status >= 500&wp={"path":"^/api"}`; see docs/2026-10-28-workbench.md §3.7). ParseQueryState
-// reads it once per request; the handler resolves its window with ResolveTimeRange and adds SqlClause to the query's
-// WHERE, the chart the pills on its table (filter.FilterService.Open, filter.Apply).
+// (`?time=1h&f=<key>&sql=status >= 500&wp={"path":"^/api"}`). ParseQueryState reads it once per request; the handler
+// resolves its window with ResolveTimeRange and adds SqlClause to the query's WHERE, the chart the pills on its table
+// (filter.FilterService.Open, filter.Apply).
 type QueryState struct {
 	// Time is the time range: a preset as a Go duration (`1h`, `168h`), or `custom` for Range.
 	Time string
@@ -30,18 +30,6 @@ type QueryState struct {
 	// preset is Time as a duration; 0 for `custom`.
 	preset time.Duration
 }
-
-// QueryStateError is what ParseQueryState cannot read; a handler answers it with 400.
-type QueryStateError struct {
-	Reason string
-}
-
-func (e *QueryStateError) Error() string {
-	return e.Reason
-}
-
-// ErrSqlNotEnabled is what SqlClause answers SQL chips with while sql_filter_enabled is off, before any query.
-var ErrSqlNotEnabled = &QueryStateError{"SQL filters are not enabled (sql_filter_enabled)"}
 
 // ParseQueryState reads the query state of `r`: `time`, `range`, each `f` and each `sql` (an empty one left out) and
 // `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a missing `time`, a `time` that is
@@ -89,3 +77,15 @@ func WriteDiagnostics(w http.ResponseWriter, d filter.Diagnostics) {
 	b, _ := json.Marshal(d) // strings only; cannot fail
 	w.Header().Set("X-Dashica-Diagnostics", url.PathEscape(string(b)))
 }
+
+// QueryStateError is what ParseQueryState cannot read; a handler answers it with 400.
+type QueryStateError struct {
+	Reason string
+}
+
+func (e *QueryStateError) Error() string {
+	return e.Reason
+}
+
+// ErrSqlNotEnabled is what SqlClause answers SQL chips with while sql_filter_enabled is off, before any query.
+var ErrSqlNotEnabled = &QueryStateError{"SQL filters are not enabled (sql_filter_enabled)"}
