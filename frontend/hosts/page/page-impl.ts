@@ -67,7 +67,7 @@ export class PageHost implements PageApi {
     return this.#active().page;
   }
 
-  /** The active tab shows a view popped out (`popOut`), not a page: its query state changes nothing it shows. */
+  /** The active tab shows a view popped out (`popOut`): it shows what its view was given, whatever its query state. */
   get showsPoppedView(): boolean {
     return this.#popped.has(this.#list.active);
   }
@@ -109,7 +109,7 @@ export class PageHost implements PageApi {
     const shown = new URL(this.activeTab.url, 'http://dashica');
     const id = newTabId();
     this.#popped.set(id, view);
-    // the page shown already, so its `page.json` is not fetched again
+    // the page shown already: the new tab takes its `page.json`
     const open = this.#createTab(id);
     open.loaded = source.page !== undefined;
     this.#open.set(id, open);
@@ -424,13 +424,13 @@ interface OpenTab {
   /** The kind it is rendered by, with the value its hash gave it (`explore=3`). */
   renderedAs: string | undefined;
   loading: { abort: AbortController; promise: Promise<void> } | undefined;
-  /** Its page was asked for: a tab restored after a reload is not until it is shown. */
+  /** Its page was asked for: a tab restored after a reload asks when it is shown first. */
   loaded: boolean;
   /** Where its element was scrolled when it went to the background (a hidden element forgets it). */
   scrollTop: number;
 }
 
-/** The tab a history entry names (`history.state.tab`); `undefined` for an entry the workbench did not write. */
+/** The tab a history entry names (`history.state.tab`); `undefined` for an entry the browser made. */
 function entryTab(state: unknown): string | undefined {
   const tab = (state as { tab?: unknown } | null)?.tab;
   return typeof tab === 'string' ? tab : undefined;

@@ -41,8 +41,8 @@ export interface PageApi {
   closeTab(id: string): void;
   /**
    * Opens `view` in a new tab after the active one, shown: Debug or Details popped out of their panel, Speedscope. The
-   * tab is the active tab's page with `#view=<tab id>` and keeps `view` in memory only: it is not kept over a reload,
-   * and a link to it shows the page.
+   * tab is the active tab's page with `#view=<tab id>` and keeps `view` in memory only: a reload or a link to it shows
+   * the page.
    */
   popOut(view: PoppedView): Promise<void>;
   /** Renders the pages of `kind` until disposed; one renderer per kind. */
@@ -51,8 +51,8 @@ export interface PageApi {
 
 /**
  * A view in a tab of its own (`popOut`): what the tab says, and how it fills the tab's element; disposing the result
- * stops what it started (the tab closed). It shows what it was given when popped out (the widget then active), not
- * whatever becomes active later.
+ * stops what it started (the tab closed). It keeps showing what it was given when popped out (the widget then
+ * active).
  */
 export interface PoppedView {
   readonly title: string;
@@ -71,7 +71,7 @@ export interface PageContext {
   readonly query: QueryApi;
   /** The tab's hash (`#w=3`, `#explore=3`; '' for none), as it is now. */
   readonly hash: string;
-  /** Fires when only the tab's hash changed (a link to a chart, back and forward), not for other tabs. */
+  /** Fires when only this tab's hash changed (a link to a chart, back and forward). */
   readonly onDidChangeHash: Event<void>;
   /** Closes the tab. */
   close(): void;
