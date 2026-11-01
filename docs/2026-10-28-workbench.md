@@ -1148,8 +1148,9 @@ interface UiApi {
                                           // the menu's entries in the quick pick as a menu at the anchor (8c, 9s)
   readonly onDidChangeMenu: Event<string>;
 
-  showQuickPick<T>(items: (T | QuickPickSeparator)[], o?: { title?; placeholder?; anchor?; menu? }): Promise<T | undefined>;
-                                          // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s)
+  showQuickPick<T>(items: (T | QuickPickSeparator)[] | Promise<(T | QuickPickSeparator)[]>, o?: { title?; placeholder?; anchor?; menu? }): Promise<T | undefined>;
+                                          // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s);
+                                          // items still to come: open at once, busy until there; failed: hides, rejects (9an, D42)
   showInputBox(o?: { title?; prompt?; placeholder?; value?; valueSelection?; validateInput?; anchor?; field? }): Promise<string | undefined>;
                                           // a button's `...`; validateInput(value): string (an error, Enter blocked) or
                                           // { message, severity: Info | Error } below the field, live (9z, D37);
@@ -1813,6 +1814,20 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   *(proposed)* `declare` is a method of `QueryApi` itself, so a tab's `QueryHost` and `activeQuery` both have it
   (the tabs share their `QueryKeys`, so declaring through either declares for all); declaring the same key twice
   throws as a second key of its URL keys does.
+- **D42 A quick pick that waits shows it (9an, decided 2026-11-01; maintainer, on "Add filter"'s table step: "this
+  thingie needs some loading indicator for async stuff, otherwise one does not know things are happening"):** as VS
+  Code's Thenable form, `ui.showQuickPick(items | Promise<items>, options)`: the box opens at once, busy (the progress
+  line, no "No results") until the items are there, typing narrows them as they come; items that fail hide the box and
+  the returned Promise rejects with their error (as VS Code: the caller handles it, no message in the box). Callers
+  hand in the Promise rather than awaiting it first: "Add filter"'s field step (the charts' `/fields`), a pill's
+  operator edit (its type from `/fields`). A pill's value edit opens the value's quick pick at once, busy while the
+  type is still to come (`askValue` takes the type or a Promise of it); a time's or a day's input box takes its place
+  once the type says so. Boxes that stay open while they ask already show busy during each request: the value step's
+  `/values` (`pickValue`) and search everywhere's async providers. *(proposed)* After an accept no box stays open
+  busy: the requests then (`/pill` of a click's ⊕ / ⊖, of "Add filter" and of an edited pill, `/button`, "Explore
+  (from chart…)"'s `/sql`) only sign or build SQL on the server and run no query (a column's `/pill` checks the connection's cached schema,
+  which the field step's `/fields` loaded), so they answer at once; the table
+  step, the click's candidates, menus and "Reset" have their items at hand and need nothing.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2158,6 +2173,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ak ✅ 2026-10-31 | **BUGFIX a widget whose renderer throws is no rendered widget** (§3.5): `WidgetsHost.render` takes its `WidgetInstance` out of the rendered ones again and disposes it, so it is neither kept nor redecorated. Test: vitest (no provider asked for a widget whose renderer threw) | |
 | 9al ✅ 2026-11-01 | **D40 the handlers know their page's default time range; `sentToServer` a boolean** (§3.7, §3.15): Go `rendering.DashboardContext.DefaultTime` (set by `Builder.CollectHandlers`, `24h` when unset), `httpserver.DefaultTimeRange`, `httpserver.ParseQueryState(r, defaultTime)` (no `time` is the default; the missing-time error gone), `widget.DataHandler(deps, defaultTime, w)`, `queryHandler`, `fieldsHandler`, `valuesHandler`, Speedscope and the alert widgets with it, `withHandler.Handler(deps, defaultTime)`; `/time-range` and the old Explore's preview pass `24h`. Client: `QueryKeySpec.sentToServer?: boolean`, `QueryKey.sentToServer` in place of `request`, `requestParams()` appends `format(value, page)` of each sent key; `TIME`, `TEST_TIME` `sentToServer: true`. Tests: Go `dashboard` (a chart's `/sql` without `time` covers the dashboard's 168h, with `time=1h` 1h, 24h on a page declaring none), `httpserver` (`ParseQueryState` takes the default), `widget` (an unreadable time range is a 400); vitest: `QueryHost.requestParams` leaves out a key's default, `TIME` sent without the page's default, refresh not sent (kept), the widget's URLs, Speedscope, the filter bar's `/fields` with another range. Playwright (adjusted, not run): `e2e/explore-view.spec.ts`'s link test uses `time=1h`, as the default is no longer in the request. Deviation: the default reaches the handlers as a parameter, not the context *(proposed)* | the page's default once, in Go |
 | 9am ✅ 2026-11-01 | **D41 query keys declared in `activate`** (§3.7, §3.15): `QueryApi.declare(key): Disposable` in `QueryHost` (on the shared `QueryKeys.declare`, a URL key in one declared key only) and `activeQuery`; `QueryKeys.check` makes `get` / `set` / `onDidChange` of an undeclared key throw (its URL keys named, "no extension declared it"); `QueryKeys.use` and first-use order gone, the order is the declaration order. `time-range` declares `TIME`, `refresh` `REFRESH`, `filters` `FILTERS`, `dashboardPage` `PARAMS`. Tests: `page.test.ts` declares `TEST_TIME` in place of the unused `get`; `widgetTestbed({ keys })`; every test declares the keys it uses as its extension would; vitest: declaring, a second key of a URL key refused, an undeclared key refused in `get` / `set` / `onDidChange`, declaration order in URL and request, a disposed key no longer sent, a sent key sent unread (`?wp` on a page without form widgets, `dashboard-page.test.ts`). No Go change; Playwright not run, no spec changed. Deviation: `declare` on `QueryApi`, the same key twice refused *(proposed)* | every key known before the first page |
+| 9an ✅ 2026-11-01 | **D42 a quick pick that waits shows it** (§3.11, §3.15): `ui.showQuickPick(items \| Promise<items>, options)` (`QuickPickItems<T>`, `QuickInput.showQuickPick` / `pickOne` with a `failed` callback): opens at once, busy until the items are there, narrowed by what was typed meanwhile; failed items hide the box and reject the Promise; items after the box was hidden are ignored. "Add filter"'s field step and a pill's operator edit hand in their `/fields` Promise; `askValue` takes the type or a Promise of it, `pickValue(…, instead)` waits busy for it and lets a time's input box take its place (a pill's value edit). Tests: vitest for busy while pending, items after, rejection, hidden before the items; the field step busy until `/fields` answers; the value pick busy until the type, a time's input box in its place. No Go change; Playwright not run, no spec changed (none checks a pick's timing). Deviations: a rejection is the caller's (VS Code's behaviour), no message in the box; no busy after an accept (`/pill`, `/button`, `/sql` run no query; a column's `/pill` reads the cached schema) *(proposed)* | one knows things are happening |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

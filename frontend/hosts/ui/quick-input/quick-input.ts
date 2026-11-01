@@ -11,6 +11,7 @@ import {
   type QuickPickAccept,
   type QuickPickHighlights,
   type QuickPickItem,
+  type QuickPickItems,
   QuickPickItemKind,
   type QuickPickOptions,
   type QuickPickSeparator,
@@ -37,32 +38,64 @@ export class QuickInput {
     });
   }
 
-  showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options: QuickPickOptions = {}): Promise<T | undefined> {
-    return new Promise((resolve) => this.pickOne(items, options, resolve));
+  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options: QuickPickOptions = {}): Promise<T | undefined> {
+    return new Promise((resolve, reject) => this.pickOne(items, options, resolve, reject));
   }
 
   /**
    * As `showQuickPick`, but calls `done` right as the box is gone and the focus back, so what it does still counts as
-   * the viewer's gesture (a command opening a tab, copying to the clipboard).
+   * the viewer's gesture (a command opening a tab, copying to the clipboard). Items still to come show the box busy (its
+   * progress line) until they are there; when they fail instead, the box hides and `failed` gets the error.
    */
-  pickOne<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options: QuickPickOptions, done: (item: T | undefined) => void): void {
+  pickOne<T extends QuickPickItem>(
+    items: QuickPickItems<T>,
+    options: QuickPickOptions,
+    done: (item: T | undefined) => void,
+    failed: (error: unknown) => void = (error) => console.error(`Quick pick ${options.title ?? ''} failed:`, error),
+  ): void {
     const pick = this.createQuickPick<Shown<T>>();
     pick.title = options.title;
     pick.placeholder = options.placeholder;
     pick.anchor = options.anchor;
     pick.menu = options.menu ?? false;
+    let shown: readonly (T | QuickPickSeparator)[] = [];
     let picked: T | undefined;
-    pick.onDidChangeValue((value) => (pick.items = narrow(items, value)));
+    let error: { readonly error: unknown } | undefined;
+    let hidden = false;
+    pick.onDidChangeValue((value) => (pick.items = narrow(shown, value)));
     pick.onDidAccept(() => {
       picked = pick.selectedItems[0]?.item;
       pick.hide();
     });
     pick.onDidHide(() => {
+      hidden = true;
       pick.dispose();
-      done(picked);
+      if (error) failed(error.error);
+      else done(picked);
     });
-    pick.items = narrow(items, '');
+    const show = (list: readonly (T | QuickPickSeparator)[]) => {
+      shown = list;
+      pick.items = narrow(list, pick.value);
+    };
+    if (!(items instanceof Promise)) {
+      show(items);
+      pick.show();
+      return;
+    }
+    pick.busy = true;
     pick.show();
+    items.then(
+      (list) => {
+        if (hidden) return;
+        show(list);
+        pick.busy = false;
+      },
+      (reason: unknown) => {
+        if (hidden) return;
+        error = { error: reason };
+        pick.hide();
+      },
+    );
   }
 
   showInputBox(options: InputBoxOptions = {}): Promise<string | undefined> {

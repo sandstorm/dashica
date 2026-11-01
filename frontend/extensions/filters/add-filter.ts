@@ -65,7 +65,8 @@ export function fieldSource(
 /**
  * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15, §3.15 D25, D27):
  * asks in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its columns or
- * computed fields (`fieldItems`, with their types from the charts' `/fields` in `query`'s state, kept in `fields`), an
+ * computed fields (`fieldItems`, with their types from the charts' `/fields` in `query`'s state, kept in `fields`; its
+ * quick pick opens at once, busy until they answer), an
  * op of its type (`opsOf`, in a menu, asking nothing more; a time's values are never asked), and a value
  * (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
  * chips of `query`. With `askSql` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
@@ -93,8 +94,9 @@ export async function addFilter(
     table = first?.table;
     if (!table) return;
   }
+  // opens at once, busy while the charts' `/fields` answer
   const field = await ui.showQuickPick<FieldItem | SqlItem>(
-    [...(await fieldItems(table, fields, query.requestParams())), ...(tables.length === 1 ? advanced : [])],
+    fieldItems(table, fields, query.requestParams()).then((items) => [...items, ...(tables.length === 1 ? advanced : [])]),
     { anchor, title: 'Add filter', placeholder: `A column or field of ${table.table}` },
   );
   if (field && 'sql' in field) return addSqlCondition(askSql!, query, anchor);
@@ -194,27 +196,37 @@ async function addSqlCondition(askSql: AskSql, query: Pick<QueryApi, 'get' | 'se
  * chart's `/fields` answered): for a time or a day an input box with `current` filled in, else the edge of `known`'s
  * time range (its start for `≥`, `>`, `=` and `≠`, its end for `≤` and `<`, now without one) as ISO 8601 in UTC, a
  * day as its date, which ClickHouse reads best effort; else the quick pick of `pickValue`, the values from `load`.
- * Resolves with the value, or `undefined` when it was hidden without.
+ * A type still to come (a Promise: a chip's `/fields` not asked yet) opens the value's quick pick at once, busy
+ * until it is there; a time's or a day's input box then takes its place. Resolves with the value, or `undefined`
+ * when it was hidden without.
  */
 export function askValue(
   ui: Pick<UiApi, 'createQuickPick' | 'showInputBox'>,
   anchor: MenuAnchor,
   title: string,
   op: FilterOp,
-  known: FieldType | undefined,
+  known: FieldType | undefined | Promise<FieldType | undefined>,
   load: (search: string, signal: AbortSignal) => Promise<readonly string[]>,
   current?: string,
 ): Promise<string | undefined> {
-  const kind = typeKind(known?.type);
-  if (kind !== 'time' && kind !== 'day') return pickValue(ui, anchor, title, load);
-  const edge = new Date((op === 'le' || op === 'lt' ? known?.timeRange?.to : known?.timeRange?.from) ?? Date.now()).toISOString();
-  return ui.showInputBox({
-    title,
-    anchor,
-    value: current ?? (kind === 'day' ? edge.slice(0, 10) : edge),
-    prompt: kind === 'day' ? 'A day, e.g. 2026-10-31' : 'A time, e.g. 2026-10-31T10:00:00Z',
-  });
+  const inputBox = (type: FieldType | undefined): AskInstead | undefined => {
+    const kind = typeKind(type?.type);
+    if (kind !== 'time' && kind !== 'day') return undefined;
+    const edge = new Date((op === 'le' || op === 'lt' ? type?.timeRange?.to : type?.timeRange?.from) ?? Date.now()).toISOString();
+    return () =>
+      ui.showInputBox({
+        title,
+        anchor,
+        value: current ?? (kind === 'day' ? edge.slice(0, 10) : edge),
+        prompt: kind === 'day' ? 'A day, e.g. 2026-10-31' : 'A time, e.g. 2026-10-31T10:00:00Z',
+      });
+  };
+  if (!(known instanceof Promise)) return inputBox(known)?.() ?? pickValue(ui, anchor, title, load);
+  return pickValue(ui, anchor, title, load, known.then(inputBox, () => undefined));
 }
+
+/** Asks for the value in a box of its own (a time's input box) in place of `pickValue`'s. */
+type AskInstead = () => Promise<string | undefined>;
 
 /** A value `pickValue` offers. */
 interface ValueItem extends QuickPickItem {
@@ -226,15 +238,17 @@ const SEARCH_DELAY = 200;
 
 /**
  * Asks for a value in a quick pick at `anchor` titled `title`: the values `load` finds for the typed text (asked at
- * first with '', again once the typing rests, the request before aborted), and the
+ * first with '', again once the typing rests, the request before aborted; busy while one is out), and the
  * typed text itself first when it is none of them, so a value beyond the ones found can be chosen. A failed `load`
- * shows its message below the list. Resolves with the value chosen, or `undefined` when the box was hidden without.
+ * shows its message below the list. With `instead` the box waits busy for it before asking: a box it names takes
+ * the box's place. Resolves with the value chosen, or `undefined` when the box was hidden without.
  */
 export function pickValue(
   ui: Pick<UiApi, 'createQuickPick'>,
   anchor: MenuAnchor,
   title: string,
   load: (search: string, signal: AbortSignal) => Promise<readonly string[]>,
+  instead?: Promise<AskInstead | undefined>,
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
     const box = ui.createQuickPick<ValueItem>();
@@ -245,6 +259,9 @@ export function pickValue(
     let request: AbortController | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let picked: string | undefined;
+    let ready = instead === undefined;
+    let hidden = false;
+    let replaced = false;
     const draw = () => {
       const typed = box.value;
       box.items = [
@@ -276,20 +293,32 @@ export function pickValue(
     box.onDidChangeValue((search) => {
       draw();
       clearTimeout(timer);
-      timer = setTimeout(() => ask(search), SEARCH_DELAY);
+      if (ready) timer = setTimeout(() => ask(search), SEARCH_DELAY);
     });
     box.onDidAccept(() => {
       picked = box.selectedItems[0]?.value;
       box.hide();
     });
     box.onDidHide(() => {
+      hidden = true;
       clearTimeout(timer);
       request?.abort();
       box.dispose();
-      resolve(picked);
+      if (!replaced) resolve(picked);
     });
     box.show();
-    ask('');
+    if (!instead) return ask('');
+    box.busy = true;
+    void instead.then((other) => {
+      if (hidden) return;
+      if (other) {
+        replaced = true;
+        box.hide();
+        return resolve(other());
+      }
+      ready = true;
+      ask(box.value);
+    });
   });
 }
 

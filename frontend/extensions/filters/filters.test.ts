@@ -115,9 +115,11 @@ beforeEach(() => {
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: (typeof asked)[number]) => (asked.push(options), answer),
-    showQuickPick: async (items: { label?: string; kind?: number }[], options: { anchor?: unknown }) => (
-      picks.push({ labels: items.map((i) => (i.kind === -1 ? `— ${i.label}` : i.label!)), anchor: options.anchor }), items.find((i) => i.label === picked)
-    ),
+    showQuickPick: async (given: { label?: string; kind?: number }[] | Promise<{ label?: string; kind?: number }[]>, options: { anchor?: unknown }) => {
+      const items = await given;
+      picks.push({ labels: items.map((i) => (i.kind === -1 ? `— ${i.label}` : i.label!)), anchor: options.anchor });
+      return items.find((i) => i.label === picked);
+    },
   };
   asked = [];
   picks = [];

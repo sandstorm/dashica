@@ -269,19 +269,21 @@ class FilterBar {
 
   /**
    * Asks a new op for the field's pill `chip` in a quick pick below `el` (a menu), the ops of its type (`opsOf`, the type from
-   * `source`'s `/fields`, the key carries none; the one it has checked), and makes the pill again with it.
+   * `source`'s `/fields`, the key carries none; the one it has checked; busy until the type is there), and makes the
+   * pill again with it.
    */
   async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
-    const known = await this.#typeOf(made, source);
-    const items = opsOf(known?.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op }));
+    const items = this.#typeOf(made, source).then((known) =>
+      opsOf(known?.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op })),
+    );
     const picked = await this.ui.showQuickPick(items, { anchor: el, title: `Operator of ${made.field}`, menu: true });
     if (picked && picked.op !== made.op) await this.#remake(chip, index, source, { ...made, op: picked.op });
   }
 
   /**
    * Asks a new value for the field's pill `chip` below `el` as "Add filter" does (`askValue`: a time in an input box,
-   * its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s `/fields`),
-   * and makes the pill again.
+   * its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s `/fields`,
+   * the value's quick pick busy until it is there), and makes the pill again.
    */
   async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
     const value = await askValue(
@@ -289,7 +291,7 @@ class FilterBar {
       el,
       `${made.field} ${OP_SIGNS[made.op]}`,
       made.op,
-      await this.#typeOf(made, source),
+      this.#typeOf(made, source),
       (search, signal) => fetchValues(source.dataUrl, made, search, this.query.requestParams(), signal),
       made.value,
     );

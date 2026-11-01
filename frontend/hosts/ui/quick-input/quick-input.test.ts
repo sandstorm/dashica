@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// Tests for quick-input.ts (createQuickPick, showQuickPick, showInputBox with its validation message and selection, and
+// Tests for quick-input.ts (createQuickPick, showQuickPick also with items still to come, showInputBox with its validation message and selection, and
 // with a field of the caller's).
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { InputBoxValidationSeverity, QuickPickItemKind, type InputBoxField } from '../ui';
 import { QuickInput } from './quick-input';
@@ -170,6 +170,35 @@ describe('showQuickPick', () => {
     void quickInput.showQuickPick([{ label: 'Billing' }]);
     expect(await replaced).toBeUndefined();
     quickInput.hide();
+    expect(box()).toBeNull();
+  });
+
+  it('opens at once for items still to come, busy and without "No results" until they are there, then shows them as typed so far', async () => {
+    const { quickInput, type, field, options, box } = setup();
+    let answer!: (items: { label: string }[]) => void;
+    const picked = quickInput.showQuickPick(new Promise<{ label: string }[]>((resolve) => (answer = resolve)), { title: 'Add filter' });
+    const progress = () => box()!.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
+    const empty = () => box()!.querySelector<HTMLElement>('.d-workbench__quick-pick-empty')!;
+    type(field(), 'sta');
+    expect([box()!.getAttribute('aria-label'), progress().hidden, empty().hidden, options()]).toEqual(['Add filter', false, true, []]);
+    answer([{ label: 'status' }, { label: 'host' }]);
+    await vi.waitFor(() => expect(progress().hidden).toBe(true));
+    expect(options().map((option) => option.textContent)).toEqual(['status']);
+    options()[0].click();
+    expect((await picked)?.label).toBe('status');
+  });
+
+  it('hides and rejects with the error of items that fail; ignores items that come after it was hidden', async () => {
+    const { quickInput, key, field, box } = setup();
+    const failed = quickInput.showQuickPick(Promise.reject(new Error('502: unreachable')));
+    await expect(failed).rejects.toThrow('502: unreachable');
+    expect(box()).toBeNull();
+    let answer!: (items: { label: string }[]) => void;
+    const escaped = quickInput.showQuickPick(new Promise<{ label: string }[]>((resolve) => (answer = resolve)));
+    key(field(), 'Escape');
+    expect(await escaped).toBeUndefined();
+    answer([{ label: 'Shop' }]);
+    await Promise.resolve();
     expect(box()).toBeNull();
   });
 

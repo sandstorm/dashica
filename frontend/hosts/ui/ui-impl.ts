@@ -16,7 +16,7 @@ import type {
   RailButtonOptions,
   QuickPickItem,
   QuickPickOptions,
-  QuickPickSeparator,
+  QuickPickItems,
   SearchProvider,
   SidePanelOptions,
   UiApi,
@@ -95,7 +95,7 @@ export class UiHost implements UiApi {
     this.#contextMenu.show(menuId, options);
   }
 
-  showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options?: QuickPickOptions): Promise<T | undefined> {
+  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions): Promise<T | undefined> {
     return this.#quickInput.showQuickPick(items, options);
   }
 

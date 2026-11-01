@@ -2,8 +2,8 @@
 // Tests for add-filter.ts: the page's filterable tables (filterableTables), the chart that makes a pill again
 // (fieldSource), "add filter" through table, column or computed field, operator (of its type) and value to the pill of
 // its chart (addFilter), the field step's table columns from the schema and computed fields, its advanced "SQL
-// condition…" while SQL chips are taken (asked in the SQL editor's input box), a time's value in an input box at the edge of the time range (askValue), the
-// value's quick pick asking the server as the text changes (pickValue), the requests of /values and /fields
+// condition…" while SQL chips are taken (asked in the SQL editor's input box), a time's value in an input box at the edge of the time range (askValue, busy while a
+// type is still to come), the value's quick pick asking the server as the text changes (pickValue), the requests of /values and /fields
 // (fetchValues, fetchFields) and the /fields kept per chart and query state (FieldsCache).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
@@ -160,6 +160,21 @@ describe('addFilter', () => {
     expect(fetched.at(-1)!.searchParams.has('type')).toBe(false);
   });
 
+  it('opens the field step at once, busy until the charts’ /fields answer', async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>((resolve) => (answer = resolve));
+    const fetchFields = fetch;
+    vi.stubGlobal('fetch', async (input: string) => (input.includes('/fields') ? answered.then(() => fetchFields(input)) : fetchFields(input)));
+    void addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
+
+    const progress = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress');
+    await vi.waitFor(() => expect(progress()?.hidden).toBe(false));
+    expect(options()).toEqual([]);
+    answer();
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String']));
+    expect(progress()!.hidden).toBe(true);
+  });
+
   it('groups the fields into the table’s columns, from the schema, and the computed fields, each once', async () => {
     void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchor, new FieldsCache());
 
@@ -309,6 +324,26 @@ describe('askValue', () => {
     void askValue(quickInput, anchor, 'host =', 'eq', known('String'), async (search) => (asked.push(search), ['x']));
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['x']));
     expect(asked).toEqual(['']);
+  });
+  it('opens the value’s quick pick at once for a type still to come, busy, and asks the values once it is there', async () => {
+    let answer!: (type: { type: string }) => void;
+    const asked: string[] = [];
+    void askValue(quickInput, anchor, 'host =', 'eq', new Promise((resolve) => (answer = resolve)), async (search) => (asked.push(search), ['x']));
+
+    const progress = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
+    expect([progress().hidden, asked]).toEqual([false, []]);
+    answer(known('String'));
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['x']));
+    expect([progress().hidden, asked]).toEqual([true, ['']]);
+  });
+
+  it('puts a time’s input box in the place of the busy value pick once its type is there', async () => {
+    const done = askValue(quickInput, anchor, 'timestamp ≥', 'ge', Promise.resolve(known('DateTime')), load, '2026-10-31T08:00:00Z');
+
+    await vi.waitFor(() => expect(field().value).toBe('2026-10-31T08:00:00Z'));
+    expect(host.querySelector('[role=listbox]')).toBeNull();
+    enter();
+    expect(await done).toBe('2026-10-31T08:00:00Z');
   });
 });
 

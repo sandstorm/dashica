@@ -40,9 +40,11 @@ export interface UiApi {
    * Shows `items` in a quick pick at `options.anchor` (else at the top in the middle of the workbench); typing narrows
    * them (fuzzily, by label, else description), a heading shows while an item of its group does. Resolves with the
    * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
-   * elsewhere, another box). As VS Code's `window.showQuickPick`.
+   * elsewhere, another box). Items still to come (a Promise, as a server's answer) open the box at once, busy (its
+   * progress line, no "No results") until they are there; when they fail the box hides and the returned Promise
+   * rejects with their error. As VS Code's `window.showQuickPick`.
    */
-  showQuickPick<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator)[], options?: QuickPickOptions): Promise<T | undefined>;
+  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions): Promise<T | undefined>;
   /**
    * Asks for a text in a box at `options.anchor` (else at the top in the middle), `options.validateInput`'s message
    * below the field: resolves with it on Enter (unless that message is an error), once the box is gone and the focus
@@ -100,6 +102,9 @@ export interface ContextMenuOptions {
 }
 
 export type MenuAnchor = Element | { readonly x: number; readonly y: number };
+
+/** What `showQuickPick` shows: the items (and headings), or a Promise of them. */
+export type QuickPickItems<T extends QuickPickItem> = readonly (T | QuickPickSeparator)[] | Promise<readonly (T | QuickPickSeparator)[]>;
 
 /** Where and how `showQuickPick` shows its box. */
 export interface QuickPickOptions {
