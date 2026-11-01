@@ -45,7 +45,7 @@ function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: Dr
     x: {
       label: props.x.alias,
       grid: false,
-      axis: !props.fx, // do not show the axis if fx is configured (because this will be the axis instead)
+      axis: !props.fx, // with fx, the facets' axis is the axis
       tickRotate: -30,
     },
     y: {

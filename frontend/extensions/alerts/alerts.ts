@@ -19,6 +19,15 @@ export const alerts: Extension = {
   },
 };
 
+/**
+ * The thresholds of the alert whose history `result` is (X-Dashica-Alert-If: `{value_gt, value_lt}`), those set and
+ * not 0, drawn as red lines; none without the header.
+ */
+export function thresholdsOf({ headers }: Pick<QueryResult, 'headers'>): number[] {
+  const alertIf: { value_gt?: number | null; value_lt?: number | null } | null = JSON.parse(headers.get('X-Dashica-Alert-If') || 'null');
+  return [alertIf?.value_gt, alertIf?.value_lt].filter((value): value is number => !!value);
+}
+
 function renderAlertOverview(widgetContainer: HTMLElement, _widget: WidgetOf<'alertOverview'>, ctx: WidgetContext): ChartFrame {
   return new ChartFrame(widgetContainer, ctx, {
     draw: (result, options) => drawAlertOverview(result, options),
@@ -96,13 +105,4 @@ function renderAlertDetail(widgetContainer: HTMLElement, widget: WidgetOf<'alert
     height: 200,
     draw: (result, options) => drawTimeBars(result, history, options, { thresholds: thresholdsOf(result) }),
   });
-}
-
-/**
- * The thresholds of the alert whose history `result` is (X-Dashica-Alert-If: `{value_gt, value_lt}`), those set and
- * not 0, drawn as red lines; none without the header.
- */
-export function thresholdsOf({ headers }: Pick<QueryResult, 'headers'>): number[] {
-  const alertIf: { value_gt?: number | null; value_lt?: number | null } | null = JSON.parse(headers.get('X-Dashica-Alert-If') || 'null');
-  return [alertIf?.value_gt, alertIf?.value_lt].filter((value): value is number => !!value);
 }
