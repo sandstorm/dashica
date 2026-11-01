@@ -5,10 +5,9 @@ import type { PageJson } from '../../generated/zz_generated.dashica';
 /**
  * The state every query of a tab's page depends on, kept in the tab's URL: each tab has its own, so a link opens the
  * page as it was shared, and the browser's back button goes to the state before. The host knows no key of its own;
- * each part of the state is a typed key that carries its URL format (`queryKey`), defined once where the state belongs
- * and imported by its readers: the time range (`TIME`, `?time=1h`), the auto refresh (`REFRESH`, `?refresh=30`), the
- * filter chips (`FILTERS`, `?f=<key>&sql=…`), the dashboard's params (`PARAMS`, `?wp=…`). Widgets query again on
- * `onDidRequestRefresh` and send `requestParams()` along; extensions get the active tab's (`activeQuery`).
+ * each part of the state is a typed key that carries its URL format (`queryKey`), defined once by the extension or
+ * library it belongs to and imported by its readers. Widgets query again on `onDidRequestRefresh` and send
+ * `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
 export interface QueryApi {
   /** The value of `key` here (to an extension: the active tab's), its URL's or its default. */
@@ -26,7 +25,7 @@ export interface QueryApi {
   refresh(): void;
   /**
    * What the data handlers read: the entries of each key sent to the server (`sentToServer`), in the order the keys
-   * were first used (`time`, `f`, `sql`, `wp`), `time` also when it is the page's default.
+   * were first used, each as its key gives them (also a default, when the key says so).
    */
   requestParams(): URLSearchParams;
 }

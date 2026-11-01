@@ -63,8 +63,8 @@ export class UiHost implements UiApi {
   }
 
   /**
-   * Shows the items of the top bar (time range, auto refresh) and the filter bar, or hides them while the active tab
-   * shows a popped-out view: what it shows follows neither the tab's time range nor its filters.
+   * Shows the items of the top bar and the filter bar, or hides them while the active tab shows a popped-out view:
+   * what it shows does not follow the tab's query state, which those items set.
    */
   showPageBars(shown: boolean): void {
     this.#bars.top.withhold(!shown);

@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import { TIME, presetRange } from '../../extensions/time-library/time-state';
 import { QueryHost } from '../query/query';
+import { TEST_TIME } from '../query/query-testing';
 import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetContext, type WidgetDecoration, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
@@ -15,8 +15,8 @@ let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  // as the time-range extension keeps it, which every request carries
-  testbed.query.get(TIME);
+  // a key every request carries
+  testbed.query.get(TEST_TIME);
 });
 
 afterEach(() => testbed.dispose());
@@ -89,7 +89,7 @@ describe('WidgetsHost', () => {
     });
 
     it('queries the widget’s handler with the page’s query state, and passes the answer’s headers through', async () => {
-      testbed.query.set(TIME, presetRange('1h'));
+      testbed.query.set(TEST_TIME, '1h');
       testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Example': 'as sent' });
       const result = await ctx.runQuery();
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);

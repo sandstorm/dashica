@@ -13,8 +13,8 @@ export interface ActiveQuerySource {
 /**
  * The `QueryApi` extensions get (`ExtensionContext.query`): every read and call goes to the active tab's query state.
  * A key's `onDidChange` fires when the active tab's fires, and once when another tab becomes active;
- * `onDidRequestRefresh` only when the active tab's fires. So the time picker, the refresh button and the filter bar
- * show the active tab's state with the code they have for one page.
+ * `onDidRequestRefresh` only when the active tab's fires. So an extension shows the active tab's state with the code
+ * it has for one page.
  */
 export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): void } {
   const refreshRequested = new EventEmitter<void>();

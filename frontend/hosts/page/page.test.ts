@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../extension-host/extension-host';
-import { TIME, presetRange } from '../../extensions/time-library/time-state';
+import { TEST_TIME } from '../query/query-testing';
 import { settle } from '../widgets/widgets-testing';
 import type { PageContext } from './page';
 import { PageHost } from './page';
@@ -39,16 +39,15 @@ function createHost(browserWindow: Window = window): PageHost {
     contexts[shown.title] = context;
     return new Disposable(() => rendered.push(`disposed ${shown.title}`));
   });
-  // as the time-range extension keeps it: a page opens in its own time range
-  // sent along from here on, as by the time-range extension
-  created.activeQuery.get(TIME);
+  // a key every chart sends, kept per page: a page opens in its own default
+  created.activeQuery.get(TEST_TIME);
   return created;
 }
 
 /** The active tab's time range (`1h`). */
-const timeRange = () => host.activeQuery.get(TIME).range;
+const timeRange = () => host.activeQuery.get(TEST_TIME);
 
-const setTimeRange = (range: string) => host.activeQuery.set(TIME, presetRange(range));
+const setTimeRange = (range: string) => host.activeQuery.set(TEST_TIME, range);
 
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');

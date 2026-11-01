@@ -135,7 +135,7 @@ export interface WidgetMenuContext {
 /**
  * A widget's data: the Arrow table its handler answered, an empty one for a 204 (no content), and the answer's
  * headers as they came. The host reads none of them; what a header says is read by its user, through a pure function
- * next to it (the chart library's time range and column types, the alert chart's thresholds, Debug's summary).
+ * next to it, in the extension or library that reads it.
  */
 export type QueryResult = Table & {
   readonly headers: Headers;

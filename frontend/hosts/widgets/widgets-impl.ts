@@ -148,7 +148,7 @@ export class WidgetsHost implements WidgetsApi {
 
   /**
    * A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. The
-   * press is heard on its way down (capture), since a chart stops the presses on its marks (filterOnClick).
+   * press is heard on its way down (capture), since a chart may stop the presses on its marks.
    */
   #activateOn(el: HTMLElement, ctx: WidgetInstance): Disposable {
     const onEvent = (event: Event) => {
