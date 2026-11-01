@@ -295,18 +295,18 @@ export async function fetchValues(dataUrl: string, field: FieldRef, search: stri
 }
 
 /** A column of a table or a computed field of a chart, as `<dataUrl>/fields` answers it. */
-export interface Column {
+export interface ChartFieldColumn {
   readonly name: string;
   /** Its ClickHouse type (`LowCardinality(String)`). */
   readonly type: string;
 }
 
 /** What `<dataUrl>/fields` answers for a chart. */
-export interface Fields {
+export interface ChartFields {
   /** The columns of its table, from the server's schema. */
-  readonly columns: readonly Column[];
+  readonly columns: readonly ChartFieldColumn[];
   /** Its fields that are more than a column (`page.json`'s `computed`), by alias. */
-  readonly computed: readonly Column[];
+  readonly computed: readonly ChartFieldColumn[];
   /** The time range the server resolved; none without the header. */
   readonly timeRange?: ResolvedTimeRange;
 }
@@ -321,8 +321,8 @@ export interface FieldType {
  * The type of `ref` in `fields`: a column's among the columns, a chart's field among the computed fields, else the
  * column of its name (a field that is a column); `undefined` for one it does not have.
  */
-export function typeIn(fields: Fields, ref: FieldRef): FieldType | undefined {
-  const named = (columns: readonly Column[]) => columns.find((c) => c.name === ref.field);
+export function typeIn(fields: ChartFields, ref: FieldRef): FieldType | undefined {
+  const named = (columns: readonly ChartFieldColumn[]) => columns.find((c) => c.name === ref.field);
   const found = (ref.column ? undefined : named(fields.computed)) ?? named(fields.columns);
   return found && { type: found.type, ...(fields.timeRange ? { timeRange: fields.timeRange } : {}) };
 }
@@ -331,10 +331,10 @@ export function typeIn(fields: Fields, ref: FieldRef): FieldType | undefined {
  * The fields of the chart at `dataUrl`, as `<dataUrl>/fields` answers them in the query state `params`, with the
  * resolved time range (a time's default value); rejects with the server's message.
  */
-export async function fetchFields(dataUrl: string, params: URLSearchParams): Promise<Fields> {
+export async function fetchFields(dataUrl: string, params: URLSearchParams): Promise<ChartFields> {
   const response = await fetch(`${dataUrl}/fields?${params}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { columns, computed } = (await response.json()) as Fields;
+  const { columns, computed } = (await response.json()) as ChartFields;
   const timeRange = JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null') as ResolvedTimeRange | null;
   return { columns, computed, ...(timeRange ? { timeRange } : {}) };
 }
@@ -345,10 +345,10 @@ export async function fetchFields(dataUrl: string, params: URLSearchParams): Pro
  * edits ask a chart once; another state (a new time range) asks again, a failed answer is not kept.
  */
 export class FieldsCache {
-  readonly #answers = new Map<string, { readonly params: string; readonly answer: Promise<Fields> }>();
+  readonly #answers = new Map<string, { readonly params: string; readonly answer: Promise<ChartFields> }>();
 
   /** The fields of the chart at `dataUrl` in the query state `params`. */
-  get(dataUrl: string, params: URLSearchParams): Promise<Fields> {
+  get(dataUrl: string, params: URLSearchParams): Promise<ChartFields> {
     const asked = new URLSearchParams([...params].filter(([key]) => !FILTERS.urlKeys.includes(key)));
     const kept = this.#answers.get(dataUrl);
     if (kept && kept.params === asked.toString()) return kept.answer;
@@ -392,7 +392,7 @@ interface FieldItem extends QuickPickItem {
  */
 async function fieldItems(table: FilterableTable, fields: FieldsCache, params: URLSearchParams): Promise<(FieldItem | QuickPickSeparator)[]> {
   const answerOf = (widget: PillSource) => fields.get(widget.dataUrl, params);
-  const ofField = (f: FilterableField, answer?: Fields): FieldItem => {
+  const ofField = (f: FilterableField, answer?: ChartFields): FieldItem => {
     const known = answer && typeIn(answer, { field: f.field });
     return { label: f.field, ref: { field: f.field }, widget: f.widget, ...(known ? { description: known.type, known } : {}) };
   };

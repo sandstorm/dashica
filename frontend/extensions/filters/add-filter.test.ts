@@ -14,7 +14,7 @@ import { TIME, presetRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
 import { EditorView } from '@codemirror/view';
 import { showSqlInputBox } from '../sql-library/sql-editor';
-import { FieldsCache, addFilter, askValue, fetchFields, fetchValues, fieldSource, filterableTables, pickValue, typeIn, type AskSql, type Column } from './add-filter';
+import { FieldsCache, addFilter, askValue, fetchFields, fetchValues, fieldSource, filterableTables, pickValue, typeIn, type AskSql, type ChartFieldColumn } from './add-filter';
 import { OP_ICONS } from './ops';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default', computed: string[] = []) =>
@@ -34,9 +34,9 @@ let query: QueryHost;
 let fetched: URL[];
 let values: (search: string) => string[];
 /** What `<dataUrl>/fields` answers as the table's columns, by the chart's URL; a chart without an entry answers 502. */
-let columns: Record<string, Column[]>;
+let columns: Record<string, ChartFieldColumn[]>;
 /** What `<dataUrl>/fields` answers as the computed fields, by the chart's URL. */
-let computed: Record<string, Column[]>;
+let computed: Record<string, ChartFieldColumn[]>;
 /** The resolved time range `/fields` answers in its header. */
 const from = Date.UTC(2026, 9, 31, 9, 0, 0);
 const to = Date.UTC(2026, 9, 31, 10, 0, 0);

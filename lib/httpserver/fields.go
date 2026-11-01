@@ -11,9 +11,9 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// Fields is what HandleFields answers: the fields a chart filters its table by, each with its ClickHouse type
+// ChartFields is what HandleFields answers: the fields a chart filters its table by, each with its ClickHouse type
 // ("DateTime64(3)", "LowCardinality(String)"), by which the filter bar offers the ops it allows.
-type Fields struct {
+type ChartFields struct {
 	// Columns are the columns of the chart's table as the schema of its connection has them.
 	Columns []clickhouse.ResultColumn `json:"columns"`
 	// Computed are the chart's filterable fields that are more than a column of its table, by alias.
@@ -22,7 +22,7 @@ type Fields struct {
 
 // HandleFields answers `columns` (the chart's table's) and the types of its `computed` fields, from `DESCRIBE (…)`
 // (which reads no rows) of sql.FieldTypes of the chart's `query` (fieldTypes) in the time range of `state` as
-// HandleQuery fills in a chart's, without its SQL chips (they change no type), as the JSON of Fields, with the resolved
+// HandleQuery fills in a chart's, without its SQL chips (they change no type), as the JSON of ChartFields, with the resolved
 // time range in X-Dashica-Resolved-Time-Range as a chart's answer has it (the filter bar's default for a time). A
 // computed field ClickHouse cannot describe has no type in the answer (logged), the columns and the other fields keep
 // theirs. Without computed fields it asks ClickHouse nothing.
@@ -31,7 +31,7 @@ func (qh QueryHandler) HandleFields(columns []clickhouse.SchemaColumn, query sql
 	if err != nil {
 		return err
 	}
-	answer := Fields{Columns: make([]clickhouse.ResultColumn, 0, len(columns)), Computed: []clickhouse.ResultColumn{}}
+	answer := ChartFields{Columns: make([]clickhouse.ResultColumn, 0, len(columns)), Computed: []clickhouse.ResultColumn{}}
 	for _, column := range columns {
 		answer.Columns = append(answer.Columns, clickhouse.ResultColumn{Name: column.Name, Type: column.Type})
 	}
