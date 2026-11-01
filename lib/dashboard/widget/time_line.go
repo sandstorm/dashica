@@ -198,7 +198,7 @@ func (b *TimeLine) Query() sql.SqlQueryable {
 		sql.Select(b.y),
 	)
 
-	// Without WITH FILL, keep the historical ORDER BY: time first, then stroke.
+	// Without WITH FILL, the ORDER BY is time first, then stroke.
 	// With WITH FILL, partition columns (stroke, z) must come BEFORE the time
 	// column so ClickHouse fills each series independently and the time column
 	// is last (WITH FILL attaches to the last ORDER BY column).

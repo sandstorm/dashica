@@ -9,7 +9,7 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// This is the Phase-1 acceptance test (docs §4.1 (5)): for a widget built via
+// This is the serialization's acceptance test: for a widget built via
 // the fluent API, the JSON round trip must be lossless. "Lossless" is proven two
 // ways:
 //

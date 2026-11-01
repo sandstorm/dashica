@@ -7,8 +7,8 @@ import (
 )
 
 // fakeWidget is a leaf widget with real JSON methods, used to exercise the
-// envelope's "props" delegation without depending on the not-yet-generated
-// per-widget serializers.
+// envelope's "props" delegation on its own, apart from the generated per-widget
+// serializers.
 type fakeWidget struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`

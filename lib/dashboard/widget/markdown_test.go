@@ -87,7 +87,7 @@ func TestMarkdown_Content(t *testing.T) {
 }
 
 // TestMarkdown_UntrustedContentEscapesRawHTML verifies the Explore trust
-// boundary (docs §6): trusted (compiled) markdown passes raw HTML through, but
+// boundary: trusted (compiled) markdown passes raw HTML through, but
 // with DashboardContext.UntrustedContent set the raw HTML is escaped rather than
 // emitted, closing the stored-XSS vector for Explore-authored markdown.
 func TestMarkdown_UntrustedContentEscapesRawHTML(t *testing.T) {
@@ -183,7 +183,7 @@ func TestMarkdown_FileNotFound(t *testing.T) {
 // TestMarkdown_FileRejectedForUntrustedContent verifies the arbitrary-file-read
 // vector is closed: Markdown.file is settable from author-controlled widget JSON,
 // so File() must be refused when the render is untrusted (Explore-authored),
-// regardless of the path. See docs Phase-2 finding 1.
+// regardless of the path.
 func TestMarkdown_FileRejectedForUntrustedContent(t *testing.T) {
 	ctx := createTestContext()
 	ctx.UntrustedContent = true

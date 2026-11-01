@@ -33,12 +33,6 @@ func (s *SchemaTable) Title(title string) *SchemaTable {
 	return &cloned
 }
 
-var schemaTableNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
-type showTableStructureResult struct {
-	Statement string `json:"statement"`
-}
-
 // Handler serves the table's CREATE TABLE statement as text at "/schema".
 func (s *SchemaTable) Handler(deps rendering.Dependencies) http.Handler {
 	mux := http.NewServeMux()
@@ -52,6 +46,12 @@ func (s *SchemaTable) Handler(deps rendering.Dependencies) http.Handler {
 		_, _ = io.WriteString(w, statement)
 	})
 	return mux
+}
+
+var schemaTableNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+type showTableStructureResult struct {
+	Statement string `json:"statement"`
 }
 
 // showCreateTable is what `SHOW CREATE TABLE <table>` answers on the default ClickHouse.

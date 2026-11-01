@@ -19,8 +19,7 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 )
 
-// Markdown is a simple widget for rendering markdown content without any legacy features.
-// It is intended for documentation and static content, not for Observable-style dashboards.
+// Markdown is a widget that renders markdown content, for documentation and static content.
 type Markdown struct {
 	// content is the markdown source rendered inline, set via Content().
 	content string
@@ -29,8 +28,7 @@ type Markdown struct {
 	file string
 	// title is the optional title shown above the rendered markdown.
 	title string `dashica-gen:"client"`
-	// assets is a runtime filesystem handle, not serializable data — skipped by
-	// dashica-gen (see docs/2026-07-21-dynamic-widget-dashboard-ui.md §4.1).
+	// assets is a runtime filesystem handle, which dashica-gen skips.
 	assets fs.FS `dashica-gen:"skip"`
 }
 
@@ -94,8 +92,7 @@ func (m *Markdown) renderHTML(fsys fs.ReadFileFS, untrusted bool) (string, error
 		// is forbidden entirely for untrusted content. Markdown.file is serialized
 		// and settable from author-controlled widget JSON; reading it with
 		// os.ReadFile on the host FS would be an arbitrary-file-read primitive once
-		// Explore renders untrusted widgets (e.g. {"file":"/etc/passwd"}). See
-		// docs/2026-07-21-dynamic-widget-dashboard-ui.md Phase-2 finding 1.
+		// Explore renders untrusted widgets (e.g. {"file":"/etc/passwd"}).
 		if untrusted {
 			return "", fmt.Errorf("markdown: File() is not permitted for untrusted content; use inline Content()")
 		}
@@ -123,7 +120,7 @@ func (m *Markdown) renderHTML(fsys fs.ReadFileFS, untrusted bool) (string, error
 	// content. When the widget is rendered from an untrusted author — a dashboard
 	// built or stored via Explore — html.WithUnsafe() is omitted, so goldmark
 	// escapes embedded <script>/<iframe>/on*-handlers instead of emitting them
-	// (docs §6; the rendered HTML still reaches the page via templ.Raw). GFM
+	// (the client inserts the rendered HTML as is, from the props' `html`). GFM
 	// tables and syntax highlighting are renderer output, unaffected either way.
 	rendererOpts := []renderer.Option{}
 	if !untrusted {

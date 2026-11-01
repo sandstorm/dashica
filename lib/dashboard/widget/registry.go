@@ -11,8 +11,7 @@ import (
 	"sync/atomic"
 )
 
-// This file makes widgets serializable for the Explore builder
-// (see docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1 (3)).
+// This file makes widgets serializable for the Explore builder.
 //
 // A widget is an interface value, so encoding/json cannot decide which concrete
 // type to unmarshal into. The wire format is therefore a tagged envelope:
@@ -304,12 +303,8 @@ func isJSONNull(b []byte) bool {
 }
 
 // ---------------------------------------------------------------------------
-// Registration of the v1 widget types (docs section 7).
-//
-// Per-widget (de)serializers do not exist yet — cmd/dashica-gen emits them into
-// zz_generated.dashica.go in a later Phase-1 step. Until then MarshalWidget
-// produces an empty "props" for these types; the envelope/registry layer itself
-// is what this step establishes and tests.
+// Registration of the widget types, by the name the widget JSON and page.json
+// carry; cmd/dashica-gen emits their (de)serializers into zz_generated.dashica.go.
 // ---------------------------------------------------------------------------
 
 func init() {

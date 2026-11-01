@@ -46,60 +46,12 @@ type TimeBar struct {
 	stack StackOptions `dashica-gen:"client,method=StackOptions"`
 }
 
-// StackOptions groups the Observable Plot stack transform options for the fill
-// series (offset, order, reverse). Its zero value is Plot's default stacking.
-// Docs: https://observablehq.com/plot/transforms/stack#stack-options
-type StackOptions struct {
-	// Order is the order in which the series are layered. Zero value = input
-	// order (Plot default).
-	Order StackOrder
-	// Offset is the baseline method (e.g. OffsetExpand for a 0–1 share chart).
-	// Zero value = a zero baseline (Plot default).
-	Offset StackOffset
-	// Reverse flips the chosen Order.
-	Reverse bool
+func NewTimeBar(sql sql.SqlQueryable) *TimeBar {
+	return &TimeBar{
+		sql:    sql,
+		height: 200,
+	}
 }
-
-// StackOrder is the stacking order of the fill series. It wraps an unexported
-// string so that only the package-defined Order* values compile — a bare
-// literal like StackOrder{"banana"} is rejected (unkeyed field is unexported),
-// giving enum-like safety without Go enums. Zero value = input order.
-//
-// Only orders valid for a vertical (stackY) bar chart are exposed; Plot's
-// stackX-only "x" alias is intentionally omitted.
-// Docs: https://observablehq.com/plot/transforms/stack#stack-options
-//
-//dashicagen:enum
-type StackOrder struct{ v string }
-
-var (
-	// OrderValue stacks by ascending value (descending with StackOptions.Reverse).
-	OrderValue = StackOrder{"value"}
-	// OrderSum orders series by their total value — smallest total at the
-	// bottom.
-	OrderSum = StackOrder{"sum"}
-	// OrderAppearance orders series by the position of their maximum value.
-	OrderAppearance = StackOrder{"appearance"}
-	// OrderInsideOut puts the earliest-appearing series on the inside.
-	OrderInsideOut = StackOrder{"inside-out"}
-)
-
-// StackOffset is the stack baseline method. Same enum-safety trick as
-// StackOrder. Zero value = a zero baseline (Plot default).
-// Docs: https://observablehq.com/plot/transforms/stack#stack-options
-//
-//dashicagen:enum
-type StackOffset struct{ v string }
-
-var (
-	// OffsetExpand normalizes each stack to the 0–1 range (share of total).
-	OffsetExpand = StackOffset{"expand"}
-	// OffsetCenter centers each stack around a shared baseline (streamgraph).
-	OffsetCenter = StackOffset{"center"}
-	// OffsetWiggle minimizes apparent movement (streamgraph); implies
-	// OrderInsideOut unless another order is set.
-	OffsetWiggle = StackOffset{"wiggle"}
-)
 
 func (b *TimeBar) X(xField sql.TimestampedField) *TimeBar {
 	cloned := *b
@@ -210,15 +162,7 @@ func (b *TimeBar) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeBar {
 	return &cloned
 }
 
-func NewTimeBar(sql sql.SqlQueryable) *TimeBar {
-	return &TimeBar{
-		sql:    sql,
-		height: 200,
-	}
-}
-
 func (b *TimeBar) Query() sql.SqlQueryable {
-	// Build the SQL query
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
 		sql.GroupBy(b.x),
@@ -248,5 +192,60 @@ func (b *TimeBar) Query() sql.SqlQueryable {
 
 	return query
 }
+
+// StackOptions groups the Observable Plot stack transform options for the fill
+// series (offset, order, reverse). Its zero value is Plot's default stacking.
+// Docs: https://observablehq.com/plot/transforms/stack#stack-options
+type StackOptions struct {
+	// Order is the order in which the series are layered. Zero value = input
+	// order (Plot default).
+	Order StackOrder
+	// Offset is the baseline method (e.g. OffsetExpand for a 0–1 share chart).
+	// Zero value = a zero baseline (Plot default).
+	Offset StackOffset
+	// Reverse flips the chosen Order.
+	Reverse bool
+}
+
+// StackOrder is the stacking order of the fill series. It wraps an unexported
+// string so that only the package-defined Order* values compile — a bare
+// literal like StackOrder{"banana"} is rejected (unkeyed field is unexported),
+// giving enum-like safety without Go enums. Zero value = input order.
+//
+// Only orders valid for a vertical (stackY) bar chart are exposed; Plot's
+// stackX-only "x" alias is intentionally omitted.
+// Docs: https://observablehq.com/plot/transforms/stack#stack-options
+//
+//dashicagen:enum
+type StackOrder struct{ v string }
+
+var (
+	// OrderValue stacks by ascending value (descending with StackOptions.Reverse).
+	OrderValue = StackOrder{"value"}
+	// OrderSum orders series by their total value — smallest total at the
+	// bottom.
+	OrderSum = StackOrder{"sum"}
+	// OrderAppearance orders series by the position of their maximum value.
+	OrderAppearance = StackOrder{"appearance"}
+	// OrderInsideOut puts the earliest-appearing series on the inside.
+	OrderInsideOut = StackOrder{"inside-out"}
+)
+
+// StackOffset is the stack baseline method. Same enum-safety trick as
+// StackOrder. Zero value = a zero baseline (Plot default).
+// Docs: https://observablehq.com/plot/transforms/stack#stack-options
+//
+//dashicagen:enum
+type StackOffset struct{ v string }
+
+var (
+	// OffsetExpand normalizes each stack to the 0–1 range (share of total).
+	OffsetExpand = StackOffset{"expand"}
+	// OffsetCenter centers each stack around a shared baseline (streamgraph).
+	OffsetCenter = StackOffset{"center"}
+	// OffsetWiggle minimizes apparent movement (streamgraph); implies
+	// OrderInsideOut unless another order is set.
+	OffsetWiggle = StackOffset{"wiggle"}
+)
 
 func (b *TimeBar) explicitId() string { return b.id }

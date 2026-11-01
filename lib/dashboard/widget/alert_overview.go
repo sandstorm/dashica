@@ -22,29 +22,6 @@ func NewAlertOverview(alertGroupPattern string) *AlertOverview {
 	}
 }
 
-const alertOverviewQuery = `
-WITH
-    (leadInFrame(timestamp) OVER (
-        PARTITION BY alert_id_group, alert_id_key
-        ORDER BY timestamp
-        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        )) as end_ts_expr
-SELECT
-    concat(alert_id_group, '#', alert_id_key) as alert_id,
-    alert_id_group,
-    alert_id_key,
-    timestamp::DateTime64 as start,
-    status::String as status,
-    message,
-    if(end_ts_expr = 0, now()::DateTime64, end_ts_expr::DateTime64) as end
-FROM
-    dashica_alert_events
-WHERE
-    alert_id_group ILIKE {alert_group_pattern:String}
-ORDER BY
-    alert_id_group, alert_id_key, timestamp
-`
-
 func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 	pattern := a.alertGroupPattern
 	mux := http.NewServeMux()
@@ -89,3 +66,26 @@ func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 	})
 	return mux
 }
+
+const alertOverviewQuery = `
+WITH
+    (leadInFrame(timestamp) OVER (
+        PARTITION BY alert_id_group, alert_id_key
+        ORDER BY timestamp
+        ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        )) as end_ts_expr
+SELECT
+    concat(alert_id_group, '#', alert_id_key) as alert_id,
+    alert_id_group,
+    alert_id_key,
+    timestamp::DateTime64 as start,
+    status::String as status,
+    message,
+    if(end_ts_expr = 0, now()::DateTime64, end_ts_expr::DateTime64) as end
+FROM
+    dashica_alert_events
+WHERE
+    alert_id_group ILIKE {alert_group_pattern:String}
+ORDER BY
+    alert_id_group, alert_id_key, timestamp
+`

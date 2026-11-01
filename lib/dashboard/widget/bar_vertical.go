@@ -167,7 +167,6 @@ func (b *BarVertical) AdjustQuery(opts ...sql.SqlBuilderOption) *BarVertical {
 }
 
 func (b *BarVertical) Query() sql.SqlQueryable {
-	// Build the SQL query
 	query := b.sql.With(
 		sql.PrependSelect(b.x),
 		sql.GroupBy(b.x),

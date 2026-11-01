@@ -18,6 +18,12 @@ type Stats struct {
 	id string
 }
 
+func NewStats(sql sql.SqlQueryable) *Stats {
+	return &Stats{
+		sql: sql,
+	}
+}
+
 func (s *Stats) TitleField(field sql.SqlField) *Stats {
 	cloned := *s
 	cloned.titleField = &field
@@ -40,12 +46,6 @@ func (s *Stats) AdjustQuery(opts ...sql.SqlBuilderOption) *Stats {
 	cloned := *s
 	cloned.sql = cloned.sql.With(opts...)
 	return &cloned
-}
-
-func NewStats(sql sql.SqlQueryable) *Stats {
-	return &Stats{
-		sql: sql,
-	}
 }
 
 func (s *Stats) Query() sql.SqlQueryable {

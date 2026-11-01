@@ -2,13 +2,10 @@
 
 package widget
 
-// This file defines the editor form-model types consumed by the Explore editor
-// (docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.4). The DATA — one
-// WidgetDescriptor per registered widget — is emitted by dashica-gen into
-// zz_generated.dashica.go (the var widgetDescriptors), derived from the same
-// parsed structs as the JSON serializers, so a new widget option appears in the
-// editor automatically. These hand-written types are the stable contract the
-// generator fills and lib/explore serves.
+// This file defines the editor form-model types consumed by the Explore editor. The DATA — one WidgetDescriptor per
+// registered widget — is emitted by dashica-gen into zz_generated.dashica.go (the var widgetDescriptors), derived from
+// the same parsed structs as the JSON serializers, so a new widget option appears in the editor automatically. These
+// hand-written types are the stable contract the generator fills and lib/explore serves.
 
 // FieldDescriptor describes one editable field of a widget. Editor kind is
 // inferred from the Go field type by dashica-gen; Help is the field's Go doc

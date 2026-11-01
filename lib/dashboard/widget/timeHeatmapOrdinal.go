@@ -40,6 +40,12 @@ type TimeHeatmapOrdinal struct {
 	yBucketSize int64 `dashica-gen:"client"`
 }
 
+func NewTimeHeatmapOrdinal(sql *sql.SqlQuery) *TimeHeatmapOrdinal {
+	return &TimeHeatmapOrdinal{
+		sql: sql,
+	}
+}
+
 func (h *TimeHeatmapOrdinal) X(xField sql.TimestampedField) *TimeHeatmapOrdinal {
 	cloned := *h
 	cloned.x = xField
@@ -120,12 +126,6 @@ func (h *TimeHeatmapOrdinal) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeHeat
 	cloned := *h
 	cloned.sql = cloned.sql.With(opts...)
 	return &cloned
-}
-
-func NewTimeHeatmapOrdinal(sql *sql.SqlQuery) *TimeHeatmapOrdinal {
-	return &TimeHeatmapOrdinal{
-		sql: sql,
-	}
 }
 
 func (h *TimeHeatmapOrdinal) Query() sql.SqlQueryable {

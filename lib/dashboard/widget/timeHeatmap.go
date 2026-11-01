@@ -28,6 +28,12 @@ type TimeHeatmap struct {
 	yBucketSize int64 `dashica-gen:"client"`
 }
 
+func NewTimeHeatmap(sql *sql.SqlQuery) *TimeHeatmap {
+	return &TimeHeatmap{
+		sql: sql,
+	}
+}
+
 func (h *TimeHeatmap) X(xField sql.TimestampedField) *TimeHeatmap {
 	cloned := *h
 	cloned.x = xField
@@ -86,12 +92,6 @@ func (h *TimeHeatmap) AdjustQuery(opts ...sql.SqlBuilderOption) *TimeHeatmap {
 	cloned := *h
 	cloned.sql = cloned.sql.With(opts...)
 	return &cloned
-}
-
-func NewTimeHeatmap(sql *sql.SqlQuery) *TimeHeatmap {
-	return &TimeHeatmap{
-		sql: sql,
-	}
 }
 
 func (h *TimeHeatmap) Query() sql.SqlQueryable {
