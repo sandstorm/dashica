@@ -19,12 +19,12 @@ let refused: Response | undefined;
 const source = { dataUrl: '/p/shop/api/3', filterable: ['status', 'instance'] };
 const pill = (field: string, op: string, value: string) => ({ kind: 'pill', key: `key:${field}:${op}:${value}` });
 
-/** The quick pick's options as their icon and label read ("Filter status = 500", "Exclude status = 500"). */
+/** The quick pick's options as their icon and label read ("Filter status = 500", "Exclude status ≠ 500"). */
 const choices = () =>
   [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')].map((el) =>
     `${el.querySelector('[role=img]')?.getAttribute('aria-label') ?? ''} ${el.textContent?.trim()}`.trim(),
   );
-/** Clicks the option `label` reads as ("Exclude status = 500"). */
+/** Clicks the option `label` reads as ("Exclude status ≠ 500"). */
 const choose = (label: string) => {
   const options = [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')];
   options[choices().indexOf(label)].click();
@@ -59,11 +59,11 @@ afterEach(() => {
 describe('offerFilters', () => {
   it('offers to filter by and to exclude each candidate in order, at the click; choosing one adds its pill at once', async () => {
     const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }], source);
-    expect(choices()).toEqual(['Filter status = 500', 'Exclude status = 500', 'Filter instance = web-1', 'Exclude instance = web-1']);
+    expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500', 'Filter instance = web-1', 'Exclude instance ≠ web-1']);
     expect(host.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
     // a menu: its field out of sight
     expect(host.querySelector('.d-workbench__quick-pick input')!.classList.contains('d-workbench__quick-pick-field--concealed')).toBe(true);
-    choose('Exclude instance = web-1');
+    choose('Exclude instance ≠ web-1');
     await done;
 
     expect(choices()).toEqual([]);
@@ -81,7 +81,7 @@ describe('offerFilters', () => {
       `Above timestamp > ${at}`,
       `Below timestamp < ${at}`,
       `Filter timestamp = ${at}`,
-      `Exclude timestamp = ${at}`,
+      `Exclude timestamp ≠ ${at}`,
     ]);
     choose(`At most timestamp ≤ ${at}`);
     await done;
@@ -92,10 +92,10 @@ describe('offerFilters', () => {
 
   it('offers only the fields the widget filters by, and nothing without one', async () => {
     void offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'cnt', value: '3' }], source);
-    expect(choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
+    expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
     await offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'cnt', value: '3' }], source);
     await offerFilters(quickInput, query, { x: 10, y: 20 }, [], source);
-    expect(choices()).toEqual(['Filter status = 500', 'Exclude status = 500']);
+    expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
   });
 
   it('adds no pill when the widget’s /pill fails', async () => {

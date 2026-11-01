@@ -846,8 +846,8 @@ on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter
 9ad, since then `filter-library`, §3.15 D38);
 the `filters` extension registers it, owns the quick pick, `OP_ICONS`, `fetchPill`, and adds to the tab shown;
 without it a click offers nothing): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
-`<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and the same with a minus icon
-("Exclude …", `ne`); it is a menu (§3.15 D30), typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
+`<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and `<field> ≠ <value>` with a minus icon
+("Exclude …", `ne`; since 9aq, D45, each op with its own sign); it is a menu (§3.15 D30), typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
 press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`), the menu `widget/selection` and the
 `filters` commands `filters.filterBySelection` / `excludeSelection`, `WidgetsApi.selection` / `select` /
 `clearSelection`, `WidgetContext.select` / `choose` / `clearSelection`, the `Selection` types, `ui.showChoices`, the
@@ -1477,8 +1477,8 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
   moves to it: a chart click's candidates, the registered context menus (right click, the "…" menu buttons), search
   everywhere.
 - **D4 Click to filter (8c):** a click on a chart mark shows at once, per candidate field, "⊕ `<field> = <value>`"
-  (filter, a filter icon) and "⊖ `<field> = <value>`" (exclude, a minus icon) in the quick pick; choosing one adds the
-  pill (D6). The floating "Filter by / Exclude" bar goes. No multi-value accumulation: pills on the same table and
+  (filter, a filter icon) and "⊖ `<field> = <value>`" (exclude, a minus icon) in the quick pick (since 9aq, D45, the
+  exclude reads "`<field> ≠ <value>`"); choosing one adds the pill (D6). The floating "Filter by / Exclude" bar goes. No multi-value accumulation: pills on the same table and
   field combine, the `eq` ones OR-ed, the `ne` ones AND-ed (§3.8).
 - **D5 Layout (8d; changed by D23, 9i: the sides full height, the tab row over the content only, "…" in the left rail, no icon):** one top row `[… global menu][Dashica icon][tabs][+] … [time range][refresh]`; the separate
   title bar goes, the filter bar stays below. Search everywhere is a button in the left rail (as Typst), not a field.
@@ -1846,7 +1846,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   call (nothing copied at start); `Manager.Database` is deleted, not kept beside it.
 - **D45 Small fixes (9ap–, decided 2026-11-01):** (a, 9ap; maintainer: "yes simplify") `validateInput` answers an
   `InputBoxValidationMessage` or `undefined` only; a filter button writes its "Enter a value." as an `Error` message
-  itself, and the quick input's `validation()` helper is gone.
+  itself, and the quick input's `validation()` helper is gone. (b, 9aq; the maintainer saw two identical
+  "shopAction = LogonAction" in a click's quick pick, filter and exclude differing by their icon only) each op is
+  labelled with its own sign (`OP_SIGNS`), the exclude "shopAction ≠ LogonAction".
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -1911,8 +1913,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   by the unit Arrow carries: `DateTime` seconds, `Date` days, `DateTime64` / `Date32` ms; since 9m a `DateTime64(4…9)`
   with its µs, read from the ms fraction apache-arrow gives a Timestamp in µs or ns, to the µs, since a JS number
   carries no ns *(proposed)*). The quick pick shows per
-  candidate one entry per op of its type: `=` with the filter icon, `=` with the minus icon (Exclude, as D4), the range
-  ops with their sign and a chevron.
+  candidate one entry per op of its type: `=` with the filter icon, `≠` with the minus icon (Exclude; until 9aq, D45,
+  `=` as D4), the range ops with their sign and a chevron.
 - **Time buckets stay without pills** *(proposed)*: a time bar's x (`AutoBucket`, `Timestamp15Min`) still cannot filter
   (422, D6), since `=` on a bucket means nothing and the bucket's expression depends on the range; "a chart's time
   value" is a plain time field (`sql.Field("timestamp")`, `toDate(timestamp)`), as a table's timestamp column is. The
@@ -2195,6 +2197,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9an ✅ 2026-11-01 | **D42 a quick pick that waits shows it** (§3.11, §3.15): `ui.showQuickPick(items \| Promise<items>, options)` (`QuickPickItems<T>`, `QuickInput.showQuickPick` / `pickOne` with a `failed` callback): opens at once, busy until the items are there, narrowed by what was typed meanwhile; failed items hide the box and reject the Promise; items after the box was hidden are ignored. "Add filter"'s field step and a pill's operator edit hand in their `/fields` Promise; `askValue` takes the type or a Promise of it, `pickValue(…, instead)` waits busy for it and lets a time's input box take its place (a pill's value edit). Tests: vitest for busy while pending, items after, rejection, hidden before the items; the field step busy until `/fields` answers; the value pick busy until the type, a time's input box in its place. No Go change; Playwright not run, no spec changed (none checks a pick's timing). Deviations: a rejection is the caller's (VS Code's behaviour), no message in the box; no busy after an accept (`/pill`, `/button`, `/sql` run no query; a column's `/pill` reads the cached schema) *(proposed)* | one knows things are happening |
 | 9ao ✅ 2026-11-01 | **D43 `filter.FilterService`** (§3.8, §3.15): Go `filter.NewFilterService(cfg)` built once in `dashica.New`, `rendering.Dependencies.FilterService`; methods `Sign(p)`, `Open(key)`, `TableName(t)` (was `ShortName`), `TableOf(q)`, unexported `database`, `secret`, `tableKey`, `readTable`, `read`; every `database func(connection string) string` parameter and the `nil` for a button's pill gone; `widget_common.go` (`tableOf` wrapper gone, `openPills`, `/pill`, the node's `table`), `speedscope_link.go`, `dashboard.pageButtons` / `buttonHandler` use the service; `clickhouse.Manager.Database` deleted (no other user). Tests: `filter` builds its service from a small config (a second secret, an empty one); `widget`, `dashboard`, root and `httpserver` tests put a `FilterService` into their `Dependencies`. `go vet` green (outer repo with and without `-tags solarwatt`, no outer change), Go tests green but the ClickHouse-bound ones (sandbox); `go generate` rerun (only the generated TS's comments change), golden contract unchanged. No TS change. Deviations: the service reads the config per call; `Manager.Database` deleted *(proposed)* | one object knows the secret and the databases |
 | 9ap ✅ 2026-11-01 | **D45 (a) `validateInput` simplified** (§3.11, §3.15): `InputBoxOptions.validateInput?: (value) => InputBoxValidationMessage \| undefined`; `filters.ts` `#press` writes "Enter a value." as an `Error` message; `validation()` in `quick-input.ts` gone. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,test.ts}`, `frontend/extensions/filters/filters.{ts,test.ts}` | |
+| 9aq ✅ 2026-11-01 | **D45 (b) the exclude reads ≠** (§3.8, §3.15): `filterPicks` (`frontend/extensions/filters/offer.ts`) labels each op with its own sign (`OP_SIGNS`). Files: `frontend/extensions/filters/offer.{ts,test.ts}`, `filters.test.ts`, `e2e/bar-selection.spec.ts` (written, not run) | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

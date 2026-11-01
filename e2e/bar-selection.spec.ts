@@ -1,6 +1,6 @@
 // Tests for click to filter on bar charts (docs/2026-10-28-workbench.md §3.8, step 8c): a click on a bar offers, in the
-// quick pick "Filter", "<field> = <value>" to filter by (a filter icon) and to exclude (a minus icon); choosing one adds
-// the chip at once; Escape and a click elsewhere close the quick pick without a chip.
+// quick pick "Filter", "<field> = <value>" to filter by (a filter icon) and "<field> ≠ <value>" to exclude (a minus
+// icon); choosing one adds the chip at once; Escape and a click elsewhere close the quick pick without a chip.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance" (category `instance`), over the last 7 days: it needs HTTP 500s in that range. Another page and
@@ -31,7 +31,7 @@ test('a click on a bar offers to filter by its category or exclude it; "Filter" 
     const options = quickPick(page).getByRole('option');
     // the category comes first, before a fill or facet: filter by it, then exclude it
     await expect(options.nth(0)).toHaveAccessibleName(/^Filter \S+ = .+/);
-    await expect(options.nth(1)).toHaveAccessibleName(/^Exclude \S+ = .+/);
+    await expect(options.nth(1)).toHaveAccessibleName(/^Exclude \S+ ≠ .+/);
     await options.nth(0).click();
     await expect(quickPick(page)).toHaveCount(0);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');

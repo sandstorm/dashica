@@ -636,7 +636,7 @@ describe('filters.offer', () => {
     picked = 'host = a';
     await commands.get('filters.offer')!({ x: 10, y: 20 }, [{ fieldId: 'host', value: 'a' }], { dataUrl: '/p/shop/api/1', filterable: ['host'] });
 
-    expect(picks).toEqual([{ labels: ['host = a', 'host = a'], anchor: { x: 10, y: 20 } }]);
+    expect(picks).toEqual([{ labels: ['host = a', 'host ≠ a'], anchor: { x: 10, y: 20 } }]);
     expect(new URL(fetched.at(-1)!, 'http://x').pathname).toBe('/p/shop/api/1/pill');
     expect(held()).toHaveLength(1);
   });

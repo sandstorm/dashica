@@ -8,7 +8,7 @@ import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 /**
  * The command `filters.offer` (docs/2026-10-28-workbench.md §3.8, §3.15 D25): a click on a chart's mark, a table's cell
  * or an Explore view's group row offers, in a quick pick "Filter" at `at` (a menu), to filter by each of `candidates` ("status =
- * 500" with a filter icon) or to exclude it (the same with a minus icon), and for a number or a time to compare with it
+ * 500" with a filter icon) or to exclude it ("status ≠ 500" with a minus icon), and for a number or a time to compare with it
  * ("timestamp ≥ 2026-10-31T10:00:00.000Z", a time's `≥` and `≤` first; the ops of its type, `opsOf`), in order, those
  * of them whose field `source` names `filterable`; choosing one asks `source`'s `/pill` for its pill and adds it to
  * the chips of `query` (the active tab's: the click happened in the tab shown). A failed answer adds none, it goes to
@@ -39,13 +39,14 @@ interface FilterPick extends QuickPickItem, FilterCandidate {
 }
 
 /**
- * For each candidate in order, one pick per op of its type: "<field> = <value>" to filter by it (a filter icon) and to
- * exclude it (a minus icon), "<field> ≥ <value>" and the like to compare with it (a chevron).
+ * For each candidate in order, one pick per op of its type, each with its own sign: "<field> = <value>" to filter by it
+ * (a filter icon), "<field> ≠ <value>" to exclude it (a minus icon), "<field> ≥ <value>" and the like to compare with it
+ * (a chevron).
  */
 function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
   return candidates.flatMap((candidate) =>
     opsOf(candidate.type).map((op) => ({
-      label: `${candidate.fieldId} ${op === 'ne' ? '=' : OP_SIGNS[op]} ${candidate.value}`,
+      label: `${candidate.fieldId} ${OP_SIGNS[op]} ${candidate.value}`,
       icon: OP_ICONS[op],
       ...candidate,
       op,
