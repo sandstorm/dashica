@@ -29,6 +29,7 @@ export const exploreView: Extension = {
     }
     // the schemas the editors complete from, asked once per connection, shared by the Explore tabs
     const schemas = new Schemas();
+    const loadPerspective = perspectiveLoader(PERSPECTIVE_URL);
     subscriptions.push(
       page.registerPageRenderer('explore', (pageContainer, shown, context) => {
         const id = new URLSearchParams(context.hash.slice(1)).get('explore') ?? '';
@@ -42,7 +43,7 @@ export const exploreView: Extension = {
           connections: page.workbench.connections,
           query: context.query,
           state: globalState,
-          perspective: () => loadPerspective(pageContainer.ownerDocument, PERSPECTIVE_URL),
+          perspective: () => loadPerspective(pageContainer.ownerDocument),
           sqlEditors: () => loadSqlEditors(),
           schema: (connection) => schemas.get(connection),
           hash: () => context.hash,
@@ -140,20 +141,24 @@ export function exploreUrl(url: string, id: string): string {
 /** Where the build puts the Perspective bundle (frontendBuild.mjs), beside index.js. */
 export const PERSPECTIVE_URL = '/public/dist/perspective.js';
 
-let loaded: Promise<Perspective> | undefined;
-
-/** The Perspective bundle at `url` (and its stylesheet beside it), loaded once for the page. */
-export function loadPerspective(doc: Document, url: string): Promise<Perspective> {
-  loaded ??= (async () => {
-    const linkElement = doc.createElement('link');
-    linkElement.rel = 'stylesheet';
-    linkElement.href = url.replace(/\.js$/, '.css');
-    doc.head.append(linkElement);
-    const module: { explorePerspective: Perspective } = await import(/* @vite-ignore */ url);
-    return module.explorePerspective;
-  })();
-  loaded.catch(() => (loaded = undefined));
-  return loaded;
+/**
+ * Loads the Perspective bundle at `url` on its first call, its stylesheet into that call's `doc`; later calls answer
+ * the same.
+ */
+export function perspectiveLoader(url: string): (doc: Document) => Promise<Perspective> {
+  let loaded: Promise<Perspective> | undefined;
+  return (doc) => {
+    loaded ??= (async () => {
+      const linkElement = doc.createElement('link');
+      linkElement.rel = 'stylesheet';
+      linkElement.href = url.replace(/\.js$/, '.css');
+      doc.head.append(linkElement);
+      const module: { explorePerspective: Perspective } = await import(/* @vite-ignore */ url);
+      return module.explorePerspective;
+    })();
+    loaded.catch(() => (loaded = undefined));
+    return loaded;
+  };
 }
 
 /**
