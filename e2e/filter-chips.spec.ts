@@ -1,17 +1,16 @@
-// Tests for the filter bar's chips (docs/2026-10-28-workbench.md §3.8, steps 6.5, 7b, 8e, 8f, 9b, 9c, 9r and 9af): a link's `f`
-// and `sql` show as chips in their order, a chart whose query ignores a pill says so (its decoration) and is drawn muted until the
-// pointer is on it, an unsigned pill fails the
-// charts, "Add filter"'s "SQL condition…" adds a SQL chip (D26) and a SQL chip's text is asked anew, both in the SQL
-// editor's input box (D12, 9aa), a chip's × removes it from the URL, a pill's operator and value are edited in
-// place on a page whose charts filter its table, a filter button toggles in place as a signed pill, without a chip; a
-// button with `...` asks its value (the condition it makes shown below the field, an empty one refused), shows it
-// beside it and takes a new one in its place (the current value selected).
+// Tests for the filter bar's chips: a link's `f` and `sql` show as chips in their order, a chart whose query ignores a
+// pill says so (its decoration) and is drawn muted until the pointer is on it, an unsigned pill fails the charts, "Add
+// filter"'s "SQL condition…" adds a SQL chip and a SQL chip's text is asked anew, both in the SQL editor's input box, a
+// chip's × removes it from the URL, a pill's operator and value are edited in place on a page whose charts filter its
+// table, a filter button toggles in place as a signed pill, without a chip; a button with `...` asks its value (the
+// condition it makes shown below the field, an empty one refused), shows it beside it and takes a new one in its place
+// (the current value selected).
 //
-// The page defaults to the Sandstorm instance's "/clickhouse/table_sizes": its tables use `FromFileWithoutFilters`,
-// so every chart ignores every pill. Another page: DASHICA_E2E_FILTER_PAGE. The pills are signed by a chart of
-// "/templates/oekokiste-caddy-ingress" (another: DASHICA_E2E_PILL_PAGE). The filter button test runs
-// on "/p_wetell/app" (its buttons "Errors only" and, with `...`, "Path Prefix"); another page and buttons:
-// DASHICA_E2E_BUTTON_PAGE, DASHICA_E2E_BUTTON, DASHICA_E2E_VALUE_BUTTON.
+// The page defaults to the Sandstorm instance's "/clickhouse/table_sizes": its tables use `FromFileWithoutFilters`, so
+// every chart ignores every pill. Another page: DASHICA_E2E_FILTER_PAGE. The pills are signed by a chart of
+// "/templates/oekokiste-caddy-ingress" (another: DASHICA_E2E_PILL_PAGE). The filter button test runs on "/p_wetell/app"
+// (its buttons "Errors only" and, with `...`, "Path Prefix"); another page and buttons: DASHICA_E2E_BUTTON_PAGE,
+// DASHICA_E2E_BUTTON, DASHICA_E2E_VALUE_BUTTON.
 import {expect, test, type Page} from '@playwright/test';
 
 const PAGE = process.env.DASHICA_E2E_FILTER_PAGE || '/clickhouse/table_sizes';

@@ -1,6 +1,6 @@
-// Tests for the start page "/" (docs/2026-10-28-workbench.md §3.4.3): no redirect; a hint while there are no
-// favorites, then every group with its dashboards; a starred dashboard shows as a tile with its group and opens from
-// there; "+" leads back to it; the time range, refresh and the status bar show there too.
+// Tests for the start page "/": it stays at "/"; a hint while there are no favorites, then every group with its
+// dashboards; a starred dashboard shows as a tile with its group and opens from there; "+" leads back to it; the time
+// range, refresh and the status bar show there too.
 //
 // The dashboard starred defaults to the Sandstorm instance's "/clickhouse/table_sizes". Another one:
 // DASHICA_E2E_START_PAGE.

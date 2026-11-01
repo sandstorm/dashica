@@ -1,8 +1,8 @@
-// Tests for the Dashboards panel's views (docs/2026-10-28-workbench.md §3.4.2): a group's view closes and stays closed
-// after a reload; favorites move by their grip (dragged) and with Alt+ArrowUp, and keep that order after a reload.
+// Tests for the Dashboards panel's views: a group's view closes and stays closed after a reload; favorites move by
+// their grip (dragged) and with Alt+ArrowUp, and keep that order after a reload.
 //
-// The page defaults to the Sandstorm instance's "/clickhouse/table_sizes"; its group must hold at least two
-// dashboards. Another page: DASHICA_E2E_VIEWS_PAGE.
+// The page defaults to the Sandstorm instance's "/clickhouse/table_sizes"; its group must hold at least two dashboards.
+// Another page: DASHICA_E2E_VIEWS_PAGE.
 import {expect, test, type Page} from '@playwright/test';
 
 const PAGE = process.env.DASHICA_E2E_VIEWS_PAGE || '/clickhouse/table_sizes';

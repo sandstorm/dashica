@@ -1,8 +1,7 @@
-// Tests for views popped out into tabs (docs/2026-10-28-workbench.md §3.14 D14, step 8l): Details' "Pop out" opens a
-// tab with the selected records side by side; Debug's opens a tab with the active chart's debug info that stays with
-// that chart when another becomes active; "Open Speedscope" opens the viewer in a tab, in an iframe. A reload keeps
-// none of them. A popped-out view's tab has only the tabs in the top bar (no time range, no auto refresh) and no filter
-// bar (step 9y, D33).
+// Tests for views popped out into tabs: Details' "Pop out" opens a tab with the selected records side by side; Debug's
+// opens a tab with the active chart's debug info that stays with that chart when another becomes active; "Open
+// Speedscope" opens the viewer in a tab, in an iframe. A reload keeps none of them. A popped-out view's tab has only
+// the tabs in the top bar (no time range, no auto refresh) and no filter bar.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its table
 // "20 slowest requests" and its time bar "HTTP non-2xx status by type"; Speedscope's to "/profiling/clarcert-clarmap".

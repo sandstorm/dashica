@@ -1,7 +1,6 @@
-// Tests for the selected records (docs/2026-10-28-workbench.md §3.4.5): ticking rows of a table makes it the active
-// widget, the status bar says how many records are selected, a click there opens the left side panel "Details" with a
-// view per record; Details keeps them when another chart becomes active; a click on a cell still offers to filter by
-// its value.
+// Tests for the selected records: ticking rows of a table makes it the active widget, the status bar says how many
+// records are selected, a click there opens the left side panel "Details" with a view per record; Details keeps them
+// when another chart becomes active; a click on a cell still offers to filter by its value.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its table
 // "20 slowest requests" (column `host_name`) and its time bar "HTTP non-2xx status by type". Others:

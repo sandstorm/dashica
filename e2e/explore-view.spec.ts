@@ -1,14 +1,12 @@
-// Tests for the Explore view (docs/2026-10-30-perspective.md §4.4): "Open in Explore view" in a chart's menu opens a
-// new tab with the chart's result in Perspective (the dashboard's URL with `#explore=<id>`, docs/2026-10-28-workbench.md
-// §3.4.1); "SQL" shows the chart's SQL with its placeholders and their values beside it, an edited query runs with
-// them and stays over a reload until "Reset to the chart's query" (§4.7, §4.8); the link opens it, Close closes its
-// tab, Back shows the dashboard's tab, the viewer opens with its settings panel, a changed config is kept per chart
-// until Reset, which asks first (Cancel keeps it); the global "…" menu's "Explore"
-// opens a blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from
-// chart…" one with a chart's SQL (§4.8, D10); the SQL editor is CodeMirror's, loaded with the view, highlighting and
-// completing (D12); the sash below the SQL panel sets its height, the editor filling it, kept over a reload (D48). All
-// of it needs `explore_enabled` (workbench.json's `explore`), else
-// every test is skipped.
+// Tests for the Explore view: "Open in Explore view" in a chart's menu opens a new tab with the chart's result in
+// Perspective (the dashboard's URL with `#explore=<id>`); "SQL" shows the chart's SQL with its placeholders and their
+// values beside it, an edited query runs with them and stays over a reload until "Reset to the chart's query"; the link
+// opens it, Close closes its tab, Back shows the dashboard's tab, the viewer opens with its settings panel, a changed
+// config is kept per chart until Reset, which asks first (Cancel keeps it); the global "…" menu's "Explore" opens a
+// blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from chart…" one
+// with a chart's SQL; the SQL editor is CodeMirror's, loaded with the view, highlighting and completing; the sash below
+// the SQL panel sets its height, the editor filling it, kept over a reload. All of it needs `explore_enabled`
+// (workbench.json's `explore`), else every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance", over the last 7 days. Another page and chart: DASHICA_E2E_EXPLORE_PAGE,

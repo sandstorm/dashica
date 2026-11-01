@@ -1,9 +1,9 @@
-// Tests for the filter bar's "Add filter" (docs/2026-10-28-workbench.md §3.14 D15, step 8m): a column of a table the
-// page's charts read, `=`, a value from the chart's `/values` (narrowed as one types), added as a signed pill; the
-// field step's "Table columns" (the schema's) and "Computed fields", both from the charts' `/fields`, no constant (a fixed colour such as
-// `'#D73027' AS darkred`) among them (D27); its last entry "SQL condition…" under "Advanced" only while SQL chips are
-// taken (D26); `/fields` answers the columns and the computed fields with their types (D39), `/values` 422 for a
-// field that cannot filter, `/pill` for a column the table lacks.
+// Tests for the filter bar's "Add filter": a column of a table the page's charts read, `=`, a value from the chart's
+// `/values` (narrowed as one types), added as a signed pill; the field step's "Table columns" (the schema's) and
+// "Computed fields", both from the charts' `/fields`, with no constant (a fixed colour such as `'#D73027' AS darkred`)
+// among them; its last entry "SQL condition…" under "Advanced" only while SQL chips are taken; `/fields` answers the
+// columns and the computed fields with their types, `/values` 422 for a field that cannot filter, `/pill` for a column
+// the table lacks.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", whose charts filter its table;
 // another page: DASHICA_E2E_ADD_FILTER_PAGE.

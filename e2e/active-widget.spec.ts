@@ -1,10 +1,11 @@
-// Tests for the active widget (docs/2026-10-28-workbench.md §3.4.4): a press on a chart makes it active (outlined),
-// the status bar says its rows and time, the left side panel "Debug" shows what it queried as views and follows
-// another chart pressed; the chart menu's "Debug" opens it; each tab keeps its own active widget.
+// Tests for the active widget: a press on a chart makes it active (outlined), the status bar says its rows and time,
+// the left side panel "Debug" shows what it queried as views and follows another chart pressed; the chart menu's
+// "Debug" opens it; each tab keeps its own active widget.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its charts
-// "HTTP non-2xx status by type" and "20 slowest requests"; the first tab of the last test shows "/clickhouse/table_sizes".
-// Others: DASHICA_E2E_ACTIVE_PAGE, DASHICA_E2E_ACTIVE_FIRST, DASHICA_E2E_ACTIVE_SECOND, DASHICA_E2E_TABS_PAGE.
+// "HTTP non-2xx status by type" and "20 slowest requests"; the first tab of the last test shows
+// "/clickhouse/table_sizes". Others: DASHICA_E2E_ACTIVE_PAGE, DASHICA_E2E_ACTIVE_FIRST, DASHICA_E2E_ACTIVE_SECOND,
+// DASHICA_E2E_TABS_PAGE.
 import {expect, test, type Page} from '@playwright/test';
 
 const PAGE = process.env.DASHICA_E2E_ACTIVE_PAGE || '/templates/oekokiste-caddy-ingress';

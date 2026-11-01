@@ -1,9 +1,8 @@
-// Tests for the top row and the side panels' chrome (docs/2026-10-28-workbench.md §3.4, steps 8d, 9i and 9o): one top
-// bar over the content only, with the tabs, "+" and the time range, no title bar, no Dashica icon and no filter funnel;
-// the left rail and panel reach from the window's top to the status bar, the global "…" first in the rail, above search
-// everywhere; "+" opens the start page in a new tab; search everywhere opens from its rail button, whose tooltip names
-// its key; a panel shows under a header with its name in caps and "…", whose "Hide" closes it; with Explore off the
-// global "…" shows "Explore" greyed (8g).
+// Tests for the top row and the side panels' chrome: one top bar over the content only, with the tabs, "+" and the time
+// range, and neither a title bar, a Dashica icon nor a filter funnel; the left rail and panel reach from the window's
+// top to the status bar, the global "…" first in the rail, above search everywhere; "+" opens the start page in a new
+// tab; search everywhere opens from its rail button, whose tooltip names its key; a panel shows under a header with its
+// name in caps and "…", whose "Hide" closes it; with Explore off the global "…" shows "Explore" greyed.
 import {expect, test} from '@playwright/test';
 
 test.beforeEach(async ({page}) => {

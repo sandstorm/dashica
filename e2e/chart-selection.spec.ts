@@ -1,10 +1,10 @@
-// Tests for click to filter on the other charts and in tables (docs/2026-10-28-workbench.md §3.8, step 8c): a click on
-// a time bar offers its series in the data point menu (the quick pick "Data point"), a click on a table cell its
-// value, as on a bar chart; choosing one adds the chip at once; the cell's menu keeps only its SQL entries.
+// Tests for click to filter on the other charts and in tables: a click on a time bar offers its series in the data
+// point menu (the quick pick "Data point"), a click on a table cell its value, as on a bar chart; choosing one adds the
+// chip at once; the cell's menu keeps only its SQL entries.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its time bar
-// "HTTP non-2xx status by type" (fill `status_group`: 3xx / 4xx / 5xx) and its table "20 slowest requests"
-// (column `host_name`). Another page and charts: DASHICA_E2E_SELECT_PAGE, DASHICA_E2E_SELECT_TIME_BAR,
+// "HTTP non-2xx status by type" (fill `status_group`: 3xx / 4xx / 5xx) and its table "20 slowest requests" (column
+// `host_name`). Another page and charts: DASHICA_E2E_SELECT_PAGE, DASHICA_E2E_SELECT_TIME_BAR,
 // DASHICA_E2E_SELECT_TABLE, DASHICA_E2E_SELECT_COLUMN.
 import {expect, test, type Page} from '@playwright/test';
 

@@ -1,8 +1,8 @@
-// Tests for the Schema view (docs/2026-10-30-perspective.md §4.8, D11; workbench §3.15 D32): the left side panel
-// "Schema" shows under "On this page" the tables the page's charts read, under "All connections" every connection of
-// dashica_config; opening one shows its databases and tables, a table its columns and keys; "Refresh" in the panel's
-// "…" asks the server again, "Show comments" there hides and shows the comments; the views close and stay closed. All
-// of it needs `explore_enabled` (workbench.json's `explore`), else every test is skipped.
+// Tests for the Schema view: the left side panel "Schema" shows under "On this page" the tables the page's charts read,
+// under "All connections" every connection of dashica_config; opening one shows its databases and tables, a table its
+// columns and keys; "Refresh" in the panel's "…" asks the server again, "Show comments" there hides and shows the
+// comments; the views close and stay closed. All of it needs `explore_enabled` (workbench.json's `explore`), else every
+// test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" (its charts on "default"); another
 // page: DASHICA_E2E_SCHEMA_PAGE.

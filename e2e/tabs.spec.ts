@@ -1,6 +1,6 @@
-// Tests for the tabs (docs/2026-10-28-workbench.md §3.4.1, step 7a): "Open in new tab" in a dashboard's menu opens a
-// second tab, the address bar follows the tab shown, each tab keeps its own query state, Back after opening shows the
-// tab before, × closes a tab, a reload keeps the tabs, and a background tab's auto refresh pauses until it is shown.
+// Tests for the tabs: "Open in new tab" in a dashboard's menu opens a second tab, the address bar follows the tab
+// shown, each tab keeps its own query state, Back after opening shows the tab before, × closes a tab, a reload keeps
+// the tabs, and a background tab's auto refresh pauses until it is shown.
 //
 // The pages default to the Sandstorm instance's "/clickhouse/table_sizes" (the first tab) and
 // "/templates/oekokiste-caddy-ingress" (opened in the second); both must be in the dashboards menu. Other pages:
