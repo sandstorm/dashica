@@ -85,7 +85,7 @@ func newTimeRange(from, to time.Time) *querying.TimeRange {
 
 // SqlClause is the condition the query state adds to a query's WHERE: the window `timeRange` (TimeClause) and each
 // SQL chip in its own parentheses, `timestamp >= 1761724800 AND timestamp <= 1761746400 AND (status >= 500) AND (a OR b)`.
-// SQL chips while `filters` takes none (sql_filter_enabled off) are ErrSqlNotEnabled, a 400 before any query.
+// SQL chips while `cfg` takes none (sql_filter_enabled off) are ErrSqlNotEnabled, a 400 before any query.
 func (s QueryState) SqlClause(timeRange *querying.TimeRange, cfg *config.Config) (string, error) {
 	if len(s.Sql) > 0 && !cfg.SqlFilterEnabled {
 		return "", ErrSqlNotEnabled
