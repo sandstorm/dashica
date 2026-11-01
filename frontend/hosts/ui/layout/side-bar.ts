@@ -2,7 +2,7 @@
 
 import { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
-import { Sash } from '../../../core/sash/sash';
+import { Sash } from '../sash/sash';
 import { html } from 'htl';
 import { Ellipsis, createElement } from 'lucide';
 import type { CommandEnablement, MenuItem } from '../../commands/commands';

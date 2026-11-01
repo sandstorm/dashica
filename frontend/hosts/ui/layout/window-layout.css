@@ -136,7 +136,7 @@
   white-space: nowrap;
 }
 .d-workbench__panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
-/* the sash (core/sash) on the panel's inner edge, half over the content */
+/* the sash (hosts/ui/sash) on the panel's inner edge, half over the content */
 .d-workbench__sash {
   position: absolute;
   top: 0;

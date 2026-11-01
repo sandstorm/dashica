@@ -1,12 +1,11 @@
 // See exploreView in explore-view.ts.
 import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
-import { Sash } from '../../core/sash/sash';
 import type { ChartSql, Schema, WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
-import type { MenuAnchor } from '../../hosts/ui/ui';
+import { Sash, type MenuAnchor } from '../../hosts/ui/ui';
 import type { DataPoint } from '../../hosts/widgets/widgets';
 import { completionOf, type SqlEditor, type SqlEditors } from '../sql-library/sql-editor';
 import { widgetTitle } from '../widget-library/widget-title';

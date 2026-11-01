@@ -1,4 +1,4 @@
-import { EventEmitter, type Event } from '../event-emitter/event-emitter';
+import { EventEmitter, type Event } from '../../../core/event-emitter/event-emitter';
 import './sash.css';
 
 /**

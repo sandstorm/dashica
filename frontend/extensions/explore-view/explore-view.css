@@ -56,7 +56,7 @@
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
-/* the sash (core/sash) on the SQL panel's lower border, taking no room of its own */
+/* the sash (hosts/ui/sash) on the SQL panel's lower border, taking no room of its own */
 .d-explore-view__sash {
   position: relative;
   flex: none;
