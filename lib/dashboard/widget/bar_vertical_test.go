@@ -8,13 +8,11 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// Test constants
 const (
 	testTableName   = "events"
 	testWhereClause = "timestamp > now() - INTERVAL 1 DAY"
 )
 
-// Test helpers
 func newTestBaseQuery() *sql.SqlQuery {
 	return sql.New(
 		sql.From(testTableName),
@@ -25,7 +23,6 @@ func newTestBaseQuery() *sql.SqlQuery {
 func assertPropsEqual(t *testing.T, expected, actual map[string]interface{}) {
 	t.Helper()
 
-	// Check that all expected fields are present
 	for key, expectedValue := range expected {
 		actualValue, exists := actual[key]
 		if !exists {
@@ -46,7 +43,6 @@ func assertPropsEqual(t *testing.T, expected, actual map[string]interface{}) {
 		}
 	}
 
-	// Check that no unexpected fields are present
 	for key := range actual {
 		if _, expected := expected[key]; !expected {
 			t.Errorf("Unexpected key %q in props with value %v", key, actual[key])
@@ -60,7 +56,6 @@ func assertNestedMapEqual(t *testing.T, parentKey string, expected, actual map[s
 	for subKey, subExpected := range expected {
 		actualSubValue := actual[subKey]
 
-		// Compare arrays
 		if expectedArray, ok := subExpected.([]interface{}); ok {
 			actualArray, ok := actualSubValue.([]interface{})
 			if !ok {

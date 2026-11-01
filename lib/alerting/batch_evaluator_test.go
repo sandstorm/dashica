@@ -16,11 +16,9 @@ import (
 func TestBatchEvaluator_CalculateExecutionTimes(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	// Create minimal dependencies to initialize BatchEvaluator
 	alertManager := &AlertManager{}
 	batchEvaluator := NewBatchEvaluator(logger, alertManager)
 
-	// Define test cases with various time zones and cron expressions
 	testCases := []struct {
 		name       string
 		cronExpr   string
@@ -144,12 +142,10 @@ func TestBatchEvaluator_CalculateExecutionTimes(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				// Check if the calculated times match the expected times
 				assert.Equal(t, len(tc.expected), len(executionTimes),
 					"Number of execution times doesn't match expected: got %d, want %d",
 					len(executionTimes), len(tc.expected))
 
-				// Check each time individually
 				for i, expectedTime := range tc.expected {
 					if i < len(executionTimes) {
 						assert.Equal(t, expectedTime, executionTimes[i],
@@ -167,7 +163,6 @@ func TestBatchEvaluator_CalculateExecutionTimes(t *testing.T) {
 func TestBatchEvaluator_BucketCalculation(t *testing.T) {
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	// Create minimal dependencies to initialize BatchEvaluator
 	cfg, _ := testServer.LoadTestingConfig(t)
 	clickhouseManager := clickhouse.NewClientManager(cfg, logger)
 	clickhouseClient, err := clickhouseManager.GetClient("alert_storage")
@@ -176,7 +171,6 @@ func TestBatchEvaluator_BucketCalculation(t *testing.T) {
 
 	batchEvaluator := NewBatchEvaluator(logger, &AlertManager{alertResultStore: alertResultStore})
 
-	// Define test cases with different bucket expressions
 	testCases := []struct {
 		name            string
 		bucketExpr      string
@@ -231,7 +225,6 @@ func TestBatchEvaluator_BucketCalculation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// For each execution timestamp, calculate the corresponding bucket
 			buckets, err := batchEvaluator.calculateBuckets(context.Background(), tc.execTimestamps, tc.bucketExpr)
 			require.NoError(t, err, "Failed to execute bucket calculation")
 
@@ -243,7 +236,6 @@ func TestBatchEvaluator_BucketCalculation(t *testing.T) {
 				"expected %d buckets, got %d",
 				len(tc.expectedBuckets), len(buckets))
 
-			// Check each time individually
 			for i, expectedBucket := range tc.expectedBuckets {
 				assert.Equal(t, expectedBucket, buckets[i],
 					"TimeTs at index %d doesn't match: got %v, want %v",

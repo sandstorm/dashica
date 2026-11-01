@@ -6,13 +6,11 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// Test constants
 const (
 	timeHeatmapTestTableName   = "events"
 	timeHeatmapTestWhereClause = "timestamp > now() - INTERVAL 1 DAY"
 )
 
-// Test helpers
 func newTimeHeatmapTestBaseQuery() *sql.SqlQuery {
 	return sql.New(
 		sql.From(timeHeatmapTestTableName),

@@ -6,13 +6,11 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// Test constants
 const (
 	timeBarTestTableName   = "events"
 	timeBarTestWhereClause = "timestamp > now() - INTERVAL 1 DAY"
 )
 
-// Test helpers
 func newTimeBarTestBaseQuery() *sql.SqlQuery {
 	return sql.New(
 		sql.From(timeBarTestTableName),

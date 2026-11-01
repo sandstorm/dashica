@@ -11,7 +11,6 @@ import (
 // TestAlertConfiguration tests the alert configuration parsing functionality
 func TestAlertConfiguration(t *testing.T) {
 	t.Run("ParseAlertConfiguration", func(t *testing.T) {
-		// Create a test filesystem with mock files
 		mockFS := fstest.MapFS{
 			"alerts/test/alerts.yaml": &fstest.MapFile{
 				Data: []byte(`
@@ -52,13 +51,11 @@ WHERE metric = 'memory'
 			},
 		}
 
-		// Test successful parsing
 		t.Run("SuccessfulParsing", func(t *testing.T) {
 			alertDefinitions, err := ParseAlertConfiguration(mockFS, "alerts/test/alerts.yaml")
 			require.NoError(t, err)
 			require.Len(t, alertDefinitions, 2, "Should have 2 alert definitions")
 
-			// Check CPU alert
 			cpuAlert := alertDefinitions[0]
 			if cpuAlert.Id.Key != "cpu_usage" {
 				cpuAlert = alertDefinitions[1]
@@ -75,7 +72,6 @@ WHERE metric = 'memory'
 			assert.Equal(t, "CPU usage is above 90%", cpuAlert.Message)
 			assert.Equal(t, "5m", cpuAlert.CheckEvery)
 
-			// Check Memory alert
 			memAlert := alertDefinitions[1]
 			if memAlert.Id.Key != "memory_usage" {
 				memAlert = alertDefinitions[0]
@@ -93,7 +89,6 @@ WHERE metric = 'memory'
 			assert.Equal(t, "10m", memAlert.CheckEvery)
 		})
 
-		// Test missing query path
 		t.Run("MissingQueryPath", func(t *testing.T) {
 			mockFSWithError := fstest.MapFS{
 				"alerts/test/alerts_error.yaml": &fstest.MapFile{
@@ -114,7 +109,6 @@ alerts:
 			assert.Contains(t, err.Error(), "no query path defined")
 		})
 
-		// Test non-existent query file
 		t.Run("NonExistentQueryFile", func(t *testing.T) {
 			mockFSWithError := fstest.MapFS{
 				"alerts/test/alerts_error.yaml": &fstest.MapFile{
@@ -136,7 +130,6 @@ alerts:
 			assert.Contains(t, err.Error(), "reading file")
 		})
 
-		// Test missing bucket expression
 		t.Run("MissingBucketExpression", func(t *testing.T) {
 			mockFSWithError := fstest.MapFS{
 				"alerts/test/alerts_error.yaml": &fstest.MapFile{
@@ -166,20 +159,16 @@ WHERE metric = 'cpu'
 			assert.Contains(t, err.Error(), "Bucket Expression --BUCKET: ... not found")
 		})
 
-		// Test AlertId functionality
 		t.Run("AlertIdFunctions", func(t *testing.T) {
-			// Test creation from string
 			id := AlertIdFromString("group1#alert1")
 			assert.Equal(t, "group1", id.Group)
 			assert.Equal(t, "alert1", id.Key)
 
-			// Test string conversion
 			assert.Equal(t, "group1#alert1", id.String())
 		})
 	})
 
 	t.Run("ExtractBucketExpression", func(t *testing.T) {
-		// Test successful extraction
 		t.Run("SuccessfulExtraction", func(t *testing.T) {
 			sql := `--BUCKET: 5m
 SELECT * FROM table`
@@ -188,7 +177,6 @@ SELECT * FROM table`
 			assert.Equal(t, "5m", result)
 		})
 
-		// Test extraction with spaces
 		t.Run("ExtractionWithSpaces", func(t *testing.T) {
 			sql := `-- Some comment
 --BUCKET:   15m   
@@ -198,7 +186,6 @@ SELECT * FROM table`
 			assert.Equal(t, "15m", result)
 		})
 
-		// Test missing bucket expression
 		t.Run("MissingBucketExpression", func(t *testing.T) {
 			sql := `-- Some comment
 SELECT * FROM table`

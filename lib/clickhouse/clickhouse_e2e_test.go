@@ -22,7 +22,6 @@ func TestClickhouseE2E(t *testing.T) {
 
 	clickhouseManager := NewClientManager(config, logger)
 
-	// Create a test context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -52,12 +51,10 @@ func TestClickhouseE2E(t *testing.T) {
 }
 
 func testQueryJSON(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
-	// Define a struct type for our test data
 	type TestResult struct {
 		Value int `json:"value"`
 	}
 
-	// Create query options
 	options := DefaultQueryOptions()
 
 	dbClient, err := clickhouseManager.GetClient("alert_storage")
@@ -65,16 +62,13 @@ func testQueryJSON(t *testing.T, ctx context.Context, clickhouseManager *ClientM
 		t.Fatalf("%s", err)
 	}
 
-	// Execute the query and parse results directly into our struct
 	result, err := QueryJSON[TestResult](ctx, dbClient, "SELECT 42 AS value", options)
 	require.NoError(t, err, "QueryJSON should not return an error")
 
-	// Verify the results
 	assertions.AssertEquals(t, "Query should return 1 row", 1, result.Rows)
 	assertions.AssertEquals(t, "Result should have 1 data item", 1, len(result.Data))
 	assertions.AssertEquals(t, "Value should be 42", 42, result.Data[0].Value)
 
-	// Test QueryJSONFirst
 	firstResult, err := QueryJSONFirst[TestResult](ctx, dbClient, "SELECT 42 AS value", options)
 	require.NoError(t, err, "QueryJSONFirst should not return an error")
 	assertions.AssertEquals(t, "First result value should be 42", 42, firstResult.Value)

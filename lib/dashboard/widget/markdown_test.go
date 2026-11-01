@@ -76,7 +76,6 @@ func TestMarkdown_Content(t *testing.T) {
 			}
 			output := computed.html
 
-			// Check that all expected strings are present
 			for _, exp := range tt.expected {
 				if !strings.Contains(output, exp) {
 					t.Errorf("Expected output to contain %q, but it was not found.\nOutput: %s", exp, output)
@@ -323,7 +322,6 @@ func TestMarkdown_SyntaxHighlighting(t *testing.T) {
 				t.Errorf("Expected syntax highlighting (style attributes) in output for %s code", tt.language)
 			}
 
-			// Verify pre and code tags are present
 			if !strings.Contains(output, "<pre") || !strings.Contains(output, "<code") {
 				t.Error("Expected <pre> and <code> tags in output")
 			}
@@ -331,7 +329,6 @@ func TestMarkdown_SyntaxHighlighting(t *testing.T) {
 	}
 }
 
-// Helper function to create a minimal test context
 func createTestContext() *rendering.DashboardContext {
 	return &rendering.DashboardContext{
 		// Add minimal fields needed for testing
