@@ -4,7 +4,8 @@ import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
-import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
+import { filterOnClick } from '../chart-library/filter-on-click';
+import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
 
 /**
  * The widget type `barVertical`: a bar per category (`x`) as high as its measure (`y`), the categories sorted by it when

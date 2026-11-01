@@ -8,16 +8,15 @@ import { CommandsHost } from '../commands/commands';
 import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
 import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost } from '../query/query';
-import { UiHost, type ContextMenuOptions, type MenuAnchor } from '../ui/ui';
-import { WidgetsHost, type FilterCandidate, type PillSource, type RenderedWidget, type WidgetStatus } from './widgets';
+import { UiHost, type ContextMenuOptions } from '../ui/ui';
+import { WidgetsHost, type RenderedWidget, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
  * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
- * shown, `offers` the runs of `filters.offer` (a click's point, its candidates, the widget's pills), which the
- * testbed registers in place of the `filters` extension. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
+ * shown. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
  * `RenderedWidget` whose status the test sets. `sqlEnabled` is `page.workbench`'s (default on).
  */
 export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
@@ -37,8 +36,6 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
   const commands = new CommandsHost(workbench);
   const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
   const widgets = new WidgetsHost({ showContextMenu: (menuId, options) => menus.push({ menuId, options }) }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
-  const offers: { at: MenuAnchor; candidates: readonly FilterCandidate[]; source: PillSource }[] = [];
-  const offering = commands.registerCommand('filters.offer', (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) => void offers.push({ at, candidates, source }));
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -79,8 +76,6 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
     ui,
     commands,
     menus,
-    /** The runs of `filters.offer`, in order: what each click offered (`{ at, candidates, source }`). */
-    offers,
     /** The page shown, for the extensions that read it. */
     page,
     /** The views popped out into a tab (`page.popOut`). */
@@ -117,7 +112,6 @@ export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = 
       for (const callback of resizes) callback([{ contentRect: { width } }]);
     },
     dispose() {
-      offering.dispose();
       widgets.dispose();
       query.dispose();
       ui.dispose();

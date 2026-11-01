@@ -5,12 +5,12 @@ import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
 import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../hosts/ui/ui';
-import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type AskSql, type FilterableTable } from './add-filter';
 import { fetchPill, offerFilters } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
+import { OFFER, type FilterCandidate, type PillSource } from '../filter-library/offer';
 import { Schemas } from '../sql-library/schemas';
 import { completionOf, loadSqlEditors, showSqlInputBox, type SqlCompletion } from '../sql-library/sql-editor';
 import './filters.css';
@@ -49,7 +49,7 @@ export const filters: Extension = {
           showSqlInputBox(ui, loadSqlEditors, { ...options, completion: conditionCompletion(schemas, filterableTables(page.current?.widgets ?? [])) })
       : undefined;
     subscriptions.push(
-      commands.registerCommand('filters.offer', (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
+      commands.registerCommand(OFFER, (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
         offerFilters(ui, query, at, candidates, source),
       ),
       // a table cell's SQL filters ("Filter: Contains this value")

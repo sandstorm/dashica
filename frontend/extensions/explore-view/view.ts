@@ -6,7 +6,7 @@ import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor } from '../../hosts/ui/ui';
-import type { FilterCandidate } from '../../hosts/widgets/widgets';
+import type { FilterCandidate } from '../filter-library/offer';
 import { completionOf, type SqlEditor, type SqlEditors } from '../sql-library/sql-editor';
 import { widgetTitle } from '../widget-library/widget-title';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';

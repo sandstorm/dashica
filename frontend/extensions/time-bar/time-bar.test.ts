@@ -3,15 +3,19 @@
 // it) running filters.offer with its fill and facets, never its time bucket or measure, and the chart's pills.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
 import { clickMark } from '../chart-library/plot-testing';
 import { timeBar } from './time-bar';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The runs of `filters.offer`, in order: what each click offered. */
+let offers: RecordedOffer[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['level', 'region'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  offers = recordOffers(testbed.commands);
   testbed.activate(timeBar);
 });
 
@@ -35,7 +39,7 @@ describe('timeBar', () => {
 
   describe('a click', () => {
     /** The candidates the last click offered, as "level = error". */
-    const offered = () => testbed.offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
+    const offered = () => offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
     const T0 = Date.UTC(2026, 9, 29, 10);
     const QUARTER = 15 * 60 * 1000;
     const range = { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from: T0, to: T0 + 4 * QUARTER }) };
@@ -56,7 +60,7 @@ describe('timeBar', () => {
       const el = render();
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+      expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
         { candidates: [{ fieldId: 'level', value: 'error' }], source: { dataUrl: '/p/shop/api/1', filterable } },
       ]);
     });

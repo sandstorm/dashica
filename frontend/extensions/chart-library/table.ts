@@ -7,7 +7,7 @@ import type { TableProps } from '../../generated/zz_generated.dashica';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { QueryResult, WidgetRecord } from '../../hosts/widgets/widgets';
 import { candidateOf } from './candidate';
-import type { OfferFilters } from './filter-on-click';
+import type { OfferFilters } from '../filter-library/offer';
 import './table.css';
 
 const canvas = document.createElement('canvas');

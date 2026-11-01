@@ -2,7 +2,7 @@ import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame } from '../chart-library/chart-frame';
-import { offerFiltersOf } from '../chart-library/filter-on-click';
+import { offerFiltersOf } from '../filter-library/offer';
 import { drawTimeBars } from '../chart-library/time-bars';
 
 /**

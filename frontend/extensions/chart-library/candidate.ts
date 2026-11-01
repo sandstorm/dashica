@@ -1,5 +1,6 @@
 // See candidateOf.
-import type { FilterCandidate, QueryResult } from '../../hosts/widgets/widgets';
+import type { QueryResult } from '../../hosts/widgets/widgets';
+import type { FilterCandidate } from '../filter-library/offer';
 import { pillValue } from '../widget-library/clickhouse-type';
 
 /**

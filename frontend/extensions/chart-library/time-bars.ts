@@ -3,7 +3,8 @@ import type { TimeBarProps } from '../../generated/zz_generated.dashica';
 import type { QueryResult } from '../../hosts/widgets/widgets';
 import type { DrawOptions } from './chart-frame';
 import { SchemaAnalyzer } from './schema';
-import { filterOnClick, type OfferFilters } from './filter-on-click';
+import { filterOnClick } from './filter-on-click';
+import type { OfferFilters } from '../filter-library/offer';
 import { timeBrush } from './time-brush';
 
 /**

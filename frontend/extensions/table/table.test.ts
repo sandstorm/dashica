@@ -6,14 +6,18 @@
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
 import { table } from './table';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The runs of `filters.offer`, in order: what each click offered. */
+let offers: RecordedOffer[];
 /** The conditions a cell's SQL filter added through `filters.addSql`, the filters extension's, in order. */
 let addedSql: string[];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  offers = recordOffers(testbed.commands);
   addedSql = [];
   testbed.commands.registerCommand('filters.addSql', (condition: string) => void addedSql.push(condition));
   testbed.activate(table);
@@ -104,7 +108,7 @@ describe('table', () => {
     const cell = cellAt(el, 'status', 1);
     expect(cell.classList.contains('d-table__filterable')).toBe(true);
     cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.offers).toEqual([{ at: cell, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
+    expect(offers).toEqual([{ at: cell, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
   });
 
   it('offers a timestamp cell as ISO 8601 with its column’s ClickHouse type', async () => {
@@ -114,7 +118,7 @@ describe('table', () => {
     await inView();
 
     cellAt(el, 'timestamp', 0).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.offers.at(-1)?.candidates).toEqual([{ fieldId: 'timestamp', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' }]);
+    expect(offers.at(-1)?.candidates).toEqual([{ fieldId: 'timestamp', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' }]);
   });
 
   it('offers nothing from a NULL cell', async () => {
@@ -123,7 +127,7 @@ describe('table', () => {
     await inView();
 
     cellAt(el, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.offers).toEqual([]);
+    expect(offers).toEqual([]);
   });
 
   it('offers only in its category columns: a measure, or a table without categories, offers nothing', async () => {
@@ -134,7 +138,7 @@ describe('table', () => {
     const cnt = cellAt(el, 'cnt', 0);
     expect(cnt.classList.contains('d-table__filterable')).toBe(false);
     cnt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.offers).toEqual([]);
+    expect(offers).toEqual([]);
     expect(cellAt(el, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
   });
 
@@ -146,7 +150,7 @@ describe('table', () => {
     const tags = cellAt(el, 'tags', 0);
     expect(tags.classList.contains('d-table__filterable')).toBe(false);
     tags.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(testbed.offers).toEqual([]);
+    expect(offers).toEqual([]);
   });
 
   it('keeps only the SQL entries no filter op says in a cell’s menu', async () => {
@@ -208,6 +212,7 @@ describe('table', () => {
   it('has no SQL entries in a cell’s menu while SQL filters are off', async () => {
     testbed.dispose();
     testbed = widgetTestbed({ sqlEnabled: false });
+    offers = recordOffers(testbed.commands);
     testbed.activate(table);
     vi.stubGlobal('CSS', {});
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });

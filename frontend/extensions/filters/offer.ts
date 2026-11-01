@@ -1,7 +1,7 @@
 // See offerFilters.
 import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
-import type { FilterCandidate, PillSource } from '../../hosts/widgets/widgets';
+import type { FilterCandidate, PillSource } from '../filter-library/offer';
 import { FILTERS, addChip, type FilterOp, type Pill } from './chips';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 

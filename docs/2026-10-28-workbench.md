@@ -461,13 +461,15 @@ title, else its type), `time-library` `formatTime` (an end of a custom range, as
 query states `time` and `refresh` (§3.7)
 (9h, §3.15 D22); `sql-library` the SQL editor (CodeMirror 6, its own bundle loaded on first use), the completion of a
 schema and the store of the connections' schemas (`Schemas`), shared by the Explore view, the filters and the Schema
-view (9d, §3.15 D12).
+view (9d, §3.15 D12); `filter-library` the contract between the charts, the Explore view and the `filters` extension:
+the command `filters.offer` (`OFFER`), its argument types `FilterCandidate`, `PillSource`, `OfferFilters`, and
+`offerFiltersOf`, which runs it (9ad, §3.15 D38).
 
 | Host | Offers |
 |---|---|
 | `commands` | `registerCommand` (with the command's `enablement` / `disabledReason`, 9t), `executeCommand`, `enablement`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
-| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status; a click to filter is the `filters` extension's command `filters.offer` (§3.8, 9f); the chart frame is `chart-library`'s (9h) |
+| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status; it knows nothing of filtering: a click to filter is the `filters` extension's command `filters.offer`, its types in `filter-library` (§3.8, 9f, 9ad); the chart frame is `chart-library`'s (9h) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's; it knows no key: typed keys carry their URL format (`queryKey`, `get` / `set` / `onDidChange`, 9w) |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -817,7 +819,8 @@ on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter
 6.7 / 6.8 parts below are history). A click on a chart mark (the mark `chart-library/filterOnClick`, until 8c
 `selectOnClick`, its candidates as in 6.8), on a category cell of a table, or on a group row of the Explore view calls
 `offerFilters(at, candidates)` (until 9f `WidgetContext` / `WidgetsApi`; since 9f, §3.15 D20, the command
-`filters.offer(at, candidates, { dataUrl, filterable })` that the click runs itself, `chart-library/offerFiltersOf`;
+`filters.offer(at, candidates, { dataUrl, filterable })` that the click runs itself, `offerFiltersOf` (`chart-library` until
+9ad, since then `filter-library`, §3.15 D38);
 the `filters` extension registers it, owns the quick pick, `OP_ICONS`, `fetchPill`, and adds to the tab shown;
 without it a click offers nothing): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
 `<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and the same with a minus icon
@@ -1190,9 +1193,10 @@ interface WidgetContext {                                 // what a renderer get
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
 }
 
-// filters — a click's candidates (§3.8, 9f): the renderer runs the filters extension's command
-commands.executeCommand('filters.offer', at: MenuAnchor, candidates: FilterCandidate[], source: PillSource);
-// FilterCandidate {fieldId, value}; PillSource {dataUrl, filterable}: whose /pill makes the pill
+// filters — a click's candidates (§3.8, 9f): the renderer runs the filters extension's command; the contract is
+// filter-library's (9ad, D38), the widgets host knows none of it
+commands.executeCommand(OFFER /* 'filters.offer' */, at: MenuAnchor, candidates: FilterCandidate[], source: PillSource);
+// FilterCandidate {fieldId, value, type?}; PillSource {dataUrl, filterable}: whose /pill makes the pill; offerFiltersOf(commands, widget)
 ```
 
 Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
@@ -1480,7 +1484,7 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 
 ### 3.15 The batch of 2026-10-31, second part (decided 2026-10-31, planned as steps 9a–9k)
 
-The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D30, D31, D32, D33, D34, D35 and D36 after the steps before them; D12 (§3.14) is built in the same batch (9d, 9aa). Each step of §5 (9a
+The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18, D20 after D19, D21 after D20, D22 after D21, D23 after D22, D24 after D23, D25 after D24, D26, D27, D29, D30, D31, D32, D33, D34, D35, D36 and D38 after the steps before them; D12 (§3.14) is built in the same batch (9d, 9aa). Each step of §5 (9a
 …) builds its part and rewrites the sections it changes.
 
 - **D16 SQL chips behind their own flag (9a):** `filters.sqlEnabled` (default false) beside `filters.secret`,
@@ -1539,7 +1543,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   at, candidates, { dataUrl, filterable })` itself; `filterOnClick` only finds the candidates under the pointer. The
   `filters` extension registers `filters.offer` and owns the picks, `OP_ICONS`, `fetchPill` and the `/pill` call; it
   adds the pill to the active tab's query state (a click happens in the tab shown). `WidgetsApi.offerFilters`,
-  `WidgetContext.offerFilters` go; `PillSource` / `FilterCandidate` stay as the types of what a widget offers. Without
+  `WidgetContext.offerFilters` go; `PillSource` / `FilterCandidate` stay as the types of what a widget offers (in the
+`widgets` host until 9ad, since then in `filter-library`, D38). Without
   the `filters` extension a click does nothing.
 - **D21 A pill's key is read by the filters extension (9g, decided after 9f):** `pillLabel`, `pillButton`,
   `pillField` and `PillField` (the decoding of the key's payload) leave the `query` host for the `filters` extension,
@@ -1702,6 +1707,20 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   and selected. *(proposed)* `validateInput` is synchronous (nothing asks the server while typing) and the severities
   are VS Code's `Info` and `Error` only (no `Warning`); the box's title stays its accessible name, not a visible line;
   the step's id is 9z, as 9x was taken by D32.
+- **D38 The hosts know nothing about filtering; widget decorations (9ad–9ag, decided 2026-11-01; maintainer: "why is
+  FilterCandidate part of the widget host? can't the full filtering concept be part of an extension?", then "the
+  ignores… badge, the muted chart, Debug => isn't this some generic chart notification extension point?" — answered
+  with VS Code's `window.registerFileDecorationProvider` / `FileDecoration {badge, tooltip, color}`: "widgetDecoration
+  good!!! yes", and for the headers "do that. alert things exactly"):** in four steps, each its own commit.
+  (9ad) `filters.offer`'s argument types belong to its side: `FilterCandidate`, `PillSource`, `OfferFilters` and
+  `offerFiltersOf` (until then in `hosts/widgets/widgets.ts` and `chart-library/filter-on-click.ts`) move into
+  `frontend/extensions/filter-library/offer.ts`, with the command's id `OFFER`; the chart tests record the command
+  through `chart-library/offer-testing.ts` (`recordOffers(commands)`), the widgets host's testbed knows no filter
+  command *(proposed: that part of (9ag) in 9ad, since the testbed is in `hosts/` and may not import the library)*.
+  (9ae) The widgets host passes the response headers through without reading them (`QueryResult.headers`); each header
+  is read by its user through a pure function next to it. (9af) Widget decorations as VS Code's file decorations: the
+  `filters` extension decorates a chart that ignores pills or did not run; `ChartFrame` and Debug draw decorations
+  without knowing their meaning. (9ag) What is left of filters, alerts and charts in `hosts/` goes.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2035,6 +2054,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9aa ✅ 2026-10-31 | **D12 / D26 the SQL condition in the SQL editor** (§3.8, §3.11, §3.15): `InputBoxOptions.field` / `InputBoxField` (`QuickInput.showInputBox` shows the caller's field, describes and validates it, takes it on `onDidAccept`; an Escape the field took itself stays the field's); `AskSql`, `SQL_PROMPT`, `SQL_PLACEHOLDER` and `addFilter(…, askSql?)` in place of `sqlEnabled`; `FilterBar` asks a SQL chip's new text in that box below the chip (`#editSql`; `#editorOf`, `#editing`, `focusEditor`, `onDidChangeWanted` and `.d-filter-chip--editing` gone); `conditionCompletion`. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,test.ts}`, `frontend/extensions/filters/{filters,add-filter}.{ts,test.ts}`, `filters.css`. ✅ (vitest, typecheck, top comments green) | *(proposed)* the chip edited in the box, not inline; one default table; the plain box while the bundle does not load; id 9aa (9m taken by a BUGFIX, every letter used) |
 | 9ab ✅ 2026-11-01 | **BUGFIX a single Escape closes the SQL input box** (§3.15 D12, step 9aa): `codemirror.ts` binds CodeMirror's default keys but Escape (`DEFAULT_KEYS`, its `simplifySelection` gone), so the box's prefilled, selected text no longer takes the first Escape; the completion's Escape stays its own. Files: `frontend/extensions/sql-library/codemirror.{ts,test.ts}`. ✅ (vitest, typecheck, top comments green) | *(proposed)* Escape no longer collapses a selection in Explore's editor either |
 | 9ac ✅ 2026-11-01 | **BUGFIX a column and a computed field of one name stay two fields** (§3.15 D27): `filter.Apply` groups the pills by table, field, `Column` and op, so `host = web-1` on the column and `host = shop` on `lower(host_name) AS host` are AND-ed, not OR-ed; `/values` and `/type` leave out only the pills of the field asked (`othersThan`: the column's for a column or a field that is just one, else the computed field's). Files: `lib/dashboard/filter/filter{,_test}.go`, `lib/dashboard/widget/widget_common.go`, `query_filters_test.go`. ✅ (`go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox) | |
+| 9ad ✅ 2026-11-01 | **D38 (1) the filter contract into `filter-library`** (§3.5, §3.8, §3.11, §3.15): `frontend/extensions/filter-library/offer.ts` (`OFFER`, `FilterCandidate`, `PillSource`, `OfferFilters`, `offerFiltersOf`, + test) out of `hosts/widgets/widgets.ts` and `chart-library/filter-on-click.ts`; the charts, `table`, the Explore view and the `filters` extension import it; `chart-library/offer-testing.ts` (`recordOffers`) replaces the testbed's `offers` and its fake `filters.offer`. ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* the testbed's fake command left in this step, not in 9ag; the command's id a constant `OFFER` |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

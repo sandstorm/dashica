@@ -4,15 +4,19 @@
 // drag area above it.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
 import { clickMark } from '../chart-library/plot-testing';
 import { timeLine } from './time-line';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The runs of `filters.offer`, in order: what each click offered. */
+let offers: RecordedOffer[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['host', 'session'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  offers = recordOffers(testbed.commands);
   testbed.activate(timeLine);
 });
 
@@ -64,7 +68,7 @@ describe('timeLine', () => {
       await inView();
       await clickMark(lines(both)[1]);
       await clickMark(lines(strokeOnly)[1]);
-      expect(testbed.offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+      expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
         { candidates: [{ fieldId: 'session', value: 's2' }, { fieldId: 'host', value: 'b' }], source: { dataUrl: '/p/shop/api/1', filterable } },
         { candidates: [{ fieldId: 'host', value: 'b' }], source: { dataUrl: '/p/shop/api/2', filterable } },
       ]);
@@ -76,7 +80,7 @@ describe('timeLine', () => {
       await inView();
       const overlay = el.querySelector('svg .overlay')!;
       await clickMark(lines(el)[0], overlay);
-      expect(testbed.offers.map(({ candidates }) => candidates)).toEqual([[{ fieldId: 'host', value: 'a' }]]);
+      expect(offers.map(({ candidates }) => candidates)).toEqual([[{ fieldId: 'host', value: 'a' }]]);
     });
   });
 });

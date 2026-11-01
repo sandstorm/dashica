@@ -2,7 +2,7 @@
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { QueryApi } from '../../hosts/query/query';
 import { QuickPickItemKind, type MenuAnchor, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
-import type { PillSource } from '../../hosts/widgets/widgets';
+import type { PillSource } from '../filter-library/offer';
 import { typeKind } from '../widget-library/clickhouse-type';
 import { FILTERS, addChip, type FilterOp } from './chips';
 import { fetchPill, fieldParam, type FieldRef } from './offer';

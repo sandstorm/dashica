@@ -3,15 +3,19 @@
 // click on an ordinal heatmap's cell running filters.offer with its row and the chart's pills.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
 import { clickMark } from '../chart-library/plot-testing';
 import { heatmap } from './heatmap';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The runs of `filters.offer`, in order: what each click offered. */
+let offers: RecordedOffer[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['status', 'duration_ms'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  offers = recordOffers(testbed.commands);
   testbed.activate(heatmap);
   // Plot paints a color legend's ramp on a canvas, which jsdom cannot draw on
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect() {} } as unknown as CanvasRenderingContext2D);
@@ -62,7 +66,7 @@ describe('heatmap', () => {
     const { el } = testbed.render({ type: 'timeHeatmapOrdinal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     await clickMark(el.querySelectorAll('g[aria-label="bar"] rect')[1]);
-    expect(testbed.offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+    expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
       { candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable } },
     ]);
   });
@@ -73,6 +77,6 @@ describe('heatmap', () => {
     await inView();
     expect(el.querySelector('.d-filter-on-click')).toBeNull();
     await clickMark(el.querySelectorAll('g[aria-label="rect"] rect')[1]);
-    expect(testbed.offers).toEqual([]);
+    expect(offers).toEqual([]);
   });
 });

@@ -13,8 +13,8 @@ import type { MenuAnchor } from '../ui/ui';
  * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
  * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
  * and the widget itself tells its status with its own event: Debug follows it. What only one widget type has (a
- * table's ticked rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
- * So is what a click offers to filter by: a chart runs `filters.offer` with its candidates and its `PillSource`.
+ * table's ticked rows, what a click on a mark offers) is that type's own; it tells other extensions by command (the
+ * table: `details.showRecords`).
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -53,25 +53,6 @@ export type WidgetStatus =
   | { readonly kind: 'loading' }
   | { readonly kind: 'done'; readonly rows: number; readonly ms: number; readonly diagnostics: Diagnostics }
   | { readonly kind: 'error'; readonly message: string; readonly ms: number };
-
-/**
- * The widget whose `<dataUrl>/pill` makes the pills a click offers, and the aliases of its fields that make one
- * (`page.json`'s `filterable`): the last argument of `filters.offer`.
- */
-export interface PillSource {
-  readonly dataUrl: string;
-  readonly filterable?: readonly string[];
-}
-
-/** A category's value a click offers to filter by (a bar's category, its fill, a table cell). */
-export interface FilterCandidate {
-  /** The alias of the clicked field's column (`host`), the field its widget's `/pill` makes the pill of. */
-  readonly fieldId: string;
-  /** As the pill compares it: a time as ISO 8601 in UTC (`2026-10-31T10:00:00.000Z`), anything else as it shows. */
-  readonly value: string;
-  /** The field's ClickHouse type (`DateTime`, `LowCardinality(String)`), by which the ops are offered; unknown without. */
-  readonly type?: string;
-}
 
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
 export type WidgetOf<T extends WidgetType> = Extract<WidgetNode, { type: T }>;

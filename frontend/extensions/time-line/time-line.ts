@@ -5,7 +5,8 @@ import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
-import { filterOnClick, offerFiltersOf, type OfferFilters } from '../chart-library/filter-on-click';
+import { filterOnClick } from '../chart-library/filter-on-click';
+import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**

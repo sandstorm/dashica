@@ -3,7 +3,7 @@ import type { CommandOptions, MenuItem } from '../../hosts/commands/commands';
 import { QuickPickItemKind, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { offerFiltersOf } from '../chart-library/filter-on-click';
+import { offerFiltersOf } from '../filter-library/offer';
 import { Schemas } from '../sql-library/schemas';
 import { loadSqlEditors } from '../sql-library/sql-editor';
 import { editedQueryKeys, fetchSql, sqlRequest, type EditedQuery } from './rows';

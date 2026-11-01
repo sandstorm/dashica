@@ -3,15 +3,19 @@
 // and fill.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
 import { clickMark } from '../chart-library/plot-testing';
 import { barHorizontal } from './bar-horizontal';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The runs of `filters.offer`, in order: what each click offered. */
+let offers: RecordedOffer[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['path', 'host'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  offers = recordOffers(testbed.commands);
   testbed.activate(barHorizontal);
 });
 
@@ -39,7 +43,7 @@ describe('barHorizontal', () => {
     const { el } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     await clickMark(el.querySelectorAll('g[aria-label="bar"] rect')[1]);
-    expect(testbed.offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+    expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
       {
         candidates: [{ fieldId: 'path', value: '/login' }, { fieldId: 'host', value: 'b' }],
         source: { dataUrl: '/p/shop/api/1', filterable },

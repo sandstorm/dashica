@@ -3,15 +3,19 @@
 // running filters.offer with its categories and the chart's pills.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
+import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
 import { clickMark, pointAt } from '../chart-library/plot-testing';
 import { barVertical } from './bar-vertical';
 
 let testbed: ReturnType<typeof widgetTestbed>;
+/** The runs of `filters.offer`, in order: what each click offered. */
+let offers: RecordedOffer[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['status', 'host', 'region'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
+  offers = recordOffers(testbed.commands);
   testbed.activate(barVertical);
 });
 
@@ -24,7 +28,7 @@ const inView = async () => {
 };
 const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
 /** The candidates the last click offered, as "status = 500". */
-const offered = () => testbed.offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
+const offered = () => offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
 
 describe('barVertical', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -53,7 +57,7 @@ describe('barVertical', () => {
       const { el } = testbed.render(byStatus());
       await inView();
       await clickMark(bars(el)[1]);
-      expect(testbed.offers).toEqual([
+      expect(offers).toEqual([
         { at: { x: expect.any(Number), y: expect.any(Number) }, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable } },
       ]);
     });
@@ -76,7 +80,7 @@ describe('barVertical', () => {
       expect(offered()).toEqual(['status = 500']);
       await clickMark(bars(el)[0]);
       expect(offered()).toEqual(['status = 200']);
-      expect(testbed.offers).toHaveLength(3);
+      expect(offers).toHaveLength(3);
     });
 
     it('stops a mouse’s pointerdown on a bar, on which Plot would pin its tip, and lets a touch or pen pass', async () => {
@@ -109,7 +113,7 @@ describe('barVertical', () => {
       const { el: without } = testbed.render(byBucket());
       await inView();
       await clickMark(bars(without)[1]);
-      expect(testbed.offers).toHaveLength(1);
+      expect(offers).toHaveLength(1);
     });
 
     it('looks clickable while Plot points at a bar, and never without a category', async () => {
@@ -134,7 +138,7 @@ describe('barVertical', () => {
       const { el: measured } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } } });
       await inView();
       if (bars(measured)[0]) await clickMark(bars(measured)[0]);
-      expect(testbed.offers).toHaveLength(1);
+      expect(offers).toHaveLength(1);
     });
 
     it('offers the facet of a bar whose x is a time bucket', async () => {
