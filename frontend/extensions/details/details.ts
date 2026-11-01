@@ -12,13 +12,12 @@ import './details.css';
 /**
  * The left side panel "Details" and the status bar's item, both about the records a widget gave last by the command
  * `details.showRecords` (`{ widget, records }`: a table runs it on each change of its ticked rows), kept here; a call
- * without records clears them when they are that widget's (another table's cleared ticks leave them). The panel shows
- * the widget's title, then a view per record, its fields one below the other (a JSON value pretty-printed, a value of
- * several lines as it is), drawn anew on each call; each view starts open, its collapsed state not kept (a place in
- * one selection says nothing about another's). "Pop out" (the panel's menu `panel/details`, its command enabled while
- * records are shown) opens a tab comparing the records kept then side by side, a column per record; the tab keeps them, also when the table's next answer clears
- * its ticks. The status bar says "3 records selected" while there are some (else the item is hidden); a click on it
- * opens the panel.
+ * without records clears them when they are that widget's, and leaves another widget's. The panel shows the widget's
+ * title, then a view per record, its fields one below the other (a JSON value pretty-printed, a value of several lines
+ * as it is), drawn anew on each call, each view starting open. "Pop out" (the panel's menu `panel/details`, enabled
+ * while records are shown) opens a tab comparing the records kept then side by side, a column per record, which keeps
+ * them when the table's next answer clears its ticks. The status bar says "3 records selected" while there are some,
+ * and is hidden while there are none; a click on it opens the panel.
  */
 export const details: Extension = {
   id: 'details',
@@ -61,24 +60,9 @@ export const details: Extension = {
   },
 };
 
-/** The argument of `details.showRecords`: the widget the records are of, and its records (empty: it has none now). */
-interface ShownRecords {
-  readonly widget: WidgetNode;
-  readonly records: readonly WidgetRecord[];
-}
-
 /** "1 record selected", "3 records selected". */
 export function recordsSelected(count: number): string {
   return `${count.toLocaleString('en')} ${count === 1 ? 'record' : 'records'} selected`;
-}
-
-/** The panel's content for `shown`: its widget's title and a view per record, each open, else a hint. */
-function drawDetails(shown: ShownRecords | undefined): HTMLElement {
-  if (!shown) return html`<div class="d-details__hint">Tick rows of a table to see them here.</div>`;
-  return html`<div class="d-details">
-    <h2 class="d-details__title">${widgetTitle(shown.widget)}</h2>
-    ${shown.records.map((record, i) => createView({ id: `record.${i}`, title: `Record ${i + 1}`, body: drawRecord(record) }))}
-  </div>`;
 }
 
 /** `record`'s fields, one below the other: a JSON value pretty-printed, a value of several lines as it is. */
@@ -114,6 +98,21 @@ export function drawComparison(title: string, records: readonly WidgetRecord[]):
         })}
       </tbody>
     </table>
+  </div>`;
+}
+
+/** The argument of `details.showRecords`: the widget the records are of, and its records (empty: it has none now). */
+interface ShownRecords {
+  readonly widget: WidgetNode;
+  readonly records: readonly WidgetRecord[];
+}
+
+/** The panel's content for `shown`: its widget's title and a view per record, each open, else a hint. */
+function drawDetails(shown: ShownRecords | undefined): HTMLElement {
+  if (!shown) return html`<div class="d-details__hint">Tick rows of a table to see them here.</div>`;
+  return html`<div class="d-details">
+    <h2 class="d-details__title">${widgetTitle(shown.widget)}</h2>
+    ${shown.records.map((record, i) => createView({ id: `record.${i}`, title: `Record ${i + 1}`, body: drawRecord(record) }))}
   </div>`;
 }
 

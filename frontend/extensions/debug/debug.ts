@@ -11,16 +11,14 @@ import './debug.css';
 
 /**
  * The left side panel "Debug" and the status bar's item, both about the active widget (`widgets.active`). The panel
- * shows, as views, what the widget queried: the SQL as sent, its decorations with their source (whatever they mean),
- * its stats, ClickHouse's EXPLAIN (plan, pipeline as a graph and as steps, syntax), from its `<dataUrl>/debug` with its
- * tab's query state, and the result it drew last as a table. It follows the active widget's status
- * (`onDidChangeStatus`) and decorations (`onDidChangeDecorations`), and asks `/debug` only while it is shown: on
- * showing, on another active widget, and when that widget's query answered or failed. Which widget it is tells its
- * outline, not the panel. "Pop out" (the panel's menu `panel/debug`, its command enabled while a widget is active)
- * shows the same for the active widget
- * in a tab of its own, which keeps following that widget's status, not the active widget. The status bar
- * says the widget's rows, query time and its decorations' badges, or its error ("No active chart" on the start page); a
- * click on it opens the panel, as the chart menu's "Debug" (`widget/context`) does.
+ * shows, as views, what the widget queried: the SQL as sent, its decorations with their source, its stats, ClickHouse's
+ * EXPLAIN (plan, pipeline as a graph and as steps, syntax), from its `<dataUrl>/debug` with its tab's query state, and
+ * the result it drew last as a table. It follows the active widget's status and decorations and asks `/debug` only
+ * while shown: on showing, on another active widget, and when that widget's query answered or failed; the widget's
+ * outline tells which widget it is. "Pop out" (the panel's menu `panel/debug`, enabled while a widget is active) shows
+ * the same in a tab of its own, bound to that widget. The status bar says the widget's rows, query time and its
+ * decorations' badges, or its error ("No active chart" on the start page); a click on it opens the panel, as the chart
+ * menu's "Debug" (`widget/context`) does.
  */
 export const debug: Extension = {
   id: 'debug',
@@ -115,15 +113,42 @@ export function decorationList(decorations: readonly WidgetDecoration[]): HTMLEl
   </table>`;
 }
 
-/** What `<dataUrl>/debug` answers (httpserver.DebugInfo). */
-interface DebugInfo {
-  query: string;
-  explainPlan: string;
-  /** A DOT graph (`digraph { … }`), else text. */
-  explainPipeline: string;
-  explainPipelineText: string;
-  explainSyntax: string;
-  stats: unknown;
+/** One piece of the status bar's item: its text and how it reads (`error` red, `muted`). */
+export interface StatusPart {
+  readonly text: string;
+  readonly tone: 'plain' | 'muted' | 'error';
+}
+
+/** What the status bar says about `active`: rows and time with its decorations' badges, or its error (its first line). */
+export function statusParts(active: RenderedWidget | undefined): readonly StatusPart[] {
+  if (!active) return [{ text: 'No active chart', tone: 'muted' }];
+  const { status } = active;
+  switch (status.kind) {
+    case 'idle':
+      return [{ text: 'not queried yet', tone: 'muted' }];
+    case 'loading':
+      return [{ text: 'querying…', tone: 'muted' }];
+    case 'error':
+      return [{ text: shorten(status.message), tone: 'error' }, { text: `${status.ms} ms`, tone: 'muted' }];
+    case 'done':
+      return [
+        { text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' },
+        { text: `${status.ms} ms`, tone: 'plain' },
+        ...active.decorations.map(({ badge }): StatusPart => ({ text: badge, tone: 'muted' })),
+      ];
+  }
+}
+
+/** ClickHouse's summary of the query that answered `result` (X-Clickhouse-Summary: rows and bytes read, elapsed time); `null` without. */
+export function clickhouseSummaryOf({ headers }: Pick<QueryResult, 'headers'>): unknown {
+  return JSON.parse(headers.get('X-Clickhouse-Summary') || 'null');
+}
+
+/** Fills the status bar's item with how `active`'s last query went; a hint without one. */
+function drawStatus(statusElement: HTMLElement, active: RenderedWidget | undefined): void {
+  const parts = statusParts(active);
+  statusElement.replaceChildren(...parts.map(({ text, tone }) => html`<span class=${`d-debug-status__part d-debug-status__part--${tone}`}>${text}</span>`));
+  statusElement.title = active ? `${active.status.kind === 'error' ? `${active.status.message}\n` : ''}Show Debug` : 'Show Debug';
 }
 
 /**
@@ -180,48 +205,15 @@ async function showDebug(debugContainer: HTMLElement, active: RenderedWidget, de
   await showPipeline(pipelineContainer, info.explainPipeline);
 }
 
-/** Fills the status bar's item with how `active`'s last query went; a hint without one. */
-function drawStatus(statusElement: HTMLElement, active: RenderedWidget | undefined): void {
-  const parts = statusParts(active);
-  statusElement.replaceChildren(...parts.map(({ text, tone }) => html`<span class=${`d-debug-status__part d-debug-status__part--${tone}`}>${text}</span>`));
-  statusElement.title = active ? `${active.status.kind === 'error' ? `${active.status.message}\n` : ''}Show Debug` : 'Show Debug';
-}
-
-/** One piece of the status bar's item: its text and how it reads (`error` red, `muted`). */
-export interface StatusPart {
-  readonly text: string;
-  readonly tone: 'plain' | 'muted' | 'error';
-}
-
-/** What the status bar says about `active`: rows and time with its decorations' badges, or its error (its first line). */
-export function statusParts(active: RenderedWidget | undefined): readonly StatusPart[] {
-  if (!active) return [{ text: 'No active chart', tone: 'muted' }];
-  const { status } = active;
-  switch (status.kind) {
-    case 'idle':
-      return [{ text: 'not queried yet', tone: 'muted' }];
-    case 'loading':
-      return [{ text: 'querying…', tone: 'muted' }];
-    case 'error':
-      return [{ text: shorten(status.message), tone: 'error' }, { text: `${status.ms} ms`, tone: 'muted' }];
-    case 'done':
-      return [
-        { text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' },
-        { text: `${status.ms} ms`, tone: 'plain' },
-        ...active.decorations.map(({ badge }): StatusPart => ({ text: badge, tone: 'muted' })),
-      ];
-  }
-}
-
-/** ClickHouse's summary of the query that answered `result` (X-Clickhouse-Summary: rows and bytes read, elapsed time); `null` without. */
-export function clickhouseSummaryOf({ headers }: Pick<QueryResult, 'headers'>): unknown {
-  return JSON.parse(headers.get('X-Clickhouse-Summary') || 'null');
-}
-
-/** The first line of `message`, at most 80 characters. */
-function shorten(message: string): string {
-  const line = message.trim().split('\n')[0];
-  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
+/** What `<dataUrl>/debug` answers (httpserver.DebugInfo). */
+interface DebugInfo {
+  query: string;
+  explainPlan: string;
+  /** A DOT graph (`digraph { … }`), else text. */
+  explainPipeline: string;
+  explainPipelineText: string;
+  explainSyntax: string;
+  stats: unknown;
 }
 
 function pre(text: string): HTMLElement {
@@ -244,4 +236,10 @@ async function showPipeline(pipelineContainer: HTMLElement, pipeline: string): P
     console.error('Failed to render DOT graph:', error);
     pipelineContainer.replaceChildren(pre(pipeline));
   }
+}
+
+/** The first line of `message`, at most 80 characters. */
+function shorten(message: string): string {
+  const line = message.trim().split('\n')[0];
+  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
 }

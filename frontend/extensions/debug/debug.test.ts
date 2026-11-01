@@ -183,7 +183,7 @@ describe('debug', () => {
     await settle();
     expect(requested).toHaveLength(2);
 
-    // another widget, though still loading; the one before is no longer listened to
+    // another widget, though still loading: only its own changes count from now on
     const before = active!;
     activate(chart({ kind: 'loading' }, 2));
     await settle();
