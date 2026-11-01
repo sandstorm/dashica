@@ -6,8 +6,7 @@ import (
 	"fmt"
 )
 
-// This file makes the sql vocabulary serializable for the Explore builder
-// (see docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1 (2)).
+// This file makes the sql vocabulary serializable for the Explore builder.
 //
 // The sql types keep unexported fields; serialization is added *around* them
 // via small private DTO structs and a tagged-union wire format:

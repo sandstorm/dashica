@@ -2,6 +2,8 @@ package color
 
 import "encoding/json"
 
+// ColorScale is a chart's color scale, as Observable Plot's `color` option takes it (New, With): its type, scheme,
+// fixed colors per value (ColorMapping), the color of unknown values and whether it shows a legend.
 type ColorScale struct {
 	legend  bool
 	domain  []string
@@ -9,6 +11,79 @@ type ColorScale struct {
 	unknown string
 	typ     ScaleType
 	scheme  Scheme
+}
+
+func New(opts ...ColorScaleOption) *ColorScale {
+	c := &ColorScale{
+		unknown: "#8E44AD",
+	}
+	for _, opt := range opts {
+		opt.apply(c)
+	}
+	return c
+}
+
+func (c *ColorScale) With(opts ...ColorScaleOption) *ColorScale {
+	cloned := *c
+	cloned.domain = make([]string, len(c.domain))
+	copy(cloned.domain, c.domain)
+	cloned.range_ = make([]string, len(c.range_))
+	copy(cloned.range_, c.range_)
+
+	for _, opt := range opts {
+		opt.apply(&cloned)
+	}
+	return &cloned
+}
+
+func (c *ColorScale) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&colorScaleDTO{
+		Legend:  c.legend,
+		Domain:  c.domain,
+		Range:   c.range_,
+		Unknown: c.unknown,
+		Type:    c.typ,
+		Scheme:  c.scheme,
+	})
+}
+
+func (c *ColorScale) UnmarshalJSON(b []byte) error {
+	var dto colorScaleDTO
+	if err := json.Unmarshal(b, &dto); err != nil {
+		return err
+	}
+	*c = ColorScale{
+		legend:  dto.Legend,
+		domain:  dto.Domain,
+		range_:  dto.Range,
+		unknown: dto.Unknown,
+		typ:     dto.Type,
+		scheme:  dto.Scheme,
+	}
+	return nil
+}
+
+// ColorScaleOption sets part of a color scale: a ScaleType (color.ScaleCategorical), a Scheme (color.SchemeGreens),
+// or what ColorLegend, ColorMapping and ColorUnknown return. Given twice, the last one wins.
+type ColorScaleOption interface{ apply(*ColorScale) }
+
+func ColorLegend(enabled bool) ColorScaleOption {
+	return optionFunc(func(c *ColorScale) {
+		c.legend = enabled
+	})
+}
+
+func ColorMapping(value string, color string) ColorScaleOption {
+	return optionFunc(func(c *ColorScale) {
+		c.domain = append(c.domain, value)
+		c.range_ = append(c.range_, color)
+	})
+}
+
+func ColorUnknown(color string) ColorScaleOption {
+	return optionFunc(func(c *ColorScale) {
+		c.unknown = color
+	})
 }
 
 // ScaleType is the type of an Observable Plot color scale: how it maps values to colors.
@@ -109,10 +184,6 @@ var (
 	SchemeSinebow = Scheme{"Sinebow"}
 )
 
-// ColorScaleOption sets part of a color scale: a ScaleType (color.ScaleCategorical), a Scheme (color.SchemeGreens),
-// or what ColorLegend, ColorMapping and ColorUnknown return. Given twice, the last one wins.
-type ColorScaleOption interface{ apply(*ColorScale) }
-
 func (t ScaleType) apply(c *ColorScale) { c.typ = t }
 func (s Scheme) apply(c *ColorScale)    { c.scheme = s }
 
@@ -121,52 +192,9 @@ type optionFunc func(*ColorScale)
 
 func (f optionFunc) apply(c *ColorScale) { f(c) }
 
-func ColorLegend(enabled bool) ColorScaleOption {
-	return optionFunc(func(c *ColorScale) {
-		c.legend = enabled
-	})
-}
-
-func ColorMapping(value string, color string) ColorScaleOption {
-	return optionFunc(func(c *ColorScale) {
-		c.domain = append(c.domain, value)
-		c.range_ = append(c.range_, color)
-	})
-}
-
-func ColorUnknown(color string) ColorScaleOption {
-	return optionFunc(func(c *ColorScale) {
-		c.unknown = color
-	})
-}
-
-func New(opts ...ColorScaleOption) *ColorScale {
-	c := &ColorScale{
-		unknown: "#8E44AD",
-	}
-	for _, opt := range opts {
-		opt.apply(c)
-	}
-	return c
-}
-
-func (c *ColorScale) With(opts ...ColorScaleOption) *ColorScale {
-	cloned := *c
-	cloned.domain = make([]string, len(c.domain))
-	copy(cloned.domain, c.domain)
-	cloned.range_ = make([]string, len(c.range_))
-	copy(cloned.range_, c.range_)
-
-	for _, opt := range opts {
-		opt.apply(&cloned)
-	}
-	return &cloned
-}
-
 // colorScaleDTO is the wire form of ColorScale, shared by Marshal/UnmarshalJSON.
-// ColorScale keeps unexported fields; (de)serialization is added around them
-// (see docs/2026-07-21-dynamic-widget-dashboard-ui.md §4.1) — hand-written like
-// the sql package, as the color vocabulary is small and stable.
+// ColorScale keeps unexported fields; (de)serialization is added around them,
+// hand-written like the sql package's, as the color vocabulary is small and stable.
 type colorScaleDTO struct {
 	Legend  bool      `json:"legend"`
 	Domain  []string  `json:"domain,omitempty"`
@@ -174,31 +202,4 @@ type colorScaleDTO struct {
 	Unknown string    `json:"unknown,omitempty"`
 	Type    ScaleType `json:"type,omitzero"`
 	Scheme  Scheme    `json:"scheme,omitzero"`
-}
-
-func (c *ColorScale) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&colorScaleDTO{
-		Legend:  c.legend,
-		Domain:  c.domain,
-		Range:   c.range_,
-		Unknown: c.unknown,
-		Type:    c.typ,
-		Scheme:  c.scheme,
-	})
-}
-
-func (c *ColorScale) UnmarshalJSON(b []byte) error {
-	var dto colorScaleDTO
-	if err := json.Unmarshal(b, &dto); err != nil {
-		return err
-	}
-	*c = ColorScale{
-		legend:  dto.Legend,
-		domain:  dto.Domain,
-		range_:  dto.Range,
-		unknown: dto.Unknown,
-		typ:     dto.Type,
-		scheme:  dto.Scheme,
-	}
-	return nil
 }

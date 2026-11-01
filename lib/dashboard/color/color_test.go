@@ -7,7 +7,7 @@ import (
 )
 
 // TestColorScale_RoundTrip verifies Marshal/UnmarshalJSON are inverses — the
-// invariant the widget serializers rely on (docs §4.1).
+// invariant the widget serializers rely on.
 func TestColorScale_RoundTrip(t *testing.T) {
 	orig := New(
 		ColorLegend(true),
