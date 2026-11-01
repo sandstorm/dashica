@@ -232,7 +232,6 @@
 .d-workbench__tab-page[hidden] { display: none; }
 /* the page a renderer fills: at least as tall as the tab, taller when its content is (the tab then scrolls) */
 .d-workbench__page { flex: 1 0 auto; display: flex; flex-direction: column; }
-/* Below everything: the status bar. */
 .d-workbench__status-bar {
   grid-column: 1 / -1;
   grid-row: 2;

@@ -302,12 +302,10 @@ function place(boxContainer: HTMLElement, anchor: MenuAnchor | undefined): void 
   boxContainer.style.top = `${Math.min(Math.max(point.y, 0), maxY)}px`;
 }
 
-/** What a failed `accept` says in the box: its error's message. */
 function messageOf(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
 
-/** `prefix` and a random part: an id no other box on the page has. */
 function uniqueId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }

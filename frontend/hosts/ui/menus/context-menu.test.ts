@@ -15,7 +15,6 @@ const ENTRIES: MenuItem[] = [
   { command: 'favorites.remove', group: 'favorites', when: (context) => context.favorite === true },
 ];
 
-/** Menus holding `items` under `menuId`. */
 function menusWith(menuId: string, items: readonly MenuItem[]): Menus {
   const menus = new Menus(() => []);
   for (const item of items) menus.register(menuId, item);

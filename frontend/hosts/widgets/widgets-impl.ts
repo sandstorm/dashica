@@ -160,7 +160,6 @@ export class WidgetsHost implements WidgetsApi {
     });
   }
 
-  /** Asks the providers again for each rendered widget. */
   #askProvidersAgain(): void {
     for (const widget of this.#rendered) widget.redecorate();
   }

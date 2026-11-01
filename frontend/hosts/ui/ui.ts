@@ -112,7 +112,6 @@ export type QuickPickItems<T extends QuickPickItem> = readonly (T | QuickPickSep
 export interface QuickPickOptions<T extends QuickPickItem = QuickPickItem> {
   /** The box's accessible name ("Filter"). */
   readonly title?: string;
-  /** Shown in the empty field. */
   readonly placeholder?: string;
   /** Where the box opens: below an element, or at a point (a click's `clientX` / `clientY`); else at the top in the middle. */
   readonly anchor?: MenuAnchor;
@@ -137,7 +136,6 @@ export interface InputBoxOptions {
   readonly title?: string;
   /** A line below the field, e.g. what the text is for. */
   readonly prompt?: string;
-  /** Shown in the empty field. */
   readonly placeholder?: string;
   /** The text in the field at first. */
   readonly value?: string;
@@ -171,7 +169,6 @@ export interface InputBoxField {
   readonly fieldElement: HTMLElement;
   /** The element the keys go to (its role `textbox`): named, described and marked `aria-invalid` by the box. */
   readonly inputElement: HTMLElement;
-  /** The text in it. */
   readonly value: string;
   /** Selects [start, end) of its text. */
   select(start: number, end: number): void;
@@ -259,7 +256,6 @@ export interface QuickPick<T extends QuickPickItem> {
   anchor: MenuAnchor | undefined;
   /** Shown as a menu, as `QuickPickOptions.menu`; read on `show`. `onDidChangeValue` fires once the field shows. */
   menu: boolean;
-  /** Shown in the empty field. */
   placeholder: string | undefined;
   /** The text in the field; setting it fires `onDidChangeValue`. */
   value: string;

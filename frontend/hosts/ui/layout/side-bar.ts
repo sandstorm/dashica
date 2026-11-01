@@ -26,7 +26,6 @@ export class SideBar {
   readonly #railContainer: HTMLElement;
   /** The rail's buttons at its far end (`alignment: 'bottom'`); the others go before it. */
   readonly #bottomContainer: HTMLElement;
-  /** Each rail button's `order`. */
   readonly #orders = new WeakMap<Element, number>();
   readonly #panelContainer: HTMLElement;
   /** The panel's inner edge. */

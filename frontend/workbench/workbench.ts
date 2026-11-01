@@ -75,7 +75,7 @@ function showTabs(page: PageHost, regionContainer: HTMLElement, commands: Comman
 /** The menu the "…" at the left rail's start shows (context and arguments none); the button is hidden while it is empty. */
 const GLOBAL_MENU = 'workbench/global';
 
-/** The "…" at the left rail's start, above search everywhere: it shows the menu `workbench/global`. */
+/** The "…" at the left rail's start, above search everywhere. */
 function showGlobalMenu(ui: UiHost): Disposable {
   const menuButtonElement: HTMLButtonElement = html`<button type="button" class="d-workbench__rail-button" aria-label="Dashica menu" title="Menu"
     aria-haspopup="dialog" data-testid="wb-global-menu" onclick=${() => ui.showContextMenu(GLOBAL_MENU, { anchor: menuButtonElement, title: 'Dashica' })}></button>`;
