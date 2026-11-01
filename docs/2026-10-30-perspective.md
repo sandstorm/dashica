@@ -302,6 +302,16 @@ with it the gap it had: SQL-file charts had no toggle, now every chart, builder 
   toolbar's "SQL" (`aria-pressed`) closes and opens it, and it opens by itself while edited (proposed). (Since step 8g
   there is no view with Explore off, so no "SQL editing is off" note.) The parameters' values are a list beside the
   text (`<dl>`, `{name}` and its value), read-only. Highlighting later, if the plain field is not enough.
+- **The split between the SQL panel and the viewer** (workbench step 9av, D48, decided 2026-11-01; maintainer: "this
+  separator needs to be resizable..."): the line below the SQL panel (editor, parameters, Run) is a horizontal sash
+  (`Sash`, `frontend/core/sash`, workbench §3.5), as the side bars' edges. Dragging it, or ArrowUp / ArrowDown on it
+  (a line, 19 px, per key), sets the panel's height; the editor fills what Run leaves of it and scrolls inside, the
+  parameters' list scrolls beside it, the viewer takes the rest. The height (96 to 2000 px, at first 216 px: about
+  the eight lines that were the editor's minimum) is kept for this viewer in the extension's `globalState`
+  (`sqlHeight`); the sash hides with the panel. The stylesheet keeps at least 160 px of the view for the viewer
+  (`max-height` on the panel), and a drag starts from the height shown, so a height kept from a taller window does
+  not make the first part of a drag do nothing *(proposed)*. The old sizing (at least eight lines, at most half the
+  view's height, growing with the text) is gone.
 - **Selection and viewer config:** an edited query's rows select nothing (no "Filter by": its columns are whatever
   the text selects, and a page chip would not change the edited query anyway). The first viewer config of an edited
   answer is the chart's mapping (§4.2) when every column it names is in the answer, else a plain datagrid of all

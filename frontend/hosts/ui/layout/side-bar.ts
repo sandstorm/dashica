@@ -2,6 +2,7 @@
 
 import { Disposable } from '../../../core/disposable/disposable';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
+import { Sash } from '../../../core/sash/sash';
 import { html } from 'htl';
 import { Ellipsis, createElement } from 'lucide';
 import type { CommandEnablement, MenuItem } from '../../commands/commands';
@@ -28,7 +29,8 @@ export class SideBar {
   /** Each rail button's `order`. */
   readonly #orders = new WeakMap<Element, number>();
   readonly #panelContainer: HTMLElement;
-  readonly #resizerElement: HTMLElement;
+  /** The panel's inner edge. */
+  readonly #sash: Sash;
   readonly #panels = new Map<string, PanelEntry>();
   /** The rail's command buttons (`addButton`). */
   readonly #buttons = new Set<HTMLElement>();
@@ -48,12 +50,12 @@ export class SideBar {
     private readonly owner: SideBarOwner,
   ) {
     this.#size = SIZES[side];
-    this.state.size = this.#clamp(state.size);
     this.railStartContainer = html`<div class="d-workbench__rail-start"></div>`;
     this.#bottomContainer = html`<div class="d-workbench__rail-bottom"></div>`;
     this.#railContainer = html`<div class="d-workbench__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.railStartContainer}${this.#bottomContainer}</div>`;
-    this.#resizerElement = this.#createResizer();
-    this.#panelContainer = html`<div class="d-workbench__panel">${this.#resizerElement}</div>`;
+    this.#sash = this.#createSash();
+    this.state.size = this.#sash.size;
+    this.#panelContainer = html`<div class="d-workbench__panel">${this.#sash.sashElement}</div>`;
     const onkeydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && this.#overlay && this.#shown) this.#closeFromKeyboard();
     };
@@ -87,8 +89,8 @@ export class SideBar {
       <h2 class="d-workbench__panel-title" id=${`wb-panel-title-${id}-${suffix}`}>${options.label}</h2>${actionsButtonElement}
     </div>`;
     this.#place(buttonElement, options.order ?? 0, options.alignment === 'bottom');
-    this.#panelContainer.insertBefore(headerContainer, this.#resizerElement);
-    this.#panelContainer.insertBefore(bodyContainer, this.#resizerElement);
+    this.#panelContainer.insertBefore(headerContainer, this.#sash.sashElement);
+    this.#panelContainer.insertBefore(bodyContainer, this.#sash.sashElement);
     const registration = Disposable.from(
       this.owner.commands.registerCommand(command, () => this.#toggleFocus(id)),
       this.owner.commands.registerCommand(hide, () => {
@@ -173,6 +175,7 @@ export class SideBar {
 
   dispose(): void {
     for (const stop of this.#cleanup) stop();
+    this.#sash.dispose();
     this.sideBarContainer.remove();
     this.hostContainer.style.removeProperty('--d-workbench-right-side');
   }
@@ -296,51 +299,32 @@ export class SideBar {
     if (this.#size.unit === 'px') this.#panelContainer.style.width = `${size}px`;
     else if (this.#shown === null) this.hostContainer.style.removeProperty('--d-workbench-right-side');
     else this.hostContainer.style.setProperty('--d-workbench-right-side', `minmax(0, ${size}%)`);
-    this.#resizerElement.setAttribute('aria-valuenow', String(size));
   }
 
-  #clamp(size: number): number {
-    return Math.round(Math.min(this.#size.max, Math.max(this.#size.min, size)));
-  }
-
-  #resize(size: number): void {
-    this.state.size = this.#clamp(size);
-    this.owner.save();
-    this.#applySize();
-  }
-
-  /** The panel's inner edge: drag (or arrow keys) to size the side; the arrow moves the edge. */
-  #createResizer(): HTMLElement {
+  /**
+   * The panel's inner edge: drag (or arrow keys) to size the side; the arrow moves the edge, outwards (away from the
+   * side's rail) making the side wider.
+   */
+  #createSash(): Sash {
     const { min, max, step, label } = this.#size;
-    // moving the edge outwards (away from the side's rail) makes the side wider
-    const outwards = this.side === 'left' ? 1 : -1;
-    const onkeydown = (event: KeyboardEvent) => {
-      const direction = ({ ArrowLeft: -1, ArrowRight: 1 } as Record<string, number>)[event.key];
-      if (direction === undefined) return;
-      event.preventDefault();
-      this.#resize(this.state.size + direction * outwards * step);
-    };
-    const onpointerdown = (event: PointerEvent) => {
-      const start = { x: event.clientX, size: this.state.size, width: this.hostContainer.getBoundingClientRect().width || 1 };
-      const perPixel = this.#size.unit === 'px' ? 1 : 100 / start.width;
-      this.#track(event, (e) => this.#resize(start.size + (e.clientX - start.x) * outwards * perPixel));
-    };
-    return html`<div class="d-workbench__resizer" role="separator" aria-orientation="vertical" aria-label=${label}
-      aria-valuemin=${min} aria-valuemax=${max} tabindex="0" onkeydown=${onkeydown} onpointerdown=${onpointerdown}></div>`;
-  }
-
-  /** Follows the pointer from `event` until it is released, calling `move` (a resize in progress). */
-  #track(event: PointerEvent, move: (event: PointerEvent) => void): void {
-    event.preventDefault();
-    const doc = this.hostContainer.ownerDocument;
-    const up = () => {
-      doc.removeEventListener('pointermove', move);
-      doc.removeEventListener('pointerup', up);
-      this.hostContainer.classList.remove('d-workbench--resizing');
-    };
-    this.hostContainer.classList.add('d-workbench--resizing');
-    doc.addEventListener('pointermove', move);
-    doc.addEventListener('pointerup', up);
+    const sash = new Sash({
+      orientation: 'vertical',
+      label,
+      size: this.state.size,
+      min,
+      max,
+      step,
+      reverse: this.side === 'right',
+      perPixel: () => (this.#size.unit === 'px' ? 1 : 100 / (this.hostContainer.getBoundingClientRect().width || 1)),
+      ownerDocument: this.hostContainer.ownerDocument,
+    });
+    sash.sashElement.classList.add('d-workbench__sash');
+    sash.onDidChange((size) => {
+      this.state.size = size;
+      this.owner.save();
+      this.#applySize();
+    });
+    return sash;
   }
 
   #listen<K extends keyof DocumentEventMap>(doc: Document, type: K, handler: (event: DocumentEventMap[K]) => void): void {

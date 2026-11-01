@@ -136,21 +136,14 @@
   white-space: nowrap;
 }
 .d-workbench__panel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
-/* the separator on the panel's inner edge */
-.d-workbench__resizer {
+/* the sash (core/sash) on the panel's inner edge, half over the content */
+.d-workbench__sash {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 6px;
-  z-index: 5;
-  cursor: col-resize;
 }
-.d-workbench__side--left .d-workbench__resizer { right: -3px; }
-.d-workbench__side--right .d-workbench__resizer { left: -3px; }
-.d-workbench__resizer:hover,
-.d-workbench__resizer:focus-visible,
-.d-workbench--resizing .d-workbench__resizer { background: var(--color-accent); outline: none; }
-.d-workbench--resizing { cursor: col-resize; user-select: none; }
+.d-workbench__side--left .d-workbench__sash { right: calc(-0.5 * var(--d-sash-size)); }
+.d-workbench__side--right .d-workbench__sash { left: calc(-0.5 * var(--d-sash-size)); }
 /* Narrow workbench: the left side's open panel lies over the content. */
 .d-workbench--narrow .d-workbench__side--left .d-workbench__panel {
   position: absolute;

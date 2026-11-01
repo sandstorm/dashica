@@ -44,9 +44,11 @@
   margin-left: auto;
 }
 
-/* the SQL editor below the bar: its text with its parameters' values beside it, Run with "not run" beside it, an
-   error of the chart's SQL */
+/* the SQL panel below the bar, as high as its sash says (its inline height), leaving the viewer room: its text with
+   its parameters' values beside it, Run with "not run" beside it, an error of the chart's SQL */
 .d-explore-view__sql {
+  flex: none;
+  max-height: calc(100% - 160px);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -54,22 +56,32 @@
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
-.d-explore-view__sql-edit {
-  display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
+/* the sash (core/sash) on the SQL panel's lower border, taking no room of its own */
+.d-explore-view__sash {
+  position: relative;
+  flex: none;
+  margin: calc(-0.5 * var(--d-sash-size)) 0;
 }
 
-/* where the SQL editor goes (sql-library): at least eight lines high, growing with its text up to half the view, then
-   scrolling */
+/* the editor and the parameters fill what Run leaves of the panel, each scrolling */
+.d-explore-view__sql-edit {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+/* where the SQL editor goes (sql-library): it fills the place and scrolls inside */
 .d-explore-view__sql-text {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
-/* the height on the editable lines, not the editor's box, so a click anywhere in it reaches the text (as CodeMirror's
-   styling example sets a minimum height) */
-.d-explore-view__sql-text .cm-content { min-height: calc(8 * var(--leading) * var(--text-sm)); }
-.d-explore-view__sql-text .cm-editor { max-height: 50vh; }
+/* the editor as high as its place; CodeMirror's own theme makes its lines fill it, so a click anywhere reaches the text */
+.d-explore-view__sql-text .cm-editor { flex: 1; min-height: 0; }
 .d-explore-view__sql-text .cm-scroller { overflow: auto; }
 
 /* the placeholders' values, a name and its value per row */
@@ -78,6 +90,9 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-1) var(--space-3);
   max-width: 40%;
+  max-height: 100%;
+  overflow: auto;
+  align-content: start;
   margin: 0;
   font-family: var(--font-mono);
   font-size: var(--text-sm);

@@ -1,6 +1,7 @@
 // See exploreView in explore-view.ts.
 import { html } from 'htl';
 import { Disposable } from '../../core/disposable/disposable';
+import { Sash } from '../../core/sash/sash';
 import type { ChartSql, Schema, WidgetNode } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
@@ -69,7 +70,7 @@ export interface ExploreViewOptions {
   /** The ClickHouse connections of dashica_config a blank Explore picks from (`workbench.json`'s `connections`). */
   readonly connections: readonly string[];
   readonly query: QueryApi;
-  /** Keeps the viewer's config per chart and mode for this viewer (`stateKey`). */
+  /** Keeps the viewer's config per chart and mode for this viewer (`stateKey`), and the SQL panel's height (`SQL_HEIGHT_KEY`). */
   readonly state: Memento;
   readonly perspective: () => Promise<Perspective>;
   /** The SQL editor's bundle (sql-library), loaded with the view. */
@@ -97,10 +98,11 @@ export interface ExploreViewOptions {
  * Fills `viewContainer` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's
  * result", the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor
  * (sql-library's, loaded with the view, completing the names of the connection's schema; open from the start) with the
- * values of its parameters beside it, the notes of the config mapping, and `<perspective-viewer>` with its settings
- * panel open. Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result with the page's query
- * state and the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`) kept and their values
- * listed, both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the listed values into the
+ * values of its parameters beside it and a sash below setting its height (kept in `state`), the notes of the config
+ * mapping, and `<perspective-viewer>` with its settings panel open. Following the chart (no `exploreSql` in the tab's
+ * hash) it shows the chart's result with the page's query state and the editor the chart's SQL for that state, its
+ * placeholders (`{__from:DateTime64}`) kept and their values listed, both fetched again on each
+ * `onDidRequestRefresh`. Run puts the editor's text and the listed values into the
  * hash (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's time range and filters
  * do not change, until "Reset to the chart's query". It keeps the config the viewer changed per chart and mode; "Reset"
  * goes back to the chart's once the viewer confirmed it (`confirmReset`). A blank Explore (no `widget`) has a
@@ -166,6 +168,15 @@ export function persistable(config: ViewerConfig): ViewerConfig {
   return kept;
 }
 
+/** Where the view's state keeps the SQL panel's height. */
+const SQL_HEIGHT_KEY = 'sqlHeight';
+
+/**
+ * The SQL panel's height in pixels: at first about eight lines of the editor above Run; at least two lines; an arrow
+ * key moves it by one line.
+ */
+const SQL_HEIGHT = { initial: 216, min: 96, max: 2000, step: 19 } as const;
+
 class ExploreView {
   readonly #statusElement: HTMLElement = html`<span class="d-explore-view__status"></span>`;
   readonly #ignoredElement: HTMLElement = html`<span class="d-badge" hidden></span>`;
@@ -181,6 +192,8 @@ class ExploreView {
   readonly #parametersContainer: HTMLElement = html`<dl class="d-explore-view__parameters" aria-label="Parameters" data-testid="explore-view-parameters"></dl>`;
   readonly #sqlErrorElement: HTMLElement = html`<div class="d-notice d-notice--error" hidden></div>`;
   readonly #sqlPanelContainer: HTMLElement = html`<div class="d-explore-view__sql" data-testid="explore-view-sql-panel"></div>`;
+  /** The line below the SQL panel, setting its height. */
+  readonly #sqlSash: Sash;
   readonly #editedNoteElement: HTMLElement = html`<div class="d-notice d-explore-view__edited" hidden data-testid="explore-view-edited"></div>`;
   readonly #notesContainer: HTMLElement = html`<ul class="d-explore-view__notes" hidden></ul>`;
   readonly #bodyContainer: HTMLElement = html`<div class="d-explore-view__body"></div>`;
@@ -226,6 +239,7 @@ class ExploreView {
       html`<div class="d-explore-view__sql-bar">${runButtonElement}${this.#sqlNoteElement}</div>`,
       this.#sqlErrorElement,
     );
+    this.#sqlSash = this.#createSqlSash();
     this.#connectionElement.replaceChildren(...options.connections.map((name) => html`<option value=${name}>${name}</option>`));
     this.#connectionElement.value = pickedConnection(options.hash(), options.connections);
     this.#connectionElement.onchange = () => options.navigate(withConnection(options.hash(), this.#connectionElement.value));
@@ -236,7 +250,7 @@ class ExploreView {
         ${options.widget ? '' : this.#connectionElement}${this.#statusElement}${this.#ignoredElement}
         <span class="d-explore-view__actions">${this.#sqlButtonElement}${resetButtonElement}${closeButtonElement}</span>
       </div>
-      ${this.#sqlPanelContainer}${this.#editedNoteElement}${this.#notesContainer}${this.#bodyContainer}
+      ${this.#sqlPanelContainer}${this.#sqlSash.sashElement}${this.#editedNoteElement}${this.#notesContainer}${this.#bodyContainer}
     </div>`);
     this.#bodyContainer.append(this.#messageElement);
     this.#edited = editedQuery(options.hash());
@@ -258,6 +272,7 @@ class ExploreView {
     this.#loading?.abort();
     this.#loadingSql?.abort();
     this.#listening.dispose();
+    this.#sqlSash.dispose();
     this.#editor?.dispose();
     void this.#shown?.viewerElement.delete().then(() => this.#shown?.table.delete());
     this.viewContainer.replaceChildren();
@@ -438,11 +453,36 @@ class ExploreView {
     this.#showSqlPanel();
   }
 
+  /**
+   * The line below the SQL panel: drag it (or ArrowUp / ArrowDown) to set the panel's height, which the editor fills;
+   * kept for this viewer (`SQL_HEIGHT_KEY`). A drag starts from the height shown, which the stylesheet keeps below the
+   * view's.
+   */
+  #createSqlSash(): Sash {
+    const sash = new Sash({
+      orientation: 'horizontal',
+      label: 'SQL editor height',
+      size: this.options.state.get<number>(SQL_HEIGHT_KEY, SQL_HEIGHT.initial),
+      ...SQL_HEIGHT,
+      shownSize: () => this.#sqlPanelContainer.getBoundingClientRect().height,
+      ownerDocument: this.viewContainer.ownerDocument,
+    });
+    sash.sashElement.classList.add('d-explore-view__sash');
+    sash.sashElement.dataset.testid = 'explore-view-sql-sash';
+    sash.onDidChange((height) => {
+      this.#sqlPanelContainer.style.height = `${height}px`;
+      void this.options.state.update(SQL_HEIGHT_KEY, height);
+    });
+    this.#sqlPanelContainer.style.height = `${sash.size}px`;
+    return sash;
+  }
+
   /** Shows the editor while it is open; on showing, the chart's SQL. */
   #showSqlPanel(): void {
     const wasHidden = this.#sqlPanelContainer.hidden;
     this.#sqlButtonElement.setAttribute('aria-pressed', String(this.#sqlOpen));
     this.#sqlPanelContainer.hidden = !this.#sqlOpen;
+    this.#sqlSash.sashElement.hidden = !this.#sqlOpen;
     if (wasHidden && !this.#sqlPanelContainer.hidden && this.#edited === undefined) void this.#loadSql();
   }
 

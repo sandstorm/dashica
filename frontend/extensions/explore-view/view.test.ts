@@ -374,6 +374,35 @@ describe('renderExploreView', () => {
     expect(sqlValue()).toBe('SELECT time=3h');
   });
 
+  it('sizes the SQL panel by the sash below it (keys and drag), kept for the viewer, hidden with the panel', async () => {
+    open();
+    await settle();
+    const panelElement = find('explore-view-sql-panel');
+    const sashElement = find('explore-view-sql-sash');
+    expect(panelElement.nextElementSibling).toBe(sashElement);
+    expect(sashElement.getAttribute('role')).toBe('separator');
+    expect(sashElement.getAttribute('aria-orientation')).toBe('horizontal');
+    const startHeight = Number(sashElement.getAttribute('aria-valuenow'));
+    expect(panelElement.style.height).toBe(`${startHeight}px`);
+    sashElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    const keyedHeight = Number(sashElement.getAttribute('aria-valuenow'));
+    expect(keyedHeight).toBeGreaterThan(startHeight);
+    expect(panelElement.style.height).toBe(`${keyedHeight}px`);
+    // jsdom has no PointerEvent: a MouseEvent of the same type carries the coordinates
+    sashElement.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientY: 300 }));
+    document.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientY: 400 }));
+    document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientY: 400 }));
+    expect(panelElement.style.height).toBe(`${keyedHeight + 100}px`);
+    expect([...stored.values()]).toContain(keyedHeight + 100);
+    find<HTMLButtonElement>('explore-view-sql').click();
+    expect(sashElement.hidden).toBe(true);
+    find<HTMLButtonElement>('explore-view-sql').click();
+    expect(sashElement.hidden).toBe(false);
+    view.dispose();
+    open();
+    expect(find('explore-view-sql-panel').style.height).toBe(`${keyedHeight + 100}px`);
+  });
+
   it('lists the values of the chart’s parameters beside the editor, fetched again on a refresh', async () => {
     open();
     await settle();

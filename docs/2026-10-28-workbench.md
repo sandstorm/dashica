@@ -136,7 +136,8 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
   everywhere) reach the start page.
 
 - The layout is ported from Zwiebelfisch (`WindowLayout`, `SideBar`: one CSS grid, rails with a button per panel,
-  resizable, state remembered, left panel overlays on narrow screens). The bottom panel is gone with step 7e (Debug
+  resizable by a sash on the panel's inner edge (`Sash`, §3.5, since 9av), state remembered, left panel overlays on
+  narrow screens). The bottom panel is gone with step 7e (Debug
   moved to the left side, it had no other user); a table's selected rows show in the left side panel "Details" (§3.4.5).
 - **Tabs** (decided 2026-10-31, reversing "one page at a time"): a tab bar in the top row (step 8d); each tab shows one
   page with its own URL and query state, the address bar the active tab's (§3.4.1).
@@ -467,6 +468,19 @@ schema and the store of the connections' schemas (`Schemas`), shared by the Expl
 view (9d, §3.15 D12); `filter-library` the contract between the charts, the Explore view and the `filters` extension:
 the command `filters.offer` (`OFFER`), its argument types `FilterCandidate`, `PillSource`, `OfferFilters`, and
 `offerFiltersOf`, which runs it (9ad, §3.15 D38).
+
+What hosts and extensions both draw lives in `frontend/core/`: `core/sash` (since 9av, §3.15 D48) is the `Sash`, as
+VS Code's: a line between two parts that the viewer drags or moves with the arrow keys (`role=separator`,
+`aria-valuenow`) to size one of them, `orientation` `vertical` or `horizontal`, within `min` / `max`, `step` per key,
+`reverse` for an edge of a part right of or below it, `perPixel` for a size that is no pixel count (the right side's
+percent), `shownSize` for a size the stylesheet may show smaller; it keeps the size and fires `onDidChange`, its
+owner applies and keeps it. Its `sash.css` draws the line (`--d-sash-size`, the accent on hover, focus and drag) and,
+during a drag, the page's cursor; where it lies is its owner's. Users: the side bars (`SideBar`, keeping the size in
+the layout's state) and the Explore view's split between the SQL panel and the viewer (Perspective §4.7).
+*(proposed)* `core/`, not the `ui` host: a host must not import a `-library` folder and an extension's drawing code
+would otherwise need a `ui` call for a plain DOM piece; it keeps no state beyond its element's lifetime and
+imports only `core/event-emitter`. The owner keeps the size (a side bar's state, an extension's `globalState`), so
+the sash needs no `Memento`.
 
 | Host | Offers |
 |---|---|
@@ -1889,6 +1903,16 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `ownerDocument`) and the search's text node (`node` in `drawTable`) keep their names, being no element;
   `MenuAnchor`'s `anchor` keeps its name, holding an element or a point; a rendered widget's own `redecorate()` stays;
   the commits are `REFACTOR:` (docs/conventions.md: renames apart from functional changes).
+- **D48 A sash, and Explore's SQL panel resizable (9av, decided 2026-11-01; maintainer, on the line between Explore's
+  SQL editor and the viewer: "this separator needs to be resizable..."):** the side bars' separator (`SideBar`'s
+  `#createResizer` / `#track` / `#resize`) became `Sash` in `frontend/core/sash` (§3.5), which the side bars use with
+  their behaviour unchanged (their sizes, keys, bounds and kept state; the class `d-workbench__resizer` is
+  `d-workbench__sash`, placing it; the workbench's `d-workbench--resizing` is the sash's `d-sash--active` and
+  `d-sash-dragging--<orientation>` on the page's root). Explore gets a horizontal sash below its SQL panel, its height
+  kept in the extension's `globalState` (Perspective §4.7). *(proposed)* `core/` as its place; the owner keeps the
+  size (no `Memento` in the sash); `shownSize`, where a move starts, so a kept height larger than the stylesheet
+  allows does not swallow the start of a drag; Explore's bounds 96–2000 px, at first 216 px, 19 px per key, at
+  least 160 px for the viewer (CSS).
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2243,6 +2267,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9as ✅ 2026-11-01 | **D45 (d) a click offers the row the tip shows** (§3.8, §3.15): root cause Plot's tip pointer of a stacked mark (`pointerX` for `barY` / `rectY`, `pointerY` for `barX`) against `filterOnClick`'s `Plot.pointer`; `FilterOnClickOptions.pointer` (`Plot.TipPointer`), each chart's `tip` names it (`time-bars.ts`, `bar-vertical.ts` `"x"`; `bar-horizontal.ts`, `heatmap.ts` `"y"`; `time-line.ts` `"xy"`). Reproduced first in vitest (`time-bar.test.ts`: stacked bars where the next bucket's bar is closer, also faceted; `bar-horizontal.test.ts`: the same by y), `plot-testing.ts` `clickAtPoint`, `anchor` exported. Files: `frontend/extensions/chart-library/{filter-on-click,time-bars,plot-testing}.ts`, `frontend/extensions/{bar-vertical,bar-horizontal,heatmap,time-line}/*.ts`, `time-bar.test.ts`, `bar-horizontal.test.ts` | |
 | 9at ✅ 2026-11-01 | **D45 (e) a failed filter is shown** (§3.8, §3.11, §3.15): `UiApi.showErrorMessage(message): Promise<void>` (`hosts/ui/notifications/notifications.{ts,css,test.ts}`, `Notifications`, in `UiHost`); `showFailed` (`filters/offer.ts`) in `offerFilters`, `addFilter`, the filter bar's `#press` and `#remake`, the console log kept. Tests: `notifications.test.ts`, `offer.test.ts`, `add-filter.test.ts` (a refused `/pill`), `filters.test.ts` (a refused button value, a refused edit) | *(proposed)* error kind only, no items; stays until closed; the HTTP status kept in the text |
 | 9au ✅ 2026-11-01 | **D47 DOM nodes end in `Element` / `Container`** (§3.15; docs/conventions.md "Names and types"): every field, variable, parameter and property in `frontend/**/*.ts` that holds a DOM node renamed by role (e.g. `#body` → `#bodyContainer`, `#title` → `#titleElement`, `#spinner` → `#spinnerElement`, `#frame` → `#frameElement`, a renderer's `el` → `widgetContainer` / `pageContainer` / `viewContainer`, `Panel.body` → `bodyContainer`, `InputBoxField.element` / `input` → `fieldElement` / `inputElement`, `WindowLayout.topBar` → `topBarContainer`), with all users and tests; the chart frame's `#decorations` → `#badgeContainer`, `#showDecorations` → `#drawDecorations`; the widgets host's `decorate()` → `decorationsOf(widget, result)`, `#redecorate` → `#askProvidersAgain`; the sticky tooltip's parts object (data) `TooltipEl` → `Tooltip`, `Pin.el` → `Pin.tooltip`; the concept's API sketches follow. Four commits (hosts and workbench; chart library and widget types; the other extensions; the leftovers with these docs), each green. ✅ 2026-11-01 (vitest, typecheck, top comments green; Playwright not run, no spec names a renamed identifier), deviations: several nodes end in `Elements`; a `Document` and a text node keep their names; `MenuAnchor.anchor` and a rendered widget's `redecorate()` stay; commits `REFACTOR:` *(all proposed)* | one name for what a node is |
+| 9av ✅ 2026-11-01 | **D48 a sash; Explore's SQL panel resizable** (§3.5, §3.15; Perspective §4.7): `Sash` (`frontend/core/sash/sash.{ts,css,test.ts}`: orientation, label, size, min / max, step, `reverse`, `perPixel`, `shownSize`, `onDidChange`, keys and pointer drag); `SideBar` uses it (`#createSash`, `window-layout.css` `.d-workbench__sash` places it); the Explore view's `#createSqlSash` below the SQL panel, height in `globalState` `sqlHeight`, hidden with the panel, the editor filling the panel (`explore-view.css`). Tests: `sash.test.ts` (keys, drag, bounds, kept size, `shownSize`, dispose), the side bars' tests unchanged and green, `view.test.ts` (the split: keys, drag, kept, hidden with the panel), `e2e/explore-view.spec.ts` (written, not run) | *(proposed)* `core/` as the place; the owner keeps the size; `shownSize`; Explore's bounds and CSS minimum for the viewer |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

@@ -1,0 +1,16 @@
+/* See Sash in sash.ts: the line and its pointer; where it lies is its owner's (absolutely on a panel's edge, or in
+   the flow between two parts, half over each: --d-sash-size). While a drag goes on, the whole page keeps its cursor
+   and selects no text. */
+.d-sash {
+  --d-sash-size: 6px;
+  z-index: 5;
+  touch-action: none;
+}
+.d-sash[hidden] { display: none; }
+.d-sash--vertical { width: var(--d-sash-size); cursor: col-resize; }
+.d-sash--horizontal { height: var(--d-sash-size); cursor: row-resize; }
+.d-sash:hover,
+.d-sash:focus-visible,
+.d-sash--active { background: var(--color-accent); outline: none; }
+.d-sash-dragging--vertical { cursor: col-resize; user-select: none; }
+.d-sash-dragging--horizontal { cursor: row-resize; user-select: none; }

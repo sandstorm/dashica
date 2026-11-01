@@ -6,7 +6,8 @@
 // until Reset, which asks first (Cancel keeps it); the global "…" menu's "Explore"
 // opens a blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from
 // chart…" one with a chart's SQL (§4.8, D10); the SQL editor is CodeMirror's, loaded with the view, highlighting and
-// completing (D12). All of it needs `explore.enabled` (workbench.json's `explore`), else
+// completing (D12); the sash below the SQL panel sets its height, the editor filling it, kept over a reload (D48). All
+// of it needs `explore.enabled` (workbench.json's `explore`), else
 // every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
@@ -46,6 +47,30 @@ test('opens the chart’s result in Perspective in a new tab, the dashboard’s 
     await expect(view.locator('perspective-viewer')).toBeVisible();
     await expect(view.locator('.d-explore-view__status')).toHaveText(/^[\d,]+ rows of the chart’s result$/);
     await expect.poll(() => view.locator('perspective-viewer').evaluate(async (el: any) => (await el.save()).settings)).toBe(true);
+});
+
+test('the sash below the SQL panel sets its height, the editor filling it, the viewer the rest, kept over a reload', async ({page}) => {
+    const view = await openExplore(page);
+    const panel = view.getByTestId('explore-view-sql-panel');
+    const sash = view.getByTestId('explore-view-sql-sash');
+    await expect(view.getByTestId('explore-view-sql-text')).toHaveText(/GROUP BY/);
+    const before = (await panel.boundingBox())!;
+    const viewerBefore = (await view.locator('perspective-viewer').boundingBox())!;
+    const box = (await sash.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 120, {steps: 4});
+    await page.mouse.up();
+    await expect.poll(async () => Math.round((await panel.boundingBox())!.height - before.height)).toBe(120);
+    const editor = (await view.locator('.cm-editor').boundingBox())!;
+    expect(editor.height).toBeGreaterThan(before.height - 80);
+    await expect.poll(async () => Math.round(viewerBefore.height - (await view.locator('perspective-viewer').boundingBox())!.height)).toBe(120);
+
+    await sash.focus();
+    await page.keyboard.press('ArrowUp');
+    const keyed = Number(await sash.getAttribute('aria-valuenow'));
+    await page.reload();
+    await expect(page.getByTestId('explore-view').getByTestId('explore-view-sql-sash')).toHaveAttribute('aria-valuenow', String(keyed));
 });
 
 test('the SQL editor: the chart’s SQL as it runs, edited without its GROUP BY, Run, a reload, Reset', async ({page}) => {
