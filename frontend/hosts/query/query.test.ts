@@ -128,21 +128,21 @@ describe('QueryHost', () => {
     tab.dispose();
   });
 
-  it('sends a key’s URL entries with the page loaded: its default left out, as in the URL', () => {
+  it('sends a key’s effective value, its page’s default too, which the URL leaves out', () => {
     const size = queryKey<string>('size', {
       parse: (url, page) => url.get('size') ?? page?.defaultTime ?? '24h',
-      format: (value, page) => (value !== (page?.defaultTime ?? '24h') ? [['size', value]] : []),
+      format: (value, page) => (page !== undefined && value === (page.defaultTime ?? '24h') ? [] : [['size', value]]),
       sentToServer: true,
     });
     query.declare(size);
     const page: PageJson = { kind: 'dashboard', title: 'Shop', defaultTime: '168h', filterBar: false, filterButtons: [], widgets: [] };
     query.load({ search: '', page });
     expect(query.get(size)).toBe('168h');
-    expect(query.requestParams().has('size')).toBe(false);
+    expect(query.requestParams().get('size')).toBe('168h');
     query.set(size, '24h');
     expect(query.requestParams().get('size')).toBe('24h');
     query.load({ search: '?size=168h', page });
-    expect(query.requestParams().has('size')).toBe(false);
+    expect(query.requestParams().get('size')).toBe('168h');
   });
 
   it('knows a key declared in one tab in every tab sharing the keys, each tab with its own value', () => {

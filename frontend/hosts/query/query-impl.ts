@@ -104,7 +104,7 @@ export class QueryHost implements QueryApi {
   requestParams(): URLSearchParams {
     const request = new URLSearchParams();
     for (const key of this.keys.all()) {
-      if (key.sentToServer) for (const [name, value] of key.format(this.get(key), this.#page)) request.append(name, value);
+      if (key.sentToServer) for (const [name, value] of key.format(this.get(key), undefined)) request.append(name, value);
     }
     return request;
   }

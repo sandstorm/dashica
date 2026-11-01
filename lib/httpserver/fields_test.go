@@ -21,7 +21,7 @@ import (
 
 func TestHandleFields_WithoutComputedFieldsAsksClickHouseNothing(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/fields?time=1h", nil)
-	state, err := ParseQueryState(r, DefaultTimeRange)
+	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestHandleFields_WithoutComputedFieldsAsksClickHouseNothing(t *testing.T) {
 
 func TestHandleFields_TakesNoSqlChipsAndAFailedDescribeKeepsTheColumns(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/fields?time=1h&sql=nonsense", nil)
-	state, err := ParseQueryState(r, DefaultTimeRange)
+	state, err := ParseQueryState(r)
 	if err != nil {
 		t.Fatal(err)
 	}

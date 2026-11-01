@@ -23,7 +23,7 @@ type pathEcho struct{}
 
 func (pathEcho) marshalProps(*rendering.DashboardContext) ([]byte, error) { return []byte("{}"), nil }
 
-func (pathEcho) Handler(rendering.Dependencies, string) http.Handler {
+func (pathEcho) Handler(rendering.Dependencies) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, r.URL.Path) })
 }
 

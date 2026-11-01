@@ -43,17 +43,11 @@ func (e *QueryStateError) Error() string {
 // ErrSqlNotEnabled is what SqlClause answers SQL chips with while filters.sqlEnabled is off, before any query.
 var ErrSqlNotEnabled = &QueryStateError{"SQL filters are not enabled (filters.sqlEnabled)"}
 
-// DefaultTimeRange is the time range of a page that declares none (dashboard.Builder.DefaultTimeRange), and of the
-// handlers without a page (/time-range, the Explore editor's preview).
-const DefaultTimeRange = "24h"
-
-// ParseQueryState reads the query state of `r`: `time`, `defaultTime` when it has none (its page's default time range,
-// which the page's URL leaves out, so neither does the request; DefaultTimeRange without a page), `range`, each `f`
-// and each `sql` (an empty one left out) and `wp` (a JSON object of strings). The QueryStateError says what cannot be
-// read: a `time` that is neither a Go duration nor `custom`, a `wp` that is not such an object. An unreadable `range`
-// is ResolveTimeRange's error; SQL chips while filters.sqlEnabled is off are SqlClause's, where they would enter a
-// query.
-func ParseQueryState(r *http.Request, defaultTime string) (QueryState, error) {
+// ParseQueryState reads the query state of `r`: `time`, `range`, each `f` and each `sql` (an empty one left out) and
+// `wp` (a JSON object of strings). The QueryStateError says what cannot be read: a missing `time`, a `time` that is
+// neither a Go duration nor `custom`, a `wp` that is not such an object. An unreadable `range` is ResolveTimeRange's
+// error; SQL chips while filters.sqlEnabled is off are SqlClause's, where they would enter a query.
+func ParseQueryState(r *http.Request) (QueryState, error) {
 	query := r.URL.Query()
 	s := QueryState{Time: query.Get("time"), Range: query.Get("range")}
 	for _, chip := range query["sql"] {
@@ -62,7 +56,7 @@ func ParseQueryState(r *http.Request, defaultTime string) (QueryState, error) {
 		}
 	}
 	if s.Time == "" {
-		s.Time = defaultTime
+		return QueryState{}, &QueryStateError{"time range missing: want `time=<Go duration>` or `time=custom&range=<from> to <to>`"}
 	}
 	if s.Time != "custom" {
 		dur, err := time.ParseDuration(s.Time)

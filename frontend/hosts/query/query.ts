@@ -31,8 +31,8 @@ export interface QueryApi {
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
   refresh(): void;
   /**
-   * What the data handlers read: the URL entries of each key sent to the server (`sentToServer`), in the order the
-   * keys were declared, a default left out as in the URL (the handlers know their page's `defaultTime`).
+   * What the data handlers read: the effective value of each key sent to the server (`sentToServer`), in the order
+   * the keys were declared, each as `format` gives it without a page: a default included (the page's time range).
    */
   requestParams(): URLSearchParams;
 }
@@ -59,12 +59,14 @@ export interface QueryKeySpec<T> {
    * page's (`page`, the page the tab shows: its `defaultTime`; `undefined` before one is).
    */
   parse(url: URLSearchParams, page: PageJson | undefined): T;
-  /** The entries of the URL that hold `value`, in order (`[['refresh', '30']]`); none for the default (`page`: as `parse`). */
+  /**
+   * The entries that hold `value`, in order (`[['refresh', '30']]`): for the URL none for the default of `page` (the
+   * page the tab shows); without a page, the request's (`requestParams`), the default included.
+   */
   format(value: T, page: PageJson | undefined): QueryEntries;
   /**
-   * Whether the data handlers read it: sent, it sends its URL entries (`format` with the tab's page, so a default is
-   * left out: the server knows its page's). Without it the key is not sent, and its change queries nothing again
-   * (auto refresh).
+   * Whether the data handlers read it: sent, it sends its effective value (`format` without a page). Without it the
+   * key is not sent, and its change queries nothing again (auto refresh).
    */
   readonly sentToServer?: boolean;
 }

@@ -20,7 +20,6 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
-	"github.com/sandstorm/dashica/lib/httpserver"
 )
 
 var testSecret = []byte("a test secret of at least thirty-two bytes")
@@ -40,7 +39,7 @@ func testDeps() rendering.Dependencies {
 // askPath is the answer of `chart`'s handler to `path` (with its query string).
 func askPath(chart withQuery, path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	queryHandler(testDeps(), httpserver.DefaultTimeRange, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	queryHandler(testDeps(), chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
 }
 
@@ -202,7 +201,7 @@ func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 		deps := testDeps()
 		deps.Config.Explore.Enabled, deps.Config.Filters.SqlEnabled = true, sqlEnabled
 		rec := httptest.NewRecorder()
-		queryHandler(deps, httpserver.DefaultTimeRange, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
+		queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
 		return rec
 	}
 	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status"} {
@@ -232,7 +231,7 @@ func TestSpeedscope_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 	link := NewSpeedscopeLink(sql.New(sql.From("http_logs")))
 	target := "/speedscope-query?time=1h&sql=" + url.QueryEscape("status >= 500")
 	rec := httptest.NewRecorder()
-	link.Handler(testDeps(), httpserver.DefaultTimeRange).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
 		t.Errorf("off: %d %s", rec.Code, rec.Body)
 	}
@@ -240,7 +239,7 @@ func TestSpeedscope_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 	deps := testDeps()
 	deps.Config.Filters.SqlEnabled = true
 	rec = httptest.NewRecorder()
-	link.Handler(deps, httpserver.DefaultTimeRange).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+	link.Handler(deps).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	if rec.Code == http.StatusBadRequest {
 		t.Errorf("on: %d %s", rec.Code, rec.Body)
 	}
@@ -249,7 +248,7 @@ func TestSpeedscope_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 func TestSpeedscope_ATamperedPillIsABadRequest(t *testing.T) {
 	link := NewSpeedscopeLink(sql.New(sql.From("http_logs")))
 	rec := httptest.NewRecorder()
-	link.Handler(testDeps(), httpserver.DefaultTimeRange).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/speedscope-query?time=1h&f=status:eq:500", nil))
+	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/speedscope-query?time=1h&f=status:eq:500", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("%d %s", rec.Code, rec.Body)
 	}
@@ -316,8 +315,8 @@ func TestValues_AFieldThatCannotFilterIs422AnUnsignedPill400(t *testing.T) {
 		if rec := askPath(bar, path+"?time=1h&field=status&f=status:eq:500"); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s, unsigned pill: %d %s", path, rec.Code, rec.Body)
 		}
-		if rec := askPath(bar, path+"?time=2d&field=status"); rec.Code != http.StatusBadRequest {
-			t.Errorf("%s, a time range that is no Go duration: %d %s", path, rec.Code, rec.Body)
+		if rec := askPath(bar, path+"?field=status"); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s, no time range: %d %s", path, rec.Code, rec.Body)
 		}
 		// the ClickHouse of testDeps is unreachable: a request that passed every check fails there
 		if rec := askPath(bar, path+"?time=1h&field=status&search=50"); rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "clickhouse") {
@@ -400,8 +399,8 @@ func TestFields_AChartWithoutATableIs422TheSchemaAskedOtherwise(t *testing.T) {
 			t.Errorf("a table, %s: %d %s", path, rec.Code, rec.Body)
 		}
 	}
-	if rec := askPath(bar, "/fields?time=2d"); rec.Code != http.StatusBadRequest {
-		t.Errorf("a time range that is no Go duration: %d %s", rec.Code, rec.Body)
+	if rec := askPath(bar, "/fields"); rec.Code != http.StatusBadRequest {
+		t.Errorf("no time range: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -410,7 +409,7 @@ func TestFields_IsNotBehindExplore(t *testing.T) {
 	deps := testDeps()
 	deps.Config.Explore.Enabled = false
 	rec := httptest.NewRecorder()
-	queryHandler(deps, httpserver.DefaultTimeRange, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fields?time=1h", nil))
+	queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fields?time=1h", nil))
 	// the ClickHouse of testDeps is unreachable: the request got to the schema, not a 404
 	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "system.tables") {
 		t.Errorf("%d %s", rec.Code, rec.Body)

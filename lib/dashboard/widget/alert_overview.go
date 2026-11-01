@@ -45,7 +45,7 @@ ORDER BY
     alert_id_group, alert_id_key, timestamp
 `
 
-func (a *AlertOverview) Handler(deps rendering.Dependencies, defaultTime string) http.Handler {
+func (a *AlertOverview) Handler(deps rendering.Dependencies) http.Handler {
 	pattern := a.alertGroupPattern
 	mux := http.NewServeMux()
 
@@ -63,7 +63,7 @@ func (a *AlertOverview) Handler(deps rendering.Dependencies, defaultTime string)
 			"alert_group_pattern": pattern,
 		}
 
-		state, err := httpserver.ParseQueryState(r, defaultTime)
+		state, err := httpserver.ParseQueryState(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

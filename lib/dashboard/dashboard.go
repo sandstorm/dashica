@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
-	"github.com/sandstorm/dashica/lib/httpserver"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
@@ -91,7 +89,6 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 			return PageJson{}, fmt.Errorf("DefaultTimeRange(%q) is not a Go duration (\"168h\" for 7 days): %w", d.defaultTime, err)
 		}
 	}
-	ctx.DefaultTime = cmp.Or(d.defaultTime, httpserver.DefaultTimeRange)
 	nodes, err := d.widgets.Mount(ctx, handlerCollector.Nested("/api"))
 	if err != nil {
 		return PageJson{}, fmt.Errorf("mounting widgets: %w", err)

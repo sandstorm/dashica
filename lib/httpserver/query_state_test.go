@@ -13,11 +13,10 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 )
 
-// parseQueryState is the query state of a request with the query string `query` to a page whose default time range is
-// 168h; it fails the test on an error.
+// parseQueryState is the query state of a request with the query string `query`; it fails the test on an error.
 func parseQueryState(t *testing.T, query string) QueryState {
 	t.Helper()
-	s, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+query, nil), "168h")
+	s, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+query, nil))
 	if err != nil {
 		t.Fatalf("ParseQueryState(%q): %v", query, err)
 	}
@@ -32,10 +31,6 @@ func TestParseQueryState(t *testing.T) {
 		"preset": {
 			query: url.Values{"time": {"1h"}},
 			want:  QueryState{Time: "1h"},
-		},
-		"the page's default without time": {
-			query: url.Values{"sql": {"status >= 500"}},
-			want:  QueryState{Time: "168h", Sql: []string{"status >= 500"}},
 		},
 		"custom": {
 			query: url.Values{"time": {"custom"}, "range": {"now-6h to now-1h"}},
@@ -70,6 +65,7 @@ func TestParseQueryState_SaysWhatIsWrong(t *testing.T) {
 		query url.Values
 		want  string
 	}{
+		"missing time":     {query: url.Values{"sql": {"status >= 500"}}, want: "time range missing"},
 		"bad duration":     {query: url.Values{"time": {"2d"}}, want: `"2d"`},
 		"negative":         {query: url.Values{"time": {"-1h"}}, want: `"-1h"`},
 		"wp not JSON":      {query: url.Values{"time": {"1h"}, "wp": {"path=^/api"}}, want: "wp"},
@@ -78,7 +74,7 @@ func TestParseQueryState_SaysWhatIsWrong(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+tt.query.Encode(), nil), DefaultTimeRange)
+			_, err := ParseQueryState(httptest.NewRequest(http.MethodGet, "/query?"+tt.query.Encode(), nil))
 			var bad *QueryStateError
 			if !errors.As(err, &bad) || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("ParseQueryState: err = %v, want a QueryStateError saying %s", err, tt.want)

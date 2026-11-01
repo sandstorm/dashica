@@ -14,8 +14,8 @@ const DEFAULT_TIME = '24h';
 /**
  * The time range of a tab's query state (`query.get(TIME)`), shown and set by the `time-range` extension, set by a
  * selection on a time chart (`customRange`). In the URL, `?time=1h`, `?time=custom&range=now-6h to now-1h`; the page's
- * own (`defaultTime`, else 24h) by default. The data handlers read it as the URL has it: without `time` they take their
- * page's default.
+ * own (`defaultTime`, else 24h) by default, left out of the URL. The data handlers read the effective range: `time`
+ * also when it is the default.
  */
 export const TIME = queryKey<TimeRange>(['time', 'range'], {
   parse(url, page) {
@@ -23,7 +23,8 @@ export const TIME = queryKey<TimeRange>(['time', 'range'], {
     return { range, custom: range === 'custom' ? (url.get('range') ?? '') : '' };
   },
   format({ range, custom }, page) {
-    return [...(range !== (page?.defaultTime || DEFAULT_TIME) ? [['time', range] as const] : []), ...(range === 'custom' && custom ? [['range', custom] as const] : [])];
+    const isDefault = page !== undefined && range === (page.defaultTime || DEFAULT_TIME);
+    return [...(isDefault ? [] : [['time', range] as const]), ...(range === 'custom' && custom ? [['range', custom] as const] : [])];
   },
   sentToServer: true,
 });
