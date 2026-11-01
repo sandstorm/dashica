@@ -12,6 +12,7 @@ import type {
   DataPointMenuProvider,
   QueryResult,
   RenderedWidget,
+  TimeCursor,
   WidgetContext,
   WidgetDecoration,
   WidgetDecorationProvider,
@@ -27,7 +28,8 @@ import './widgets.css';
  * under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a `WidgetInstance`:
  * its renderer's context and, as `active`, the widget itself. The decoration providers are asked by each instance when
  * its query answered (`decorationsOf`), and for every rendered instance when one fires; the data point menu providers
- * each time a data point menu is shown, whose chosen item runs through `commands`.
+ * each time a data point menu is shown, whose chosen item runs through `commands`. The time cursor is one for all
+ * rendered widgets.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
@@ -43,6 +45,7 @@ export class WidgetsHost implements WidgetsApi {
   /** The widgets rendered now, asked again when a provider fires. */
   readonly #rendered = new Set<WidgetInstance>();
   readonly #dataPointMenuProviders: DataPointMenuProvider[] = [];
+  readonly timeCursor = new SharedTimeCursor();
 
   constructor(
     private readonly ui: Pick<UiApi, 'showContextMenu' | 'showQuickPick'>,
@@ -212,6 +215,28 @@ export class WidgetsHost implements WidgetsApi {
     this.#onDidChangeTabs.dispose();
     this.#onDidChangeActive.dispose();
     this.#active.clear();
+    this.timeCursor.dispose();
+  }
+}
+
+/** The `TimeCursor` of all rendered widgets. */
+class SharedTimeCursor implements TimeCursor {
+  #time: number | undefined;
+  readonly #onDidChange = new EventEmitter<void>();
+  readonly onDidChange = this.#onDidChange.event;
+
+  get time(): number | undefined {
+    return this.#time;
+  }
+
+  set(time: number | undefined): void {
+    if (time === this.#time) return;
+    this.#time = time;
+    this.#onDidChange.fire();
+  }
+
+  dispose(): void {
+    this.#onDidChange.dispose();
   }
 }
 
@@ -316,6 +341,10 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
 
   showDataPointMenu(at: MenuAnchor, dataPoints: readonly DataPoint[]): void {
     this.host.showDataPointMenu(this, at, dataPoints);
+  }
+
+  get timeCursor(): TimeCursor {
+    return this.host.timeCursor;
   }
 
   /** It is removed: its events end. */

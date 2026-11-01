@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 // Tests for chart-frame.ts: the title above the chart, querying once in view and on a refresh, drawing again for
 // another width, the error, the widget's decorations (a badge each, the chart muted while one says so), an answer
-// without a table, the dragged time range, the menu button.
+// without a table, the dragged time range, the time cursor told to the last draw only, the menu button.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
-import type { WidgetDecoration } from '../../hosts/widgets/widgets';
+import type { TimeCursor, WidgetDecoration } from '../../hosts/widgets/widgets';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { TIME, type TimeRange } from '../time-library/time-state';
 import { ChartFrame } from './chart-frame';
@@ -23,17 +23,21 @@ const requests: WidgetNode = { type: 'timeBar', props: { title: 'Requests', x: {
 describe('ChartFrame', () => {
   const drawn: { rows: number; width: number }[] = [];
   let selectTime: (from: Date, to: Date) => void;
+  /** Each draw's time cursor, in order. */
+  const cursors: TimeCursor[] = [];
 
   beforeEach(() => {
     drawn.length = 0;
+    cursors.length = 0;
     testbed.widgets.registerWidget(
       'timeBar',
       (widgetContainer, widget, ctx) =>
         new ChartFrame(widgetContainer, ctx, {
           title: widget.props.title,
           height: 200,
-          draw(result, { width, onTimeSelect }) {
+          draw(result, { width, onTimeSelect, timeCursor }) {
             selectTime = onTimeSelect;
+            cursors.push(timeCursor);
             drawn.push({ rows: result.numRows, width });
             const chartElement = document.createElement('figure');
             chartElement.textContent = `${result.numRows} rows`;
@@ -59,6 +63,24 @@ describe('ChartFrame', () => {
     await settle();
     expect(body(widgetContainer).textContent).toBe('2 rows');
     expect(titleElement.textContent).toBe('Requests');
+  });
+
+  it('tells the time cursor’s change to the last draw only, not once removed', async () => {
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    const { rendered } = testbed.render(requests);
+    testbed.resize(640);
+    testbed.scrollIntoView();
+    await settle();
+    testbed.resize(320);
+    await settle();
+    const told = cursors.map(() => 0);
+    cursors.forEach((cursor, at) => cursor.onDidChange(() => told[at]++));
+    cursors[1].set(1_000);
+    expect(told).toEqual([0, 1]);
+    expect(cursors[0].time).toBe(1_000);
+    rendered.dispose();
+    testbed.widgets.timeCursor.set(2_000);
+    expect(told).toEqual([0, 1]);
   });
 
   it('queries again on a refresh, and draws again for another width', async () => {

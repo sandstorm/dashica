@@ -1,7 +1,8 @@
 import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
-import type { QueryResult, WidgetContext, WidgetDecoration } from '../../hosts/widgets/widgets';
+import { EventEmitter } from '../../core/event-emitter/event-emitter';
+import type { QueryResult, TimeCursor, WidgetContext, WidgetDecoration } from '../../hosts/widgets/widgets';
 import { formatTime } from '../time-library/format-time';
 import { TIME, customRange } from '../time-library/time-state';
 import './chart-frame.css';
@@ -12,8 +13,8 @@ import './chart-frame.css';
  * whatever extension made them): a badge each in its title row with its tooltip, the chart drawn muted
  * (`d-chart-frame--muted`) while one of them says so, until the pointer, the focus or being the active widget brings it
  * back. An answer without a table (a 204) draws nothing; its decorations say why. It queries once the chart scrolls
- * into view, and again on each `onDidRequestRefresh` from then on; an answer to an older query is dropped. A chart's
- * renderer returns it.
+ * into view, and again on each `onDidRequestRefresh` from then on; an answer to an older query is dropped. Each draw
+ * gets the widget's time cursor, whose listeners end with the next draw. A chart's renderer returns it.
  */
 export class ChartFrame {
   readonly #ctx: WidgetContext;
@@ -29,6 +30,9 @@ export class ChartFrame {
   readonly #resize: ResizeObserver;
   readonly #onDidRequestRefresh: Disposable;
   readonly #onDidChangeDecorations: Disposable;
+  readonly #onDidChangeTimeCursor: Disposable;
+  /** Tells the last draw's listeners of the time cursor its change; another for each draw. */
+  #timeCursorChanged = new EventEmitter<void>();
   #visible = false;
   #width = 0;
   #result: QueryResult | undefined;
@@ -66,6 +70,7 @@ export class ChartFrame {
       if (this.#visible) void this.#query();
     });
     this.#onDidChangeDecorations = ctx.onDidChangeDecorations(() => this.#drawDecorations(ctx.decorations));
+    this.#onDidChangeTimeCursor = ctx.timeCursor.onDidChange(() => this.#timeCursorChanged.fire());
     this.#drawDecorations(ctx.decorations);
   }
 
@@ -75,6 +80,8 @@ export class ChartFrame {
     this.#darkScheme.removeEventListener('change', this.#onSchemeChange);
     this.#onDidRequestRefresh.dispose();
     this.#onDidChangeDecorations.dispose();
+    this.#onDidChangeTimeCursor.dispose();
+    this.#timeCursorChanged.dispose();
     this.#running?.abort();
     this.#drawn++;
   }
@@ -121,11 +128,14 @@ export class ChartFrame {
       this.#shimmerElement.hidden = true;
       return;
     }
+    this.#timeCursorChanged.dispose();
+    this.#timeCursorChanged = new EventEmitter<void>();
     try {
       const chartElement = await this.#options.draw(this.#result, {
         width: this.#width,
         colorSchemeDark: this.#darkScheme.matches,
         onTimeSelect: this.#onTimeSelect,
+        timeCursor: this.#drawnTimeCursor(),
       });
       if (turn !== this.#drawn) return;
       if (this.#bodyContainer.firstElementChild !== chartElement) this.#bodyContainer.replaceChildren(chartElement);
@@ -133,6 +143,18 @@ export class ChartFrame {
     } catch (error) {
       if (turn === this.#drawn) this.#drawError(error);
     }
+  }
+
+  /** The widget's time cursor, telling its change while the chart drawn now is the last one. */
+  #drawnTimeCursor(): TimeCursor {
+    const cursor = this.#ctx.timeCursor;
+    return {
+      get time() {
+        return cursor.time;
+      },
+      set: (time) => cursor.set(time),
+      onDidChange: this.#timeCursorChanged.event,
+    };
   }
 
   #drawDecorations(decorations: readonly WidgetDecoration[]): void {
@@ -175,4 +197,6 @@ export interface DrawOptions {
   readonly colorSchemeDark: boolean;
   /** Sets the page's time range to the range the viewer dragged across a time chart. */
   readonly onTimeSelect: (from: Date, to: Date) => void;
+  /** The time cursor the time charts share (`timeCursor`); its listeners end when the chart is drawn again or removed. */
+  readonly timeCursor: TimeCursor;
 }

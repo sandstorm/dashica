@@ -3,8 +3,9 @@ import type { TimeBarProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
-import { resolvedTimeRangeOf } from '../chart-library/time-axis';
+import { resolvedTimeRangeOf, timeAxisLabel } from '../chart-library/time-axis';
 import { drawTimeBars } from '../chart-library/time-bars';
+import { timeCursor } from '../chart-library/time-cursor';
 
 /**
  * The widget types `alertOverview` and `alertDetail`: the status of the alerts of a group over time, one row per alert,
@@ -48,6 +49,7 @@ function drawAlertOverview(data: QueryResult, options: DrawOptions) {
     },
     x: {
       axis: 'top',
+      label: timeAxisLabel('time', range),
       type: 'time',
       clamp: true,
       domain: range ? [range.from, range.to] : undefined,
@@ -80,6 +82,7 @@ function drawAlertOverview(data: QueryResult, options: DrawOptions) {
           },
         }),
       ),
+      timeCursor(options.timeCursor),
     ],
   });
 }

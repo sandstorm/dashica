@@ -1,0 +1,8 @@
+/* See timeCursor in time-cursor.ts. */
+
+.d-time-cursor {
+    stroke: var(--color-text-muted);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+    pointer-events: none;
+}

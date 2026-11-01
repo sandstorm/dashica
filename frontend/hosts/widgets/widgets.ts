@@ -18,6 +18,7 @@ import type { MenuAnchor, QuickPickItem } from '../ui/ui';
  * chart's mark, a table's cell shows the items of all providers (`WidgetContext.showDataPointMenu`), the `filters`
  * extension's "status = 500" among them, each running its provider's command. What only one widget type has (a
  * table's ticked rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
+ * The time charts of all tabs share one `TimeCursor`: the time the viewer points at in one, drawn as a line in each.
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -162,6 +163,19 @@ export interface WidgetContext extends Decorated {
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
   /** Shows this widget's data point menu for `dataPoints` (a click's) at `at`, as `WidgetsApi.showDataPointMenu`. */
   showDataPointMenu(at: MenuAnchor, dataPoints: readonly DataPoint[]): void;
+  /** The time cursor all time charts share. */
+  readonly timeCursor: TimeCursor;
+}
+
+/**
+ * The time the viewer points at in a time chart (`2026-10-31 20:55`), which every time chart draws as a line: set by
+ * the chart under the pointer, read by all.
+ */
+export interface TimeCursor {
+  /** In ms since the epoch; `undefined` while the pointer is on no time chart. */
+  readonly time: number | undefined;
+  set(time: number | undefined): void;
+  readonly onDidChange: Event<void>;
 }
 
 /** What the menu `widget/context` is shown for, also its commands' argument: the widget and what it queried last. */

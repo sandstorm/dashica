@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // Tests for time-bar.ts: a time bar drawn from the widget's data; a click on a bar (also through the drag area above
 // it) showing the data point menu of its fill and facets, never its time bucket or measure, for the chart; always
-// those of the row the tip shows.
+// those of the row the tip shows. The tip's time bucket in the viewer's time zone (here Berlin's), the axis naming it;
+// the time cursor the pointer on one time bar sets, drawn on every time bar.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';
-import { anchor, clickAtPoint, clickMark } from '../chart-library/plot-testing';
+import { anchor, clickAtPoint, clickMark, pointAt } from '../chart-library/plot-testing';
 import { timeBar } from './time-bar';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -14,12 +15,14 @@ let offers: readonly RecordedDataPointMenu[];
 const filterable = ['level', 'region'];
 
 beforeEach(() => {
+  process.env.TZ = 'Europe/Berlin';
   testbed = widgetTestbed();
   offers = testbed.dataPointMenus;
   testbed.activate(timeBar);
 });
 
 afterEach(() => {
+  delete process.env.TZ;
   testbed.dispose();
   vi.restoreAllMocks();
 });
@@ -133,6 +136,47 @@ describe('timeBar', () => {
       await inView();
       await clickMark(bars(widgetContainer).at(-1)!);
       expect(offered()).toEqual(['region = us']);
+    });
+  });
+
+  describe('time', () => {
+    const T0 = Date.UTC(2026, 9, 31, 19, 45);
+    const QUARTER = 15 * 60 * 1000;
+    const range = { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from: T0, to: T0 + 4 * QUARTER }) };
+    const props = { x: { kind: 'expr', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } } as const;
+    const render = (dataUrl: string) => {
+      testbed.serve(`${dataUrl}/query`, { time: [T0, T0 + QUARTER], cnt: [3, 5] }, range);
+      return testbed.render({ type: 'timeBar', props, dataUrl, filterable }).widgetContainer;
+    };
+    const inView = async () => {
+      testbed.resize(640);
+      testbed.scrollIntoView();
+      await settle();
+    };
+
+    it('shows a bar’s bucket in the tip in local time, and the time zone on the axis', async () => {
+      const widgetContainer = render('/p/shop/api/1');
+      await inView();
+      await pointAt(widgetContainer.querySelectorAll('g[aria-label="rect"] rect')[1]);
+      expect(widgetContainer.querySelector('g[aria-label="tip"]')?.textContent).toContain('time Sat 2026-10-31 21:00–21:15');
+      expect(widgetContainer.querySelector('g[aria-label="x-axis label"]')?.textContent).toContain('time (local, UTC+1)');
+    });
+
+    it('draws where the pointer is on one time bar on every time bar, until it leaves', async () => {
+      const pointedContainer = render('/p/shop/api/1');
+      const otherContainer = render('/p/shop/api/2');
+      await inView();
+      const cursorX = (widgetContainer: HTMLElement) => {
+        const lineElement = widgetContainer.querySelector('.d-time-cursor')!;
+        return lineElement.getAttribute('visibility') === 'visible' ? Number(lineElement.getAttribute('x1')) : undefined;
+      };
+      expect([cursorX(pointedContainer), cursorX(otherContainer)]).toEqual([undefined, undefined]);
+      const [x] = await pointAt(pointedContainer.querySelectorAll('g[aria-label="rect"] rect')[1]);
+      expect(cursorX(pointedContainer)).toBeCloseTo(x);
+      expect(cursorX(otherContainer)).toBeCloseTo(x);
+      expect(new Date(testbed.widgets.timeCursor.time!).toISOString()).toMatch(/^2026-10-31T20:0/);
+      (pointedContainer.querySelector<SVGElement>('.d-time-cursor')!.ownerSVGElement!).dispatchEvent(new MouseEvent('pointerleave'));
+      expect([cursorX(pointedContainer), cursorX(otherContainer)]).toEqual([undefined, undefined]);
     });
   });
 });

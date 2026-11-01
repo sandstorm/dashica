@@ -5,8 +5,9 @@ import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/w
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import { filterOnClick } from '../chart-library/filter-on-click';
-import { bucketSizeOf, resolvedTimeRangeOf } from '../chart-library/time-axis';
+import { bucketSizeOf, formatTipTime, resolvedTimeRangeOf, TIP_LINE_WIDTH, timeAxisLabel } from '../chart-library/time-axis';
 import { timeBrush } from '../chart-library/time-brush';
+import { timeCursor } from '../chart-library/time-cursor';
 
 /**
  * The widget type `timeLine`: a line over time (`x`) through its measure (`y`), over the time range the server queried;
@@ -32,9 +33,14 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
   }
   const range = resolvedTimeRangeOf(data);
-  const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
   // the tip points at the closest point, and so does a click (FilterOnClickOptions.pointer)
   const pointer = 'xy';
+  const tip: Plot.TipOptions & { pointer: typeof pointer } = {
+    pointer,
+    channels: props.tipChannels,
+    format: { x: formatTipTime },
+    lineWidth: TIP_LINE_WIDTH,
+  };
   const lines: Plot.LineOptions = {
     x: schema.requiredColumn(props.x.alias, 'x'),
     y: schema.requiredColumn(props.y.alias, 'y'),
@@ -57,7 +63,7 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
     marginBottom: props.marginBottom,
     marginTop: props.marginTop,
     x: {
-      label: props.x.alias,
+      label: timeAxisLabel(props.x.alias, range),
       grid: false,
       axis: true,
       type: 'time',
@@ -74,8 +80,9 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
       legend: true,
     },
     marks: [
-      Plot.line(data, { ...lines, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
+      Plot.line(data, { ...lines, tip }),
       filterOnClick(Plot.line, data, { ...lines, pointer, fields: [props.zField, props.strokeField, props.fx, props.fy], ctx }),
+      timeCursor(options.timeCursor),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

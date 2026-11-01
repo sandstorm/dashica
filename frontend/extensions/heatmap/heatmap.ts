@@ -5,7 +5,9 @@ import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/w
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import { filterOnClick } from '../chart-library/filter-on-click';
+import { resolvedTimeRangeOf, timeAxisLabel, timeBucketTip } from '../chart-library/time-axis';
 import { timeBrush } from '../chart-library/time-brush';
+import { timeCursor } from '../chart-library/time-cursor';
 
 /**
  * The widget types `timeHeatmap` and `timeHeatmapOrdinal`: a cell per time bucket (`x`) and `y` bucket, or per distinct
@@ -47,13 +49,14 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
   }
   const y = String(schema.requiredColumn(props.y.alias, 'y'));
   const fill = props.fill?.alias;
+  const range = resolvedTimeRangeOf(data);
 
   return Plot.plot({
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,
     x: {
-      label: props.x.alias,
+      label: timeAxisLabel(props.x.alias, range),
       grid: false,
       axis: true,
       type: 'time',
@@ -76,9 +79,10 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
         // Clip to the frame: the last bucket's x2 extends one bucket past
         // the auto-fit domain and would otherwise paint outside the SVG.
         clip: true,
-        tip: true,
+        tip: timeBucketTip(x, xBucketSize, props.x.alias),
         fill: fill ? (d: Record<string, unknown>) => Number(d[fill]) : undefined,
       }),
+      timeCursor(options.timeCursor),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],
@@ -104,16 +108,17 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
   };
   // the tip points by y, at the row under the mouse, and so does a click (FilterOnClickOptions.pointer)
   const pointer = 'y';
+  const range = resolvedTimeRangeOf(data);
 
   return Plot.plot({
     height: props.height,
     width: options.width,
     marginLeft: props.marginLeft,
     x: {
-      label: props.x.alias,
+      label: timeAxisLabel(props.x.alias, range),
       grid: false,
       axis: true,
-      type: 'utc',
+      type: 'time',
     },
     y: {
       label: props.y.alias,
@@ -125,8 +130,9 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
       legend: true,
     },
     marks: [
-      Plot.barX(data, { ...cells, tip: pointer }),
+      Plot.barX(data, { ...cells, tip: { ...timeBucketTip(x, xBucketSize, props.x.alias), pointer } }),
       filterOnClick(Plot.barX, data, { ...cells, pointer, fields: [props.y], ctx }),
+      timeCursor(options.timeCursor),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],
