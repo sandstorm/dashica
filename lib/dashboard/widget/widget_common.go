@@ -94,10 +94,10 @@ type Node struct {
 	// column, any field of a SQL file: sql.ColumnOf): "add filter" lists them as computed fields, the others among
 	// the table's columns (docs/2026-10-28-workbench.md §3.15 D27).
 	Computed []string `json:"computed,omitempty"`
-	// Table is the table its pills are on as their keys name it (filter.FilterService.TableName: "http_logs" on a connection to
-	// `default`, "monitoring.full_logs" else), when its query has one and takes filters: the filter bar's "add
-	// filter" offers the page's columns and fields by table (`<dataUrl>/fields`, their values `<dataUrl>/values`), and finds the
-	// chart that edits a pill by it.
+	// Table is the table its pills are on as their keys name it (filter.FilterService.TableName: "http_logs" on a
+	// connection to `default`, "monitoring.full_logs" else), when its query has one and takes filters: the filter bar's
+	// "add filter" offers the page's columns and fields by table (`<dataUrl>/fields`, their values `<dataUrl>/values`),
+	// and finds the chart that edits a pill by it.
 	Table string `json:"table,omitempty"`
 	// Connection is the ClickHouse connection its query runs on (sql.ConnectionOf: "default", "logs"); empty for a
 	// widget without a query. The Schema view shows a page's connections first.
@@ -369,13 +369,13 @@ func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 	}
 }
 
-// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge` with the pill (filter.New)
-// of the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with filters.secret
-// (filter.FilterService.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that column of its
-// table (filterBy: checked against the schema); a field that is just a column (columnOf) makes that column's pill too,
-// so its key is as short as one from "Add filter" (docs/2026-10-28-workbench.md §3.15 D29). 422 for a field that
-// cannot filter (none of filterableFields: a count, a time bucket, a constant, any field of a chart without a table)
-// and a column its table does not have, 400 for a request without `value` or with another op.
+// pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge` with the pill (filter.New) of
+// the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with filters.secret
+// (filter.FilterService.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that
+// column of its table (filterBy: checked against the schema); a field that is just a column (columnOf) makes that
+// column's pill too, so its key is as short as one from "Add filter" (docs/2026-10-28-workbench.md §3.15 D29). 422 for
+// a field that cannot filter (none of filterableFields: a count, a time bucket, a constant, any field of a chart
+// without a table) and a column its table does not have, 400 for a request without `value` or with another op.
 func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		args := r.URL.Query()
@@ -525,8 +525,8 @@ func tableColumns(ctx context.Context, deps rendering.Dependencies, table filter
 	return columns, nil
 }
 
-// openPills are the pills of `keys` (filter.FilterService.Open, a table without database in its connection's from dashica_config);
-// a QueryStateError (400) for the first one not signed with filters.secret.
+// openPills are the pills of `keys` (filter.FilterService.Open, a table without database in its connection's from
+// dashica_config); a QueryStateError (400) for the first one not signed with filters.secret.
 func openPills(deps rendering.Dependencies, keys []string) ([]filter.Pill, error) {
 	pills := make([]filter.Pill, 0, len(keys))
 	for _, key := range keys {

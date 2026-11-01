@@ -364,11 +364,12 @@ func shorten(key string) string {
 }
 
 // Apply is `q` with the pills on `table` added to its WHERE (a SQL file's {{DASHICA_FILTERS}}), and the Diagnostics
-// naming the others; without a table (`ok` false, FilterService.TableOf) it applies none. The pills on one field combine (a column
-// and a computed field of the same name being two fields, Pill.Column), in the order of their first one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op
-// AND-ed (`customer ≠ acme` and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one
-// Where, so a `≥` and a `≤` on one field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table
-// too, each one Where after those of the fields.
+// naming the others; without a table (`ok` false, FilterService.TableOf) it applies none. The pills on one field
+// combine (a column and a computed field of the same name being two fields, Pill.Column), in the order of their first
+// one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op AND-ed (`customer ≠ acme`
+// and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one Where, so a `≥` and a `≤` on one
+// field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table too, each
+// one Where after those of the fields.
 func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQueryable, Diagnostics) {
 	var d Diagnostics
 	type group struct {
