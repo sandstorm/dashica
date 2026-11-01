@@ -19,7 +19,6 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 	opts := DefaultQueryOptions()
 	opts.Parameters["db"] = c.serverConfig.Database
 
-	// Find all database tables
 	result, err := QueryJSON[TableListRow](ctx, c, tableListQuery, opts)
 	if err != nil {
 		return nil, fmt.Errorf("query tables: %w", err)
@@ -34,7 +33,6 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 		return &IntrospectedSchema{CommonColumns: []string{}}, nil
 	}
 
-	// Create a quoted list of table names for the SQL query
 	quotedTables := make([]string, 0, len(tables))
 	for _, table := range tables {
 		quotedTables = append(quotedTables, fmt.Sprintf("'%s'", table))
@@ -62,7 +60,6 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 		return nil, fmt.Errorf("query columns: %w", err)
 	}
 
-	// Map for tracking which tables contain which columns
 	tablesPerColumn := make(map[string][]string)
 	columnsPerTable := make(map[string][]string)
 	// Full column detail (name/type/comment) per table, for the field pickers.

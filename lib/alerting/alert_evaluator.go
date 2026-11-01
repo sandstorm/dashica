@@ -112,7 +112,6 @@ func (e AlertEvaluator) evaluateThreshold(definition AlertDefinition, data []ale
 	e.logger.Debug().
 		Str("alertDefinition", definition.Id.String()).
 		Str("sqlPath", definition.QueryPath).
-		//Str("clickhouseClientId", clickhouseClient.Id).
 		Str("currentTime", e.timeProvider.NowSqlString()).
 		Array("results", results).
 		Msg("received result set")

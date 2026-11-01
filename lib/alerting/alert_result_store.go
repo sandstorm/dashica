@@ -123,7 +123,6 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 		s.mu.RUnlock()
 	}
 
-	// trigger alert notifier
 	err := notifier()
 	if err != nil {
 		// if there was an error triggering the notifier, we persist this as errored AlertResult; to ensure
@@ -149,7 +148,6 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 		return fmt.Errorf("persisting %s: %w", id.String(), err)
 	}
 
-	// persist succeeded, we need to update our in-memory map
 	s.mu.Lock()
 	if _, exists := s.currentAlertStatus[id]; !exists {
 		s.currentAlertStatus[id] = &currentAlertStatus{
@@ -160,7 +158,6 @@ func (s *AlertResultStore) PersistResultAndNotifyIfChanged(id AlertId, result *A
 			LatestMessage:   result.Message,
 		}
 	} else {
-		// Update existing entry
 		s.currentAlertStatus[id].LatestTimestamp = result.Timestamp
 		s.currentAlertStatus[id].LatestStatus = result.State.String()
 		s.currentAlertStatus[id].LatestMessage = result.Message

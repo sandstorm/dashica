@@ -106,7 +106,6 @@ func (a *AlertManager) RunAlertScheduler() error {
 	}
 
 	if len(loadedAlertDefinitions) == 0 {
-		// no alerts, nothing needs to be done
 		return nil
 	}
 	for _, alertDefinition := range loadedAlertDefinitions {
@@ -136,7 +135,6 @@ func (a *AlertManager) RunAlertScheduler() error {
 			if err != nil {
 				return 1, fmt.Errorf("persisting alert result and notifying %s: %w", alertDefinition.Id.String(), err)
 			}
-			// then return exit code and error, for eg: if everything okay
 			return 0, nil
 		})
 	}

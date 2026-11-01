@@ -77,9 +77,6 @@ func LoadConfig(appEnv string, forTesting bool) (*Config, error) {
 		return nil, fmt.Errorf("unmarshaling configuration: %w", err)
 	}
 
-	// for debugging:
-	//k.Print()
-
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}

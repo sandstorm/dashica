@@ -10,7 +10,6 @@ import (
 )
 
 func LoadTestingConfig(t *testing.T) (*config.Config, fs.FS) {
-	// ITERATE UP IN WORKING DIRECTORY UNTIL FOUND THE go.mod file
 	SetGoModuleAsWorkingDir(t)
 
 	appEnv := os.Getenv("APP_ENV")

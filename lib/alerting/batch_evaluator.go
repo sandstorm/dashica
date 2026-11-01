@@ -123,7 +123,6 @@ func (e *BatchEvaluator) calculateExecutionTimes(cronExpr string, start, end tim
 			return nil, fmt.Errorf("error when parsing cron-time: %q calculating next time after %s: %w", cronExpr, refTime, err)
 		}
 
-		// If next time exceeds the end time, we're done
 		if nextTime.After(end) {
 			break
 		}
@@ -159,7 +158,6 @@ func (b *BatchEvaluator) calculateBuckets(ctx context.Context, executionTimes []
 	// Replace --NOW-- in the bucket expression with the Clickhouse input_datetime reference
 	bucketExpr := strings.ReplaceAll(bucketExpression, "--NOW--", "input_datetime")
 
-	// Build the Clickhouse query to calculate buckets for all execution times
 	executionTimesTs := make([]string, 0, len(executionTimes))
 	for _, t := range executionTimes {
 		executionTimesTs = append(executionTimesTs, fmt.Sprintf("%d", t.Unix()))
@@ -167,7 +165,6 @@ func (b *BatchEvaluator) calculateBuckets(ctx context.Context, executionTimes []
 
 	query := fmt.Sprintf(TO_BUCKET_INTERVAL_CONVERSION_TPL, bucketExpr, strings.Join(executionTimesTs, ", "))
 
-	// Execute the query to get the bucket timestamps for each execution time
 	type bucketMapping struct {
 		Input        int64 `json:"input"`
 		TargetBucket int64 `json:"target_bucket"`
@@ -214,7 +211,6 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 	}
 
 	for i, executionTime := range executionTimes {
-		// find the corresponding bucket timestamp for each execution time
 		bucket := buckets[i]
 
 		// find the result for this bucket in the resultset (or 0)
@@ -224,7 +220,6 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 		if err != nil {
 			return fmt.Errorf("evaluating resultset row: %w", err)
 		}
-		// Persist the result with the timestamp from the execution time
 		alertResult.Timestamp = config.Time(executionTime)
 
 		err = b.alertResultStore.PersistResultAndNotifyIfChanged(alertDefinition.Id, alertResult, noNotification)

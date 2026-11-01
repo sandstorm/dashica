@@ -96,7 +96,6 @@ func (c *Client) QueryToHandler(ctx context.Context, query string, options Query
 	}
 	defer resp.Body.Close()
 
-	// Copy headers from Clickhouse response to the output response
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)

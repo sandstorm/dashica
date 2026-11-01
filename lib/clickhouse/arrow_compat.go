@@ -35,8 +35,6 @@ import (
 // (Nullable(JSON), Array(JSON), Object('json'), Variant(...), Dynamic).
 var arrowUnsafeTypeRe = regexp.MustCompile(`(?i)\b(JSON|Object|Dynamic|Variant)\b`)
 
-// arrowUnsafeType reports whether a ClickHouse type string cannot be serialized
-// to Arrow.
 func arrowUnsafeType(chType string) bool {
 	return arrowUnsafeTypeRe.MatchString(chType)
 }

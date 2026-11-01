@@ -201,7 +201,7 @@ func TruncateFields(names ...string) Processor {
 
 // ScrambleAlphanumeric deterministically replaces letters and digits with other
 // letters/digits, preserving case and non-alphanumeric characters. crc32-seeded
-// so the same input yields the same output across runs (matches anonymize-lib.php).
+// so the same input yields the same output across runs.
 func ScrambleAlphanumeric(s string) string {
 	if s == "" {
 		return s

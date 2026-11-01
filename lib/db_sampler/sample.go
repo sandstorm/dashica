@@ -25,9 +25,6 @@ type SampleConfig struct {
 	//   "timestamp > now() - INTERVAL 1 HOUR"
 	// Empty = no filter, sample over the full table. Caller is responsible for
 	// the SQL being valid for this table; columns referenced must exist.
-	//
-	// An LLM or operator can populate this per-table to focus sampling on
-	// recent / interesting slices of data.
 	WhereClause string
 
 	// Recent, if non-empty, auto-builds a WHERE clause of the form
@@ -469,7 +466,6 @@ func fetchSortingKey(ctx context.Context, c *clickhouse.Client, database, table 
 // identifier of a Date/DateTime/DateTime64 column. Returns "" if none.
 func firstDateTimeSortKey(sortKey []string, colTypes map[string]string) string {
 	for _, entry := range sortKey {
-		// only handle bare identifiers, not expressions
 		if !validIdent(entry) {
 			continue
 		}
@@ -818,7 +814,6 @@ func validExceptList(cols []string) string {
 	return strings.Join(out, ", ")
 }
 
-// whereSuffix returns " WHERE <clause>" if clause is non-empty, else "".
 func whereSuffix(clause string) string {
 	if strings.TrimSpace(clause) == "" {
 		return ""

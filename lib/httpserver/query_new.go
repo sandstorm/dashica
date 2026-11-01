@@ -107,7 +107,6 @@ func (qh QueryHandler) HandleDebug(queryObj sql.SqlQueryable, state QueryState, 
 	}
 
 	// 1. EXPLAIN PLAN - shows the query execution plan with details
-	// Options: header=1 (show header), actions=1 (show actions), indexes=1 (show indexes)
 	debugInfo.ExplainPlan = executeExplain("EXPLAIN header = 1, actions = 1, indexes = 1 " + query)
 
 	// 2. EXPLAIN PIPELINE - shows the execution pipeline (similar to EXPLAIN ANALYZE)
