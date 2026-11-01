@@ -32,7 +32,7 @@ export interface QueryApi {
   refresh(): void;
   /**
    * What the data handlers read: the effective value of each key sent to the server (`sentToServer`), in the order
-   * the keys were declared, each as `format` gives it without a page: a default included (the page's time range).
+   * the keys were declared, each as `format` gives it: a default included (the page's time range).
    */
   requestParams(): URLSearchParams;
 }
@@ -47,7 +47,7 @@ export interface QueryKey<T> {
   /** As `QueryKeySpec.parse`. */
   parse(url: URLSearchParams, page: PageJson | undefined): T;
   /** As `QueryKeySpec.format`. */
-  format(value: T, page: PageJson | undefined): QueryEntries;
+  format(value: T): QueryEntries;
   /** As `QueryKeySpec.sentToServer`. */
   readonly sentToServer: boolean;
 }
@@ -60,13 +60,13 @@ export interface QueryKeySpec<T> {
    */
   parse(url: URLSearchParams, page: PageJson | undefined): T;
   /**
-   * The entries that hold `value`, in order (`[['refresh', '30']]`): for the URL none for the default of `page` (the
-   * page the tab shows); without a page, the request's (`requestParams`), the default included.
+   * The entries that hold `value`, in order (`[['time', '168h']]`), a default too. The URL leaves them out when they
+   * are the default's (`format(parse(<no keys>, page))`, the host compares them); the request sends them always.
    */
-  format(value: T, page: PageJson | undefined): QueryEntries;
+  format(value: T): QueryEntries;
   /**
-   * Whether the data handlers read it: sent, it sends its effective value (`format` without a page). Without it the
-   * key is not sent, and its change queries nothing again (auto refresh).
+   * Whether the data handlers read it: sent, it sends its effective value (`format`). Without it the key is not
+   * sent, and its change queries nothing again (auto refresh).
    */
   readonly sentToServer?: boolean;
 }
@@ -79,7 +79,7 @@ export function queryKey<T>(urlKeys: string | readonly string[], spec: QueryKeyS
   return {
     urlKeys: typeof urlKeys === 'string' ? [urlKeys] : urlKeys,
     parse: (url, page) => spec.parse(url, page),
-    format: (value, page) => spec.format(value, page),
+    format: (value) => spec.format(value),
     sentToServer: spec.sentToServer ?? false,
   };
 }

@@ -84,7 +84,7 @@ export class QueryHost implements QueryApi {
 
   /** Sets `key` to `value`, unless the URL holds both alike; a key the handlers read asks for a refresh. */
   set<T>(key: QueryKey<T>, value: T): void {
-    if (sameEntries(key.format(this.get(key), this.#page), key.format(value, this.#page))) return;
+    if (sameEntries(key.format(this.get(key)), key.format(value))) return;
     const held = this.#held(key);
     held.value = value;
     held.known = true;
@@ -104,7 +104,7 @@ export class QueryHost implements QueryApi {
   requestParams(): URLSearchParams {
     const request = new URLSearchParams();
     for (const key of this.keys.all()) {
-      if (key.sentToServer) for (const [name, value] of key.format(this.get(key), undefined)) request.append(name, value);
+      if (key.sentToServer) for (const [name, value] of key.format(this.get(key))) request.append(name, value);
     }
     return request;
   }
@@ -126,14 +126,26 @@ export class QueryHost implements QueryApi {
     return held;
   }
 
-  /** The query string with each key's entries (`value`: its value) in place of its URL keys, the others kept. */
+  /**
+   * The query string with each key's entries (`value`: its value) in place of its URL keys, the others kept; a key
+   * whose entries are its default's (`#defaultEntries`) is left out.
+   */
   #formatSearch(value: (key: QueryKey<unknown>) => unknown): string {
     const url = new URLSearchParams(this.#search);
     const keys = this.keys.all();
     for (const key of keys) for (const urlKey of key.urlKeys) url.delete(urlKey);
-    for (const key of keys) for (const [name, entry] of key.format(value(key), this.#page)) url.append(name, entry);
+    for (const key of keys) {
+      const entries = key.format(value(key));
+      if (sameEntries(entries, this.#defaultEntries(key))) continue;
+      for (const [name, entry] of entries) url.append(name, entry);
+    }
     const text = url.toString();
     return text ? `?${text}` : '';
+  }
+
+  /** The entries of `key`'s default here: its value read from no URL keys, with the page's defaults (`defaultTime`). */
+  #defaultEntries(key: QueryKey<unknown>): QueryEntries {
+    return key.format(key.parse(new URLSearchParams(), this.#page));
   }
 
   /** Gives the query string of the state a moment after the last change, when it changed. */

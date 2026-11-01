@@ -20,7 +20,7 @@ describe('FILTERS', () => {
       ['f', 'k1.mac'],
       ['sql', "level != 'info'"],
     ];
-    expect(FILTERS.format(chips, undefined)).toEqual(entries);
+    expect(FILTERS.format(chips)).toEqual(entries);
     expect(FILTERS.sentToServer).toBe(true);
     expect(FILTERS.parse(new URLSearchParams(entries as [string, string][]), undefined)).toEqual(chips);
   });

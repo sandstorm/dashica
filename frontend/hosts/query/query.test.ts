@@ -54,10 +54,10 @@ describe('QueryHost', () => {
     expect(query.get(COLORS)).toEqual(['red', 'blue']);
   });
 
-  it('reads and writes a key with the default of the page loaded', () => {
+  it('reads a key with the default of the page loaded, and leaves the default out of the URL', () => {
     const size = queryKey<string>('size', {
       parse: (url, page) => url.get('size') ?? page?.title ?? '',
-      format: (value, page) => (value !== page?.title ? [['size', value]] : []),
+      format: (value) => [['size', value]],
     });
     query.declare(size);
     query.load({ page: { kind: 'dashboard', title: 'xl', filterBar: false, filterButtons: [], widgets: [] } });
@@ -131,7 +131,7 @@ describe('QueryHost', () => {
   it('sends a key’s effective value, its page’s default too, which the URL leaves out', () => {
     const size = queryKey<string>('size', {
       parse: (url, page) => url.get('size') ?? page?.defaultTime ?? '24h',
-      format: (value, page) => (page !== undefined && value === (page.defaultTime ?? '24h') ? [] : [['size', value]]),
+      format: (value) => [['size', value]],
       sentToServer: true,
     });
     query.declare(size);
@@ -140,9 +140,28 @@ describe('QueryHost', () => {
     expect(query.get(size)).toBe('168h');
     expect(query.requestParams().get('size')).toBe('168h');
     query.set(size, '24h');
+    vi.advanceTimersByTime(200);
+    expect(searches).toEqual(['?size=24h']);
     expect(query.requestParams().get('size')).toBe('24h');
+    query.set(size, '168h');
+    vi.advanceTimersByTime(200);
+    expect(searches).toEqual(['?size=24h', '']);
     query.load({ search: '?size=168h', page });
     expect(query.requestParams().get('size')).toBe('168h');
+  });
+
+  it('leaves a key’s default out of the URL without a page too, and sends it', () => {
+    const size = queryKey<string>('size', {
+      parse: (url, page) => url.get('size') ?? page?.defaultTime ?? '24h',
+      format: (value) => [['size', value]],
+      sentToServer: true,
+    });
+    query.declare(size);
+    query.load({ search: '?size=1h' });
+    query.set(size, '24h');
+    vi.advanceTimersByTime(200);
+    expect(searches).toEqual(['']);
+    expect(query.requestParams().get('size')).toBe('24h');
   });
 
   it('knows a key declared in one tab in every tab sharing the keys, each tab with its own value', () => {

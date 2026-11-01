@@ -538,8 +538,8 @@ ctx.showDataPointMenu(at, dataPoints)      // a click's data points ({field, val
 
 ✅ **Typed keys (D24, step 9j; D36, step 9w, 2026-10-31; declared since 9am, D41, 2026-11-01):** the `query` host is a plain per-tab URL state store that
 knows no key of its own. Each part of the state is a typed key that carries its URL format, defined once where the
-state belongs: `export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value, page),
-sentToServer })`. Readers and writers import the key and use `query.get(TIME)`, `query.set(TIME, value)`,
+state belongs: `export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value),
+sentToServer })` (`format` without a page since 9bf, D53). Readers and writers import the key and use `query.get(TIME)`, `query.set(TIME, value)`,
 `query.onDidChange(TIME, listener)` (to an extension the active tab's, `activeQuery`; to a widget its tab's,
 `ctx.query`): typed by the key, no generic argument, no cast, never `undefined`. The extension that owns a key
 declares it in its `activate`, `subscriptions.push(query.declare(TIME))` (since 9am, D41): `time-range` declares
@@ -551,11 +551,14 @@ no side effect; a reader (`ChartFrame` setting `TIME` after a drag, the form wid
 each tab's values (parsed from the tab's query string when first read, so a key first read after a load reads the URL
 loaded), writes them into their URL keys a moment after a change (the other keys kept as they are), fires the change,
 and `requestParams()` sends each key's server entries in the order the keys were declared (the activation order:
-`time`, `range`, `f`, `sql`, `wp`). A key sent to the server (`sentToServer: true`; since 9al, D40, a boolean) sends
-its effective value, `format(value, undefined)`: without a page `format` leaves no default out, so `time` is sent also
-when it is the page's default (since 9ax; the server knows no page default), and asks the widgets to query again on
-its change; one without does not (auto refresh). A `set` the URL would hold alike changes nothing. *(proposed)* The page
-shown is given to `parse` / `format` for the defaults it declares (`defaultTime`), in place of a `default` per key;
+`time`, `range`, `f`, `sql`, `wp`). `format(value)` gives a key's full entries, a default
+too; the host alone leaves a default out of the URL, once for every key (since 9bf, D53): the default's entries are
+`format(parse(<no URL keys>, page))`, and a key whose `format(value)` equals them is not written. A key sent to the
+server (`sentToServer: true`; since 9al, D40, a boolean) sends its effective value, `format(value)`, so `time` is
+sent also when it is the page's default (since 9ax; the server knows no page default), and asks the widgets to query
+again on its change; one without does not (auto refresh). A `set` whose entries equal the value's now changes
+nothing. *(proposed)* The page shown is given to `parse` for the defaults it declares (`defaultTime`), in place of a
+`default` per key;
 one key may span several URL keys (`time` + `range`, `f` + `sql` in chip order), so `parse` reads the whole query
 string; the first argument of `queryKey` is the URL key or keys, not a separate name *(proposed)*. A declared key the
 server reads is sent on every page, read or not: `?wp` also on a page without form widgets (9am).
@@ -1216,8 +1219,9 @@ interface QueryApi {                        // knows no key of its own: typed ke
   requestParams(): URLSearchParams;         // what every data handler reads, in declaration order; one format with step 6
 }
 // defined once where the state belongs (time-library, filters, widget-library), declared by its owning extension
-export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value, page), sentToServer: true });
-// a sent key sends format(value, undefined): its effective value, a default included (9ax)
+export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value), sentToServer: true });
+// a sent key sends format(value): its effective value, a default included (9ax); the URL leaves out the entries of
+// format(parse(<no URL keys>, page)), the host's one default rule (9bf, D53)
 
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
@@ -1998,6 +2002,15 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   scheduler logs and runs no alerts, the server keeps running), the alert evaluations and the alert overview widgets.
   `workbench.json` keeps its fields `explore` and `sqlEnabled` *(proposed: they are the client's contract, not
   config keys)*.
+- **D53 One default rule, in the query host (9bf, decided 2026-11-01; maintainer: "ok good"):** D49's final shape.
+  9ax (4299f53) made `format(value, page)` double as the request's form when `page` was `undefined`, a hidden mode
+  switch (docs/conventions.md: no `undefined` for an argument not needed), and left each key its own default rule
+  (`TIME`'s `isDefault`, `TEST_TIME`, the tests' keys). Now `QueryKeySpec.format(value): QueryEntries` takes no page
+  and always gives the full entries; the query host computes each key's default entries as
+  `key.format(key.parse(new URLSearchParams(), page))` and leaves the key out of the URL when `format(value)` equals
+  them (entries compared in order); `requestParams()` sends `format(value)` of every `sentToServer` key. Gone: the
+  `page` parameter of every `format` (`TIME`, `REFRESH`, `FILTERS`, `PARAMS`, `TEST_TIME`, the tests' keys) and
+  every `isDefault`-style rule in them.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2363,6 +2376,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9bc ✅ 2026-11-01 | **D51 "Explore (from chart…)" lists every dashboard's charts** (§3.2, §3.15; Perspective §4.5, §4.7, §4.8): first `REFACTOR` `rendering.OutlineEntry.DataUrl` instead of `Id` (`widget.Outline`; search everywhere's `chartSearch` takes the id from it; contract golden regenerated); then `menuCharts` in `explore-view.ts` (every dashboard's outline charts with rows, label the title, description "<dashboard> › <group>", the shown dashboard's first), `exploreView.startFromChart` opening the blank Explore on the connection `/sql` answers (`httpserver.ChartSql.Connection`), enabled while some dashboard has a chart; the quick input's `narrow` also matches label and description read as one (`matchOf`). Tests: `TestSql_NamesTheConnectionTheChartRunsOn`, `TestOutline_AChartCarriesItsDataUrlAndItsRowsUrlAWidgetWithoutQueryNone`, `TestWorkbenchJson_ListsEveryPagesOutline`; vitest `explore-view.test.ts` (`menuCharts`, the pick), `quick-input.test.ts`, `chart-search.test.ts`; e2e `explore-view.spec.ts`. *(proposed)* `OutlineEntry.RowsUrl`; `chartsOf` kept for "Explore (from scratch)"; a 204 opens on the first connection (until 9be: a skipped chart's `/sql` names its connection). |
 | 9bd ✅ 2026-11-01 | **D52 the config restructured** (§3.8, §3.15; Perspective; docs/conventions.md): `lib/config.Config` with `AppSecret` (`app_secret`), `ServerPort`, `LogToStdout`, `LogFilename`, `ExploreEnabled`, `SqlFilterEnabled`, `ClickHouse`, `Alerting`; `Config.CheckAppSecret` / `MinAppSecretLength`; the dead `auth`, `letsencrypt`, `dev_mode`, `log.host_*` removed; `QueryState.SqlClause(timeRange, cfg)`; every user, the testing configs, `docs/dev-server/*` and the concepts follow; the reference `dashica_config.example.yaml` (root). Tests: `config_test.go` (`CheckAppSecret`, defaults, file over defaults, environment over file, the reference names every key and its env variable). *(proposed)* `workbench.json`'s `explore` / `sqlEnabled` keep their names; the outer repo's local `generate-config` and `*-production.yaml` follow (uncommitted). | one flat config, its reference checked |
 | 9be ✅ 2026-11-01 | **BUGFIX the review findings of 9bc / 9bd** (§3.15; Perspective §4.7): `TestLoadConfig_TheDefaults` / `TestLoadConfig_TheFileOverTheDefaults` load without the process environment (`loadIn(t, file, withEnvironment)`), so an exported `APP_SECRET` no longer fails them; `HandleSql` answers a skipped chart with its `connection` and an empty `sql` (200, no 204), so "Explore (from chart…)" on a chart that does not run opens on the chart's connection, not on the first of `workbench.json`'s sorted ones (`fetchSql` reads 200 only); `SqlClause`'s comment names `cfg`; row 9a keeps its 9a names with an "until 9bd" note, its precedence deviation corrected. Tests: `TestHandleSql_ASkippedChartAnswersItsConnectionWithoutClickHouse`; vitest `explore-view.test.ts`, `rows.test.ts`, `view.test.ts`. | the skipped chart's connection, tests independent of the shell |
+| 9bf ✅ 2026-11-01 | **D53 one default rule, in the query host** (§3.7, §3.15; D49's final shape): `QueryKeySpec.format(value)` / `QueryKey.format(value)` without a page, always the full entries; `QueryHost` leaves a key out of the URL when its entries equal `#defaultEntries` (`format(parse(<no URL keys>, page))`), `requestParams()` sends `format(value)`; `TIME`'s `isDefault` and `TEST_TIME`'s rule gone, every `format(…, undefined)` caller follows. Tests: `query.test.ts` (the page's default left out of the URL and sent, 24h without a page too), `time-state.test.ts` (168h left out and sent, 24h without a page default, a non-default and a custom range in both, refresh in the URL but not sent), `chips.test.ts`, `params-state.test.ts` | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |
