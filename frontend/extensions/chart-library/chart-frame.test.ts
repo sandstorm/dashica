@@ -28,37 +28,37 @@ describe('ChartFrame', () => {
     drawn.length = 0;
     testbed.widgets.registerWidget(
       'timeBar',
-      (el, widget, ctx) =>
-        new ChartFrame(el, ctx, {
+      (widgetContainer, widget, ctx) =>
+        new ChartFrame(widgetContainer, ctx, {
           title: widget.props.title,
           height: 200,
           draw(result, { width, onTimeSelect }) {
             selectTime = onTimeSelect;
             drawn.push({ rows: result.numRows, width });
-            const chart = document.createElement('figure');
-            chart.textContent = `${result.numRows} rows`;
-            return chart;
+            const chartElement = document.createElement('figure');
+            chartElement.textContent = `${result.numRows} rows`;
+            return chartElement;
           },
         }),
     );
   });
 
-  const body = (el: HTMLElement) => el.querySelector('.d-chart-frame__body')!;
-  const muted = (el: HTMLElement) => el.querySelector('.d-chart-frame')!.classList.contains('d-chart-frame--muted');
+  const body = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-chart-frame__body')!;
+  const muted = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-chart-frame')!.classList.contains('d-chart-frame--muted');
 
   it('shows the title above the chart, and queries only once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3, 4] });
     const { widgetContainer } = testbed.render(requests);
-    const title = widgetContainer.querySelector<HTMLElement>('.d-chart-frame__title')!;
-    expect(title.textContent).toBe('Requests');
-    expect(title.nextElementSibling!.contains(body(widgetContainer))).toBe(true);
+    const titleElement = widgetContainer.querySelector<HTMLElement>('.d-chart-frame__title')!;
+    expect(titleElement.textContent).toBe('Requests');
+    expect(titleElement.nextElementSibling!.contains(body(widgetContainer))).toBe(true);
     testbed.query.refresh();
     await settle();
     expect(testbed.requests).toHaveLength(0);
     testbed.scrollIntoView();
     await settle();
     expect(body(widgetContainer).textContent).toBe('2 rows');
-    expect(title.textContent).toBe('Requests');
+    expect(titleElement.textContent).toBe('Requests');
   });
 
   it('queries again on a refresh, and draws again for another width', async () => {
@@ -103,7 +103,7 @@ describe('ChartFrame', () => {
     decorating = [];
     testbed.widgets.registerDecorationProvider({ provideDecorations: () => decorating });
   });
-  const badges = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('.d-chart-frame__decoration')].map((badge) => ({ text: badge.textContent, title: badge.title }));
+  const badges = (widgetContainer: HTMLElement) => [...widgetContainer.querySelectorAll<HTMLElement>('.d-chart-frame__decoration')].map((badgeElement) => ({ text: badgeElement.textContent, title: badgeElement.title }));
   const ignores: WidgetDecoration = { badge: 'ignores host = a', tooltip: 'not applied', muted: true, source: 'test' };
 
   it('draws a badge per decoration in its title row, with its tooltip, until it has none', async () => {
@@ -151,15 +151,15 @@ describe('ChartFrame', () => {
   });
 
   it('shows the title row of a chart without title only for its badges', async () => {
-    testbed.widgets.registerWidget('stats', (el, _widget, ctx) => new ChartFrame(el, ctx, { draw: () => document.createElement('figure') }));
+    testbed.widgets.registerWidget('stats', (widgetContainer, _widget, ctx) => new ChartFrame(widgetContainer, ctx, { draw: () => document.createElement('figure') }));
     decorating = [ignores];
     testbed.serve('/p/shop/api/2/query', { cnt: [3] });
     const { widgetContainer } = testbed.render({ type: 'stats', props: {}, dataUrl: '/p/shop/api/2' } as WidgetNode);
-    const title = widgetContainer.querySelector<HTMLElement>('.d-chart-frame__title')!;
-    expect(title.hidden).toBe(true);
+    const titleElement = widgetContainer.querySelector<HTMLElement>('.d-chart-frame__title')!;
+    expect(titleElement.hidden).toBe(true);
     testbed.scrollIntoView();
     await settle();
-    expect(title.hidden).toBe(false);
+    expect(titleElement.hidden).toBe(false);
   });
 
   it('draws nothing for an answer without a table (a chart that did not run), and draws it again once it runs', async () => {

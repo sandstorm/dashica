@@ -15,8 +15,8 @@ export const stats: Extension = {
   activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('stats', renderStats)),
 };
 
-function renderStats(el: HTMLElement, widget: WidgetOf<'stats'>, ctx: WidgetContext): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderStats(widgetContainer: HTMLElement, widget: WidgetOf<'stats'>, ctx: WidgetContext): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     draw: (result) => drawStats(result, widget.props),
   });
 }

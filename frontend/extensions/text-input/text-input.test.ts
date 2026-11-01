@@ -19,9 +19,9 @@ afterEach(() => testbed.dispose());
 const param = (name: string) => testbed.query.get(PARAMS)[name];
 const setParam = (name: string, value: string) => testbed.query.set(PARAMS, withParam(testbed.query.get(PARAMS), name, value));
 
-function type(input: HTMLInputElement, text: string): void {
-  input.value = text;
-  input.dispatchEvent(new Event('input'));
+function type(inputElement: HTMLInputElement, text: string): void {
+  inputElement.value = text;
+  inputElement.dispatchEvent(new Event('input'));
 }
 
 describe('textInput', () => {
@@ -32,20 +32,20 @@ describe('textInput', () => {
 
   it('writes what is typed into its param', () => {
     const { widgetContainer } = testbed.render({ type: 'textInput', props: { name: 'path', label: 'Path', placeholder: '/api/' } });
-    const input = widgetContainer.querySelector('input')!;
-    expect(input.placeholder).toBe('/api/');
-    type(input, '/api/orders');
+    const inputElement = widgetContainer.querySelector('input')!;
+    expect(inputElement.placeholder).toBe('/api/');
+    type(inputElement, '/api/orders');
     expect(param('path')).toBe('/api/orders');
   });
 
   it('with prependCaret, stores the text with a leading ^ and shows it without', () => {
     setParam('path', '^/api/');
     const { widgetContainer } = testbed.render({ type: 'textInput', props: { name: 'path', prependCaret: true } });
-    const input = widgetContainer.querySelector('input')!;
-    expect(input.value).toBe('/api/');
-    type(input, '/checkout');
+    const inputElement = widgetContainer.querySelector('input')!;
+    expect(inputElement.value).toBe('/api/');
+    type(inputElement, '/checkout');
     expect(param('path')).toBe('^/checkout');
-    type(input, '');
+    type(inputElement, '');
     expect(param('path')).toBe('');
   });
 });

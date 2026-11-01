@@ -14,7 +14,7 @@ export const checkboxGroup: Extension = {
   activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('checkboxGroup', renderCheckboxGroup)),
 };
 
-function renderCheckboxGroup(el: HTMLElement, widget: WidgetOf<'checkboxGroup'>, ctx: WidgetContext): Disposable {
+function renderCheckboxGroup(widgetContainer: HTMLElement, widget: WidgetOf<'checkboxGroup'>, ctx: WidgetContext): Disposable {
   const name = widget.props.name ?? '';
   const { query } = ctx;
   const set = (value: string) => query.set(PARAMS, withParam(query.get(PARAMS), name, value));
@@ -22,25 +22,25 @@ function renderCheckboxGroup(el: HTMLElement, widget: WidgetOf<'checkboxGroup'>,
   if (query.get(PARAMS)[name] === undefined) set(JSON.stringify(widget.props.defaults ?? []));
 
   const checkboxes = (widget.props.options ?? []).map((option) => {
-    const checkbox: HTMLInputElement = html`<input type="checkbox" class="d-checkbox">`;
-    checkbox.addEventListener('change', () => {
+    const checkboxElement: HTMLInputElement = html`<input type="checkbox" class="d-checkbox">`;
+    checkboxElement.addEventListener('change', () => {
       const checked = checkedOptions(query.get(PARAMS)[name]).filter((o) => o !== option);
-      if (checkbox.checked) checked.push(option);
+      if (checkboxElement.checked) checked.push(option);
       set(JSON.stringify(checked));
     });
-    return { option, checkbox };
+    return { option, checkboxElement };
   });
   const showChecked = () => {
     const checked = checkedOptions(query.get(PARAMS)[name]);
-    for (const { option, checkbox } of checkboxes) checkbox.checked = checked.includes(option);
+    for (const { option, checkboxElement } of checkboxes) checkboxElement.checked = checked.includes(option);
   };
   showChecked();
 
-  el.replaceChildren(html`<div class="d-form-field">
+  widgetContainer.replaceChildren(html`<div class="d-form-field">
     <span class="d-form-field__label">${widget.props.label ?? ''}</span>
     <div class="d-form-field__options">
-      ${checkboxes.map(({ option, checkbox }) => html`<label class="d-form-field__option">
-        ${checkbox}
+      ${checkboxes.map(({ option, checkboxElement }) => html`<label class="d-form-field__option">
+        ${checkboxElement}
         <span>${option}</span>
       </label>`)}
     </div>

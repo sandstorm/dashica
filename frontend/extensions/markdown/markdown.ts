@@ -13,12 +13,12 @@ export const markdown: Extension = {
   activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('markdown', renderMarkdown)),
 };
 
-function renderMarkdown(el: HTMLElement, widget: WidgetOf<'markdown'>): Disposable {
-  const body: HTMLElement = html`<div class="d-markdown__body"></div>`;
+function renderMarkdown(widgetContainer: HTMLElement, widget: WidgetOf<'markdown'>): Disposable {
+  const bodyContainer: HTMLElement = html`<div class="d-markdown__body"></div>`;
   // the server rendered it: raw HTML passes for a compiled dashboard, is escaped for an untrusted one
-  body.innerHTML = widget.props.html ?? '';
-  const shown: HTMLElement = html`<div class="d-markdown">${body}</div>`;
-  if (widget.props.title) body.before(html`<h2 class="d-markdown__title">${widget.props.title}</h2>`);
-  el.replaceChildren(shown);
+  bodyContainer.innerHTML = widget.props.html ?? '';
+  const markdownElement: HTMLElement = html`<div class="d-markdown">${bodyContainer}</div>`;
+  if (widget.props.title) bodyContainer.before(html`<h2 class="d-markdown__title">${widget.props.title}</h2>`);
+  widgetContainer.replaceChildren(markdownElement);
   return new Disposable(() => {});
 }

@@ -37,13 +37,13 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
+const error = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-widget-error')?.textContent;
 
-const cellAt = (el: HTMLElement, column: string, row: number) =>
-  el.querySelectorAll<HTMLElement>(`.tabulator-cell[tabulator-field="${column}"]`)[row];
+const cellAt = (widgetContainer: HTMLElement, column: string, row: number) =>
+  widgetContainer.querySelectorAll<HTMLElement>(`.tabulator-cell[tabulator-field="${column}"]`)[row];
 // Right-clicks the cell in `column` of row `row` (0-based): the menu it shows, and its entries
-const openCellMenu = (el: HTMLElement, column: string, row: number) => {
-  cellAt(el, column, row).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 6 }));
+const openCellMenu = (widgetContainer: HTMLElement, column: string, row: number) => {
+  cellAt(widgetContainer, column, row).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 6 }));
   const shown = testbed.menus.at(-1)!;
   return { ...shown, entries: testbed.ui.getMenuItems(shown.menuId, shown.options.context) };
 };
@@ -73,9 +73,9 @@ describe('table', () => {
     expect(testbed.widgets.active).toBeUndefined();
 
     const tick = (row: number) => {
-      const box = widgetContainer.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row];
-      box.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-      box.click();
+      const checkboxElement = widgetContainer.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row];
+      checkboxElement.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      checkboxElement.click();
     };
     tick(1);
     expect(testbed.widgets.active?.widget).toBe(widget);
@@ -84,10 +84,10 @@ describe('table', () => {
     expect(given.at(-1)).toEqual({ widget, records: [{ path: '/login', status: 500 }, { path: '/api', status: 200 }] });
     expect(widgetContainer.querySelector('.d-record-panel')).toBeNull();
 
-    const drawn = widgetContainer.querySelector('.tabulator');
+    const drawnElement = widgetContainer.querySelector('.tabulator');
     testbed.resize(480);
     await settle();
-    expect(widgetContainer.querySelector('.tabulator')).toBe(drawn);
+    expect(widgetContainer.querySelector('.tabulator')).toBe(drawnElement);
     expect(given).toHaveLength(2);
     expect(widgetContainer.querySelectorAll('.tabulator-row input[type=checkbox]:checked')).toHaveLength(2);
 
@@ -105,10 +105,10 @@ describe('table', () => {
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] });
     await inView();
 
-    const cell = cellAt(widgetContainer, 'status', 1);
-    expect(cell.classList.contains('d-table__filterable')).toBe(true);
-    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(offers).toEqual([{ at: cell, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
+    const cellElement = cellAt(widgetContainer, 'status', 1);
+    expect(cellElement.classList.contains('d-table__filterable')).toBe(true);
+    cellElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(offers).toEqual([{ at: cellElement, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
   });
 
   it('offers a timestamp cell as ISO 8601 with its column’s ClickHouse type', async () => {
@@ -135,9 +135,9 @@ describe('table', () => {
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
     await inView();
 
-    const cnt = cellAt(widgetContainer, 'cnt', 0);
-    expect(cnt.classList.contains('d-table__filterable')).toBe(false);
-    cnt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const countCellElement = cellAt(widgetContainer, 'cnt', 0);
+    expect(countCellElement.classList.contains('d-table__filterable')).toBe(false);
+    countCellElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers).toEqual([]);
     expect(cellAt(widgetContainer, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
   });
@@ -147,9 +147,9 @@ describe('table', () => {
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['tags'] });
     await inView();
 
-    const tags = cellAt(widgetContainer, 'tags', 0);
-    expect(tags.classList.contains('d-table__filterable')).toBe(false);
-    tags.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const tagsElement = cellAt(widgetContainer, 'tags', 0);
+    expect(tagsElement.classList.contains('d-table__filterable')).toBe(false);
+    tagsElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers).toEqual([]);
   });
 
@@ -188,10 +188,10 @@ describe('table', () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'] });
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
-    const button = widgetContainer.querySelector<HTMLButtonElement>('.tabulator-col[tabulator-field="path"] .d-table__header-menu')!;
-    button.click();
+    const buttonElement = widgetContainer.querySelector<HTMLButtonElement>('.tabulator-col[tabulator-field="path"] .d-table__header-menu')!;
+    buttonElement.click();
     const shown = testbed.menus.at(-1)!;
-    expect(shown).toMatchObject({ menuId: 'table/header', options: { anchor: button, context: { column: 'path' } } });
+    expect(shown).toMatchObject({ menuId: 'table/header', options: { anchor: buttonElement, context: { column: 'path' } } });
     const entries = testbed.ui.getMenuItems(shown.menuId, shown.options.context);
     expect(entries.map((entry) => entry.title)).toEqual(['Auto-size column (based on visible data)', 'Auto-size all columns (based on visible data)']);
     const sized = vi.spyOn(shown.options.context as { autoSize(): void }, 'autoSize');

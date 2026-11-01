@@ -12,9 +12,9 @@ import { schemaTable } from '../schema-table/schema-table';
 import { dashboardPage } from './dashboard-page';
 
 let testbed: ReturnType<typeof widgetTestbed>;
-let content: HTMLElement;
+let contentContainer: HTMLElement;
 let page: PageHost | undefined;
-let scrolledTo: Element[];
+let scrolledToElements: Element[];
 
 /** A page with a chart in a closed group inside a closed group. */
 const billing: PageJson = {
@@ -47,18 +47,18 @@ beforeEach(() => {
   testbed = widgetTestbed();
   testbed.serveText('/p/shop/page.json', JSON.stringify(shop));
   testbed.serveText('/p/billing/page.json', JSON.stringify(billing));
-  scrolledTo = [];
+  scrolledToElements = [];
   Element.prototype.scrollIntoView = function (this: Element) {
-    scrolledTo.push(this);
+    scrolledToElements.push(this);
   };
-  content = document.body.appendChild(document.createElement('main'));
+  contentContainer = document.body.appendChild(document.createElement('main'));
   testbed.activate(markdown, collapsible, schemaTable);
 });
 
 /** The page host at `url`, the dashboard page's renderer registered, started. */
 async function start(url: string): Promise<PageHost> {
   history.replaceState(null, '', url);
-  page = new PageHost(window, { menu: [], explore: false, sqlEnabled: false, connections: [] }, content, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
+  page = new PageHost(window, { menu: [], explore: false, sqlEnabled: false, connections: [] }, contentContainer, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
   // declared through the active tab's query state, for every tab, as through `activeQuery`
   dashboardPage.activate({ page, query: page.activeQuery, widgets: testbed.widgets, subscriptions: [] } as never);
   await page.start();
@@ -77,17 +77,17 @@ afterEach(() => {
 const animationEnd = (name: string) => Object.assign(new Event('animationend', { bubbles: true }), { animationName: name });
 
 /** The highlighted widgets. */
-const linked = () => [...content.querySelectorAll('[data-data-url]')].filter((widget) => widget.classList.contains('d-dashboard-page__linked'));
+const linked = () => [...contentContainer.querySelectorAll('[data-data-url]')].filter((widgetElement) => widgetElement.classList.contains('d-dashboard-page__linked'));
 
 describe('dashboardPage', () => {
   it('renders the widgets one below the other', async () => {
     await start('/p/shop');
-    expect([...content.querySelectorAll('.d-markdown')].map((w) => w.textContent)).toEqual(['Orders', 'Payments']);
+    expect([...contentContainer.querySelectorAll('.d-markdown')].map((markdownElement) => markdownElement.textContent)).toEqual(['Orders', 'Payments']);
   });
 
   it('renders the widgets with its tab’s query state', async () => {
     const states: unknown[] = [];
-    testbed.widgets.registerWidget('stats', (_el, _widget, ctx) => (states.push(ctx.query), { dispose() {} }));
+    testbed.widgets.registerWidget('stats', (_widgetContainer, _widget, ctx) => (states.push(ctx.query), { dispose() {} }));
     testbed.serveText('/p/stats/page.json', JSON.stringify({ ...shop, widgets: [{ type: 'stats', props: {}, dataUrl: '/p/stats/api/1' }] }));
     const shown = await start('/p/stats');
     expect(states).toEqual([shown.activeQuery]);
@@ -100,32 +100,32 @@ describe('dashboardPage', () => {
 
   it('takes the widgets down with the page', async () => {
     (await start('/p/shop')).dispose();
-    expect(content.children.length).toBe(0);
+    expect(contentContainer.children.length).toBe(0);
   });
 
   it('opens the groups around the chart a link names, scrolls it into view and highlights it for a moment', async () => {
     await start('/p/billing#w=slow_payments');
-    const chart = content.querySelector<HTMLElement>('[data-data-url="/p/billing/api/slow_payments"]')!;
-    expect([...content.querySelectorAll('details')].map((group) => group.open)).toEqual([true, true]);
-    expect(scrolledTo).toEqual([chart]);
-    expect(linked()).toEqual([chart]);
-    chart.firstElementChild!.dispatchEvent(animationEnd('d-spinner'));
-    expect(linked()).toEqual([chart]);
-    chart.dispatchEvent(animationEnd('d-dashboard-page-linked'));
+    const chartElement = contentContainer.querySelector<HTMLElement>('[data-data-url="/p/billing/api/slow_payments"]')!;
+    expect([...contentContainer.querySelectorAll('details')].map((groupContainer) => groupContainer.open)).toEqual([true, true]);
+    expect(scrolledToElements).toEqual([chartElement]);
+    expect(linked()).toEqual([chartElement]);
+    chartElement.firstElementChild!.dispatchEvent(animationEnd('d-spinner'));
+    expect(linked()).toEqual([chartElement]);
+    chartElement.dispatchEvent(animationEnd('d-dashboard-page-linked'));
     expect(linked()).toEqual([]);
   });
 
   it('goes to a chart of the page shown on a hash change, without loading the page again', async () => {
     const shown = await start('/p/billing');
-    expect(scrolledTo).toEqual([]);
+    expect(scrolledToElements).toEqual([]);
     await shown.navigate('/p/billing#w=1');
-    expect(linked()).toEqual([content.querySelector('[data-data-url="/p/billing/api/1"]')]);
+    expect(linked()).toEqual([contentContainer.querySelector('[data-data-url="/p/billing/api/1"]')]);
     expect(testbed.requests.filter((url) => url.pathname.endsWith('/page.json')).length).toBe(1);
   });
 
   it('leaves the page as it is for a link to a chart it lacks', async () => {
     await start('/p/billing#w=99');
-    expect(scrolledTo).toEqual([]);
-    expect([...content.querySelectorAll('details')].map((group) => group.open)).toEqual([false, false]);
+    expect(scrolledToElements).toEqual([]);
+    expect([...contentContainer.querySelectorAll('details')].map((groupContainer) => groupContainer.open)).toEqual([false, false]);
   });
 });

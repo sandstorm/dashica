@@ -19,8 +19,8 @@ export const alerts: Extension = {
   },
 };
 
-function renderAlertOverview(el: HTMLElement, _widget: WidgetOf<'alertOverview'>, ctx: WidgetContext): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderAlertOverview(widgetContainer: HTMLElement, _widget: WidgetOf<'alertOverview'>, ctx: WidgetContext): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     draw: (result, options) => drawAlertOverview(result, options),
   });
 }
@@ -83,7 +83,7 @@ function hoursMinutes(time: Date) {
   });
 }
 
-function renderAlertDetail(el: HTMLElement, widget: WidgetOf<'alertDetail'>, ctx: WidgetContext): ChartFrame {
+function renderAlertDetail(widgetContainer: HTMLElement, widget: WidgetOf<'alertDetail'>, ctx: WidgetContext): ChartFrame {
   // the alert's history: its columns `time` and `value`, as 15 minute bars
   const history: TimeBarProps = {
     title: widget.props.title,
@@ -91,7 +91,7 @@ function renderAlertDetail(el: HTMLElement, widget: WidgetOf<'alertDetail'>, ctx
     x: { kind: 'expr', alias: 'time', xBucketSizeMs: 15 * 60 * 1000 },
     y: { kind: 'expr', alias: 'value' },
   };
-  return new ChartFrame(el, ctx, {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: 200,
     draw: (result, options) => drawTimeBars(result, history, options, { thresholds: thresholdsOf(result) }),

@@ -17,11 +17,11 @@ import { timeBrush } from '../chart-library/time-brush';
  */
 export const timeLine: Extension = {
   id: 'timeLine',
-  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeLine', (el, widget, ctx) => renderTimeLine(el, widget, ctx, commands))),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeLine', (widgetContainer, widget, ctx) => renderTimeLine(widgetContainer, widget, ctx, commands))),
 };
 
-function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: WidgetContext, commands: Commands): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderTimeLine(widgetContainer: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result, options) => drawTimeLine(result, widget.props, options, offerFiltersOf(commands, widget)),

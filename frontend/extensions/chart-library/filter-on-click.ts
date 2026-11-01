@@ -29,19 +29,19 @@ export function filterOnClick<O extends Plot.MarkOptions>(
   // (pointer.js), so the row clicked is the one of the element that points, asked of the DOM
   const rows = new WeakMap<Element, Record<string, unknown>>();
   const listening = new WeakSet<SVGSVGElement>();
-  const pointedRow = (svg: SVGSVGElement) => [...svg.querySelectorAll('.d-filter-on-click--pointing')].map((g) => rows.get(g)).find(Boolean);
+  const pointedRow = (svgElement: SVGSVGElement) => [...svgElement.querySelectorAll('.d-filter-on-click--pointing')].map((pointingElement) => rows.get(pointingElement)).find(Boolean);
 
-  const listen = (svg: SVGSVGElement) => {
+  const listen = (svgElement: SVGSVGElement) => {
     // Plot's pointer pins the tip on a mouse's pointerdown while it points at a row, and then stops following the
     // mouse until the next pointerdown unpins it, so a second click would offer nothing (Plot's source only,
     // pointer.js: `pointerdown`, `state.sticky`; its typings say nothing of it). A mouse's pointerdown therefore stops
     // at the svg, before Plot's listeners on it; Plot stops the same pointerdowns itself (stopImmediatePropagation),
     // so nothing past the svg misses them. Plot pins on no touch or pen, which pass.
-    svg.addEventListener('pointerdown', (event) => event.pointerType === 'mouse' && pointedRow(svg) && event.stopPropagation(), true);
+    svgElement.addEventListener('pointerdown', (event) => event.pointerType === 'mouse' && pointedRow(svgElement) && event.stopPropagation(), true);
     // the svg, where Plot's pointer listens too (its source, pointer.js): a click on what lies above the marks (a time
     // chart's drag area) counts as one on them
-    svg.addEventListener('click', (event) => {
-      const row = pointedRow(svg);
+    svgElement.addEventListener('click', (event) => {
+      const row = pointedRow(svgElement);
       if (!row) return;
       const candidates = categories.flatMap((field) => {
         const value = row[field.alias];
@@ -53,21 +53,21 @@ export function filterOnClick<O extends Plot.MarkOptions>(
 
   // Plot's pointer calls it with the index of the row it points at, or an empty one
   const render: Plot.RenderFunction = (index, _scales, _values, _dimensions, context) => {
-    const svg = context.ownerSVGElement;
-    if (!listening.has(svg)) {
-      listening.add(svg);
-      listen(svg);
+    const svgElement = context.ownerSVGElement;
+    if (!listening.has(svgElement)) {
+      listening.add(svgElement);
+      listen(svgElement);
     }
-    const g = context.document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('class', 'd-filter-on-click');
-    g.setAttribute('aria-hidden', 'true');
+    const layerElement = context.document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    layerElement.setAttribute('class', 'd-filter-on-click');
+    layerElement.setAttribute('aria-hidden', 'true');
     // the index counts the rows of `data`, which Plot's pointer reads the same way (pointer.js: `data.get(i)`)
     const row = index.length > 0 ? (data.get(index[0]) as Record<string, unknown> | null) : null;
     if (row) {
-      rows.set(g, row);
-      g.classList.add('d-filter-on-click--pointing');
+      rows.set(layerElement, row);
+      layerElement.classList.add('d-filter-on-click--pointing');
     }
-    return g;
+    return layerElement;
   };
   return mark(data, POINTERS[pointer]({ ...options, render }));
 }

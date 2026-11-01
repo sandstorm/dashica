@@ -55,31 +55,31 @@ describe('timeBar', () => {
       testbed.scrollIntoView();
       await settle();
     };
-    const bars = (el: HTMLElement) => [...el.querySelectorAll<SVGRectElement>('g[aria-label="rect"] rect')];
+    const bars = (widgetContainer: HTMLElement) => [...widgetContainer.querySelectorAll<SVGRectElement>('g[aria-label="rect"] rect')];
 
     it('on a bar offers its fill, never its time bucket or measure, with the chart’s pills', async () => {
-      const el = render();
+      const widgetContainer = render();
       await inView();
-      await clickMark(bars(el)[1]);
+      await clickMark(bars(widgetContainer)[1]);
       expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
         { candidates: [{ fieldId: 'level', value: 'error' }], source: { dataUrl: '/p/shop/api/1', filterable } },
       ]);
     });
 
     it('on the drag area offers the bar Plot points at below it, again on the next click', async () => {
-      const el = render();
+      const widgetContainer = render();
       await inView();
-      const overlay = () => el.querySelector('svg .overlay')!;
-      await clickMark(bars(el)[2], overlay());
+      const overlay = () => widgetContainer.querySelector('svg .overlay')!;
+      await clickMark(bars(widgetContainer)[2], overlay());
       expect(offered()).toEqual(['level = info']);
-      await clickMark(bars(el)[1], overlay());
+      await clickMark(bars(widgetContainer)[1], overlay());
       expect(offered()).toEqual(['level = error']);
     });
 
     it('on a bar offers its fill and its facet', async () => {
-      const el = render({ props: { ...props, fy: { kind: 'expr', alias: 'region' } } });
+      const widgetContainer = render({ props: { ...props, fy: { kind: 'expr', alias: 'region' } } });
       await inView();
-      await clickMark(bars(el).at(-1)!);
+      await clickMark(bars(widgetContainer).at(-1)!);
       expect(offered()).toEqual(['level = info', 'region = us']);
     });
 
@@ -88,17 +88,17 @@ describe('timeBar', () => {
       // bucket 1 a short "info" and a tall "error" above it
       const many = { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from: T0, to: T0 + 16 * QUARTER }) };
       const stacked = { time: [T0, T0 + QUARTER, T0 + QUARTER], level: ['info', 'info', 'error'], region: ['eu', 'eu', 'eu'], cnt: [1, 1, 10] };
-      const shown = (el: HTMLElement) => /level (\S+)/.exec(el.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
+      const shown = (widgetContainer: HTMLElement) => /level (\S+)/.exec(widgetContainer.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
       /** Clicks the drag area right of bucket 0's bar, at the height of bucket 1's "error", and in a bar's middle. */
-      const clicks = async (el: HTMLElement) => {
-        const overlay = el.querySelector('svg .overlay')!;
-        const [short, , tall] = bars(el);
+      const clicks = async (widgetContainer: HTMLElement) => {
+        const overlayContainer = widgetContainer.querySelector('svg .overlay')!;
+        const [shortElement, , tallElement] = bars(widgetContainer);
         const said: [string | undefined, string | undefined][] = [];
-        const [x] = anchor(short!);
-        const width = Number(short!.getAttribute('width'));
-        for (const at of [[x + 0.4 * width, anchor(tall!)[1]], anchor(tall!), anchor(short!), [x + 0.4 * width, anchor(tall!)[1]]] as [number, number][]) {
-          await clickAtPoint(overlay, at);
-          said.push([shown(el), offers.at(-1)?.candidates[0]?.value as string | undefined]);
+        const [x] = anchor(shortElement!);
+        const width = Number(shortElement!.getAttribute('width'));
+        for (const at of [[x + 0.4 * width, anchor(tallElement!)[1]], anchor(tallElement!), anchor(shortElement!), [x + 0.4 * width, anchor(tallElement!)[1]]] as [number, number][]) {
+          await clickAtPoint(overlayContainer, at);
+          said.push([shown(widgetContainer), offers.at(-1)?.candidates[0]?.value as string | undefined]);
         }
         return said;
       };
@@ -130,9 +130,9 @@ describe('timeBar', () => {
 
     it('on a bar without a fill offers its facet', async () => {
       const { fill: _, ...unfilled } = props;
-      const el = render({ props: { ...unfilled, fy: { kind: 'expr', alias: 'region' } } });
+      const widgetContainer = render({ props: { ...unfilled, fy: { kind: 'expr', alias: 'region' } } });
       await inView();
-      await clickMark(bars(el).at(-1)!);
+      await clickMark(bars(widgetContainer).at(-1)!);
       expect(offered()).toEqual(['region = us']);
     });
   });

@@ -22,11 +22,11 @@ describe('collapsible', () => {
     for (const n of [1, 2, 10]) testbed.serveText(`/p/shop/api/${n}/schema`, `CREATE TABLE t${n}`);
     const { widgetContainer } = testbed.render({ type: 'collapsibleGroup', props: { title: 'Details', open: true }, children: { '10': table(10), '0': table(1), '2': table(2) } });
     await settle();
-    const group = widgetContainer.querySelector('details')!;
-    expect(group.open).toBe(true);
-    expect(group.querySelector('summary span')!.textContent).toBe('Details');
-    expect(group.querySelector('summary .d-collapsible__count')!.textContent).toBe('· 3 widgets');
-    expect([...group.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual(['CREATE TABLE t1', 'CREATE TABLE t2', 'CREATE TABLE t10']);
+    const groupContainer = widgetContainer.querySelector('details')!;
+    expect(groupContainer.open).toBe(true);
+    expect(groupContainer.querySelector('summary span')!.textContent).toBe('Details');
+    expect(groupContainer.querySelector('summary .d-collapsible__count')!.textContent).toBe('· 3 widgets');
+    expect([...groupContainer.querySelectorAll('pre')].map((preElement) => preElement.textContent)).toEqual(['CREATE TABLE t1', 'CREATE TABLE t2', 'CREATE TABLE t10']);
   });
 
   it('starts closed unless it says open', () => {

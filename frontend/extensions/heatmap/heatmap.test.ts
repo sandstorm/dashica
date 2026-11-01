@@ -34,7 +34,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
+const error = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-widget-error')?.textContent;
 
 const x = { kind: 'expr' as const, alias: 'time', xBucketSizeMs: QUARTER };
 

@@ -26,7 +26,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
+const error = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-widget-error')?.textContent;
 /** The candidates the last click offered, as "status = 500". */
 const offered = () => offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
 
@@ -43,12 +43,12 @@ describe('barVertical', () => {
     testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [2, 30] });
     const { widgetContainer } = testbed.render({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' }, sortReverse: true }, dataUrl: '/p/shop/api/1', filterable });
     await inView();
-    const ticks = [...widgetContainer.querySelectorAll('[aria-label="x-axis tick label"] text')].map((tick) => tick.textContent);
+    const ticks = [...widgetContainer.querySelectorAll('[aria-label="x-axis tick label"] text')].map((tickElement) => tickElement.textContent);
     expect(ticks).toEqual(['500', '200']);
   });
 
   describe('a click on a bar', () => {
-    const bars = (el: HTMLElement) => [...el.querySelectorAll<SVGRectElement>('g[aria-label="bar"] rect')];
+    const bars = (widgetContainer: HTMLElement) => [...widgetContainer.querySelectorAll<SVGRectElement>('g[aria-label="bar"] rect')];
     const byStatus = (more: object = {}) =>
       ({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable, ...more }) as const;
 
@@ -110,23 +110,23 @@ describe('barVertical', () => {
       await inView();
       await clickMark(bars(widgetContainer)[1]);
       expect(offered()).toEqual(['host = b']);
-      const { widgetContainer: without } = testbed.render(byBucket());
+      const { widgetContainer: withoutElement } = testbed.render(byBucket());
       await inView();
-      await clickMark(bars(without)[1]);
+      await clickMark(bars(withoutElement)[1]);
       expect(offers).toHaveLength(1);
     });
 
     it('looks clickable while Plot points at a bar, and never without a category', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
       const { widgetContainer } = testbed.render(byStatus());
-      const { widgetContainer: without } = testbed.render(byBucket());
+      const { widgetContainer: withoutElement } = testbed.render(byBucket());
       await inView();
       const pointing = () => widgetContainer.querySelector('.d-filter-on-click--pointing') !== null;
       expect(widgetContainer.querySelector('.d-filter-on-click')).not.toBeNull();
       expect(pointing()).toBe(false);
       await pointAt(bars(widgetContainer)[1]);
       expect(pointing()).toBe(true);
-      expect(without.querySelector('.d-filter-on-click')).toBeNull();
+      expect(withoutElement.querySelector('.d-filter-on-click')).toBeNull();
     });
 
     it('never offers a measure, nor a NULL', async () => {
@@ -135,9 +135,9 @@ describe('barVertical', () => {
       await inView();
       await clickMark(bars(widgetContainer)[1]);
       expect(offered()).toEqual(['host = b']);
-      const { widgetContainer: measured } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } } });
+      const { widgetContainer: measuredElement } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } } });
       await inView();
-      if (bars(measured)[0]) await clickMark(bars(measured)[0]);
+      if (bars(measuredElement)[0]) await clickMark(bars(measuredElement)[0]);
       expect(offers).toHaveLength(1);
     });
 

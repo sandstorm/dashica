@@ -14,28 +14,28 @@ import './speedscope-link.css';
 export const speedscopeLink: Extension = {
   id: 'speedscopeLink',
   activate: ({ widgets, page, subscriptions }) =>
-    subscriptions.push(widgets.registerWidget('speedscopeLink', (el, widget, ctx) => renderSpeedscopeLink(el, widget, ctx, page))),
+    subscriptions.push(widgets.registerWidget('speedscopeLink', (widgetContainer, widget, ctx) => renderSpeedscopeLink(widgetContainer, widget, ctx, page))),
 };
 
-function renderSpeedscopeLink(el: HTMLElement, widget: WidgetOf<'speedscopeLink'>, ctx: WidgetContext, page: Pick<PageApi, 'popOut'>): Disposable {
+function renderSpeedscopeLink(widgetContainer: HTMLElement, widget: WidgetOf<'speedscopeLink'>, ctx: WidgetContext, page: Pick<PageApi, 'popOut'>): Disposable {
   const open = (event: MouseEvent) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    const src = link.href;
+    const src = linkElement.href;
     void page.popOut({
       title: 'Speedscope',
       // the tab's element is emptied when it closes
-      render: (tab) => (tab.append(html`<iframe class="d-speedscope-tab" title="Speedscope" src=${src}></iframe>`), Disposable.from()),
+      render: (tabContainer) => (tabContainer.append(html`<iframe class="d-speedscope-tab" title="Speedscope" src=${src}></iframe>`), Disposable.from()),
     });
   };
-  const link: HTMLAnchorElement = html`<a target="_blank" class="d-button d-button--primary" onclick=${open}>${widget.props.title || 'Open Speedscope'}</a>`;
+  const linkElement: HTMLAnchorElement = html`<a target="_blank" class="d-button d-button--primary" onclick=${open}>${widget.props.title || 'Open Speedscope'}</a>`;
   const showHref = () => {
-    const origin = el.ownerDocument.location.origin;
+    const origin = widgetContainer.ownerDocument.location.origin;
     const profile = origin + ctx.url('/speedscope-query');
-    link.href = `${origin}${widget.dataUrl}/viewer/#profileURL=${encodeURIComponent(profile)}`;
+    linkElement.href = `${origin}${widget.dataUrl}/viewer/#profileURL=${encodeURIComponent(profile)}`;
   };
   showHref();
-  el.replaceChildren(html`<div>${link}</div>`);
+  widgetContainer.replaceChildren(html`<div>${linkElement}</div>`);
   // the time range, filter or a param changed
   return ctx.query.onDidRequestRefresh(showHref);
 }

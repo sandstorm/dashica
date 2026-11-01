@@ -10,8 +10,8 @@ import { candidateOf, columnTypesOf } from './candidate';
 import type { OfferFilters } from '../filter-library/offer';
 import './table.css';
 
-const canvas = document.createElement('canvas');
-const ctx = canvas.getContext('2d');
+const canvasElement = document.createElement('canvas');
+const ctx = canvasElement.getContext('2d');
 
 function calculateSizeOfColumn(rows: RowComponent[], fieldName: string) {
 
@@ -73,13 +73,13 @@ const HIDE_DELAY = 300;
 // One tooltip DOM element (transient hover tooltip or a pinned one). Owns its
 // own value/JSON/drag state; pin + close behaviour is wired up by the manager.
 interface TooltipEl {
-  root: HTMLElement;
-  header: HTMLElement;
-  jsonBtn: HTMLButtonElement;
-  copyBtn: HTMLButtonElement;
-  pinBtn: HTMLButtonElement;
-  closeBtn: HTMLButtonElement;
-  indexLabel: HTMLElement;
+  rootContainer: HTMLElement;
+  headerContainer: HTMLElement;
+  jsonButtonElement: HTMLButtonElement;
+  copyButtonElement: HTMLButtonElement;
+  pinButtonElement: HTMLButtonElement;
+  closeButtonElement: HTMLButtonElement;
+  indexLabelElement: HTMLElement;
   setValue(raw: string): void;
   currentText(): string;
 }
@@ -88,7 +88,7 @@ function createTooltipEl(): TooltipEl {
   // Build the static skeleton with htl (the house style in this file for one-shot DOM);
   // grab element refs afterwards. Behaviour (drag/position/pin) is wired
   // imperatively — see the note in `drawTable()`.
-  const root = html`<div class="d-sticky-tooltip">
+  const rootContainer = html`<div class="d-sticky-tooltip">
     <div class="d-sticky-tooltip__header">
       <span class="d-sticky-tooltip__index" style="display:none"></span>
       <button class="d-sticky-tooltip__btn d-sticky-tooltip__json" title="Toggle JSON pretty-print">${createElement(Braces, { width: 14, height: 14 })}</button>
@@ -100,27 +100,27 @@ function createTooltipEl(): TooltipEl {
     <pre class="d-sticky-tooltip__body"><code></code></pre>
   </div>` as HTMLElement;
 
-  const header = root.querySelector('.d-sticky-tooltip__header') as HTMLElement;
-  const indexLabel = root.querySelector('.d-sticky-tooltip__index') as HTMLElement;
-  const jsonBtn = root.querySelector('.d-sticky-tooltip__json') as HTMLButtonElement;
-  const copyBtn = root.querySelector('.d-sticky-tooltip__copy') as HTMLButtonElement;
-  const pinBtn = root.querySelector('.d-sticky-tooltip__pin') as HTMLButtonElement;
-  const closeBtn = root.querySelector('.d-sticky-tooltip__close') as HTMLButtonElement;
-  const code = root.querySelector('code') as HTMLElement;
+  const headerContainer = rootContainer.querySelector('.d-sticky-tooltip__header') as HTMLElement;
+  const indexLabelElement = rootContainer.querySelector('.d-sticky-tooltip__index') as HTMLElement;
+  const jsonButtonElement = rootContainer.querySelector('.d-sticky-tooltip__json') as HTMLButtonElement;
+  const copyButtonElement = rootContainer.querySelector('.d-sticky-tooltip__copy') as HTMLButtonElement;
+  const pinButtonElement = rootContainer.querySelector('.d-sticky-tooltip__pin') as HTMLButtonElement;
+  const closeButtonElement = rootContainer.querySelector('.d-sticky-tooltip__close') as HTMLButtonElement;
+  const codeElement = rootContainer.querySelector('code') as HTMLElement;
 
   let currentRaw = '';
   let prettyJson: string | null = null;   // non-null => value is JSON
   let showPretty = true;
 
   function renderBody() {
-    code.textContent = (prettyJson !== null && showPretty) ? prettyJson : currentRaw;
+    codeElement.textContent = (prettyJson !== null && showPretty) ? prettyJson : currentRaw;
   }
 
   function setValue(raw: string) {
     currentRaw = raw;
     prettyJson = tryPrettyJson(raw);
     showPretty = true;
-    jsonBtn.style.display = prettyJson !== null ? '' : 'none';
+    jsonButtonElement.style.display = prettyJson !== null ? '' : 'none';
     renderBody();
   }
 
@@ -128,16 +128,16 @@ function createTooltipEl(): TooltipEl {
     return (prettyJson !== null && showPretty) ? prettyJson : currentRaw;
   }
 
-  jsonBtn.addEventListener('click', () => {
+  jsonButtonElement.addEventListener('click', () => {
     showPretty = !showPretty;
     renderBody();
   });
 
-  copyBtn.addEventListener('click', async () => {
+  copyButtonElement.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(currentText());
-      copyBtn.classList.add('d-sticky-tooltip__btn--ok');
-      window.setTimeout(() => copyBtn.classList.remove('d-sticky-tooltip__btn--ok'), 800);
+      copyButtonElement.classList.add('d-sticky-tooltip__btn--ok');
+      window.setTimeout(() => copyButtonElement.classList.remove('d-sticky-tooltip__btn--ok'), 800);
     } catch (e) {
       console.warn('Clipboard write failed', e);
     }
@@ -148,43 +148,43 @@ function createTooltipEl(): TooltipEl {
   let dragDY = 0;
 
   function onDragMove(e: PointerEvent) {
-    root.style.left = (e.clientX - dragDX) + 'px';
-    root.style.top = (e.clientY - dragDY) + 'px';
-    root.style.right = 'auto';
-    root.style.bottom = 'auto';
+    rootContainer.style.left = (e.clientX - dragDX) + 'px';
+    rootContainer.style.top = (e.clientY - dragDY) + 'px';
+    rootContainer.style.right = 'auto';
+    rootContainer.style.bottom = 'auto';
   }
 
   function onDragEnd(e: PointerEvent) {
-    header.releasePointerCapture(e.pointerId);
-    header.removeEventListener('pointermove', onDragMove);
-    header.removeEventListener('pointerup', onDragEnd);
+    headerContainer.releasePointerCapture(e.pointerId);
+    headerContainer.removeEventListener('pointermove', onDragMove);
+    headerContainer.removeEventListener('pointerup', onDragEnd);
   }
 
-  header.addEventListener('pointerdown', (e) => {
+  headerContainer.addEventListener('pointerdown', (e) => {
     // Transient (unpinned) tooltip is not draggable.
-    if (!root.classList.contains('d-sticky-tooltip--pinned')) {
+    if (!rootContainer.classList.contains('d-sticky-tooltip--pinned')) {
       return;
     }
     if ((e.target as HTMLElement).closest('.d-sticky-tooltip__btn')) {
       return; // don't start a drag from a button
     }
-    const rect = root.getBoundingClientRect();
+    const rect = rootContainer.getBoundingClientRect();
     dragDX = e.clientX - rect.left;
     dragDY = e.clientY - rect.top;
-    header.setPointerCapture(e.pointerId);
-    header.addEventListener('pointermove', onDragMove);
-    header.addEventListener('pointerup', onDragEnd);
+    headerContainer.setPointerCapture(e.pointerId);
+    headerContainer.addEventListener('pointermove', onDragMove);
+    headerContainer.addEventListener('pointerup', onDragEnd);
     e.preventDefault();
   });
 
-  return {root, header, jsonBtn, copyBtn, pinBtn, closeBtn, indexLabel, setValue, currentText};
+  return {rootContainer, headerContainer, jsonButtonElement, copyButtonElement, pinButtonElement, closeButtonElement, indexLabelElement, setValue, currentText};
 }
 
 // Position a tooltip near the mouse pointer, clamped to the viewport. Anchoring
 // to the pointer (not the cell's left edge) keeps the tooltip next to the cursor
 // even in very wide columns, where the cell's left edge can be far away.
-function positionTooltip(root: HTMLElement, pointerX: number, pointerY: number, offset = 0) {
-  const ttRect = root.getBoundingClientRect();
+function positionTooltip(rootContainer: HTMLElement, pointerX: number, pointerY: number, offset = 0) {
+  const ttRect = rootContainer.getBoundingClientRect();
   let left = pointerX + 12 + offset;
   let top = pointerY + 16 + offset;
   // Flip left if it would overflow the right edge.
@@ -197,10 +197,10 @@ function positionTooltip(root: HTMLElement, pointerX: number, pointerY: number, 
     top = Math.max(8, pointerY - ttRect.height - 12);
   }
   top = Math.max(8, top);
-  root.style.left = left + 'px';
-  root.style.top = top + 'px';
-  root.style.right = 'auto';
-  root.style.bottom = 'auto';
+  rootContainer.style.left = left + 'px';
+  rootContainer.style.top = top + 'px';
+  rootContainer.style.right = 'auto';
+  rootContainer.style.bottom = 'auto';
 }
 
 interface Pin {
@@ -217,9 +217,9 @@ interface Pin {
 // so markers survive scrolling/filtering (Tabulator recycles row DOM).
 function createTooltipManager(table: Tabulator, notifyRendered: () => void = () => {}) {
   const transient = createTooltipEl();
-  transient.root.classList.add('d-sticky-tooltip--transient');
-  transient.root.style.display = 'none';
-  document.body.appendChild(transient.root);
+  transient.rootContainer.classList.add('d-sticky-tooltip--transient');
+  transient.rootContainer.style.display = 'none';
+  document.body.appendChild(transient.rootContainer);
 
   const pins: Pin[] = [];
   let nextIndex = 1;
@@ -241,7 +241,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
     if (hideTimer !== null) { window.clearTimeout(hideTimer); hideTimer = null; }
   }
   function hideTransient() {
-    transient.root.style.display = 'none';
+    transient.rootContainer.style.display = 'none';
     transientCell = null;
   }
   function scheduleHide() {
@@ -252,14 +252,14 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   function updateTransient(cell: CellComponent) {
     transientCell = cell;
     transient.setValue(String(cell.getValue()));
-    transient.root.style.display = '';
+    transient.rootContainer.style.display = '';
     // The transient element is shared across cells. Clear any inline size
     // left over from a previous (wider) value so it re-shrinks to the new
     // content before we measure — otherwise a stale-wide box gets clamped
     // too far left when hovering cells near the right edge.
-    transient.root.style.width = '';
-    transient.root.style.height = '';
-    positionTooltip(transient.root, pointerX, pointerY);
+    transient.rootContainer.style.width = '';
+    transient.rootContainer.style.height = '';
+    positionTooltip(transient.rootContainer, pointerX, pointerY);
     notifyRendered(); // re-highlight search term inside the tooltip
   }
 
@@ -267,31 +267,31 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   // render, so it first strips stale decoration then re-adds it for whichever
   // pinned rows are currently rendered.
   function decorate() {
-    const tableEl = (table as any).element as HTMLElement | undefined;
-    if (!tableEl) return;
-    tableEl.querySelectorAll('.d-sticky-tooltip__badge').forEach(n => n.remove());
-    tableEl.querySelectorAll('.d-sticky-tooltip__pinned-row').forEach(n => {
-      const row = n as HTMLElement;
-      row.classList.remove('d-sticky-tooltip__pinned-row');
-      row.style.removeProperty('box-shadow');
-      row.querySelectorAll('.tabulator-cell').forEach(c => {
-        (c as HTMLElement).style.removeProperty('background-color');
+    const tableElement = (table as any).element as HTMLElement | undefined;
+    if (!tableElement) return;
+    tableElement.querySelectorAll('.d-sticky-tooltip__badge').forEach(badgeElement => badgeElement.remove());
+    tableElement.querySelectorAll('.d-sticky-tooltip__pinned-row').forEach(pinnedRowElement => {
+      const rowElement = pinnedRowElement as HTMLElement;
+      rowElement.classList.remove('d-sticky-tooltip__pinned-row');
+      rowElement.style.removeProperty('box-shadow');
+      rowElement.querySelectorAll('.tabulator-cell').forEach(cellElement => {
+        (cellElement as HTMLElement).style.removeProperty('background-color');
       });
     });
 
     pins.forEach(pin => {
-      let rowEl: HTMLElement | null = null;
-      let cellEl: HTMLElement | null = null;
+      let rowElement: HTMLElement | null = null;
+      let cellElement: HTMLElement | null = null;
       try {
-        rowEl = pin.row.getElement();
+        rowElement = pin.row.getElement();
         const cell = pin.row.getCell(pin.field);
-        cellEl = cell ? cell.getElement() : null;
+        cellElement = cell ? cell.getElement() : null;
       } catch (e) {
         return; // row no longer exists / not rendered
       }
-      if (rowEl) {
-        rowEl.classList.add('d-sticky-tooltip__pinned-row');
-        rowEl.style.boxShadow = `inset 3px 0 0 0 ${pin.color}`;
+      if (rowElement) {
+        rowElement.classList.add('d-sticky-tooltip__pinned-row');
+        rowElement.style.boxShadow = `inset 3px 0 0 0 ${pin.color}`;
         // Tint only the scrolling cells, never the frozen (checkbox)
         // column. The frozen column is position:sticky and hides the
         // horizontally-scrolled cells sliding under it *only* while its
@@ -300,16 +300,16 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
         // text would bleed through it. Leaving frozen cells untouched
         // keeps their solid Tabulator background — same as an unpinned
         // row, which is exactly why unpinned rows never showed the bug.
-        rowEl.querySelectorAll('.tabulator-cell:not(.tabulator-frozen)').forEach(c => {
-          (c as HTMLElement).style.backgroundColor = pin.color + '14'; // ~8% alpha
+        rowElement.querySelectorAll('.tabulator-cell:not(.tabulator-frozen)').forEach(scrollingCellElement => {
+          (scrollingCellElement as HTMLElement).style.backgroundColor = pin.color + '14'; // ~8% alpha
         });
       }
-      if (cellEl && !cellEl.querySelector('.d-sticky-tooltip__badge')) {
-        const badge = document.createElement('span');
-        badge.className = 'd-sticky-tooltip__badge';
-        badge.textContent = String(pin.index);
-        badge.style.backgroundColor = pin.color;
-        cellEl.insertBefore(badge, cellEl.firstChild);
+      if (cellElement && !cellElement.querySelector('.d-sticky-tooltip__badge')) {
+        const badgeElement = document.createElement('span');
+        badgeElement.className = 'd-sticky-tooltip__badge';
+        badgeElement.textContent = String(pin.index);
+        badgeElement.style.backgroundColor = pin.color;
+        cellElement.insertBefore(badgeElement, cellElement.firstChild);
       }
     });
   }
@@ -317,7 +317,7 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   function removePin(pin: Pin) {
     const i = pins.indexOf(pin);
     if (i >= 0) pins.splice(i, 1);
-    pin.el.root.remove();
+    pin.el.rootContainer.remove();
     decorate();
   }
 
@@ -327,31 +327,31 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
     if (!transientCell) return;
     const cell = transientCell;
     const pinned = createTooltipEl();
-    pinned.root.classList.add('d-sticky-tooltip--pinned');
-    pinned.pinBtn.style.display = 'none'; // already pinned
+    pinned.rootContainer.classList.add('d-sticky-tooltip--pinned');
+    pinned.pinButtonElement.style.display = 'none'; // already pinned
 
     const index = nextIndex++;
     const color = PIN_COLORS[(index - 1) % PIN_COLORS.length];
-    pinned.indexLabel.textContent = String(index);
-    pinned.indexLabel.style.display = '';
-    pinned.indexLabel.style.backgroundColor = color;
-    pinned.root.style.borderColor = color;
+    pinned.indexLabelElement.textContent = String(index);
+    pinned.indexLabelElement.style.display = '';
+    pinned.indexLabelElement.style.backgroundColor = color;
+    pinned.rootContainer.style.borderColor = color;
 
     pinned.setValue(String(cell.getValue()));
-    document.body.appendChild(pinned.root);
+    document.body.appendChild(pinned.rootContainer);
     // Appear exactly where the transient tooltip already sits — pinning is
     // a promotion of the thing under the cursor, so it must not jump. (We
     // deliberately don't re-run positionTooltip from the pointer here: that
     // recomputed a fresh pointer+offset location and made the box jump.)
-    const tRect = transient.root.getBoundingClientRect();
-    pinned.root.style.left = tRect.left + 'px';
-    pinned.root.style.top = tRect.top + 'px';
-    pinned.root.style.right = 'auto';
-    pinned.root.style.bottom = 'auto';
+    const tRect = transient.rootContainer.getBoundingClientRect();
+    pinned.rootContainer.style.left = tRect.left + 'px';
+    pinned.rootContainer.style.top = tRect.top + 'px';
+    pinned.rootContainer.style.right = 'auto';
+    pinned.rootContainer.style.bottom = 'auto';
 
     const pin: Pin = {el: pinned, index, color, row: cell.getRow(), field: cell.getField()};
     pins.push(pin);
-    pinned.closeBtn.addEventListener('click', () => removePin(pin));
+    pinned.closeButtonElement.addEventListener('click', () => removePin(pin));
 
     hideTransient();
     decorate();
@@ -361,12 +361,12 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   // Keep the transient tooltip alive while the pointer is over it. Also kill
   // any pending show-timer armed by a cell crossed en route, so the content
   // stays frozen on the shown cell instead of swapping under the cursor.
-  transient.root.addEventListener('mouseenter', () => { cancelHide(); clearShowTimer(); });
-  transient.root.addEventListener('mouseleave', scheduleHide);
-  transient.pinBtn.addEventListener('click', pinCurrent);
+  transient.rootContainer.addEventListener('mouseenter', () => { cancelHide(); clearShowTimer(); });
+  transient.rootContainer.addEventListener('mouseleave', scheduleHide);
+  transient.pinButtonElement.addEventListener('click', pinCurrent);
   // Close button is meaningful only on pinned tooltips; the transient one
   // hides itself on mouse-out, so hide its close button.
-  transient.closeBtn.style.display = 'none';
+  transient.closeButtonElement.style.display = 'none';
 
   // Re-decorate whenever Tabulator (re)renders rows.
   table.on('renderComplete', decorate);
@@ -447,12 +447,12 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
     autoSize: () => size(column),
     autoSizeAll: () => column.getTable().getColumns().forEach(size),
   };
-  const button: HTMLButtonElement = html`<button type="button" class="d-table__header-menu" title="Column menu" aria-label=${`Menu of ${title}`} aria-haspopup="dialog"
+  const buttonElement: HTMLButtonElement = html`<button type="button" class="d-table__header-menu" title="Column menu" aria-label=${`Menu of ${title}`} aria-haspopup="dialog"
     onclick=${(event: MouseEvent) => {
       event.stopPropagation();
-      showMenu('table/header', button, context);
+      showMenu('table/header', buttonElement, context);
     }}>⋮</button>`;
-  return html`<span class="d-table__header-title">${title}${button}</span>`;
+  return html`<span class="d-table__header-title">${title}${buttonElement}</span>`;
 }
 
 /**
@@ -519,9 +519,9 @@ export function drawTable(
             month: '2-digit',
             year: '2-digit',
           });
-          const el = document.createElement('div');
-          el.innerHTML = `${time} &nbsp; <span class="d-table__date">${date}</span>`;
-          return el;
+          const timeElement = document.createElement('div');
+          timeElement.innerHTML = `${time} &nbsp; <span class="d-table__date">${date}</span>`;
+          return timeElement;
         },
         cssClass: filters(field.name) ? 'd-table__filterable' : undefined,
       });
@@ -535,15 +535,15 @@ export function drawTable(
   });
 
   // Create container structure
-  const container = document.createElement('div');
-  container.classList.add('d-table');
+  const tableContainer = document.createElement('div');
+  tableContainer.classList.add('d-table');
 
   // Create search input
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = 'Search records...';
-  searchInput.classList.add('d-field', 'd-field--full', 'd-table__search');
-  searchInput.addEventListener('input', (e) => {
+  const searchInputElement = document.createElement('input');
+  searchInputElement.type = 'text';
+  searchInputElement.placeholder = 'Search records...';
+  searchInputElement.classList.add('d-field', 'd-field--full', 'd-table__search');
+  searchInputElement.addEventListener('input', (e) => {
     searchTerm = (e.target as HTMLInputElement).value;
     applySearch();
   });
@@ -569,8 +569,8 @@ export function drawTable(
   }
 
   // Create table element
-  const tableRoot = document.createElement('div');
-  tableRoot.classList.add("d-table__grid");
+  const tableRootContainer = document.createElement('div');
+  tableRootContainer.classList.add("d-table__grid");
 
   // Highlight the search term everywhere it appears in the widget: visible
   // table cells and the sticky tooltips. Uses the
@@ -587,15 +587,15 @@ export function drawTable(
     highlights.delete('tableSearch');
     const needle = term.trim().toLowerCase();
     if (!needle) return;
-    const roots = [
-      tableRoot.querySelector('.tabulator-tableholder'),
+    const rootElements = [
+      tableRootContainer.querySelector('.tabulator-tableholder'),
       // All live tooltips (transient + every pin) — they append to <body>,
       // so query them fresh each run rather than plumbing refs.
       ...document.querySelectorAll('.d-sticky-tooltip'),
-    ].filter((el): el is Element => !!el);
+    ].filter((rootElement): rootElement is Element => !!rootElement);
     const ranges: Range[] = [];
-    for (const root of roots) {
-      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (const rootElement of rootElements) {
+      const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
       let node: Node | null;
       while ((node = walker.nextNode())) {
         const hay = (node.nodeValue ?? '').toLowerCase();
@@ -612,7 +612,7 @@ export function drawTable(
     if (ranges.length) highlights.set('tableSearch', new (window as any).Highlight(...ranges));
   }
 
-  tabulatorTable = new Tabulator(tableRoot, {
+  tabulatorTable = new Tabulator(tableRootContainer, {
     height: props.height,
     maxHeight: "100vh",
     data: data,
@@ -684,8 +684,8 @@ export function drawTable(
   });
 
   // Assemble container
-  container.appendChild(searchInput);
-  container.appendChild(tableRoot);
+  tableContainer.appendChild(searchInputElement);
+  tableContainer.appendChild(tableRootContainer);
 
-  return container;
+  return tableContainer;
 }

@@ -13,11 +13,11 @@ import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
  */
 export const barHorizontal: Extension = {
   id: 'barHorizontal',
-  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('barHorizontal', (el, widget, ctx) => renderBarHorizontal(el, widget, ctx, commands))),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('barHorizontal', (widgetContainer, widget, ctx) => renderBarHorizontal(widgetContainer, widget, ctx, commands))),
 };
 
-function renderBarHorizontal(el: HTMLElement, widget: WidgetOf<'barHorizontal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderBarHorizontal(widgetContainer: HTMLElement, widget: WidgetOf<'barHorizontal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result, options) => drawBarHorizontal(result, widget.props, options, offerFiltersOf(commands, widget)),

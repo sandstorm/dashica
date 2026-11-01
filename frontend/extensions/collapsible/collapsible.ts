@@ -16,22 +16,22 @@ export const collapsible: Extension = {
   activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('collapsibleGroup', renderCollapsible)),
 };
 
-function renderCollapsible(el: HTMLElement, widget: WidgetOf<'collapsibleGroup'>, ctx: WidgetContext): Disposable {
-  const content: HTMLElement = html`<div class="d-collapsible__content"></div>`;
+function renderCollapsible(widgetContainer: HTMLElement, widget: WidgetOf<'collapsibleGroup'>, ctx: WidgetContext): Disposable {
+  const contentContainer: HTMLElement = html`<div class="d-collapsible__content"></div>`;
   const children = Object.entries(widget.children ?? {}).sort(([a], [b]) => Number(a) - Number(b));
-  const group: HTMLDetailsElement = html`<details class="d-collapsible">
+  const groupContainer: HTMLDetailsElement = html`<details class="d-collapsible">
     <summary class="d-collapsible__title">
       ${createElement(ChevronRight, { width: 16, height: 16, class: 'd-collapsible__chevron' })}
       <span>${widget.props.title ?? ''}</span>
       <span class="d-collapsible__count">· ${children.length === 1 ? '1 widget' : `${children.length} widgets`}</span>
     </summary>
-    ${content}
+    ${contentContainer}
   </details>`;
-  group.open = widget.props.open ?? false;
+  groupContainer.open = widget.props.open ?? false;
   const rendered: Disposable[] = [];
   for (const [, child] of children) {
-    rendered.push(ctx.renderChild(content.appendChild(el.ownerDocument.createElement('div')), child));
+    rendered.push(ctx.renderChild(contentContainer.appendChild(widgetContainer.ownerDocument.createElement('div')), child));
   }
-  el.replaceChildren(group);
+  widgetContainer.replaceChildren(groupContainer);
   return Disposable.from(...rendered);
 }

@@ -25,11 +25,11 @@ describe('grid', () => {
       },
     });
     await settle();
-    const layout = widgetContainer.firstElementChild as HTMLElement;
-    expect(layout.style.gridTemplateColumns).toBe('repeat(2, 1fr)');
-    expect(layout.style.gridTemplateAreas).toBe('"a b" "c c"');
-    expect(layout.style.gap).toBe('4px');
-    const cells = [...layout.children].map((cell) => [(cell as HTMLElement).style.gridArea, cell.textContent?.trim()]);
+    const layoutContainer = widgetContainer.firstElementChild as HTMLElement;
+    expect(layoutContainer.style.gridTemplateColumns).toBe('repeat(2, 1fr)');
+    expect(layoutContainer.style.gridTemplateAreas).toBe('"a b" "c c"');
+    expect(layoutContainer.style.gap).toBe('4px');
+    const cells = [...layoutContainer.children].map((cellElement) => [(cellElement as HTMLElement).style.gridArea, cellElement.textContent?.trim()]);
     expect(cells).toEqual([
       ['a', 'Requests'],
       ['b', 'Errors'],

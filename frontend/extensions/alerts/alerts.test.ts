@@ -20,7 +20,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
+const error = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-widget-error')?.textContent;
 
 describe('alerts', () => {
   it('draws the statuses of the group’s alerts once it is in view', async () => {

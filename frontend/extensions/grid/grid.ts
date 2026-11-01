@@ -12,19 +12,19 @@ export const grid: Extension = {
   activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('grid', renderGrid)),
 };
 
-function renderGrid(el: HTMLElement, widget: WidgetOf<'grid'>, ctx: WidgetContext): Disposable {
+function renderGrid(widgetContainer: HTMLElement, widget: WidgetOf<'grid'>, ctx: WidgetContext): Disposable {
   const template = widget.props.template ?? [];
-  const layout = el.ownerDocument.createElement('div');
-  layout.className = 'd-grid';
-  layout.style.gap = widget.props.gap ?? '';
-  layout.style.gridTemplateColumns = `repeat(${template[0]?.trim().split(/\s+/).length ?? 1}, 1fr)`;
-  layout.style.gridTemplateAreas = template.map((row) => JSON.stringify(row)).join(' ');
+  const layoutContainer = widgetContainer.ownerDocument.createElement('div');
+  layoutContainer.className = 'd-grid';
+  layoutContainer.style.gap = widget.props.gap ?? '';
+  layoutContainer.style.gridTemplateColumns = `repeat(${template[0]?.trim().split(/\s+/).length ?? 1}, 1fr)`;
+  layoutContainer.style.gridTemplateAreas = template.map((row) => JSON.stringify(row)).join(' ');
   const rendered: Disposable[] = [];
   for (const [name, child] of Object.entries(widget.children ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
-    const cell = layout.appendChild(el.ownerDocument.createElement('div'));
-    cell.style.gridArea = name;
-    rendered.push(ctx.renderChild(cell, child));
+    const cellContainer = layoutContainer.appendChild(widgetContainer.ownerDocument.createElement('div'));
+    cellContainer.style.gridArea = name;
+    rendered.push(ctx.renderChild(cellContainer, child));
   }
-  el.replaceChildren(layout);
+  widgetContainer.replaceChildren(layoutContainer);
   return Disposable.from(...rendered);
 }

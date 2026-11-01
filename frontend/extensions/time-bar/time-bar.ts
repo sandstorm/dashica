@@ -11,11 +11,11 @@ import { drawTimeBars } from '../chart-library/time-bars';
  */
 export const timeBar: Extension = {
   id: 'timeBar',
-  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeBar', (el, widget, ctx) => renderTimeBar(el, widget, ctx, commands))),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeBar', (widgetContainer, widget, ctx) => renderTimeBar(widgetContainer, widget, ctx, commands))),
 };
 
-function renderTimeBar(el: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: WidgetContext, commands: Commands): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderTimeBar(widgetContainer: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result, options) => drawTimeBars(result, widget.props, options, { offerFilters: offerFiltersOf(commands, widget) }),

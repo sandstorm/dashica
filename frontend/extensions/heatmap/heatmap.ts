@@ -18,22 +18,22 @@ export const heatmap: Extension = {
   id: 'heatmap',
   activate({ widgets, commands, subscriptions }) {
     subscriptions.push(widgets.registerWidget('timeHeatmap', renderTimeHeatmap));
-    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', (el, widget, ctx) => renderTimeHeatmapOrdinal(el, widget, ctx, commands)));
+    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', (widgetContainer, widget, ctx) => renderTimeHeatmapOrdinal(widgetContainer, widget, ctx, commands)));
   },
 };
 
-function renderTimeHeatmap(el: HTMLElement, widget: WidgetOf<'timeHeatmap'>, ctx: WidgetContext): ChartFrame {
+function renderTimeHeatmap(widgetContainer: HTMLElement, widget: WidgetOf<'timeHeatmap'>, ctx: WidgetContext): ChartFrame {
   const yBucketSize = widget.props.yBucketSize ?? 0;
   if (yBucketSize <= 0) throw new Error(`YBucketSize must be set to a positive value (was ${yBucketSize})`);
-  return new ChartFrame(el, ctx, {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result, options) => drawTimeHeatmap(result, widget.props, yBucketSize, options),
   });
 }
 
-function renderTimeHeatmapOrdinal(el: HTMLElement, widget: WidgetOf<'timeHeatmapOrdinal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderTimeHeatmapOrdinal(widgetContainer: HTMLElement, widget: WidgetOf<'timeHeatmapOrdinal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, offerFiltersOf(commands, widget)),

@@ -18,7 +18,7 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
 export const table: Extension = {
   id: 'table',
   activate: ({ widgets, commands, ui, page, subscriptions }) => {
-    subscriptions.push(widgets.registerWidget('table', (el, widget, ctx) => renderTable(el, widget, ctx, commands)));
+    subscriptions.push(widgets.registerWidget('table', (widgetContainer, widget, ctx) => renderTable(widgetContainer, widget, ctx, commands)));
     for (const [order, filter] of page.workbench.sqlEnabled ? CELL_FILTERS.entries() : []) {
       subscriptions.push(commands.registerCommand(filter.command, (cell: TableCellMenuContext) => commands.executeCommand(ADD_SQL, filter.condition(cell))));
       subscriptions.push(ui.registerMenuItem<TableCellMenuContext>('table/cell', { command: filter.command, title: filter.title, when: filter.when, order }));
@@ -38,7 +38,7 @@ const ADD_SQL = 'filters.addSql';
 /** The command a table runs with `{ widget, records }` on each change of its ticked rows (the `details` extension's). */
 const SHOW_RECORDS = 'details.showRecords';
 
-function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext, commands: Commands): { dispose(): void } {
+function renderTable(widgetContainer: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext, commands: Commands): { dispose(): void } {
   /** The ticked rows, in the order ticked. */
   let ticked: readonly WidgetRecord[] = [];
   const tick = (records: readonly WidgetRecord[]) => {
@@ -47,22 +47,22 @@ function renderTable(el: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetCont
     commands.executeCommand(SHOW_RECORDS, { widget, records }).catch((error: unknown) => console.error(`Command ${SHOW_RECORDS} failed:`, error));
   };
   // Tabulator fits a new width itself, and its colors are the page's: one table per answer, its ticks kept on a resize
-  let drawn: { result: QueryResult; table: HTMLElement } | undefined;
-  const frame = new ChartFrame(el, ctx, {
+  let drawn: { result: QueryResult; tableElement: HTMLElement } | undefined;
+  const frame = new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result) => {
-      if (drawn?.result === result) return drawn.table;
+      if (drawn?.result === result) return drawn.tableElement;
       // the table of a new answer has no row ticked
       tick([]);
-      const table = drawTable(result, widget.props, {
+      const tableElement = drawTable(result, widget.props, {
         offerFilters: offerFiltersOf(commands, widget),
         filterable: widget.filterable,
         selectRecords: tick,
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
       });
-      drawn = { result, table };
-      return table;
+      drawn = { result, tableElement };
+      return tableElement;
     },
   });
   return {

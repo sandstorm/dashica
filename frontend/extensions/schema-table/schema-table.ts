@@ -13,25 +13,25 @@ export const schemaTable: Extension = {
   activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('schemaTable', renderSchemaTable)),
 };
 
-function renderSchemaTable(el: HTMLElement, widget: WidgetOf<'schemaTable'>): Disposable {
-  const statement: HTMLElement = html`<pre class="d-schema-table__statement"></pre>`;
-  const shown: HTMLElement = html`<div class="d-schema-table">${statement}</div>`;
-  if (widget.props.title) statement.before(html`<h2 class="d-schema-table__title">${widget.props.title}</h2>`);
-  el.replaceChildren(shown);
+function renderSchemaTable(widgetContainer: HTMLElement, widget: WidgetOf<'schemaTable'>): Disposable {
+  const statementElement: HTMLElement = html`<pre class="d-schema-table__statement"></pre>`;
+  const schemaTableElement: HTMLElement = html`<div class="d-schema-table">${statementElement}</div>`;
+  if (widget.props.title) statementElement.before(html`<h2 class="d-schema-table__title">${widget.props.title}</h2>`);
+  widgetContainer.replaceChildren(schemaTableElement);
   const controller = new AbortController();
-  void showStatement(statement, `${widget.dataUrl}/schema`, controller.signal);
+  void showStatement(statementElement, `${widget.dataUrl}/schema`, controller.signal);
   return new Disposable(() => controller.abort());
 }
 
-/** Puts what the server answers at `url` into `statement`, marked as an error when it is one. */
-async function showStatement(statement: HTMLElement, url: string, signal: AbortSignal): Promise<void> {
+/** Puts what the server answers at `url` into `statementElement`, marked as an error when it is one. */
+async function showStatement(statementElement: HTMLElement, url: string, signal: AbortSignal): Promise<void> {
   try {
     const response = await fetch(url, { signal });
-    statement.textContent = await response.text();
-    if (!response.ok) statement.classList.add('d-schema-table__statement--error');
+    statementElement.textContent = await response.text();
+    if (!response.ok) statementElement.classList.add('d-schema-table__statement--error');
   } catch (error) {
     if (signal.aborted) return;
-    statement.textContent = error instanceof Error ? error.message : String(error);
-    statement.classList.add('d-schema-table__statement--error');
+    statementElement.textContent = error instanceof Error ? error.message : String(error);
+    statementElement.classList.add('d-schema-table__statement--error');
   }
 }

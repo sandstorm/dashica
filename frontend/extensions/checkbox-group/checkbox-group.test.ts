@@ -30,9 +30,9 @@ const methods: WidgetNode = {
   },
 };
 
-function checkbox(el: HTMLElement, option: string): HTMLInputElement {
-  const label = [...el.querySelectorAll('label.d-form-field__option')].find((l) => l.textContent!.includes(option))!;
-  return label.querySelector('input')!;
+function checkbox(widgetContainer: HTMLElement, option: string): HTMLInputElement {
+  const labelElement = [...widgetContainer.querySelectorAll('label.d-form-field__option')].find((candidateElement) => candidateElement.textContent!.includes(option))!;
+  return labelElement.querySelector('input')!;
 }
 
 describe('checkboxGroup', () => {

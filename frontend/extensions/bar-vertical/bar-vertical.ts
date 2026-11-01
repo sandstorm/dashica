@@ -14,11 +14,11 @@ import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
  */
 export const barVertical: Extension = {
   id: 'barVertical',
-  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('barVertical', (el, widget, ctx) => renderBarVertical(el, widget, ctx, commands))),
+  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('barVertical', (widgetContainer, widget, ctx) => renderBarVertical(widgetContainer, widget, ctx, commands))),
 };
 
-function renderBarVertical(el: HTMLElement, widget: WidgetOf<'barVertical'>, ctx: WidgetContext, commands: Commands): ChartFrame {
-  return new ChartFrame(el, ctx, {
+function renderBarVertical(widgetContainer: HTMLElement, widget: WidgetOf<'barVertical'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+  return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
     draw: (result, options) => drawBarVertical(result, widget.props, options, offerFiltersOf(commands, widget)),

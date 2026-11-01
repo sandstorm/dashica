@@ -20,37 +20,37 @@ export const dashboardPage: Extension = {
   activate: ({ page, query, widgets, subscriptions }) =>
     subscriptions.push(
       query.declare(PARAMS),
-      page.registerPageRenderer('dashboard', (el, shown, context) => renderDashboard(el, shown, context, widgets)),
+      page.registerPageRenderer('dashboard', (pageContainer, shown, context) => renderDashboard(pageContainer, shown, context, widgets)),
     ),
 };
 
-function renderDashboard(el: HTMLElement, page: PageJson, context: PageContext, widgets: WidgetsApi): Disposable {
-  const content: HTMLElement = html`<div class="d-dashboard-page"></div>`;
-  const rendered = page.widgets.map((widget) => widgets.render(content.appendChild(el.ownerDocument.createElement('div')), widget, context.query));
-  el.replaceChildren(content);
-  const reveal = () => revealLinked(content, context.hash);
+function renderDashboard(widgetContainer: HTMLElement, page: PageJson, context: PageContext, widgets: WidgetsApi): Disposable {
+  const contentContainer: HTMLElement = html`<div class="d-dashboard-page"></div>`;
+  const rendered = page.widgets.map((widget) => widgets.render(contentContainer.appendChild(widgetContainer.ownerDocument.createElement('div')), widget, context.query));
+  widgetContainer.replaceChildren(contentContainer);
+  const reveal = () => revealLinked(contentContainer, context.hash);
   reveal();
   return Disposable.from(...rendered, context.onDidChangeHash(reveal));
 }
 
 /** Opens the groups around the widget `hash` names (`#w=3`), scrolls it into view and highlights it. */
-function revealLinked(content: HTMLElement, hash: string): void {
+function revealLinked(contentContainer: HTMLElement, hash: string): void {
   const id = new URLSearchParams(hash.slice(1)).get('w');
   if (!id) return;
-  const widget = [...content.querySelectorAll<HTMLElement>('[data-data-url]')].find((candidate) => candidate.dataset.dataUrl!.split('/').pop() === id);
-  if (!widget) return;
-  for (let group = widget.closest('details'); group; group = group.parentElement?.closest('details') ?? null) group.open = true;
-  widget.scrollIntoView({ block: 'center' });
+  const widgetElement = [...contentContainer.querySelectorAll<HTMLElement>('[data-data-url]')].find((candidateElement) => candidateElement.dataset.dataUrl!.split('/').pop() === id);
+  if (!widgetElement) return;
+  for (let groupElement = widgetElement.closest('details'); groupElement; groupElement = groupElement.parentElement?.closest('details') ?? null) groupElement.open = true;
+  widgetElement.scrollIntoView({ block: 'center' });
   // again from the start when the same chart is linked twice
-  widget.classList.remove(LINKED);
-  void widget.offsetWidth;
-  widget.classList.add(LINKED);
+  widgetElement.classList.remove(LINKED);
+  void widgetElement.offsetWidth;
+  widgetElement.classList.add(LINKED);
   const onAnimationEnd = (event: AnimationEvent) => {
     if (event.animationName !== LINKED_ANIMATION) return;
-    widget.classList.remove(LINKED);
-    widget.removeEventListener('animationend', onAnimationEnd);
+    widgetElement.classList.remove(LINKED);
+    widgetElement.removeEventListener('animationend', onAnimationEnd);
   };
-  widget.addEventListener('animationend', onAnimationEnd);
+  widgetElement.addEventListener('animationend', onAnimationEnd);
 }
 
 const LINKED = 'd-dashboard-page__linked';

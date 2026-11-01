@@ -26,7 +26,7 @@ const inView = async () => {
   testbed.scrollIntoView();
   await settle();
 };
-const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textContent;
+const error = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-widget-error')?.textContent;
 
 describe('barHorizontal', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -59,10 +59,10 @@ describe('barHorizontal', () => {
     const props = { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } } as const;
     const { widgetContainer } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
-    const [short, , long] = widgetContainer.querySelectorAll('g[aria-label="bar"] rect');
-    const [, y] = anchor(short!);
+    const [shortElement, , longElement] = widgetContainer.querySelectorAll('g[aria-label="bar"] rect');
+    const [, y] = anchor(shortElement!);
     // below /0's middle, still on its band, as far right as /1's "b" is in its middle
-    await clickAtPoint((short as SVGElement).ownerSVGElement!, [anchor(long!)[0], y + 0.4 * Number(short!.getAttribute('height'))]);
+    await clickAtPoint((shortElement as SVGElement).ownerSVGElement!, [anchor(longElement!)[0], y + 0.4 * Number(shortElement!.getAttribute('height'))]);
     const shown = /path (\S+)/.exec(widgetContainer.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
     expect([shown, offers.at(-1)?.candidates.map(({ value }) => value)]).toEqual(['/0', ['/0', 'a']]);
   });
