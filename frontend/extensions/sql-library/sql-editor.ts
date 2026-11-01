@@ -16,7 +16,6 @@ export interface SqlEditors {
 export interface SqlEditorOptions {
   /** The text at first. */
   readonly value?: string;
-  /** Shown while it is empty. */
   readonly placeholder?: string;
   /** The accessible name of its text ("SQL"). */
   readonly label: string;

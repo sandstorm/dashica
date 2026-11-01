@@ -222,7 +222,6 @@ function connectionNode(name: string, schemas: Schemas): { connectionElement: HT
   return { connectionElement, refresh: () => (loaded ? load() : Promise.resolve()) };
 }
 
-/** A failed answer's text as an error notice. */
 function errorNotice(error: unknown): HTMLElement {
   return html`<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div>`;
 }

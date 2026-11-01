@@ -10,7 +10,6 @@ import type { SqlEditor, SqlEditorOptions } from './sql-editor';
 
 let editor: SqlEditor;
 
-/** A new editor of `options` in the document. */
 function create(options: Partial<SqlEditorOptions> = {}): SqlEditor {
   editor = sqlEditors.create({ label: 'SQL', ...options });
   document.body.append(editor.fieldElement);

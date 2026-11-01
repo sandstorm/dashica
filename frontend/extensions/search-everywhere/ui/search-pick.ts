@@ -47,7 +47,6 @@ export class SearchPick {
     this.#pick?.hide();
   }
 
-  /** Asks the providers for `text`, showing what they found as it comes. */
   #search(text: string): void {
     this.#round?.cancel();
     const round = (this.#round = new CancellationTokenSource());
