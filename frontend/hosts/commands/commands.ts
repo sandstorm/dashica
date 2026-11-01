@@ -100,4 +100,4 @@ export type MenuContext = Readonly<Record<string, unknown>>;
 export type Platform = 'mac' | 'win' | 'linux';
 
 export { CommandsHost } from './commands-impl';
-export { keyLabel } from './commands-helpers';
+export { keyLabel } from './keys';

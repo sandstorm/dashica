@@ -1,7 +1,7 @@
 // See Commands in commands.ts.
 import { Disposable } from '../../core/disposable/disposable';
 import type { CommandContribution, CommandEnablement, CommandOptions, Commands, KeybindingContribution, Platform } from './commands';
-import { DOUBLE_TAP, keyLabel, LABELS, PLATFORM } from './commands-helpers';
+import { DOUBLE_TAP, keyLabel, LABELS, PLATFORM } from './keys';
 import { listenForDoubleTap } from './double-tap';
 
 /** The workbench's `Commands`; listens for the bound keys on `rootElement`. `platform`: whose keys apply, default the browser's. */
