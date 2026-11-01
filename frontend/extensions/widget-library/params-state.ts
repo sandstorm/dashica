@@ -19,10 +19,6 @@ export function withParam(params: Params, name: string, value: string): Params {
   return { ...params, [name]: value };
 }
 
-function entriesOf(params: Params): [string, string][] {
-  return Object.keys(params).length > 0 ? [['wp', JSON.stringify(params)]] : [];
-}
-
 function parseParams(text: string | null): Params {
   try {
     const parsed: unknown = JSON.parse(text ?? '{}');
@@ -31,4 +27,8 @@ function parseParams(text: string | null): Params {
   } catch {
     return {};
   }
+}
+
+function entriesOf(params: Params): [string, string][] {
+  return Object.keys(params).length > 0 ? [['wp', JSON.stringify(params)]] : [];
 }

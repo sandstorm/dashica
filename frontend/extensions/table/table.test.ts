@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell of a
 // category column showing the data point menu of its value for the table, a cell's menu (`table/cell`) adding a
-// condition to the page's SQL filter by `filters.addSql` (none while SQL filters are off), a column header's (`table/header`) sizing the
-// columns.
+// condition to the page's SQL filter by `filters.addSql` (none while SQL filters are off), a column header's
+// (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';

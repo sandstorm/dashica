@@ -5,11 +5,12 @@ import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
 
 /**
  * Search everywhere: one quick pick over everything the search providers find (dashboards, commands, …), a group per
- * provider (`ui.getSearchProviders`). `show` opens it (`ui.createQuickPick`, hiding an open box). As the text changes every provider is asked (only those whose
- * prefix it starts with, if any), the previous round cancelled; synchronous results show at once, async ones as they
- * come (a progress line meanwhile). Items a provider did not match itself are matched fuzzily against their label, else
- * their description. Groups follow the providers' `order`. Picking an item closes the search, gives the focus back and
- * runs the item's `accept` right then (still in the user's gesture); with Cmd / Ctrl in a new tab.
+ * provider (`ui.getSearchProviders`). `show` opens it (`ui.createQuickPick`, hiding an open box). As the text changes
+ * every provider is asked (only those whose prefix it starts with, if any), the previous round cancelled; synchronous
+ * results show at once, async ones as they come (a progress line meanwhile). Items without the provider's own
+ * `highlights` are matched fuzzily against their label, else their description. Groups follow the providers' `order`.
+ * Picking an item closes the search, gives the focus back and runs the item's `accept` right then (still in the user's
+ * gesture); with Cmd / Ctrl in a new tab.
  */
 export class SearchPick {
   #pick: QuickPick<Row> | null = null;

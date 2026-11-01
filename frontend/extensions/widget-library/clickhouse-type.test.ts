@@ -36,7 +36,7 @@ describe('pillValue', () => {
     // a ns value to the µs, rounded; .9999996 ms carries over to the next ms
     expect(pillValue(read(new TimestampNanosecond(), BigInt(at) * 1000000n + 123456789n), 'DateTime64(9)')).toBe('2026-10-31T10:00:00.123457Z');
     expect(pillValue(read(new TimestampNanosecond(), BigInt(at) * 1000000n + 999999600n), 'DateTime64(9)')).toBe('2026-10-31T10:00:01.000000Z');
-    // up to DateTime64(3) the ms, as before
+    // up to DateTime64(3) the ms
     expect(pillValue(at + 100, 'DateTime64(1)')).toBe('2026-10-31T10:00:00.100Z');
   });
 

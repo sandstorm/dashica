@@ -1,9 +1,9 @@
 // See typeKind and pillValue.
 
 /**
- * What a ClickHouse type holds, as the filters compare it (docs/2026-10-28-workbench.md §3.15 D25): `day` a Date or
- * Date32, `time` a DateTime or DateTime64, `number` an integer, a float or a Decimal, `text` anything else (a String,
- * an Enum, a Bool, a UUID) and an unknown type. `Nullable(…)` and `LowCardinality(…)` count as what they wrap.
+ * What a ClickHouse type holds, as the filters compare it: `day` a Date or Date32, `time` a DateTime or DateTime64,
+ * `number` an integer, a float or a Decimal, `text` anything else (a String, an Enum, a Bool, a UUID) and an unknown
+ * type. `Nullable(…)` and `LowCardinality(…)` count as what they wrap.
  */
 export type TypeKind = 'text' | 'number' | 'day' | 'time';
 
@@ -15,18 +15,6 @@ export function typeKind(type: string | undefined): TypeKind {
   return 'text';
 }
 
-/** `type` without the `Nullable(…)` and `LowCardinality(…)` around it: `DateTime64(3)`; '' for none. */
-function unwrap(type: string | undefined): string {
-  let t = type?.trim() ?? '';
-  for (let wrapped = WRAPPED.exec(t); wrapped; wrapped = WRAPPED.exec(t)) t = wrapped[1].trim();
-  return t;
-}
-
-const WRAPPED = /^(?:Nullable|LowCardinality)\((.*)\)$/;
-
-/** A day in ms. */
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /**
  * A value of a column of ClickHouse type `type` as a pill compares it: a time as ISO 8601 in UTC
  * (`2026-10-31T10:00:00.000Z`), with as many fraction digits as a `DateTime64(P)` has, at least 3 and at most 6
@@ -35,7 +23,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * `Date32` in ms, those of a `DateTime64(4…9)` with their µs and ns as the fraction of a ms (apache-arrow's
  * Timestamp in µs and ns), a `Date` object as it is; a time that is no number or date stays its text. A number
  * carries a ms fraction to about 0.25 µs, so a `DateTime64(7…9)` is written to the µs (rounded): its click compares
- * to the µs, not the ns.
+ * to the µs.
  */
 export function pillValue(value: unknown, type: string | undefined): string {
   const kind = typeKind(type);
@@ -58,3 +46,15 @@ export function pillValue(value: unknown, type: string | undefined): string {
   const iso = new Date(whole).toISOString();
   return extra === 0 ? iso : `${iso.slice(0, -1)}${String(below).padStart(extra, '0')}Z`;
 }
+
+/** `type` without the `Nullable(…)` and `LowCardinality(…)` around it: `DateTime64(3)`; '' for none. */
+function unwrap(type: string | undefined): string {
+  let t = type?.trim() ?? '';
+  for (let wrapped = WRAPPED.exec(t); wrapped; wrapped = WRAPPED.exec(t)) t = wrapped[1].trim();
+  return t;
+}
+
+const WRAPPED = /^(?:Nullable|LowCardinality)\((.*)\)$/;
+
+/** A day in ms. */
+const DAY_MS = 24 * 60 * 60 * 1000;

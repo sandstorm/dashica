@@ -81,7 +81,7 @@ const around = (ms: number) => (cell: TableCellMenuContext) => {
 
 /**
  * A cell's SQL filters, in menu order. A table whose cells show their data point menu on a click leaves "Equals" /
- * "Not equals" to that menu's filters, and keeps the entries no filter op says.
+ * "Not equals" to that menu's filters, and keeps "Contains" and the time windows.
  */
 const CELL_FILTERS: readonly {
   command: string;
