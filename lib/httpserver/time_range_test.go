@@ -26,7 +26,9 @@ func TestParseTimeExpr(t *testing.T) {
 		"days ago":           {text: "now-2d", want: now.AddDate(0, 0, -2)},
 		"weeks ago":          {text: "now-1w", want: now.AddDate(0, 0, -7)},
 		"ahead":              {text: "now+1h", want: now.Add(time.Hour)},
-		"absolute":           {text: "2026-10-29 10:00", want: time.Date(2026, 10, 29, 10, 0, 0, 0, time.Local)},
+		"absolute":           {text: "2026-10-29 10:00+01:00", want: time.Date(2026, 10, 29, 9, 0, 0, 0, time.UTC)},
+		"absolute, behind":   {text: "2026-10-29 10:00-03:00", want: time.Date(2026, 10, 29, 13, 0, 0, 0, time.UTC)},
+		"absolute in UTC":    {text: "2026-10-29 10:00Z", want: time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)},
 		"surrounding spaces": {text: " now-1h ", want: now.Add(-time.Hour)},
 	}
 	for name, tt := range tests {
@@ -44,7 +46,8 @@ func TestParseTimeExpr(t *testing.T) {
 
 func TestParseTimeExpr_RejectsWhatItDoesNotKnow(t *testing.T) {
 	now := time.Now()
-	for _, text := range []string{"", "yesterday", "now-6", "now-6y", "now-h", "2026-10-29", "2026-10-29T10:00", "now()-1h"} {
+	// an absolute time without offset to UTC means another time in each time zone
+	for _, text := range []string{"", "yesterday", "now-6", "now-6y", "now-h", "2026-10-29", "2026-10-29 10:00", "2026-10-29T10:00+01:00", "now()-1h"} {
 		if _, err := parseTimeExpr(text, now); err == nil {
 			t.Errorf("parseTimeExpr(%q): want an error", text)
 		}
@@ -104,9 +107,9 @@ func TestResolveTimeRange(t *testing.T) {
 		"preset":   {query: url.Values{"time": {"90m"}}, from: now.Add(-90 * time.Minute), to: now},
 		"relative": {query: url.Values{"time": {"custom"}, "range": {"now-6h to now-1h"}}, from: now.Add(-6 * time.Hour), to: now.Add(-time.Hour)},
 		"absolute": {
-			query: url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00 to 2026-10-28 09:30"}},
-			from:  time.Date(2026, 10, 28, 8, 0, 0, 0, time.Local),
-			to:    time.Date(2026, 10, 28, 9, 30, 0, 0, time.Local),
+			query: url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00+01:00 to 2026-10-28 09:30+01:00"}},
+			from:  time.Date(2026, 10, 28, 7, 0, 0, 0, time.UTC),
+			to:    time.Date(2026, 10, 28, 8, 30, 0, 0, time.UTC),
 		},
 	}
 	for name, tt := range tests {
@@ -144,14 +147,14 @@ func TestResolveTimeRange_SaysWhatIsWrong(t *testing.T) {
 }
 
 func TestTimeRangeHandler(t *testing.T) {
-	query := url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00 to 2026-10-28 09:30"}}
+	query := url.Values{"time": {"custom"}, "range": {"2026-10-28 08:00+01:00 to 2026-10-28 09:30+01:00"}}
 	rec := httptest.NewRecorder()
 	TimeRangeHandler{}.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/time-range?"+query.Encode(), nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body)
 	}
-	from := time.Date(2026, 10, 28, 8, 0, 0, 0, time.Local).UnixMilli()
-	to := time.Date(2026, 10, 28, 9, 30, 0, 0, time.Local).UnixMilli()
+	from := time.Date(2026, 10, 28, 7, 0, 0, 0, time.UTC).UnixMilli()
+	to := time.Date(2026, 10, 28, 8, 30, 0, 0, time.UTC).UnixMilli()
 	if want := fmt.Sprintf(`{"from":%d,"to":%d}`, from, to); strings.TrimSpace(rec.Body.String()) != want {
 		t.Errorf("body = %s, want %s", rec.Body, want)
 	}

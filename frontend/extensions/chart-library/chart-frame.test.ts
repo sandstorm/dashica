@@ -13,10 +13,14 @@ let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
   // sent along, declared as by the time-range extension
+  process.env.TZ = 'Europe/Berlin';
   testbed = widgetTestbed({ keys: [TIME] });
 });
 
-afterEach(() => testbed.dispose());
+afterEach(() => {
+  delete process.env.TZ;
+  testbed.dispose();
+});
 
 const requests: WidgetNode = { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1' };
 
@@ -205,8 +209,9 @@ describe('ChartFrame', () => {
     testbed.render(requests);
     testbed.scrollIntoView();
     await settle();
-    selectTime(new Date(2026, 9, 29, 10, 0), new Date(2026, 9, 29, 11, 30));
-    expect(testbed.query.get(TIME)).toEqual({ range: 'custom', custom: '2026-10-29 10:00 to 2026-10-29 11:30' });
+    selectTime(new Date(Date.UTC(2026, 9, 29, 9, 0)), new Date(Date.UTC(2026, 9, 29, 10, 30)));
+    // in the viewer's time zone, here Berlin's, with its offset
+    expect(testbed.query.get(TIME)).toEqual({ range: 'custom', custom: '2026-10-29 10:00+01:00 to 2026-10-29 11:30+01:00' });
   });
 
   it('opens the widget’s menu from its button', () => {

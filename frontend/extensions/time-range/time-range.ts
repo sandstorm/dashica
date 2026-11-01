@@ -2,7 +2,7 @@ import { html } from 'htl';
 import { ChevronDown, ChevronLeft, ChevronRight, Clock, ZoomOut, createElement } from 'lucide';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
-import { formatTime } from '../time-library/format-time';
+import { formatTime, withUtcOffset } from '../time-library/format-time';
 import { REFRESH } from '../time-library/refresh-state';
 import { TIME, customRange, presetRange } from '../time-library/time-state';
 import './time-range.css';
@@ -12,7 +12,8 @@ import './time-range.css';
  * the top bar: a button showing the range ("Last 1 hour", "2026-10-29 10:00 to 12:00") that opens the picker, ‹ ›
  * shifting the window by its length, ⊖ zooming out to twice the window. On every page, the start page too. The picker
  * has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets), filtered by
- * typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply asks it
+ * typing, and the last three custom ranges applied (per viewer). An absolute time typed without offset to UTC gets the
+ * viewer's (`withUtcOffset`), so every time sent has one; only the server reads the times: Apply asks it
  * (`/time-range`) and shows its reason when it cannot. A range ending at a fixed time stays fixed, so applying one
  * turns auto refresh off (the query key `REFRESH`). A selection on a time chart shows here as a custom range.
  */
@@ -182,8 +183,8 @@ class TimeRangePicker {
 
   /** Applies From / To once the server could read them; else shows its reason ("time \"yesterday\": …"). */
   async #applyCustom(): Promise<void> {
-    const from = this.#fromElement.value.trim();
-    const to = this.#toElement.value.trim();
+    const from = withUtcOffset(this.#fromElement.value);
+    const to = withUtcOffset(this.#toElement.value);
     this.#errorElement.textContent = '';
     this.#applyButtonElement.disabled = true;
     try {

@@ -93,9 +93,9 @@ func (h TimeRangeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // relativeTimeExpr is `now`, or `now` and an offset: `now-6h`, `now+1d` (units s m h d w).
 var relativeTimeExpr = regexp.MustCompile(`^now(?:([+-])(\d+)([smhdw]))?$`)
 
-// parseTimeExpr reads one end of a custom time range, as the time picker sends it: an absolute time `2026-10-29 10:00`
-// in the server's time zone, or a time relative to `now` (`now-6h`). Days and weeks are calendar days, so `now-1d` is
-// the same time yesterday.
+// parseTimeExpr reads one end of a custom time range, as the browser sends it: an absolute time with its offset to UTC
+// (`2026-10-29 10:00+01:00`, the viewer's), or a time relative to `now` (`now-6h`). Days and weeks are calendar days,
+// so `now-1d` is the same time yesterday.
 func parseTimeExpr(text string, now time.Time) (time.Time, error) {
 	text = strings.TrimSpace(text)
 	if m := relativeTimeExpr.FindStringSubmatch(text); m != nil {
@@ -122,12 +122,15 @@ func parseTimeExpr(text string, now time.Time) (time.Time, error) {
 			return now.AddDate(0, 0, 7*n), nil
 		}
 	}
-	t, err := time.ParseInLocation("2006-01-02 15:04", text, time.Local)
+	t, err := time.Parse(absoluteTimeLayout, text)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("time %q: neither `now-…` nor `2006-01-02 15:04`", text)
+		return time.Time{}, fmt.Errorf("time %q: neither `now-…` nor `2006-01-02 15:04+01:00`", text)
 	}
 	return t, nil
 }
+
+// absoluteTimeLayout is an absolute time with its offset to UTC: `2026-10-29 10:00+01:00`, `2026-10-29 09:00Z`.
+const absoluteTimeLayout = "2006-01-02 15:04Z07:00"
 
 func newTimeRange(from, to time.Time) *querying.TimeRange {
 	fromMs, toMs := from.UnixMilli(), to.UnixMilli()

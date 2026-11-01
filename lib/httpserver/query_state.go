@@ -18,7 +18,7 @@ import (
 type QueryState struct {
 	// Time is the time range: a preset as a Go duration (`1h`, `168h`), or `custom` for Range.
 	Time string
-	// Range is the custom range, `<from> to <to>`, each end a time expression (`2026-10-29 10:00`, `now-6h`).
+	// Range is the custom range, `<from> to <to>`, each end a time expression (`2026-10-29 10:00+01:00`, `now-6h`).
 	Range string
 	// Pills are the keys of the pills (`f`, filter.FilterService.Sign), in the order of the URL, not yet checked:
 	// filter.FilterService.Open checks each.

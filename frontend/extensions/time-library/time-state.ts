@@ -18,13 +18,13 @@ export const TIME = queryKey<TimeRange>(['time', 'range'], {
 export interface TimeRange {
   /** A preset as a Go duration (`1h`, `168h`), or `custom`. */
   readonly range: string;
-  /** The custom range as the server reads it (`2026-10-29 10:00 to now-1h`); '' unless `range` is `custom`. */
+  /** The custom range as the server reads it (`2026-10-29 10:00+01:00 to now-1h`); '' unless `range` is `custom`. */
   readonly custom: string;
 }
 
 /**
- * The custom range from `from` to `to`, each a time as the server reads it: `2026-10-29 10:00` (a selection on a time
- * chart, `formatTime`) or relative to now, `now-6h` (the time picker).
+ * The custom range from `from` to `to`, each a time as the server reads it: absolute with its offset to UTC,
+ * `2026-10-29 10:00+01:00` (`formatTime`, `withUtcOffset`), or relative to now, `now-6h`.
  */
 export function customRange(from: string, to: string): TimeRange {
   return { range: 'custom', custom: `${from} to ${to}` };

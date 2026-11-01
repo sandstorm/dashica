@@ -1,6 +1,6 @@
 import type * as Plot from '@observablehq/plot';
 import type { QueryResult } from '../../hosts/widgets/widgets';
-import { formatTime } from '../time-library/format-time';
+import { formatLocalTime } from '../time-library/format-time';
 
 /**
  * The time range the server queried for `result` (X-Dashica-Resolved-Time-Range), in ms since the epoch: a time
@@ -44,14 +44,14 @@ export function timeBucketTip(x: string, xBucketSize: number, label: string, cha
 /** `Sat 2026-10-31 20:55` in the viewer's time zone, with the seconds when it has any: a time in a chart's tooltip. */
 export function formatTipTime(time: Date | number): string {
   const date = new Date(time);
-  return `${WEEKDAYS[date.getDay()]} ${formatTime(date)}${secondsOf(date)}`;
+  return `${WEEKDAYS[date.getDay()]} ${formatLocalTime(date)}${secondsOf(date)}`;
 }
 
 /** `Sat 2026-10-31 20:55–21:00`: a time bucket in a chart's tooltip; the end's day only when it is another. */
 export function formatTipSpan(from: Date | number, to: Date | number): string {
   const [fromDate, toDate] = [new Date(from), new Date(to)];
   const sameDay = fromDate.toDateString() === toDate.toDateString();
-  return `${formatTipTime(fromDate)}–${sameDay ? `${formatTime(toDate).slice(11)}${secondsOf(toDate)}` : formatTipTime(toDate)}`;
+  return `${formatTipTime(fromDate)}–${sameDay ? `${formatLocalTime(toDate).slice(11)}${secondsOf(toDate)}` : formatTipTime(toDate)}`;
 }
 
 /** The width of a time chart's tip in ems: a bucket over midnight in one line (`Sat 2026-10-31 23:00–Sun 2026-11-01 00:00`). */

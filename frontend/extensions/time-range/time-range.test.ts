@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-// Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range), closing the panel, shift and zoom.
+// Tests for time-range.ts: the button, the quick ranges, From / To (read by a fake /time-range; an absolute time with the
+// viewer's offset to UTC, here Berlin's), closing the panel, shift and zoom.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
@@ -12,6 +13,7 @@ let barContainer: HTMLElement;
 let stored: Map<string, unknown>;
 
 beforeEach(() => {
+  process.env.TZ = 'Europe/Berlin';
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
   // the refresh extension's state, which a fixed range turns off
@@ -38,6 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.TZ;
   vi.unstubAllGlobals();
   query.dispose();
   document.body.replaceChildren();
@@ -132,17 +135,26 @@ describe('timeRange', () => {
     type('From', '2026-10-28 08:00');
     type('To', '2026-10-28 09:30');
     await submit();
-    expect(time().custom).toBe('2026-10-28 08:00 to 2026-10-28 09:30');
+    expect(time().custom).toBe('2026-10-28 08:00+01:00 to 2026-10-28 09:30+01:00');
     expect(autoRefresh()).toBeUndefined();
-    expect(rangeButton().textContent).toBe('2026-10-28 08:00 to 09:30');
+    expect(rangeButton().textContent).toBe('2026-10-28 08:00+01:00 to 09:30+01:00');
+  });
+
+  it('sends a typed time with an offset to UTC as it is', async () => {
+    const asked = serverAnswers(200, '{"from":1761631200000,"to":1761636600000}');
+    rangeButton().click();
+    type('From', '2026-10-28 08:00-03:00');
+    type('To', '2026-10-28 09:30Z');
+    await submit();
+    expect(asked).toEqual([new URLSearchParams({ time: 'custom', range: '2026-10-28 08:00-03:00 to 2026-10-28 09:30Z' }).toString()]);
   });
 
   it('shows the server’s reason for a range it cannot read, and applies nothing', async () => {
-    serverAnswers(400, 'time "yesterday": neither `now-…` nor `2006-01-02 15:04`\n');
+    serverAnswers(400, 'time "yesterday": neither `now-…` nor `2006-01-02 15:04+01:00`\n');
     rangeButton().click();
     type('From', 'yesterday');
     await submit();
-    expect(panel().querySelector('[role=alert]')!.textContent).toBe('time "yesterday": neither `now-…` nor `2006-01-02 15:04`');
+    expect(panel().querySelector('[role=alert]')!.textContent).toBe('time "yesterday": neither `now-…` nor `2006-01-02 15:04+01:00`');
     expect(panel().hidden).toBe(false);
     expect(time().range).toBe('24h');
   });
@@ -179,12 +191,12 @@ describe('timeRange', () => {
     query.set(TIME, presetRange('1h'));
     query.set(REFRESH, 30);
     click('Shift back');
-    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 10:00 to 2026-10-29 11:00'));
+    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 10:00+01:00 to 2026-10-29 11:00+01:00'));
     expect(asked).toEqual(['time=1h']);
     expect(autoRefresh()).toBeUndefined();
     serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(11, 0) }));
     click('Shift forward');
-    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 11:00 to 2026-10-29 12:00'));
+    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 11:00+01:00 to 2026-10-29 12:00+01:00'));
   });
 
   it('zooms a window ending now out to the preset twice as long', async () => {
@@ -197,8 +209,8 @@ describe('timeRange', () => {
 
   it('zooms a fixed window out by half its length on each side', async () => {
     serverAnswers(200, JSON.stringify({ from: at(10, 0), to: at(12, 0) }));
-    query.set(TIME, customRange('2026-10-29 10:00', '2026-10-29 12:00'));
+    query.set(TIME, customRange('2026-10-29 10:00+01:00', '2026-10-29 12:00+01:00'));
     click('Zoom out');
-    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 09:00 to 2026-10-29 13:00'));
+    await vi.waitFor(() => expect(time().custom).toBe('2026-10-29 09:00+01:00 to 2026-10-29 13:00+01:00'));
   });
 });
