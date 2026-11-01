@@ -15,13 +15,13 @@ export function keyLabel(key: string, mac = IS_MAC): string {
 /** The platform the browser runs on. */
 export const PLATFORM: Platform = typeof navigator === 'undefined' ? 'linux' : /Mac|iPhone|iPad/.test(navigator.platform) ? 'mac' : /Win/.test(navigator.platform) ? 'win' : 'linux';
 
-const IS_MAC = PLATFORM === 'mac';
-
 /** A modifier tapped twice (`Shift Shift`). */
 export const DOUBLE_TAP = /^(Mod|Ctrl|Meta|Alt|Shift) \1$/;
 
 /** The labels of the modifiers outside the Mac; its keys are the modifiers a binding may name. */
 export const LABELS: Record<string, string> = { Mod: 'Ctrl', Ctrl: 'Ctrl', Meta: 'Meta', Alt: 'Alt', Shift: 'Shift' };
+
+const IS_MAC = PLATFORM === 'mac';
 
 const MAC_LABELS: Record<string, string> = { Mod: '⌘', Ctrl: '⌃', Meta: '⌘', Alt: '⌥', Shift: '⇧' };
 

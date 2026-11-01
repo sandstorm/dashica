@@ -3,9 +3,9 @@ import type { Disposable } from '../../core/disposable/disposable';
 /**
  * Commands: named actions an extension offers to the others. Other extensions, menu entries, key bindings and search
  * everywhere run them by id. The handler runs synchronously inside `executeCommand`, so focus and selection are still
- * those of the user's click or key. Whether a command can run now is the command's own (its `enablement`, as VS Code's
- * `contributes.commands[].enablement`): every place that shows or triggers it asks `enablement(id)`, so a menu entry,
- * a rail button and search everywhere show it greyed with its `disabledReason` on hover, and its keys do nothing.
+ * those of the user's click or key. Whether a command can run now is the command's own (its `enablement`): every
+ * place that shows or triggers it asks `enablement(id)`, so a menu entry, a rail button and search everywhere show it
+ * greyed with its `disabledReason` on hover, and its keys do nothing.
  * A menu entry's `when` only says whether the entry shows.
  */
 export interface Commands {
@@ -38,7 +38,7 @@ export interface CommandOptions {
 /** What `enablement` answers: whether the command can run now and, while it cannot, why. */
 export interface CommandEnablement {
   readonly enabled: boolean;
-  /** Only while not `enabled`: the command's `disabledReason`. */
+  /** While it cannot run: the command's `disabledReason`. */
   readonly disabledReason?: string;
 }
 
