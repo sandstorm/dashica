@@ -23,39 +23,25 @@ import {
   type RowsAnswer,
 } from './rows';
 
-/** Perspective as the view uses it, from the lazily loaded module (perspective.ts). */
-export interface Perspective {
-  /** The page's one client of the engine in a Web Worker. */
-  worker(): Promise<PerspectiveClient>;
-  /** A new `<perspective-viewer>` with the datagrid and the charts; once `worker()` resolved, which defines it. */
-  createViewer(doc: Document): PerspectiveViewer;
+/**
+ * Fills `viewContainer` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's
+ * result", the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor
+ * (sql-library's, loaded with the view, completing the names of the connection's schema; open from the start) with the
+ * values of its parameters beside it and a sash below setting its height (kept in `state`), the notes of the config
+ * mapping, and `<perspective-viewer>` with its settings panel open. Following the chart (no `exploreSql` in the tab's
+ * hash) it shows the chart's result with the page's query state and the editor the chart's SQL for that state, its
+ * placeholders (`{__from:DateTime64}`) kept and their values listed, both fetched again on each `onDidRequestRefresh`.
+ * Run puts the editor's text and the listed values into the hash (`exploreSql`, `param_<name>`): the view then shows
+ * that query's rows, which the page's time range and filters leave as they are, until "Reset to the chart's query". It
+ * keeps the config the viewer changed per chart and mode; "Reset" goes back to the chart's once the viewer confirmed it
+ * (`confirmReset`). A blank Explore (no `widget`) has a connection picker in its bar in place of the chart's state:
+ * its editor starts empty, Run shows the rows of its text on the picked connection (`/rows?connection=…`), and the
+ * pick is the hash's `connection`.
+ */
+export function renderExploreView(widgetContainer: HTMLElement, options: ExploreViewOptions): Disposable {
+  const view = new ExploreView(widgetContainer, options);
+  return new Disposable(() => view.dispose());
 }
-
-export interface PerspectiveClient {
-  /** A table of the Arrow IPC stream `arrow`. */
-  table(arrow: ArrayBuffer): Promise<PerspectiveTable>;
-}
-
-export interface PerspectiveTable {
-  /** Swaps the rows for those of `arrow`, the same columns; the viewer on it keeps its config. */
-  replace(arrow: ArrayBuffer): Promise<void>;
-  /** The columns by name, each with its Perspective type (`string`, `integer`, `float`, `boolean`, `date`, `datetime`). */
-  schema(): Promise<Record<string, string>>;
-  size(): Promise<number>;
-  delete(): Promise<void>;
-}
-
-export interface PerspectiveViewer extends HTMLElement {
-  load(table: PerspectiveTable): Promise<unknown>;
-  restore(config: ViewerConfig): Promise<void>;
-  save(): Promise<ViewerConfig>;
-  /** Back to no config; `all`: the plugin's settings too. */
-  reset(all?: boolean): Promise<unknown>;
-  /** Opens (`true`) or closes the settings panel, else toggles it. */
-  toggleConfig(force?: boolean): Promise<unknown>;
-  delete(): Promise<unknown>;
-}
-
 
 /** A chart that serves its rows to the view: its result, and the rows of its SQL as the viewer edited it. */
 export type ChartWithRows = Extract<WidgetNode, { rowsUrl?: string }> & { readonly rowsUrl: string };
@@ -93,24 +79,37 @@ export interface ExploreViewOptions {
   confirmReset(anchorElement: Element): Promise<boolean>;
 }
 
-/**
- * Fills `viewContainer` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's
- * result", the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor
- * (sql-library's, loaded with the view, completing the names of the connection's schema; open from the start) with the
- * values of its parameters beside it and a sash below setting its height (kept in `state`), the notes of the config
- * mapping, and `<perspective-viewer>` with its settings panel open. Following the chart (no `exploreSql` in the tab's
- * hash) it shows the chart's result with the page's query state and the editor the chart's SQL for that state, its
- * placeholders (`{__from:DateTime64}`) kept and their values listed, both fetched again on each
- * `onDidRequestRefresh`. Run puts the editor's text and the listed values into the
- * hash (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's time range and filters
- * do not change, until "Reset to the chart's query". It keeps the config the viewer changed per chart and mode; "Reset"
- * goes back to the chart's once the viewer confirmed it (`confirmReset`). A blank Explore (no `widget`) has a
- * connection picker in its bar in place of the chart's state: its editor starts empty, Run shows the rows of its text
- * on the picked connection (`/rows?connection=…`), and the pick is the hash's `connection`.
- */
-export function renderExploreView(widgetContainer: HTMLElement, options: ExploreViewOptions): Disposable {
-  const view = new ExploreView(widgetContainer, options);
-  return new Disposable(() => view.dispose());
+/** Perspective as the view uses it, from the lazily loaded module (perspective.ts). */
+export interface Perspective {
+  /** The page's one client of the engine in a Web Worker. */
+  worker(): Promise<PerspectiveClient>;
+  /** A new `<perspective-viewer>` with the datagrid and the charts; once `worker()` resolved, which defines it. */
+  createViewer(doc: Document): PerspectiveViewer;
+}
+
+export interface PerspectiveClient {
+  /** A table of the Arrow IPC stream `arrow`. */
+  table(arrow: ArrayBuffer): Promise<PerspectiveTable>;
+}
+
+export interface PerspectiveTable {
+  /** Swaps the rows for those of `arrow`, the same columns; the viewer on it keeps its config. */
+  replace(arrow: ArrayBuffer): Promise<void>;
+  /** The columns by name, each with its Perspective type (`string`, `integer`, `float`, `boolean`, `date`, `datetime`). */
+  schema(): Promise<Record<string, string>>;
+  size(): Promise<number>;
+  delete(): Promise<void>;
+}
+
+export interface PerspectiveViewer extends HTMLElement {
+  load(table: PerspectiveTable): Promise<unknown>;
+  restore(config: ViewerConfig): Promise<void>;
+  save(): Promise<ViewerConfig>;
+  /** Back to no config; `all`: the plugin's settings too. */
+  reset(all?: boolean): Promise<unknown>;
+  /** Opens (`true`) or closes the settings panel, else toggles it. */
+  toggleConfig(force?: boolean): Promise<unknown>;
+  delete(): Promise<unknown>;
 }
 
 /** What the view calls `widget`: its title, else its type; a blank Explore (`undefined`) is "Explore". */
@@ -153,11 +152,6 @@ export function withEditedQuery(hash: string, edited: EditedQuery | undefined): 
   return `#${params}`;
 }
 
-/** `a` and `b` are the same edited query (or both none): the same SQL and parameters. */
-function sameQuery(a: EditedQuery | undefined, b: EditedQuery | undefined): boolean {
-  return withEditedQuery('', a) === withEditedQuery('', b);
-}
-
 /**
  * What the viewer's config keeps across visits: without the table's name (new per visit), its theme, title and
  * whether the settings panel is open (it opens with every viewer).
@@ -166,15 +160,6 @@ export function persistable(config: ViewerConfig): ViewerConfig {
   const { table: _table, theme: _theme, title: _title, settings: _settings, ...kept } = config;
   return kept;
 }
-
-/** Where the view's state keeps the SQL panel's height. */
-const SQL_HEIGHT_KEY = 'sqlHeight';
-
-/**
- * The SQL panel's height in pixels: at first about eight lines of the editor above Run; at least two lines; an arrow
- * key moves it by one line.
- */
-const SQL_HEIGHT = { initial: 216, min: 96, max: 2000, step: 19 } as const;
 
 class ExploreView {
   readonly #statusElement: HTMLElement = html`<span class="d-explore-view__status"></span>`;
@@ -649,4 +634,18 @@ class ExploreView {
     void viewerElement.delete().then(() => table.delete());
     viewerElement.remove();
   }
+}
+
+/** Where the view's state keeps the SQL panel's height. */
+const SQL_HEIGHT_KEY = 'sqlHeight';
+
+/**
+ * The SQL panel's height in pixels: at first about eight lines of the editor above Run; at least two lines; an arrow
+ * key moves it by one line.
+ */
+const SQL_HEIGHT = { initial: 216, min: 96, max: 2000, step: 19 } as const;
+
+/** `a` and `b` are the same edited query (or both none): the same SQL and parameters. */
+function sameQuery(a: EditedQuery | undefined, b: EditedQuery | undefined): boolean {
+  return withEditedQuery('', a) === withEditedQuery('', b);
 }

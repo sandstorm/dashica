@@ -10,21 +10,15 @@ import { chartTitle, renderExploreView, type ChartWithRows, type Perspective } f
 import './explore-view.css';
 
 /**
- * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore_enabled; else only "Explore"
- * greyed in the global menu, its command `exploreView.open` not enabled, EXPLORE_NOT_ENABLED): "Open in Explore view" in a chart's menu (`widget/context`, charts
- * with a `rowsUrl`) opens a new tab with the chart's result in `<perspective-viewer>`, its settings panel open and its config rebuilt from the chart's props, while the tab's time range and filters keep
- * working on it. "SQL" shows the chart's SQL as it runs, its placeholders kept and their values beside it; the viewer
- * edits it and runs it (`#explore=3&exploreSql=…`), and the page's time range and filters no longer apply until
- * "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
- * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
- * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab, "Reset" asks
- * first (`confirmReset`). A click on a group row's value of the chart's result shows the chart's data point menu
- * (`widgets.showDataPointMenu`), where the `filters` extension offers to filter the tab by it or exclude it. The global menu's "Explore" opens a blank Explore in a new tab
- * (`#explore=&connection=<name>`): a connection picker and an empty editor, run on that connection
- * (`/rows?connection=…`); its "Explore (from chart…)" opens one with the SQL, parameters and connection of a chart of
- * any dashboard (`menuCharts`, the shown one's first), run at once. Perspective loads on first use
- * (`loadPerspective`), and so does the SQL editor (sql-library's `loadSqlEditors`, CodeMirror 6 with ClickHouse's
- * dialect), which completes the names of the connection's schema.
+ * The Explore view, with Explore enabled (`workbench.json`'s `explore`, explore_enabled): "Open in Explore view" in a
+ * chart's menu (`widget/context`, charts with a `rowsUrl`) opens a new tab with the chart's result in
+ * `<perspective-viewer>`, its config rebuilt from the chart's props, the tab's time range and filters applying; "SQL"
+ * shows the chart's SQL with its placeholders and their values, which the viewer edits and runs (`exploreSql`). The
+ * tab is the page kind `explore`, its hash naming the chart on the source tab's URL (`#explore=3`, the id in its
+ * `dataUrl`), so a link or a reload opens it again. The global menu's "Explore (from scratch)" opens a blank Explore on
+ * a connection (`#explore=&connection=<name>`), "Explore (from chart…)" one with a chart's SQL (`menuCharts`). A click
+ * on a group row shows the chart's data point menu. Perspective and the SQL editor load on first use. With Explore
+ * off, the global menu shows "Explore" greyed (`EXPLORE_NOT_ENABLED`).
  */
 export const exploreView: Extension = {
   id: 'exploreView',
@@ -55,7 +49,7 @@ export const exploreView: Extension = {
           onDidChangeHash: context.onDidChangeHash,
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
-          // the chart is not rendered here: its data point menu is shown for it as its menus are (`WidgetMenuContext`)
+          // the chart is on another tab: its data point menu is shown for it as its menus are (`WidgetMenuContext`)
           showDataPointMenu: (at, dataPoints) =>
             widget &&
             widgets.showDataPointMenu({ widget, url: (path) => `${(widget as ChartWithRows).dataUrl}${path}?${context.query.requestParams()}`, lastResult: undefined }, at, dataPoints),
@@ -111,24 +105,14 @@ export const exploreView: Extension = {
   },
 };
 
-/** The global menu's "Explore (from scratch)": a blank Explore in a new tab (`exploreView.open`). */
-const EXPLORE_ENTRY: MenuItem = { command: 'exploreView.open', title: 'Explore (from scratch)', group: 'explore' };
-
 /**
- * The global menu's only trace of the Explore view while it is not enabled: its command `exploreView.open` never
- * enabled, so "Explore" shows greyed, its hover saying why.
+ * The global menu's only trace of the Explore view while Explore is off: its command `exploreView.open`, always
+ * disabled, so "Explore" shows greyed, its hover saying why.
  */
 export const EXPLORE_NOT_ENABLED: CommandOptions = {
   enablement: () => false,
   disabledReason: 'Explore is not enabled (explore_enabled)',
 };
-
-/** The question, "Reset" and "Cancel" of `confirmReset`. */
-const RESET_CHOICES: readonly ((QuickPickItem & { readonly reset: boolean }) | QuickPickSeparator)[] = [
-  { kind: QuickPickItemKind.Separator, label: 'Reset the viewer’s config?' },
-  { label: 'Reset', detail: 'The viewer’s config back to its start; what was changed in it is forgotten', reset: true },
-  { label: 'Cancel', reset: false },
-];
 
 /**
  * Asks in a menu below `anchorElement` (the view's "Reset"), under the question as its heading, whether to reset the
@@ -204,3 +188,13 @@ export function findWidget(widgets: readonly WidgetNode[], id: string): WidgetNo
   }
   return undefined;
 }
+
+/** The global menu's "Explore (from scratch)": a blank Explore in a new tab (`exploreView.open`). */
+const EXPLORE_ENTRY: MenuItem = { command: 'exploreView.open', title: 'Explore (from scratch)', group: 'explore' };
+
+/** The question, "Reset" and "Cancel" of `confirmReset`. */
+const RESET_CHOICES: readonly ((QuickPickItem & { readonly reset: boolean }) | QuickPickSeparator)[] = [
+  { kind: QuickPickItemKind.Separator, label: 'Reset the viewer’s config?' },
+  { label: 'Reset', detail: 'The viewer’s config back to its start; what was changed in it is forgotten', reset: true },
+  { label: 'Cancel', reset: false },
+];

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // Tests for renderExploreView in view.ts, Perspective faked at its module boundary: the rows with the page's query
-// state, their description, the settings panel open, the config from the chart or kept per chart, Reset once confirmed, a refresh, the SQL editor (following
-// the chart, its parameters listed, Run and "Reset to the chart's query" as hash navigations, a draft, an error), a
-// click on a group row; a blank Explore (its connection picker, Run on the picked connection, a chart's SQL from the
-// hash); the SQL editor completing the connection's names, or saying it did not load.
+// state, their description, the settings panel open, the config from the chart or kept per chart, Reset once confirmed,
+// a refresh, the SQL editor (following the chart, its parameters listed, Run and "Reset to the chart's query" as hash
+// navigations, a draft, an error), a click on a group row; a blank Explore (its connection picker, Run on the picked
+// connection, a chart's SQL from the hash); the SQL editor completing the connection's names, or saying it did not
+// load.
 import { EditorView } from '@codemirror/view';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../core/disposable/disposable';

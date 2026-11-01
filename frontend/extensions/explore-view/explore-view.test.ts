@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Tests for exploreView in explore-view.ts: only "Explore" greyed in the global menu while Explore is not enabled, the
 // chart menu's entry opening a tab, the view as the page kind `explore` named in the tab's hash, its title, Close, the
-// widget found in the page's tree; the global menu's "Explore (from scratch)" and "Explore (from chart…)" opening a blank Explore; Reset's
-// confirmation.
+// widget found in the page's tree; the global menu's "Explore (from scratch)" and "Explore (from chart…)" opening a
+// blank Explore; Reset's confirmation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
