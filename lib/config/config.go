@@ -19,10 +19,10 @@ import (
 // every key with its default and its environment variable.
 type Config struct {
 	// AppSecret is the key of the HMAC on everything the server hands to the browser and takes back (a pill, a filter
-	// button), so that the conditions of a page's URL are the server's own; required (CheckAppSecret). Never in a
-	// checked-in file: set it as APP_SECRET.
+	// button), so that the conditions of a page's URL are the server's own; required (CheckAppSecret). Set it as
+	// APP_SECRET, outside the checked-in files.
 	AppSecret string `koanf:"app_secret"`
-	// Map of ClickHouse configurations indexed by server alias
+	// ClickHouse are the ClickHouse connections by name (`clickhouse.<name>`).
 	ClickHouse map[string]ClickHouseConfig `koanf:"clickhouse"`
 	// ServerPort is the port the HTTP server listens on.
 	ServerPort int `koanf:"server_port"`
@@ -41,9 +41,6 @@ type Config struct {
 	Alerting         AlertingConfig `koanf:"alerting"`
 }
 
-// MinAppSecretLength is the shortest app_secret the server starts with (`openssl rand -hex 32` gives 64).
-const MinAppSecretLength = 32
-
 // CheckAppSecret is why the server cannot start with `c`'s app_secret: missing or shorter than MinAppSecretLength;
 // nil when it can.
 func (c *Config) CheckAppSecret() error {
@@ -53,43 +50,28 @@ func (c *Config) CheckAppSecret() error {
 	return nil
 }
 
-// ClickHouseConfig holds configuration for a single ClickHouse server
-type ClickHouseConfig struct {
-	URL      string `koanf:"url"`
-	User     string `koanf:"user"`
-	Password string `koanf:"password"`
-	Database string `koanf:"database"`
-}
+// MinAppSecretLength is the shortest app_secret the server starts with (`openssl rand -hex 32` gives 64).
+const MinAppSecretLength = 32
 
-type AlertingConfig struct {
-	HelvetikitAlertingUrl    string `koanf:"helvetikit_alerting_url"`
-	HelvetikitIdGroup        string `koanf:"helvetikit_id_group"`
-	AlertCronMonitorSchedule string `koanf:"alert_cron_monitor_schedule"`
-	AlertCronMonitorUrl      string `koanf:"alert_cron_monitor_url"`
-}
-
-// LoadConfig loads configuration from various sources and returns the parsed config
+// LoadConfig is the config of `appEnv`: the defaults, then dashica_config.<appEnv>.yaml (else dashica_config.yaml),
+// then the environment (left out `forTesting`), validated.
 func LoadConfig(appEnv string, forTesting bool) (*Config, error) {
 	k := koanf.New(".")
 
-	// Load default configuration values
 	if err := loadDefaultConfig(k); err != nil {
 		return nil, fmt.Errorf("loading default configuration: %w", err)
 	}
 
-	// Load environment variables
 	if err := loadDashicaConfig(k, appEnv); err != nil {
 		return nil, fmt.Errorf("loading dotenv variables: %w", err)
 	}
 
 	if !forTesting {
-		// Load environment variables
 		if err := loadEnvVariables(k); err != nil {
 			return nil, fmt.Errorf("loading environment variables: %w", err)
 		}
 	}
 
-	// Unmarshal configuration into struct
 	config := &Config{}
 	if err := k.Unmarshal("", config); err != nil {
 		return nil, fmt.Errorf("unmarshaling configuration: %w", err)
@@ -98,67 +80,11 @@ func LoadConfig(appEnv string, forTesting bool) (*Config, error) {
 	// for debugging:
 	//k.Print()
 
-	// Validate config
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
 
 	return config, nil
-}
-
-func loadDefaultConfig(k *koanf.Koanf) error {
-	// Setup default values
-	defaultConfig := map[string]interface{}{
-		"server_port":   8081,
-		"log_to_stdout": true,
-	}
-
-	return k.Load(confmap.Provider(defaultConfig, "."), nil)
-}
-
-func loadDashicaConfig(k *koanf.Koanf, appEnv string) error {
-	err := k.Load(file.Provider(fmt.Sprintf("dashica_config.%s.yaml", appEnv)), yaml.Parser())
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		// dashica_config.[APP_ENV].yaml does not exist; try to load .env as fallback
-		err = k.Load(file.Provider("dashica_config.yaml"), yaml.Parser())
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	return err
-}
-func envTransformFunc(s string) string {
-	s = strings.ToLower(s)
-	s = strings.ReplaceAll(s, "__", ".")
-	return s
-}
-
-// loadEnvVariables loads env vars to config, lower-cased, "__" joining the levels:
-// APP_SECRET -> app_secret, CLICKHOUSE__DEFAULT__PASSWORD -> clickhouse.default.password
-// see https://github.com/knadh/koanf/issues/74
-func loadEnvVariables(k *koanf.Koanf) error {
-	return k.Load(env.Provider("", ".", envTransformFunc), nil)
-}
-
-func validateConfig(config *Config) error {
-	// Check if we have at least one ClickHouse configuration
-	if len(config.ClickHouse) == 0 {
-		return fmt.Errorf("no ClickHouse configurations found")
-	}
-
-	// Validate each ClickHouse configuration
-	for key, ch := range config.ClickHouse {
-		if ch.URL == "" {
-			return fmt.Errorf("ClickHouse %s': URL is required", key)
-		}
-
-		if ch.Database == "" {
-			return fmt.Errorf("ClickHouse '%s': database is required", key)
-		}
-	}
-
-	return nil
 }
 
 // PrintConfig prints the current configuration (with sensitive data masked)
@@ -188,7 +114,76 @@ func PrintConfig(config *Config) {
 	fmt.Println("=========================================")
 }
 
-// Helper function to mask sensitive data
+// ClickHouseConfig holds configuration for a single ClickHouse server
+type ClickHouseConfig struct {
+	URL      string `koanf:"url"`
+	User     string `koanf:"user"`
+	Password string `koanf:"password"`
+	Database string `koanf:"database"`
+}
+
+// AlertingConfig is where the alerts are sent (Helvetikit) and the cron monitor the alert scheduler pings.
+type AlertingConfig struct {
+	HelvetikitAlertingUrl    string `koanf:"helvetikit_alerting_url"`
+	HelvetikitIdGroup        string `koanf:"helvetikit_id_group"`
+	AlertCronMonitorSchedule string `koanf:"alert_cron_monitor_schedule"`
+	AlertCronMonitorUrl      string `koanf:"alert_cron_monitor_url"`
+}
+
+func loadDefaultConfig(k *koanf.Koanf) error {
+	defaultConfig := map[string]interface{}{
+		"server_port":   8081,
+		"log_to_stdout": true,
+	}
+
+	return k.Load(confmap.Provider(defaultConfig, "."), nil)
+}
+
+func loadDashicaConfig(k *koanf.Koanf, appEnv string) error {
+	err := k.Load(file.Provider(fmt.Sprintf("dashica_config.%s.yaml", appEnv)), yaml.Parser())
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		// without dashica_config.[APP_ENV].yaml, dashica_config.yaml
+		err = k.Load(file.Provider("dashica_config.yaml"), yaml.Parser())
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return err
+}
+
+// loadEnvVariables loads env vars to config, lower-cased, "__" joining the levels:
+// APP_SECRET -> app_secret, CLICKHOUSE__DEFAULT__PASSWORD -> clickhouse.default.password
+// see https://github.com/knadh/koanf/issues/74
+func loadEnvVariables(k *koanf.Koanf) error {
+	return k.Load(env.Provider("", ".", envTransformFunc), nil)
+}
+
+func envTransformFunc(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "__", ".")
+	return s
+}
+
+func validateConfig(config *Config) error {
+	if len(config.ClickHouse) == 0 {
+		return fmt.Errorf("no ClickHouse configurations found")
+	}
+
+	for key, ch := range config.ClickHouse {
+		if ch.URL == "" {
+			return fmt.Errorf("ClickHouse %s': URL is required", key)
+		}
+
+		if ch.Database == "" {
+			return fmt.Errorf("ClickHouse '%s': database is required", key)
+		}
+	}
+
+	return nil
+}
+
+// maskSecret is `s` with all but its first and last character masked.
 func maskSecret(s string) string {
 	if s == "" {
 		return ""

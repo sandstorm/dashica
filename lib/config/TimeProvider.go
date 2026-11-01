@@ -11,19 +11,8 @@ type TimeProvider interface {
 	Now() Time
 }
 
-// realTimeProvider returns the actual current time as a SQL string
-type realTimeProvider struct{}
-
 func NewRealTimeProvider() TimeProvider {
 	return &realTimeProvider{}
-}
-
-func (p *realTimeProvider) NowSqlString() string {
-	return "now()"
-}
-
-func (p *realTimeProvider) Now() Time {
-	return Time(time.Now())
 }
 
 // VirtualTimeProvider allows setting a fixed time for tests
@@ -77,6 +66,7 @@ func (m Time) MarshalText() ([]byte, error) {
 	text := time.Time(m).Format(CLICKHOUSE_TIME_FORMAT)
 	return []byte(text), nil
 }
+
 func (m *Time) UnmarshalText(text []byte) error {
 	t, err := time.Parse(CLICKHOUSE_TIME_FORMAT, string(text))
 	if err == nil {
@@ -93,4 +83,15 @@ func (m Time) SameDayAs(other Time) bool {
 	y1, m1, d1 := time.Time(m).Date()
 	y2, m2, d2 := time.Time(other).Date()
 	return y1 == y2 && m1 == m2 && d1 == d2
+}
+
+// realTimeProvider returns the actual current time as a SQL string
+type realTimeProvider struct{}
+
+func (p *realTimeProvider) NowSqlString() string {
+	return "now()"
+}
+
+func (p *realTimeProvider) Now() Time {
+	return Time(time.Now())
 }
