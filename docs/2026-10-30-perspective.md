@@ -305,7 +305,7 @@ with it the gap it had: SQL-file charts had no toggle, now every chart, builder 
   text (`<dl>`, `{name}` and its value), read-only. Highlighting later, if the plain field is not enough.
 - **The split between the SQL panel and the viewer** (workbench step 9av, D48, decided 2026-11-01; maintainer: "this
   separator needs to be resizable..."): the line below the SQL panel (editor, parameters, Run) is a horizontal sash
-  (`Sash`, `frontend/core/sash`, workbench §3.5), as the side bars' edges. Dragging it, or ArrowUp / ArrowDown on it
+  (`Sash`, `frontend/hosts/ui/sash`, workbench §3.5), as the side bars' edges. Dragging it, or ArrowUp / ArrowDown on it
   (a line, 19 px, per key), sets the panel's height; the editor fills what Run leaves of it and scrolls inside, the
   parameters' list scrolls beside it, the viewer takes the rest. The height (96 to 2000 px, at first 216 px: about
   the eight lines that were the editor's minimum) is kept for this viewer in the extension's `globalState`

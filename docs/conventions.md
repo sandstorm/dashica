@@ -30,10 +30,11 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 
 ## Where code goes (frontend)
 
-- **Layers:** `frontend/core/` (shared basics: disposables, events, cancellation, fuzzy matching, the sash, style
-  tokens) ← `frontend/hosts/<name>/` (mechanism: commands, ui, page, query, widgets, extension host) ←
+- **Layers:** `frontend/core/` (shared basics: disposables, events, cancellation, fuzzy matching, style tokens) ←
+  `frontend/hosts/<name>/` (mechanism: commands, ui, page, query, widgets, extension host) ←
   `frontend/extensions/<name>/` (features) and `frontend/workbench/` (wires hosts and extensions). Imports go down
   only; no cycles.
+- **core: no DOM, no UI controls;** shared UI pieces (the sash) live in the `ui` host.
 - **Highest layer that can hold it,** next to its consumers: extension, then host, then core. A host function only
   one extension uses moves into that extension.
 - **Hosts keep only mechanism.** For each host member ask: mechanism, or one feature's policy? Policy is an extension.
