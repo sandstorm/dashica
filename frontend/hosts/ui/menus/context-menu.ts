@@ -6,7 +6,7 @@ import type { Menus } from './menus';
 
 /**
  * What `showContextMenu` shows: the menu's entries in the quick pick as a menu at the anchor (`menu`), a line
- * between groups, an entry with `toggled` with a check mark while it holds, one whose command is not enabled
+ * between groups, an entry with `toggled` with a check mark while it holds, one whose command cannot run now
  * (`Commands.enablement`) greyed with the command's `disabledReason` on hover, an entry's key at its end. Choosing an
  * entry closes the box and gives the focus back; its command runs right after, still in the viewer's gesture (a
  * failing one is logged). A menu without entries hides the open box and shows nothing.

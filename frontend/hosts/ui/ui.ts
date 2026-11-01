@@ -32,25 +32,25 @@ export interface UiApi {
   readonly onDidChangeMenu: Event<string>;
   /**
    * Pops up the menu `menuId` at `options.anchor`, its entries in the quick pick as a menu (`QuickPickOptions.menu`);
-   * nothing while no entry applies (an open box hides). Choosing an entry runs its command with `options.args`, after the box closed
-   * and gave the focus back. One box at a time: a new one closes the open one; so do Escape and a press elsewhere.
+   * nothing while no entry applies (an open box hides). Choosing an entry runs its command with `options.args`, after
+   * the box closed and gave the focus back. One box at a time: a new one closes the open one; so do Escape and a press
+   * elsewhere.
    */
   showContextMenu(menuId: string, options: ContextMenuOptions): void;
   /**
    * Shows `items` in a quick pick at `options.anchor` (else at the top in the middle of the workbench); typing narrows
-   * them (fuzzily, by label, else description, else both read as one), a heading shows while an item of its group does. Resolves with the
-   * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
-   * elsewhere, another box). Items still to come (a Promise, as a server's answer) open the box at once, busy (its
-   * progress line, no "No results") until they are there; when they fail the box hides and the returned Promise
-   * rejects with their error; a menu's that turn out none hide it, resolving with `undefined`. With `options.accept` the box stays open while it runs (`QuickPickOptions.accept`). As VS
-   * Code's `window.showQuickPick`.
+   * them (fuzzily, by label, else description, else both read as one), a heading shows while an item of its group
+   * does. Resolves with the item picked, once the box is gone and the focus back, or `undefined` when it was hidden
+   * without (Escape, a press elsewhere, another box). Items still to come (a Promise, as a server's answer) open the
+   * box at once, busy (its progress line, no "No results") until they are there; when they fail the box hides and the
+   * returned Promise rejects with their error; a menu's that turn out none hide it, resolving with `undefined`. With
+   * `options.accept` the box stays open while it runs (`QuickPickOptions.accept`).
    */
   showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions<T>): Promise<T | undefined>;
   /**
    * Asks for a text in a box at `options.anchor` (else at the top in the middle), `options.validateInput`'s message
    * below the field: resolves with it on Enter (unless that message is an error; with `options.accept` once that
-   * succeeded), once the box is gone and the focus back, or `undefined` when it was hidden without. As VS Code's
-   * `window.showInputBox`.
+   * succeeded), once the box is gone and the focus back, or `undefined` when it was hidden without.
    */
   showInputBox(options?: InputBoxOptions): Promise<string | undefined>;
   /**
@@ -141,7 +141,7 @@ export interface InputBoxOptions {
   readonly placeholder?: string;
   /** The text in the field at first. */
   readonly value?: string;
-  /** The part of `value` selected at first, as [start, end) offsets; else all of it. As VS Code's. */
+  /** The part of `value` selected at first, as [start, end) offsets; else all of it. */
   readonly valueSelection?: readonly [number, number];
   /**
    * Checks the text when the box shows, as it is typed and on Enter; what it says shows below the field. An `Error`
@@ -155,7 +155,7 @@ export interface InputBoxOptions {
   readonly accept?: (value: string) => Promise<unknown>;
   /**
    * A field of its own in place of the one-line text field (a SQL editor, `showSqlInputBox` in sql-library); its maker
-   * gives it its text and placeholder, so `value` and `placeholder` are not used, and disposes it once the box resolved.
+   * gives it its text and placeholder in place of `value` and `placeholder`, and disposes it once the box resolved.
    */
   readonly field?: InputBoxField;
 }
@@ -188,7 +188,7 @@ export interface InputBoxValidationMessage {
   readonly severity: InputBoxValidationSeverity;
 }
 
-/** How a validation message counts: `Info` lets Enter through, `Error` does not. VS Code's values. */
+/** How a validation message counts: `Info` lets Enter through, `Error` holds it back. */
 export const InputBoxValidationSeverity = { Info: 1, Error: 3 } as const;
 
 export type InputBoxValidationSeverity = (typeof InputBoxValidationSeverity)[keyof typeof InputBoxValidationSeverity];

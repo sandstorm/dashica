@@ -64,7 +64,7 @@ export class UiHost implements UiApi {
 
   /**
    * Shows the items of the top bar and the filter bar, or hides them while the active tab shows a popped-out view:
-   * what it shows does not follow the tab's query state, which those items set.
+   * that view shows what it was given, and those items set the tab's query state.
    */
   showPageBars(shown: boolean): void {
     this.#bars.top.withhold(!shown);
