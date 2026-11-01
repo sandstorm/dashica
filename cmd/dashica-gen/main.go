@@ -1,5 +1,5 @@
-// Command dashica-gen is the code generator described in
-// docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1.
+// Command dashica-gen is the code generator of the widgets' JSON, page.json's
+// TypeScript types and the enums' methods (`go generate` runs it).
 //
 // It parses the registered widget structs in lib/dashboard/widget (their field
 // types AND doc comments) via go/packages and emits a sibling
@@ -12,12 +12,12 @@
 //  2. An editor descriptor (field order, editor kind inferred from the Go type,
 //     doc comments as help texts) consumed by /explore/api/formmodel.
 //  3. A code-generation table (field <-> builder method) consumed by the Go-code
-//     generator (lib/explore/gocode.go, Phase 3).
+//     generator (lib/explore/gocode_emit.go).
 //
 // With -ts it also writes the TypeScript types of what the server sends (ts_emit.go). With -enums it only writes the
 // methods of a package's enums (enums.go).
 //
-// Emitter mechanics: stdlib text/template + go/format, no dependency (see §4.5).
+// Emitter mechanics: stdlib text/template + go/format, no dependency.
 package main
 
 import (

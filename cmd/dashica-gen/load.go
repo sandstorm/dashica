@@ -398,8 +398,8 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 	fi.Required = cat == catQueryable || cat == catField || cat == catTsField
 
 	// Query role (dimension | measure) for field slots, driving the editor's
-	// kind picker (docs B4). Only meaningful on field categories; a
-	// TimestampedField is always a temporal dimension so it defaults to one.
+	// kind picker. Only meaningful on field categories; a TimestampedField is
+	// always a temporal dimension so it defaults to one.
 	role := dashicaTag["role"]
 	isFieldCat := cat == catField || cat == catTsField || cat == catOptField
 	switch {
@@ -420,10 +420,10 @@ func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag str
 		return nil, false, fmt.Errorf("client tag not valid on %s: it is not sent in the props", cat)
 	}
 
-	// gocode mapping (docs §4 Step 4). A field is a constructor argument when the
-	// constructor assigns it (the SqlQueryable of a chart; name/label/options of a
-	// parameter widget); otherwise it is a chained builder call whose method name
-	// is the identity title-case of the field, unless overridden by
+	// gocode mapping: a field is a constructor argument when the constructor
+	// assigns it (the SqlQueryable of a chart; name/label/options of a
+	// parameter widget); otherwise it is a chained builder call whose method
+	// name is the identity title-case of the field, unless overridden by
 	// `dashica-gen:"method=..."` (grid areas → Area, collapsibleGroup widgets →
 	// Widget).
 	if order, ok := ctorOrder[name]; ok {

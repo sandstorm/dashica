@@ -56,8 +56,8 @@ func sampleDashboard() *dashboard.Builder {
 }
 
 // TestGenerateDashboardCode_fragments checks the generator emits the idiomatic
-// constructors (docs §2.1: kind ≡ constructor), not baked expressions, and wires
-// containers via their real child methods.
+// constructors (a field's kind is its constructor), not baked expressions, and
+// wires containers via their real child methods.
 func TestGenerateDashboardCode_fragments(t *testing.T) {
 	stateJSON, _, err := sampleDashboard().MarshalForExplore()
 	if err != nil {

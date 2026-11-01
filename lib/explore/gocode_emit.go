@@ -15,9 +15,9 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
-// This file implements the Go-code generator — docs requirement #1: Explore
-// continuously shows the fluent-builder Go for whatever is being edited, so a
-// dashboard prototyped in the browser copy/pastes verbatim into the repo.
+// This file implements the Go-code generator: Explore continuously shows the
+// fluent-builder Go for whatever is being edited, so a dashboard prototyped in
+// the browser copy/pastes verbatim into the repo.
 //
 // It turns a dashboard state (the editor's JSON, identical to the dashboard wire
 // format) into `dashboard.New().WithLayout(...).Widget(...)...` source. The
@@ -37,7 +37,7 @@ import (
 // GocodeField / GocodeEnumValue below) is the Go model of the JSON table
 // dashica-gen emits into the widget package (WidgetGocodeJSON()); Go-code
 // generation is an Explore concern, so these types live here, not in
-// lib/dashboard/widget. See docs §4 Step 4.
+// lib/dashboard/widget.
 type WidgetGocode struct {
 	// Constructor is the factory function name, e.g. "NewTimeBar", emitted
 	// qualified as widget.NewTimeBar.
@@ -452,7 +452,7 @@ func (g *generator) emitValue(f GocodeField, raw []byte, asArg bool) (string, er
 }
 
 // emitField renders one sql.SqlField from its wire form as the idiomatic
-// constructor call (docs §2.1: kind ≡ which constructor produced the field).
+// constructor call (its kind is the constructor that produced the field).
 func (g *generator) emitField(raw []byte, timestamped bool) (string, error) {
 	g.imports[pkgSQL] = true
 	var d fieldWire

@@ -12,9 +12,9 @@ import (
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
-// registerHandlers wires the editor page and the API sub-routes. Route layout
-// mirrors docs section 4.3. Everything lives under the registration URL; the
-// API routes hang off a "/api" nested collector.
+// registerHandlers wires the editor page and the API sub-routes. Everything
+// lives under the registration URL; the API routes hang off a "/api" nested
+// collector.
 func (e *exploreImpl) registerHandlers(collector handler_collector.HandlerCollector) error {
 	api := collector.Nested("/api")
 
@@ -29,10 +29,10 @@ func (e *exploreImpl) registerHandlers(collector handler_collector.HandlerCollec
 
 // handleGocode turns the posted dashboard state (the editor JSON, identical to
 // the dashboard wire format) into fluent-builder Go source and returns it as
-// text/plain. This is docs requirement #1 (the Go-code drawer tab): a dashboard
-// prototyped in the browser copy/pastes verbatim into the repo. The generator
-// (gocode.go) reads the same wire format the round-trip serializers produce, so
-// its output round-trips.
+// text/plain, for the Go-code drawer tab: a dashboard prototyped in the browser
+// copy/pastes verbatim into the repo. The generator (gocode_emit.go) reads the
+// same wire format the round-trip serializers produce, so its output
+// round-trips.
 func (e *exploreImpl) handleGocode(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodPost {
 		return fmt.Errorf("gocode: method %s not allowed, use POST", r.Method)

@@ -16,7 +16,7 @@ import (
 // Emitter mechanics: stdlib text/template lays out the functions; the per-field
 // branching (which varies by category) is computed in Go by marshalStmt /
 // unmarshalStmt and injected as pre-rendered statements. go/format fixes all
-// spacing, so the templates need not be whitespace-perfect. (See §4.5.)
+// spacing, so the templates need not be whitespace-perfect.
 func emit(m *model, outFile string) error {
 	groups := collectGroups(m)
 

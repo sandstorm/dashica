@@ -11,7 +11,7 @@ import (
 )
 
 // This file emits the Go-code-generation table into zz_generated.dashica.go,
-// consumed by lib/explore's Go code generator (docs §4 Step 4).
+// consumed by lib/explore's Go code generator.
 //
 // Unlike the editor descriptors (which are a widget-package concern, served as
 // the form model), Go-code generation is purely an Explore concern — the widget

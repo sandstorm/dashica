@@ -18,9 +18,8 @@ import (
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
-// Option configures an Explore instance. Persistence options (WithFileStore,
-// WithReadOnly) arrive in Phase 6; the variadic signature is stable now so
-// call sites in main.go do not change when they land.
+// Option configures an Explore instance; the variadic signature lets main.go
+// pass options as they are added.
 type Option func(*exploreImpl)
 
 // New creates an Explore view. Wire it up in main.go exactly like a dashboard:
