@@ -101,11 +101,11 @@ describe('ContextMenu', () => {
     ];
     let explore = false;
     const { hostContainer, menu, items: options, field, ran, isOpen } = setup(menusWith('workbench/global', items), {
-      enablement: (command) => (command !== 'exploreView.open' || explore ? { enabled: true } : { enabled: false, disabledReason: 'Explore is not enabled (explore.enabled)' }),
+      enablement: (command) => (command !== 'exploreView.open' || explore ? { enabled: true } : { enabled: false, disabledReason: 'Explore is not enabled (explore_enabled)' }),
     });
     menu.show('workbench/global', { anchor: hostContainer, title: 'Dashica' });
     expect(options().map((entryElement) => [entryElement.getAttribute('aria-disabled'), entryElement.title])).toEqual([
-      ['true', 'Explore is not enabled (explore.enabled)'],
+      ['true', 'Explore is not enabled (explore_enabled)'],
       [null, ''],
     ]);
     options()[0].click();

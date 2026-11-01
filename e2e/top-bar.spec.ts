@@ -89,11 +89,11 @@ test('the global "…" opens a menu: no field in sight, the arrow keys at once, 
 
 test('with Explore off, the global "…" shows only "Explore (from scratch)", greyed, its tooltip saying why', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
-    test.skip(workbench.explore, 'Explore is on (explore.enabled)');
+    test.skip(workbench.explore, 'Explore is on (explore_enabled)');
     await page.getByTestId('wb-global-menu').click();
     const explore = page.getByRole('option', {name: 'Explore (from scratch)'});
     await expect(explore).toHaveAttribute('aria-disabled', 'true');
-    await expect(explore).toHaveAttribute('title', 'Explore is not enabled (explore.enabled)');
+    await expect(explore).toHaveAttribute('title', 'Explore is not enabled (explore_enabled)');
     await explore.click();
     await expect(page.getByRole('tab')).toHaveCount(1);
 });

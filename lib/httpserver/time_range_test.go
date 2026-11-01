@@ -68,7 +68,7 @@ func TestSqlClause(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := parseQueryState(t, tt.query).SqlClause(newTimeRange(from, to), config.FiltersConfig{SqlEnabled: true})
+			got, err := parseQueryState(t, tt.query).SqlClause(newTimeRange(from, to), &config.Config{SqlFilterEnabled: true})
 			if err != nil || got != tt.want {
 				t.Errorf("SqlClause = %q, %v, want %q", got, err, tt.want)
 			}
@@ -78,11 +78,11 @@ func TestSqlClause(t *testing.T) {
 
 func TestSqlClause_SqlChipsOnlyWhileSqlFiltersAreOn(t *testing.T) {
 	window := newTimeRange(time.Now().Add(-time.Hour), time.Now())
-	if _, err := parseQueryState(t, "time=1h&sql=status+%3E%3D+500").SqlClause(window, config.FiltersConfig{}); !errors.Is(err, ErrSqlNotEnabled) {
+	if _, err := parseQueryState(t, "time=1h&sql=status+%3E%3D+500").SqlClause(window, &config.Config{}); !errors.Is(err, ErrSqlNotEnabled) {
 		t.Errorf("off: err = %v, want ErrSqlNotEnabled", err)
 	}
 	// without a chip there is nothing to refuse; an empty `sql`, as a page without chips may send it, is no chip
-	if got, err := parseQueryState(t, "time=1h&sql=").SqlClause(window, config.FiltersConfig{}); err != nil || got != TimeClause(window) {
+	if got, err := parseQueryState(t, "time=1h&sql=").SqlClause(window, &config.Config{}); err != nil || got != TimeClause(window) {
 		t.Errorf("off, no chip: %q, %v", got, err)
 	}
 }

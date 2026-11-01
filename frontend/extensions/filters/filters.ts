@@ -28,7 +28,7 @@ import './filters.css';
  * button's pill outside its page, can only be removed. "Add filter"'s advanced entry "SQL condition…" adds a SQL chip
  * (§3.15 D26). Both ask in the input box with sql-library's SQL editor (D12: ClickHouse's words, and with Explore on
  * the names of the page's first table's connection, `conditionCompletion`). Both only while the server takes SQL
- * chips (`workbench.json`'s `sqlEnabled`, filters.sqlEnabled); else a SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
+ * chips (`workbench.json`'s `sqlEnabled`, sql_filter_enabled); else a SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
  * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
  * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
  * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on a column
@@ -45,7 +45,7 @@ export const filters: Extension = {
   activate({ ui, page, query, commands, widgets, subscriptions }) {
     subscriptions.push(query.declare(FILTERS));
     const { sqlEnabled, explore } = page.workbench;
-    // the names a SQL condition completes: the schema is part of Explore (/schema.json only with explore.enabled)
+    // the names a SQL condition completes: the schema is part of Explore (/schema.json only with explore_enabled)
     const schemas = explore ? new Schemas() : undefined;
     const askSql: AskSql | undefined = sqlEnabled
       ? (options) =>
@@ -150,7 +150,7 @@ class FilterBar {
     private readonly query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
     /** Asks for the value of a button's `...`, and "Add filter"'s table, field, operator and value. */
     private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
-    /** Asks for a SQL condition, while the server takes SQL chips (filters.sqlEnabled). */
+    /** Asks for a SQL condition, while the server takes SQL chips (sql_filter_enabled). */
     private readonly askSql: AskSql | undefined,
     /** The charts' `/fields`, by which "Add filter" and a pill's edit know a field's type. */
     private readonly fields: FieldsCache,
@@ -223,7 +223,7 @@ class FilterBar {
     const whole = chip.kind === 'sql' ? chip.sql : value;
     const title =
       chip.kind === 'sql' && !this.askSql
-        ? `${whole}\nSQL filters are not enabled (filters.sqlEnabled)`
+        ? `${whole}\nSQL filters are not enabled (sql_filter_enabled)`
         : made
           ? `${whole}\n${made.column ? `No chart of this page reads ${made.table}` : `No chart of this page filters ${made.table} by ${made.field}`}, so it can only be removed`
           : whole;

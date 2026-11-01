@@ -15,12 +15,12 @@ import (
 
 var secret = []byte("a test secret of at least thirty-two bytes")
 
-// service is the FilterService of a dashica_config with the filters.secret `filterSecret` and the database "default"
+// service is the FilterService of a dashica_config with the app_secret `filterSecret` and the database "default"
 // on the connection default, "monitoring" on logs, none on any other.
 func service(filterSecret string) *FilterService {
 	return NewFilterService(&config.Config{
 		ClickHouse: map[string]config.ClickHouseConfig{"default": {Database: "default"}, "logs": {Database: "monitoring"}},
-		Filters:    config.FiltersConfig{Secret: filterSecret},
+		AppSecret:  filterSecret,
 	})
 }
 

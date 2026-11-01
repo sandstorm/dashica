@@ -59,8 +59,8 @@ func (s *SpeedscopeLink) explicitId() string { return s.id }
 
 // serveSpeedscope runs the query and streams the result as space-delimited CSV — the format
 // Speedscope's profileURL ingestor expects. It takes the page's filters as a chart does: the window, the SQL chips
-// and the pills on its table and of the filter buttons (filter.Apply); a pill not signed with filters.secret, or a SQL
-// chip while filters.sqlEnabled is off, is a 400.
+// and the pills on its table and of the filter buttons (filter.Apply); a pill not signed with app_secret, or a SQL
+// chip while sql_filter_enabled is off, is a 400.
 func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http.ResponseWriter, r *http.Request) error {
 	client, err := deps.ClickhouseClientManager.GetClient("default")
 	if err != nil {
@@ -90,7 +90,7 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 		if err != nil {
 			return err
 		}
-		clause, err := state.SqlClause(resolvedTimeRange, deps.Config.Filters)
+		clause, err := state.SqlClause(resolvedTimeRange, deps.Config)
 		if err != nil {
 			return err
 		}

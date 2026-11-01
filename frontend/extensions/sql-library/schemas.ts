@@ -3,7 +3,7 @@ import type { Schema } from '../../generated/zz_generated.dashica';
 /**
  * Each connection's schema from `/schema.json`, asked once and shared by those who hold this store (the Schema view's
  * two views; a SQL editor's completion); a failed answer is forgotten, so the next `get` asks again. `/schema.json`
- * is part of Explore: it answers only with explore.enabled.
+ * is part of Explore: it answers only with explore_enabled.
  */
 export class Schemas {
   readonly #asked = new Map<string, Promise<Schema>>();

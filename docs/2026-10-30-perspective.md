@@ -92,7 +92,7 @@ chart's result. Which slot is the measure is fixed per widget type:
   builder. Its Go state in `dashica.go` (`exploreBaseURL`, the `IsExploreView()` marker) is deprecated as well.
 - `lib/explore`'s preview (`preview/query`) ran a widget the browser sent as JSON through the same
   `widget.DataHandler` as a mounted chart, including a query of kind `raw` (`sql.FromString`): SQL from the browser,
-  without `explore.enabled`. It is deleted (workbench step 9aw), with `lib/explore`'s `schema` and `values`.
+  without `explore_enabled`. It is deleted (workbench step 9aw), with `lib/explore`'s `schema` and `values`.
 - `public/dist/index.js`: 3.9 MB unminified, ~1.1 MB gzipped, one esbuild entry. Speedscope is a separate build served
   per widget: precedent for a heavy viewer outside the main bundle.
 
@@ -160,8 +160,8 @@ filter" describe the spike's "Remove grouping" (`?grouping=none`, `sql.Ungrouped
   column; regrouping by it in the view groups the raw values.
 - **SQL files:** their grouping is inside their text and cannot be derived; for them the view offers the chart's result
   only (no toggle). Changing a query's SQL in the view is the next step (§6, §7 question 2), not part of this one.
-- **Gate (sensitive raw data):** rows without grouping are served only when Explore is enabled: `explore.enabled: true`
-  in `dashica_config*.yaml` (env `EXPLORE__ENABLED=true`), default off. The value reaches the chart's handler where it
+- **Gate (sensitive raw data):** rows without grouping are served only when Explore is enabled: `explore_enabled: true`
+  in `dashica_config*.yaml` (env `EXPLORE_ENABLED=true`), default off. The value reaches the chart's handler where it
   is built (the config injected as `rendering.Dependencies.Config`, since step 9v); with it off, or for a SQL
   file, `grouping=none` answers 404 and the answer has no `X-Dashica-Grouping`, so the view shows no toggle.
   Permissions per viewer come later and replace the flag by a per-request decision at the same place.
@@ -169,7 +169,7 @@ filter" describe the spike's "Remove grouping" (`?grouping=none`, `sql.Ungrouped
   goes with every request, `grouping=none` included, and is SQL from the client: without grouping it sees the raw
   columns, and on any chart, Explore off, it can already ask about raw columns through `/query` (subqueries included).
   It keeps its existing trust model (all authenticated users are trusted); permissions later cover both. Since step
-  9a of the workbench concept (§3.15 D16) it runs only with `filters.sqlEnabled`; off, a `sql=` is a 400 wherever it
+  9a of the workbench concept (§3.15 D16) it runs only with `sql_filter_enabled`; off, a `sql=` is a 400 wherever it
   would enter a query (`QueryState.SqlClause`, since step 9v).
 - **No selection from the rows without grouping:** a click on one of their group rows offers no "Filter by" /
   "Exclude". Their columns are raw, and a page filter on a column the chart also computes as a dimension (Caddy's
@@ -210,7 +210,7 @@ handler) is not planned.
 
 - **Entry:** `ui.registerMenuItem('widget/context', { command: 'exploreView.openWidget', title: 'Open in Explore
   view', group: 'data' })` for charts (`rowsUrl` in the widget's node), only while `workbench.json` says `explore`
-  (explore.enabled; since step 8g, §4.8 D8); else the extension registers only "Explore (from scratch)" greyed in the
+  (explore_enabled; since step 8g, §4.8 D8); else the extension registers only "Explore (from scratch)" greyed in the
   global menu. With Explore on, the global menu's "Explore (from scratch)" and "Explore (from chart…)" open a blank Explore, the same view without a
   chart (`#explore=&connection=<name>`, §4.8 D10).
 - **Place** (a tab since 2026-10-31, workbench §3.4.1, step 7a): a new tab of the page kind `explore`, named in its
@@ -319,7 +319,7 @@ with it the gap it had: SQL-file charts had no toggle, now every chart, builder 
   columns; kept per chart under `view:<dataUrl>:edited` (proposed).
 
 **The chart's SQL, in Go** (`GET <dataUrl>/sql`, since step 8g, D9): the `/sql` handler is `queryHandler`'s `serve`
-as for `/query` (ParseQueryState, the pills on its table), then `HandleSql`, which checks `explore.enabled` (`QueryHandler.Config`)
+as for `/query` (ParseQueryState, the pills on its table), then `HandleSql`, which checks `explore_enabled` (`QueryHandler.Config`)
 first (`ErrExploreNotEnabled`, a 404, before any query), then `prepare` as for `/query`, which already gives the SQL
 text (`p.query`: the window and the page's filters written in, `{{DASHICA_FILTERS}}` filled, the auto buckets
 rebaked) and every value bound to it (`p.opts.Parameters`: `__from`, `__to`, the form values), and answers both as
@@ -338,9 +338,8 @@ a bound parameter, then quoted with `\` and `'` escaped; typed placeholders as `
 **Running an edited query** (`GET <dataUrl>/rows?exploreSql=<text>&param_<name>=<value>…`,
 `QueryHandler.HandleEditedRows(queryObj, text, params, limit, w, r)` in `lib/httpserver/rows.go`): before `serve`, the
 `/rows` handler sees `exploreSql` and calls it with the request's `param_<name>` values (`EditedParameters`); it checks
-`explore.enabled` first (`ErrExploreNotEnabled`, a 404, before any query), binds the values to the text's placeholders,
-and runs the text on the chart's ClickHouse connection (`query.Database()`, so a connection limited to some dashboards
-by `query_file_patterns` stays so); the request's QueryState is not read. It sends the text as it is, after trimming
+`explore_enabled` first (`ErrExploreNotEnabled`, a 404, before any query), binds the values to the text's placeholders,
+and runs the text on the chart's ClickHouse connection (`query.Database()`); the request's QueryState is not read. It sends the text as it is, after trimming
 spaces and one trailing `;`:
 
 - **read-only:** `Client.Query` asks ClickHouse with HTTP GET, which ClickHouse runs read-only (`readonly=2` unless the
@@ -348,7 +347,7 @@ spaces and one trailing `;`:
   code. ClickHouse then refuses `INSERT`, `ALTER`, `DROP`, `CREATE` and `SET readonly = 0` with `READONLY` (code 164).
   **To check** on 26.10 (`clickhouse local`, then an integration test against CI's ClickHouse): an `INSERT`, a
   `CREATE TABLE` and a `SETTINGS readonly = 0` clause each fail with code 164. All authenticated users are trusted
-  (the instance's trust model); read-only and `explore.enabled` still apply.
+  (the instance's trust model); read-only and `explore_enabled` still apply.
 - **the row limit:** a `LIMIT` around the text, `SELECT * FROM (\n<text>\n) LIMIT 100000` (`limited` in `rows.go`):
   exactly that many rows at most, without an error; the text's own `SETTINGS` cannot lift it (`readonly=2` lets the
   text change settings, so `max_result_rows` could be set back to 0), and its subqueries run in full
@@ -364,7 +363,7 @@ spaces and one trailing `;`:
   it in place of the viewer, in `d-notice d-notice--error`, and keeps the editor with the text, so the user fixes
   and runs again. A 404 (Explore turned off since) says "Explore is not enabled". The same for `/sql`: its error shows
   in the editor's place.
-- **Gate** (since step 8g, D8): `HandleSql` and `HandleEditedRows` check `explore.enabled` themselves, in the config
+- **Gate** (since step 8g, D8): `HandleSql` and `HandleEditedRows` check `explore_enabled` themselves, in the config
   `QueryHandler.Config` (injected from `rendering.Dependencies.Config`, since step 9v), and answer `ErrExploreNotEnabled`, which `httpError` makes a
   404, before any query. `/rows` without `exploreSql` is the chart's result as before and stays ungated. The client
   learns the flag from `workbench.json` (`explore`) and leaves the view out without it, so no header tells it
@@ -402,11 +401,11 @@ in the URL), reload (still edited), Reset.
 
 The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each step rewrites what it changes above.
 
-- **D8 Explore off is off (step 8g, ✅ 2026-10-31):** with `explore.enabled: false` the whole Explore extension is
+- **D8 Explore off is off (step 8g, ✅ 2026-10-31):** with `explore_enabled: false` the whole Explore extension is
   off: no "Open in Explore view" in the chart menu, no Explore tabs. The server endpoints check the flag **in their
   handlers** (`HandleSql`, the edited-rows handler, the free SQL endpoint of D10) and answer 404 before any query.
   The only trace in the UI: the global "…" menu (D10) shows "Explore" greyed, hovered "Explore is not enabled
-  (explore.enabled)" (the entry reads "Explore (from scratch)" since workbench commit c56c7cc). Built as §4.4, §4.5 and §4.7 say: the client reads `workbench.json`'s `explore`; the greyed
+  (explore_enabled)" (the entry reads "Explore (from scratch)" since workbench commit c56c7cc). Built as §4.4, §4.5 and §4.7 say: the client reads `workbench.json`'s `explore`; the greyed
   entry is a menu entry that is not `enabled` (workbench §3.11), its command `exploreView.open`, which only Explore on
   registers (step 8i) *(proposed)*; the free SQL endpoint is `/rows?connection=` of D10.
 - **D9 Placeholders, not literals (step 8g, ✅ 2026-10-31):** the key `xsql` is renamed `exploreSql` everywhere (Go,
@@ -418,7 +417,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   request *(proposed)*.
 - **D10 Explore without a chart (step 8i, ✅ 2026-10-31):** the global "…" menu (at the left rail's start since workbench step 9i). Its
   "Explore" opens a blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an
-  empty editor, run on a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts
+  empty editor, run on a new endpoint per connection behind `explore_enabled` (read-only, the same row limit and casts
   as the edited rows); "Start from chart…" fills the editor from one of the shown page's charts. Since workbench
   commit c56c7cc the two entries read "Explore (from scratch)" and "Explore (from chart…)". Built as:
   - **Server:** `GET /rows?connection=<name>&exploreSql=<text>&param_<name>=…` (`httpserver.ConnectionRowsHandler`)
@@ -452,7 +451,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   TTL is cut from `engine_full` (system.tables has no TTL column); the connections come from `workbench.json`'s
   `connections`, a page's tables from its nodes' `table` and `connection` (a `table` without database in the
   connection's own, the answer's `database`). The view and `/schema.json` are part of Explore: without
-  `explore.enabled` there is no panel and the handler answers 404 *(proposed)*. Every database the user sees is
+  `explore_enabled` there is no panel and the handler answers 404 *(proposed)*. Every database the user sees is
   listed, `system` included; a table opens in place in the tree; "Refresh" is in the panel's "…" *(proposed)*.
 - **D12 SQL editor (step 8j):** CodeMirror 6, `@codemirror/lang-sql` with a ClickHouse dialect (`SQLDialect.define`),
   its `schema` option fed by the Schema data; loaded only when Explore opens (with the Perspective bundle). Replaces
@@ -490,7 +489,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
 
 | Risk | Mitigation |
 |---|---|
-| Edited SQL reads any table the chart's ClickHouse user can read, raw data included (IPs, user ids) | only with `explore.enabled`, default off; read-only (GET, `readonly=2`); the chart's connection only; all authenticated users are trusted today, permissions per viewer later at the same place (§4.7) |
+| Edited SQL reads any table the chart's ClickHouse user can read, raw data included (IPs, user ids) | only with `explore_enabled`, default off; read-only (GET, `readonly=2`); the chart's connection only; all authenticated users are trusted today, permissions per viewer later at the same place (§4.7) |
 | Edited SQL writes or changes settings back (`INSERT`, `SETTINGS readonly = 0`) | ClickHouse refuses it read-only (code 164); **to check** on 26.10 with an integration test (§4.7) |
 | A value of the chart's SQL becomes SQL (`'`, `\`) | since step 8g no value is written into the text: the parameters are sent back as `param_<name>` and ClickHouse binds them (§4.7); the pills' conditions are the server's own, signed (workbench §3.8) |
 | The chart's SQL with its parameters, run as an edited query, differs from what the chart ran | the same text and values, bound by ClickHouse as for the chart; integration test: the same rows as the chart (`rows_e2e_test.go`, to check in CI) |
@@ -507,7 +506,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
 
 1. ✅ **Spike** (2026-10-30): the first draft built (derived rows, declared rows), without a browser or ClickHouse.
 2. ✅ **Simplified** (2026-10-31, after the maintainer's notes): the chart's result, "Remove grouping" for builder
-   charts behind `explore.enabled`; `sql.Rows`, `sql.ExploreLimit`, `?count=1`, the byte cap and `timeAxes()` removed
+   charts behind `explore_enabled`; `sql.Rows`, `sql.ExploreLimit`, `?count=1`, the byte cap and `timeAxes()` removed
    (§8).
 3. **The maintainer's first run** in a browser (§8.1); the measurements of §8.3.
 4. ✅ **Editable SQL** (decided 2026-10-31, §4.7; its `/sql` literals, `xsql` and gate replaced by step 8g), one commit
@@ -522,7 +521,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
    - **The gate** is `editable(explore, needs, handler)` in `widget_common.go`, `needs` saying which request requires
      Explore (`/sql`: each, `/rows`: one with `xsql`); `HandleEditedRows(queryObj, text, limit, w, r)` takes the limit;
      the shared client lookup is `QueryHandler.client`. An empty `xsql` (spaces, a `;`) is a 400; the 404 says
-     "Explore is not enabled (explore.enabled)".
+     "Explore is not enabled (explore_enabled)".
    - **`/sql` of a skipped chart** answers 204, the editor gets no text.
    - **The editor fetches `/sql` only while it is open** (and when it opens), not on every refresh while closed. A
      Run of the same edited text runs it again (the page host fires `onDidChangeHash` for the same hash too).
@@ -544,7 +543,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
    on first use only.
 2. ✅ **Reversed and decided 2026-10-31** (§4.7): the view edits the chart's whole SQL as text, materialized (no
    placeholder; since step 8g its parameter placeholders stay, their values beside it, §4.8 D9), for builder and
-   SQL-file charts alike, behind `explore.enabled`, read-only; "Remove grouping" goes.
+   SQL-file charts alike, behind `explore_enabled`, read-only; "Remove grouping" goes.
    The question as it stood: **Changing the query in the view** (maintainer's note: "a way in Explore to change the SQL query … and drop the
    groupings", more explicit than derived rows). Not built. What exists: the free SQL filter `sql=` (any WHERE, on every
    chart of the page) and `lib/explore`'s preview (deprecated; deleted since workbench step 9aw), which already ran a widget the browser
@@ -552,12 +551,12 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
    Open: whether the view edits (a) the chart's whole SQL as text, for builder and SQL-file charts alike, sent as a
    `raw` query, or (b) a few structured parts (columns, GROUP BY, LIMIT) of a builder query; and who may send SQL: the
    free filter already runs any WHERE with the dashboard's ClickHouse user (all authenticated users are trusted
-   today), a whole query reads any table that user can read, so the same `explore.enabled` gate, later permissions,
+   today), a whole query reads any table that user can read, so the same `explore_enabled` gate, later permissions,
    apply. Recommendation: (a) behind the gate, with the chart's built SQL (`/debug`) as the starting text, once the
    first run shows the view is used.
 3. **Row limit:** 100,000 rows of an edited query (was: the newest 100,000 without grouping). Recommendation: keep; measure memory and bytes on the first
    run; make it a setting only if a dashboard needs another.
-4. **Explore enabled per instance or per viewer?** Today one flag per instance (`explore.enabled`); permissions per
+4. **Explore enabled per instance or per viewer?** Today one flag per instance (`explore_enabled`); permissions per
    viewer replace it.
 5. **Viewer config in the URL** for share links (`?view=…`), or `localStorage` only? Recommendation: `localStorage`
    first.
@@ -579,9 +578,9 @@ typechecked.
 Updated 2026-10-31 to the SQL editor of §4.7, which replaced "Remove grouping" and `?grouping=none`.
 
 - Every chart serves `<dataUrl>/rows` (`rowsUrl` in `page.json`): its query as at `/query` in plain Arrow types; with
-  `explore.enabled`, also `<dataUrl>/sql` (the chart's query and its parameters, since step 8g) and
+  `explore_enabled`, also `<dataUrl>/sql` (the chart's query and its parameters, since step 8g) and
   `/rows?exploreSql=<text>&param_…` (an edited query, read-only, at most 100,000 rows) (§4.7).
-- With `explore.enabled` (since step 8g; else only "Explore (from scratch)" greyed in the global menu), a chart's menu (⋮) has "Open
+- With `explore_enabled` (since step 8g; else only "Explore (from scratch)" greyed in the global menu), a chart's menu (⋮) has "Open
   in Explore view": the chart's result in `<perspective-viewer>` in a new tab,
   rebuilt as the chart (§4.2), with a toolbar "Explore: <title>", the row count, the filters the chart ignores,
   "SQL" (Explore enabled), "Reset" and "Close".
@@ -600,8 +599,8 @@ Steps for the maintainer (none of them were run in the spike):
 1. In `dashica-src`: commit the working tree's `package-lock.json` (already installed: it has the five
    `@perspective-dev/*@5.6.1` packages of `package.json`, and no Tailwind or daisyUI). The committed lock has none of
    them, so `npm ci` (outer repo's `server:build-npm`, CI) refuses the branch until then.
-2. Enable Explore for the SQL editor: `explore: { enabled: true }` in the outer repo's
-   `dashica_config.sandstorm.yaml` (or `EXPLORE__ENABLED=true`).
+2. Enable Explore for the SQL editor: `explore_enabled: true` in the outer repo's
+   `dashica_config.sandstorm.yaml` (or `EXPLORE_ENABLED=true`).
 3. Build: `node frontendBuild.mjs` in `dashica-src`, or `mise run server:build` in the outer repo; it also writes
    `public/dist/perspective.js`, `perspective.css` and three `.wasm` files.
 4. Outer repo: `mise r watch`, then open `http://127.0.0.1:8081/templates/oekokiste-caddy-ingress?time=168h`.
@@ -613,7 +612,7 @@ Steps for the maintainer (none of them were run in the spike):
    quick pick, returns to the chart's config ("Cancel" keeps it).
 9. E2E: `npm run e2e -- explore-view.spec.ts` against your running instance (defaults to the page and chart above;
    `DASHICA_E2E_EXPLORE_PAGE` / `DASHICA_E2E_EXPLORE_CHART` pick others); the SQL editor test is skipped without
-   `explore.enabled` (step 2).
+   `explore_enabled` (step 2).
 10. ClickHouse tests: `mise exec go -- go test ./lib/httpserver/` with the test ClickHouse on `127.0.0.1:28123`
     (`TestHandleRows_*`, `TestHandleSql_*`, `TestHandleEditedRows_*`, written but never run).
 
@@ -633,7 +632,7 @@ query nothing. Not run in a browser; `e2e/explore-view.spec.ts` updated.
 | `max_result_bytes` cap | not sent | measured ineffective under `LIMIT` in `clickhouse local` 25.9 |
 | Types cast in the rows query | cast in transport: `QueryOptions.Cast` with `clickhouse.PlainArrowCast`, which generalises the existing describe-and-wrap of `ensureArrowCompatible` | the SQL stays readable; also the chart's result needs it (`count()` is `UInt64`) |
 | Five npm packages `@perspective-dev/*@5.6.1` | as planned: client, server, viewer, viewer-datagrid, viewer-charts | `@finos/perspective` is the deprecated old name |
-| "Explore enabled" | a config flag `explore.enabled`, read by the chart's handler from the config injected as `rendering.Dependencies.Config` (since step 9v of the workbench concept; before, a copied flag `ExploreEnabled`) | the deprecated `exploreBaseURL` is shared state about the old Explore page; a value where the handler is built is the least machinery |
+| "Explore enabled" | a config flag `explore_enabled`, read by the chart's handler from the config injected as `rendering.Dependencies.Config` (since step 9v of the workbench concept; before, a copied flag `ExploreEnabled`) | the deprecated `exploreBaseURL` is shared state about the old Explore page; a value where the handler is built is the least machinery |
 | The toggle's visibility from `page.json` or `workbench.json` | from the answer's header `X-Dashica-Grouping: removable` | one place decides (the handler); no new generated field |
 | Toggle state | per open view, not in the URL or storage | the least state; reopening starts on the chart's result |
 

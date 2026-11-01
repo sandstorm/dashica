@@ -73,11 +73,11 @@ type Dependencies struct {
 	AlertResultStore        *alerting2.AlertResultStore
 	AlertEvaluator          *alerting2.AlertEvaluator
 	AlertManager            *alerting2.AlertManager
-	// Config is the loaded dashica_config, read only. The handlers check its settings where they apply: explore.enabled
-	// in the Explore handlers (httpserver.ErrExploreNotEnabled), filters.sqlEnabled where SQL chips enter a query
+	// Config is the loaded dashica_config, read only. The handlers check its settings where they apply: explore_enabled
+	// in the Explore handlers (httpserver.ErrExploreNotEnabled), sql_filter_enabled where SQL chips enter a query
 	// (httpserver.QueryState.SqlClause).
 	Config *config.Config
-	// FilterService signs and opens the pills and names their tables, with filters.secret and the connections'
+	// FilterService signs and opens the pills and names their tables, with app_secret and the connections'
 	// databases from Config.
 	FilterService *filter.FilterService
 }

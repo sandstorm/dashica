@@ -69,7 +69,7 @@ func TestExploreHandlers_AnswerErrExploreNotEnabledBeforeAnyQuery(t *testing.T) 
 // askConnectionRows is what a ConnectionRowsHandler on a config with the connection "default" (whose ClickHouse is not
 // asked: every case answers before) answers `target`.
 func askConnectionRows(exploreEnabled bool, target string) *httptest.ResponseRecorder {
-	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}, Explore: config.ExploreConfig{Enabled: exploreEnabled}}
+	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1"}}, ExploreEnabled: exploreEnabled}
 	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
@@ -78,7 +78,7 @@ func askConnectionRows(exploreEnabled bool, target string) *httptest.ResponseRec
 
 func TestConnectionRowsHandler_AnswersNotFoundWhileExploreIsOff(t *testing.T) {
 	rec := askConnectionRows(false, "/rows?connection=default&exploreSql=SELECT+1")
-	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "explore.enabled") {
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "explore_enabled") {
 		t.Errorf("status %d: %s", rec.Code, rec.Body)
 	}
 }

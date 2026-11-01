@@ -31,7 +31,7 @@ export interface Commands {
 export interface CommandOptions {
   /** Whether it can run now, asked each time it is shown or a key would run it; default: always. */
   readonly enablement?: () => boolean;
-  /** Shown on hover while it cannot run: why ("Explore is not enabled (explore.enabled)"). */
+  /** Shown on hover while it cannot run: why ("Explore is not enabled (explore_enabled)"). */
   readonly disabledReason?: string;
 }
 

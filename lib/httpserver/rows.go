@@ -16,9 +16,9 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
-// ErrExploreNotEnabled is what HandleSql, HandleEditedRows and ConnectionRowsHandler answer while explore.enabled is off, before any query:
+// ErrExploreNotEnabled is what HandleSql, HandleEditedRows and ConnectionRowsHandler answer while explore_enabled is off, before any query:
 // a 404.
-var ErrExploreNotEnabled = errors.New("Explore is not enabled (explore.enabled)")
+var ErrExploreNotEnabled = errors.New("Explore is not enabled (explore_enabled)")
 
 // HandleRows answers `queryObj` as HandleQuery does, in Arrow with every column of a plain Arrow type
 // (clickhouse.PlainArrowCast), which the Explore view's Perspective reads.
@@ -35,9 +35,9 @@ const ExploreRowLimit = 100_000
 // chart's), in the Arrow of HandleRows: read-only (an HTTP GET and `readonly=2`, so ClickHouse refuses writes and
 // changes of `readonly` with READONLY), at most `limit` rows, said in X-Dashica-Rows-Limit. The limit is a LIMIT around
 // the text (`SELECT * FROM (\n<text>\n) LIMIT <limit>`): exact, out of reach of the text's own SETTINGS, and its
-// subqueries run in full. ErrExploreNotEnabled unless explore.enabled (qh.Config); an empty text is a QueryStateError.
+// subqueries run in full. ErrExploreNotEnabled unless explore_enabled (qh.Config); an empty text is a QueryStateError.
 func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, params map[string]string, limit int, w http.ResponseWriter, r *http.Request) error {
-	if !qh.Config.Explore.Enabled {
+	if !qh.Config.ExploreEnabled {
 		return ErrExploreNotEnabled
 	}
 	text, err := editedText(text)
@@ -54,16 +54,16 @@ func (qh QueryHandler) HandleEditedRows(queryObj sql.SqlQueryable, text string, 
 // ConnectionRowsHandler answers `GET /rows?connection=<name>&exploreSql=<text>&param_<name>=…`, the query of a blank
 // Explore tab, which no chart runs (docs/2026-10-30-perspective.md §4.8): `text` on that connection of dashica_config,
 // as HandleEditedRows answers an edited query (read-only, at most ExploreRowLimit rows, the Arrow of HandleRows). 404
-// while explore.enabled is off (ErrExploreNotEnabled, before any query) and for a connection dashica_config does not
+// while explore_enabled is off (ErrExploreNotEnabled, before any query) and for a connection dashica_config does not
 // name; 400 for an empty text.
 type ConnectionRowsHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
-	// Config is the loaded dashica_config, read only: it answers while explore.enabled is on.
+	// Config is the loaded dashica_config, read only: it answers while explore_enabled is on.
 	Config *config.Config
 }
 
 func (h ConnectionRowsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !h.Config.Explore.Enabled {
+	if !h.Config.ExploreEnabled {
 		http.Error(w, ErrExploreNotEnabled.Error(), http.StatusNotFound)
 		return
 	}

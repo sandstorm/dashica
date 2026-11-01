@@ -15,6 +15,7 @@ npm run build
 # 3. Set up and run the dev server
 cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
+export APP_SECRET=$(openssl rand -hex 32)  # required; every config key: dashica_config.example.yaml (root)
 go run main.go
 
 # 4. Open http://127.0.0.1:8080/docs/intro

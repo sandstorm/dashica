@@ -29,7 +29,8 @@ npm run build
 # From project root
 cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
-# No need to edit - default settings work with Docker setup!
+# No need to edit - default settings work with Docker setup! Only the secret comes from the environment:
+export APP_SECRET=$(openssl rand -hex 32)
 ```
 
 4. **Run the dev server**:
@@ -58,8 +59,8 @@ cd docs/dev-server
 cp dashica_config.example.yaml dashica_config.yaml
 ```
 
-2. **Edit `dashica_config.yaml`** with your ClickHouse connection details, and set `filters.secret` (signs the
-   page's filter pills; the server does not start without it): `openssl rand -hex 32`.
+2. **Edit `dashica_config.yaml`** with your ClickHouse connection details, and set `APP_SECRET` in the environment
+   (signs the page's filter pills; the server does not start without it): `export APP_SECRET=$(openssl rand -hex 32)`.
 
 3. **Load sample data** (optional):
 
@@ -94,19 +95,21 @@ The dev server requires a `dashica_config.yaml` file in the same directory:
 cp dashica_config.example.yaml dashica_config.yaml
 ```
 
-Edit the file to configure:
-- ClickHouse connection settings
-- Logging options
-- Alert configuration (optional)
+Edit the file to configure the ClickHouse connections. Every other key (logging, alerting, Explore, SQL filters),
+its default and its environment variable is in the reference `dashica_config.example.yaml` in the repository root.
 
 ### Environment Variables
 
 Additional configuration via environment variables:
 
 ```bash
-export PORT=8080                # Server port (default: 8080)
+export PORT=8080                # Server port of the dev server's main.go (default: 8080)
 export APP_ENV=development      # Environment name (loads dashica_config.yaml)
+export APP_SECRET=...           # Required: signs the page's filters (openssl rand -hex 32)
 ```
+
+Any key of the config can be set from the environment: upper case, `__` joining the levels
+(`CLICKHOUSE__DEFAULT__PASSWORD`, `EXPLORE_ENABLED=true`); a variable set wins over the file.
 
 The `APP_ENV` variable controls which config file is loaded:
 - Not set or `development`: loads `dashica_config.yaml`

@@ -21,8 +21,8 @@ type QueryHandler struct {
 	ClickhouseClientManager *clickhouse.Manager
 	Logger                  zerolog.Logger
 	FileSystem              fs.ReadFileFS
-	// Config is the loaded dashica_config, read only: HandleSql and HandleEditedRows answer while explore.enabled is
-	// on (else ErrExploreNotEnabled), every query takes SQL chips while filters.sqlEnabled is (SqlClause).
+	// Config is the loaded dashica_config, read only: HandleSql and HandleEditedRows answer while explore_enabled is
+	// on (else ErrExploreNotEnabled), every query takes SQL chips while sql_filter_enabled is (SqlClause).
 	Config *config.Config
 }
 
@@ -67,7 +67,7 @@ type prepared struct {
 }
 
 // prepare is `queryObj` filtered by `state` as HandleQuery, HandleRows and HandleDebug send it: its window and SQL
-// filter unless it skips filters, the form values bound; ErrSqlNotEnabled for SQL chips while filters.sqlEnabled is
+// filter unless it skips filters, the form values bound; ErrSqlNotEnabled for SQL chips while sql_filter_enabled is
 // off.
 func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (prepared, error) {
 	client, err := qh.client(queryObj)
@@ -84,7 +84,7 @@ func (qh QueryHandler) prepare(queryObj sql.SqlQueryable, state QueryState) (pre
 		if p.timeRange, err = state.ResolveTimeRange(time.Now()); err != nil {
 			return prepared{}, err
 		}
-		if p.filterClause, err = state.SqlClause(p.timeRange, qh.Config.Filters); err != nil {
+		if p.filterClause, err = state.SqlClause(p.timeRange, qh.Config); err != nil {
 			return prepared{}, err
 		}
 		q = queryObj.With(sql.Where(p.filterClause))
@@ -122,9 +122,9 @@ type ChartSql struct {
 
 // HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, the parameters bound
 // to it and its connection, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
-// chart answers 204; ErrExploreNotEnabled unless explore.enabled (qh.Config).
+// chart answers 204; ErrExploreNotEnabled unless explore_enabled (qh.Config).
 func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
-	if !qh.Config.Explore.Enabled {
+	if !qh.Config.ExploreEnabled {
 		return ErrExploreNotEnabled
 	}
 	WriteDiagnostics(w, diagnostics)

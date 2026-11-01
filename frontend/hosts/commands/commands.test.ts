@@ -182,9 +182,9 @@ describe('CommandsHost', () => {
   it('says whether a command can run now, asking its enablement each time, with its reason only while it cannot', () => {
     const { commands } = setup();
     let explore = false;
-    const registration = commands.registerCommand('test.explore', () => {}, { enablement: () => explore, disabledReason: 'Explore is not enabled (explore.enabled)' });
+    const registration = commands.registerCommand('test.explore', () => {}, { enablement: () => explore, disabledReason: 'Explore is not enabled (explore_enabled)' });
     commands.registerCommand('test.plain', () => {});
-    expect(commands.enablement('test.explore')).toEqual({ enabled: false, disabledReason: 'Explore is not enabled (explore.enabled)' });
+    expect(commands.enablement('test.explore')).toEqual({ enabled: false, disabledReason: 'Explore is not enabled (explore_enabled)' });
     explore = true;
     expect(commands.enablement('test.explore')).toEqual({ enabled: true });
     expect([commands.enablement('test.plain'), commands.enablement('test.unknown')]).toEqual([{ enabled: true }, { enabled: true }]);

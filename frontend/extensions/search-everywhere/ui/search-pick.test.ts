@@ -135,10 +135,10 @@ describe('SearchPick', () => {
 
   it('shows a disabled item greyed with its tooltip and runs nothing when it is picked', () => {
     const accept = vi.fn();
-    const { hostContainer, search, field } = setup({ id: 'commands', label: 'Commands', provideItems: () => [{ label: 'Explore', disabled: true, tooltip: 'Explore is not enabled (explore.enabled)', accept }] });
+    const { hostContainer, search, field } = setup({ id: 'commands', label: 'Commands', provideItems: () => [{ label: 'Explore', disabled: true, tooltip: 'Explore is not enabled (explore_enabled)', accept }] });
     search.show('explore');
     const optionElement = hostContainer.querySelector<HTMLElement>('[role=option]')!;
-    expect([optionElement.getAttribute('aria-disabled'), optionElement.title]).toEqual(['true', 'Explore is not enabled (explore.enabled)']);
+    expect([optionElement.getAttribute('aria-disabled'), optionElement.title]).toEqual(['true', 'Explore is not enabled (explore_enabled)']);
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     optionElement.click();
     expect(accept).not.toHaveBeenCalled();

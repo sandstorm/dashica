@@ -81,7 +81,7 @@ test('/fields answers the table’s columns and the computed fields with their t
     expect(refused.status()).toBe(422);
 });
 
-test('"Add filter" ends with "SQL condition…" only while SQL chips are taken (filters.sqlEnabled)', async ({page, request}) => {
+test('"Add filter" ends with "SQL condition…" only while SQL chips are taken (sql_filter_enabled)', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
     await page.goto(PAGE);
     await page.getByRole('button', {name: 'Add filter'}).click();

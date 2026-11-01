@@ -74,10 +74,13 @@ clickhouse:
     password: password
     database: default
 
-log:
-  file_name: /tmp/dashica.log
-  to_stdout: true
+log_filename: /tmp/dashica.log
+log_to_stdout: true
 ` + "```" + `
+
+Set ` + "`app_secret`" + ` in the environment (it signs the page's filters; the server does not start without it):
+` + "`export APP_SECRET=$(openssl rand -hex 32)`" + `. Every key, its default and its environment variable:
+` + "`dashica_config.example.yaml`" + ` in the Dashica repository.
 
 ### Main Application
 

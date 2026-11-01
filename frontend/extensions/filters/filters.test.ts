@@ -8,7 +8,7 @@
 // field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
 // input box), each made again by a chart of the page (a column's by the table's first chart), its type from that
 // chart's /fields asked once per time range, one no chart makes only removed; with SQL filters off
-// (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; its
+// (sql_filter_enabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; its
 // data point menu provider registered and `filters.addPill` adding the pill to the tab shown; the charts' answers
 // decorated with the pills they ignore.
 import { Table } from 'apache-arrow';
@@ -166,7 +166,7 @@ beforeEach(() => {
   });
 });
 
-/** Activates the extension, the server taking SQL chips or not (filters.sqlEnabled), and shows the page Shop. */
+/** Activates the extension, the server taking SQL chips or not (sql_filter_enabled), and shows the page Shop. */
 function activate(sqlEnabled: boolean): void {
   page.workbench.sqlEnabled = sqlEnabled;
   const registry = { registerCommand: (id: string, handler: (...args: any[]) => unknown) => (commands.set(id, handler), { dispose: () => commands.delete(id) }) };
@@ -629,7 +629,7 @@ describe('filters with SQL filters off', () => {
     query.load({ search: '?sql=status+%3E%3D+400' });
     chips()[0].querySelector<HTMLElement>('.d-filter-chip__value')!.click();
     expect(asked).toEqual([]);
-    expect(chips()[0].title).toBe('status >= 400\nSQL filters are not enabled (filters.sqlEnabled)');
+    expect(chips()[0].title).toBe('status >= 400\nSQL filters are not enabled (sql_filter_enabled)');
     chips()[0].querySelector<HTMLButtonElement>('button[aria-label="Remove status >= 400"]')!.click();
     expect(held()).toEqual([]);
   });

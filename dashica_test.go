@@ -43,7 +43,7 @@ func TestWorkbenchJson_ListsTheGroupsAsRegisteredWhenAsked(t *testing.T) {
 func TestWorkbenchJson_SaysWhetherExploreAndSqlFiltersAreEnabledAndTheConnections(t *testing.T) {
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {}, "alert_storage": {}}}
 	rec := httptest.NewRecorder()
-	cfg.Explore.Enabled, cfg.Filters.SqlEnabled = true, true
+	cfg.ExploreEnabled, cfg.SqlFilterEnabled = true, true
 	deps := rendering.Dependencies{Config: cfg, ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop())}
 	(&DashicaImpl{deps: deps}).serveWorkbenchJson(rec, httptest.NewRequest(http.MethodGet, "/workbench.json", nil))
 
@@ -59,7 +59,7 @@ func TestSchemaJson_IsServedAndAnswersNotFoundWhileExploreIsOff(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/schema.json?connection=default", nil))
-	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "explore.enabled") {
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "explore_enabled") {
 		t.Errorf("status %d: %s", rec.Code, rec.Body)
 	}
 }

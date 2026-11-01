@@ -45,7 +45,7 @@ func TestHandleFields_TakesNoSqlChipsAndAFailedDescribeKeepsTheColumns(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	// filters.sqlEnabled off: a chip that reached the DESCRIBE would be ErrSqlNotEnabled
+	// sql_filter_enabled off: a chip that reached the DESCRIBE would be ErrSqlNotEnabled
 	cfg := &config.Config{ClickHouse: map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}}
 	var logged bytes.Buffer
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, Logger: zerolog.New(&logged)}
@@ -58,7 +58,7 @@ func TestHandleFields_TakesNoSqlChipsAndAFailedDescribeKeepsTheColumns(t *testin
 		t.Errorf("%s, want %s", got, want)
 	}
 	// the ClickHouse of cfg is unreachable: the request got to the DESCRIBE
-	if !strings.Contains(logged.String(), "clickhouse describe") || strings.Contains(logged.String(), "sqlEnabled") {
+	if !strings.Contains(logged.String(), "clickhouse describe") || strings.Contains(logged.String(), "sql_filter_enabled") {
 		t.Errorf("logged %s", logged.String())
 	}
 }

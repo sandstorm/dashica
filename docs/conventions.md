@@ -88,8 +88,8 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
   is sent, not re-derived on the server.
 - **Logic local to the widget,** decided server side: what a filter means for a chart is the chart's (its table, its
   fields, `FilterAs`), never a page-wide collection of widgets.
-- **Anything from the browser that becomes SQL is signed** (`filters.secret`) or behind a feature flag
-  (`filters.sqlEnabled`, `explore.enabled`).
+- **Anything from the browser that becomes SQL is signed** (`app_secret`) or behind a feature flag
+  (`sql_filter_enabled`, `explore_enabled`).
 - **No self round trip:** never fetch the app's own handler or decode JSON it just encoded; collect at the source.
 - **`.sql` files and builder queries** (`sql.New`, fields) are two separate cases; never lump them together.
 - **Run Go through mise:** `mise exec go -- go …`. A change to `dashica-src`'s `go.mod` or to an API the outer

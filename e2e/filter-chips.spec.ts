@@ -127,7 +127,7 @@ test('a pill’s key is readable: table, field, op and value, then a 22 characte
 
 test('a link with two `sql` shows two SQL chips; "Add filter"’s "SQL condition…" adds one; × removes one', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
-    test.skip(!workbench.sqlEnabled, 'SQL chips are off (filters.sqlEnabled)');
+    test.skip(!workbench.sqlEnabled, 'SQL chips are off (sql_filter_enabled)');
     const pill = await signedPill(page, 'eq', 'system');
     await page.goto(`${PAGE}?sql=${encodeURIComponent('1 = 1')}&f=${encodeURIComponent(pill.key)}&sql=${encodeURIComponent('2 = 2')}`);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
@@ -153,7 +153,7 @@ test('a link with two `sql` shows two SQL chips; "Add filter"’s "SQL condition
 
 test('a SQL chip is edited in the SQL editor’s input box below it', async ({page, request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
-    test.skip(!workbench.sqlEnabled, 'SQL chips are off (filters.sqlEnabled)');
+    test.skip(!workbench.sqlEnabled, 'SQL chips are off (sql_filter_enabled)');
     await page.goto(`${PAGE}?sql=${encodeURIComponent('1 = 1')}`);
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');
     await chips.first().locator('.d-filter-chip__value').click();

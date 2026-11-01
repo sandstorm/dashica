@@ -2,7 +2,7 @@
 // "Schema" shows under "On this page" the tables the page's charts read, under "All connections" every connection of
 // dashica_config; opening one shows its databases and tables, a table its columns and keys; "Refresh" in the panel's
 // "…" asks the server again, "Show comments" there hides and shows the comments; the views close and stay closed. All
-// of it needs `explore.enabled` (workbench.json's `explore`), else every test is skipped.
+// of it needs `explore_enabled` (workbench.json's `explore`), else every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" (its charts on "default"); another
 // page: DASHICA_E2E_SCHEMA_PAGE.
@@ -19,7 +19,7 @@ interface Widget {
 
 test.beforeEach(async ({request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
-    test.skip(!workbench.explore, 'Explore is off: set explore.enabled: true in the dashica config');
+    test.skip(!workbench.explore, 'Explore is off: set explore_enabled: true in the dashica config');
 });
 
 test('"On this page" shows the tables the page’s charts read, a table opens to its columns and keys', async ({page}) => {

@@ -1,0 +1,87 @@
+# The reference of Dashica's configuration: every key, its default and its environment variable, all commented out.
+# Copy what you need into your own file and uncomment it.
+#
+# Sources, each overriding the one before: the defaults below < dashica_config.<APP_ENV>.yaml in the working
+# directory, or dashica_config.yaml when that file does not exist < the environment.
+#
+# Environment variables: the key in upper case, "__" joining the levels: `explore_enabled` is EXPLORE_ENABLED,
+# `clickhouse.default.password` is CLICKHOUSE__DEFAULT__PASSWORD. A variable set wins over the file.
+#
+# Secrets (app_secret, the ClickHouse passwords) belong only in the environment, never in a checked-in file.
+# (lib/config/config_test.go checks that this file names every key of lib/config.Config.)
+
+# Signs everything the server hands to the browser and takes back (the page's filter pills, the filter buttons), so
+# that the conditions in a page's URL are the server's own. Required: the server refuses to start without it, or with
+# fewer than 32 characters. Generate one with `openssl rand -hex 32`. A new secret makes the pills of older links
+# fail with 400.
+# env: APP_SECRET
+#app_secret: ""
+
+# The ClickHouse connections, by name; a dashboard query runs on `default` unless it names another. Each needs `url`
+# and `database`; with a `user`, `user` and `password` go along as HTTP basic auth.
+#clickhouse:
+#  # The connection queries run on unless they name another.
+#  default:
+#    # env: CLICKHOUSE__DEFAULT__URL
+#    url: http://localhost:8123
+#    # env: CLICKHOUSE__DEFAULT__USER
+#    user: default
+#    # env: CLICKHOUSE__DEFAULT__PASSWORD
+#    password: ""
+#    # The database a table name without database refers to.
+#    # env: CLICKHOUSE__DEFAULT__DATABASE
+#    database: default
+#  # Where the alerts store their results (table dashica_alert_events, see schema.sql). Required even without
+#  # alerts: the server refuses to start when no connection of this name is configured. It is queried only by the
+#  # alert scheduler at start (which, when that fails, logs "Alert scheduler failed" and runs no alerts, the server
+#  # keeps running), by the alert evaluations and by the alert overview widgets.
+#  alert_storage:
+#    # env: CLICKHOUSE__ALERT_STORAGE__URL
+#    url: http://localhost:8123
+#    # env: CLICKHOUSE__ALERT_STORAGE__USER
+#    user: default
+#    # env: CLICKHOUSE__ALERT_STORAGE__PASSWORD
+#    password: ""
+#    # env: CLICKHOUSE__ALERT_STORAGE__DATABASE
+#    database: default
+
+# The port the HTTP server listens on.
+# env: SERVER_PORT
+#server_port: 8081
+
+# The log goes to stderr too, beside the log file. Off, only to the log file.
+# env: LOG_TO_STDOUT
+#log_to_stdout: true
+
+# The log file (rotated at 500 MB, 3 backups, 28 days). Empty: <temp dir>/<binary name>-lumberjack.log.
+# env: LOG_FILENAME
+#log_filename: ""
+
+# The Explore view: every viewer may edit a chart's SQL and run it, read-only, on the chart's connection, raw rows
+# included. Off by default, since raw rows may hold personal data a chart aggregates away. Off, the view is not
+# offered and its endpoints answer 404.
+# env: EXPLORE_ENABLED
+#explore_enabled: false
+
+# The page's SQL chips (`?sql=`): the viewer's own SQL in every chart's WHERE, typed in the filter bar. Off by
+# default, since a SQL chip is SQL the viewer writes. Off, the filter bar offers none, and a request with one answers
+# 400 before any query.
+# env: SQL_FILTER_ENABLED
+#sql_filter_enabled: false
+
+# Where alerts are sent and who watches the alert scheduler.
+#alerting:
+#  # The Helvetikit endpoint an alert's status change is posted to. Empty: alerts are evaluated and stored, but no
+#  # notification is sent (logged as "No Helvetikit server found").
+#  # env: ALERTING__HELVETIKIT_ALERTING_URL
+#  helvetikit_alerting_url: ""
+#  # The alert group at Helvetikit, sent as "dashica_<group>".
+#  # env: ALERTING__HELVETIKIT_ID_GROUP
+#  helvetikit_id_group: ""
+#  # A cron schedule ("@hourly") on which the alert scheduler calls alert_cron_monitor_url as a heartbeat. Empty
+#  # (or the URL empty): no heartbeat.
+#  # env: ALERTING__ALERT_CRON_MONITOR_SCHEDULE
+#  alert_cron_monitor_schedule: ""
+#  # The heartbeat URL a cron monitor watches.
+#  # env: ALERTING__ALERT_CRON_MONITOR_URL
+#  alert_cron_monitor_url: ""

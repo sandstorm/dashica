@@ -121,6 +121,7 @@ The backend will restart automatically when Go files change.
 ` + "```bash" + `
 export PORT=8080                # Server port (default: 8080)
 export APP_ENV=production       # Environment (loads dashica_config.<env>.yaml)
+export APP_SECRET=...           # Required: signs the page's filters (openssl rand -hex 32)
 ` + "```" + `
 
 ### Configuration File
@@ -129,19 +130,21 @@ Create ` + "`dashica_config.yaml`" + ` (or ` + "`dashica_config.<env>.yaml`" + `
 
 ` + "```yaml" + `
 clickhouse:
-  url: "http://localhost:8123"
-  username: "default"
-  password: ""
-  database: "default"
+  default:
+    url: "http://localhost:8123"
+    user: "default"
+    # password from the environment: CLICKHOUSE__DEFAULT__PASSWORD
+    database: "default"
+  alert_storage:
+    url: "http://localhost:8123"
+    user: "default"
+    database: "default"
 
-logging:
-  level: "info"
-  format: "json"
-
-alerting:
-  enabled: false
-  check_interval: "5m"
+log_to_stdout: true
 ` + "```" + `
+
+Every key, its default and its environment variable: ` + "`dashica_config.example.yaml`" + ` in the Dashica
+repository.
 
 ## Deployment Strategies
 
@@ -238,12 +241,14 @@ metadata:
 data:
   dashica_config.yaml: |
     clickhouse:
-      url: "http://clickhouse:8123"
-      username: "default"
-      password: ""
-      database: "production"
-    logging:
-      level: "info"
+      default:
+        url: "http://clickhouse:8123"
+        user: "default"
+        database: "production"
+      alert_storage:
+        url: "http://clickhouse:8123"
+        user: "default"
+        database: "production"
 ` + "```" + `
 
 ### Systemd Service

@@ -19,7 +19,7 @@ import (
 )
 
 // FilterService signs and opens the server's pills and names their tables, with what dashica_config says for them:
-// filters.secret, the key of each pill's HMAC, and each connection's database (`clickhouse.<name>.database`), where a
+// app_secret, the key of each pill's HMAC, and each connection's database (`clickhouse.<name>.database`), where a
 // table named without its database is. One for the server, in rendering.Dependencies.
 type FilterService struct {
 	config *config.Config
@@ -35,9 +35,9 @@ func (s *FilterService) database(connection string) string {
 	return s.config.ClickHouse[connection].Database
 }
 
-// secret is filters.secret, the key of each pill's HMAC.
+// secret is app_secret, the key of each pill's HMAC.
 func (s *FilterService) secret() []byte {
-	return []byte(s.config.Filters.Secret)
+	return []byte(s.config.AppSecret)
 }
 
 // Diagnostics is what a chart tells the outside about one answer, sent with its data (X-Dashica-Diagnostics).
@@ -160,13 +160,13 @@ func NewButton(title, queryPart, value string) (Pill, error) {
 // The table is `[<connection>:][<database>.]<name>`, the connection left out when it is "default" and the database
 // when it is the connection's (dashica_config); the op its ClickHouse
 // operator (`=`, `!=`, `<`, `<=`, `>`, `>=`); the condition only when it is not the column's own (a Column's). The mac
-// is the HMAC-SHA256 with filters.secret of everything before it, its first 128 bits in unpadded base64url.
+// is the HMAC-SHA256 with app_secret of everything before it, its first 128 bits in unpadded base64url.
 // `%` and each separator a part could hold are percent-encoded in it (`~` everywhere; `:`, `.`, `=`, `!`, `<`, `>`
 // and `@` in a name; a value's leading `=`), so each part reads back as it was.
 func (s *FilterService) Sign(p Pill) (string, error) {
 	secret := s.secret()
 	if len(secret) == 0 {
-		return "", errors.New("filters.secret is not set")
+		return "", errors.New("app_secret is not set")
 	}
 	var head string
 	if p.Button != "" {
@@ -183,13 +183,13 @@ func (s *FilterService) Sign(p Pill) (string, error) {
 	return head + "~" + base64.RawURLEncoding.EncodeToString(mac(secret, head)), nil
 }
 
-// Open is the pill of `key` (Sign), when its mac is the one filters.secret gives, its table's name with the database
+// Open is the pill of `key` (Sign), when its mac is the one app_secret gives, its table's name with the database
 // dashica_config names for its connection when the key has none; else an error: a key changed on its way, one written
 // by hand, one signed with another secret.
 func (s *FilterService) Open(key string) (Pill, error) {
 	secret := s.secret()
 	if len(secret) == 0 {
-		return Pill{}, errors.New("filters.secret is not set")
+		return Pill{}, errors.New("app_secret is not set")
 	}
 	i := strings.LastIndex(key, "~")
 	if i < 0 {

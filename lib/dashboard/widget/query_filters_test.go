@@ -32,7 +32,7 @@ var testFiles = fstest.MapFS{"colors.sql": {Data: []byte("SELECT host, 'darkred'
 // testSecret, SQL chips and Explore off, its SQL files testFiles.
 func testDeps() rendering.Dependencies {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
-	cfg := &config.Config{ClickHouse: unreachable, Filters: config.FiltersConfig{Secret: string(testSecret)}}
+	cfg := &config.Config{ClickHouse: unreachable, AppSecret: string(testSecret)}
 	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
 }
 
@@ -199,13 +199,13 @@ func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 	// Explore on, so that /sql gets to the query
 	ask := func(sqlEnabled bool, path string) *httptest.ResponseRecorder {
 		deps := testDeps()
-		deps.Config.Explore.Enabled, deps.Config.Filters.SqlEnabled = true, sqlEnabled
+		deps.Config.ExploreEnabled, deps.Config.SqlFilterEnabled = true, sqlEnabled
 		rec := httptest.NewRecorder()
 		queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
 		return rec
 	}
 	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status"} {
-		if rec := ask(false, path); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
+		if rec := ask(false, path); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "sql_filter_enabled") {
 			t.Errorf("off, %s: %d %s", path, rec.Code, rec.Body)
 		}
 		// on, the same request passes: the ClickHouse of testDeps is unreachable
@@ -232,12 +232,12 @@ func TestSpeedscope_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 	target := "/speedscope-query?time=1h&sql=" + url.QueryEscape("status >= 500")
 	rec := httptest.NewRecorder()
 	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "sql_filter_enabled") {
 		t.Errorf("off: %d %s", rec.Code, rec.Body)
 	}
 	// on, the same request passes: the ClickHouse of testDeps is unreachable
 	deps := testDeps()
-	deps.Config.Filters.SqlEnabled = true
+	deps.Config.SqlFilterEnabled = true
 	rec = httptest.NewRecorder()
 	link.Handler(deps).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	if rec.Code == http.StatusBadRequest {
@@ -407,7 +407,7 @@ func TestFields_AChartWithoutATableIs422TheSchemaAskedOtherwise(t *testing.T) {
 func TestFields_IsNotBehindExplore(t *testing.T) {
 	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("lower(host_name)").WithAlias("host")).Y(sql.Count())
 	deps := testDeps()
-	deps.Config.Explore.Enabled = false
+	deps.Config.ExploreEnabled = false
 	rec := httptest.NewRecorder()
 	queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fields?time=1h", nil))
 	// the ClickHouse of testDeps is unreachable: the request got to the schema, not a 404

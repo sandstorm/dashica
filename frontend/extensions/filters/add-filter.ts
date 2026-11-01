@@ -68,7 +68,7 @@ export function fieldSource(
  * quick pick opens at once, busy until they answer), an
  * op of its type (`opsOf`, in a menu, asking nothing more; a time's values are never asked), and a value
  * (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
- * chips of `query`. With `askSql` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
+ * chips of `query`. With `askSql` (sql_filter_enabled, §3.15 D26) the first quick pick ends with "SQL condition…"
  * under "Advanced" (its only entry while no chart filters a table), which asks the condition in the SQL input box
  * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` shows the server's message in the value's
  * still-open box.
@@ -173,7 +173,7 @@ interface SqlItem extends QuickPickItem {
 }
 
 /**
- * Asks for SQL (a condition) in an input box at `options.anchor`, while the server takes SQL chips (filters.sqlEnabled):
+ * Asks for SQL (a condition) in an input box at `options.anchor`, while the server takes SQL chips (sql_filter_enabled):
  * the filters extension's SQL editor in it (`showSqlInputBox`). Resolves with the text, or `undefined` without.
  */
 export type AskSql = (options: { readonly title: string; readonly prompt?: string; readonly placeholder?: string; readonly value?: string; readonly anchor: MenuAnchor }) => Promise<string | undefined>;

@@ -133,7 +133,7 @@ describe('exploreView', () => {
     // greyed: its command is never enabled, its hover says why
     expect([...commands.keys()]).toEqual(['exploreView.open']);
     expect(options.get('exploreView.open')).toBe(EXPLORE_NOT_ENABLED);
-    expect([EXPLORE_NOT_ENABLED.enablement!(), EXPLORE_NOT_ENABLED.disabledReason]).toEqual([false, 'Explore is not enabled (explore.enabled)']);
+    expect([EXPLORE_NOT_ENABLED.enablement!(), EXPLORE_NOT_ENABLED.disabledReason]).toEqual([false, 'Explore is not enabled (explore_enabled)']);
     expect(renderers.size).toBe(0);
   });
 

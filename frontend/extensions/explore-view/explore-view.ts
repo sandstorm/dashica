@@ -10,7 +10,7 @@ import { chartTitle, renderExploreView, type ChartWithRows, type Perspective } f
 import './explore-view.css';
 
 /**
- * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore.enabled; else only "Explore"
+ * The Explore view, only with Explore enabled (`workbench.json`'s `explore`, explore_enabled; else only "Explore"
  * greyed in the global menu, its command `exploreView.open` not enabled, EXPLORE_NOT_ENABLED): "Open in Explore view" in a chart's menu (`widget/context`, charts
  * with a `rowsUrl`) opens a new tab with the chart's result in `<perspective-viewer>`, its settings panel open and its config rebuilt from the chart's props, while the tab's time range and filters keep
  * working on it. "SQL" shows the chart's SQL as it runs, its placeholders kept and their values beside it; the viewer
@@ -121,7 +121,7 @@ const EXPLORE_ENTRY: MenuItem = { command: 'exploreView.open', title: 'Explore (
  */
 export const EXPLORE_NOT_ENABLED: CommandOptions = {
   enablement: () => false,
-  disabledReason: 'Explore is not enabled (explore.enabled)',
+  disabledReason: 'Explore is not enabled (explore_enabled)',
 };
 
 /** The question, "Reset" and "Cancel" of `confirmReset`. */

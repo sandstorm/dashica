@@ -40,7 +40,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		println("Failed to load config: ", err.Error())
 		os.Exit(1)
 	}
-	if err := cfg.Filters.CheckFilterSecret(); err != nil {
+	if err := cfg.CheckAppSecret(); err != nil {
 		println("Failed to load config: ", err.Error())
 		os.Exit(1)
 	}
@@ -54,13 +54,13 @@ func New(projectFS fs.ReadFileFS) Dashica {
 
 	var logger zerolog.Logger
 	logWriter := &lumberjack.Logger{
-		Filename:   cfg.Log.FileName,
+		Filename:   cfg.LogFilename,
 		MaxSize:    500, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28, // days
 	}
 
-	if cfg.Log.ToStdout {
+	if cfg.LogToStdout {
 		logger = zerolog.New(zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stderr}, logWriter))
 	} else {
 		logger = zerolog.New(zerolog.MultiLevelWriter(logWriter))
@@ -87,7 +87,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	if err != nil {
 		logger.Fatal().
 			Str(logging.EventDataset, logging.EventDataset_Dashica_Startup).
-			Msg("did NOT find clickhouse 'alert_target' (needed for alert result storage) in dashica_config.yaml.")
+			Msg("did NOT find the clickhouse connection 'alert_storage' (needed for alert result storage, even without alerts) in dashica_config.")
 	}
 	alertResultStore := alerting2.NewAlertResultStore(logger, alertTargetClickhouseClient)
 	alertEvaluator := alerting2.NewAlertEvaluator(logger, clickhouseClientManager, timeProvider)
@@ -176,9 +176,9 @@ func newDashicaImpl(logger zerolog.Logger, mux *http.ServeMux, deps rendering.De
 type WorkbenchJson struct {
 	// Menu is the dashboards by group, in registration order, each with its outline.
 	Menu []rendering.MenuGroup `json:"menu"`
-	// Explore: the Explore view is on (explore.enabled); else the client leaves it out, and its endpoints answer 404.
+	// Explore: the Explore view is on (explore_enabled); else the client leaves it out, and its endpoints answer 404.
 	Explore bool `json:"explore"`
-	// SqlEnabled: the filter bar lets the viewer type SQL chips (filters.sqlEnabled); else it offers none, and every
+	// SqlEnabled: the filter bar lets the viewer type SQL chips (sql_filter_enabled); else it offers none, and every
 	// query a SQL chip would enter answers it with 400.
 	SqlEnabled bool `json:"sqlEnabled"`
 	// Connections are the names of the ClickHouse connections of dashica_config, sorted: the Schema view's tree.
@@ -196,7 +196,7 @@ func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request)
 		connections = []string{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.Config.Explore.Enabled, SqlEnabled: d.deps.Config.Filters.SqlEnabled, Connections: connections}); err != nil {
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.Config.ExploreEnabled, SqlEnabled: d.deps.Config.SqlFilterEnabled, Connections: connections}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -240,9 +240,9 @@ func (d *DashicaImpl) Log() zerolog.Logger {
 }
 
 func (d *DashicaImpl) ListenAndServe() error {
-	addr := fmt.Sprintf(":%d", d.cfg.Server.Port)
+	addr := fmt.Sprintf(":%d", d.cfg.ServerPort)
 	d.log.Info().
-		Int("port", d.cfg.Server.Port).
+		Int("port", d.cfg.ServerPort).
 		Msg("Starting Dashica HTTP server")
 
 	return http.ListenAndServe(addr, d)

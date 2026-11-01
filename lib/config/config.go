@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/knadh/koanf/providers/confmap"
 
@@ -16,65 +15,42 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// Config is the main config struct which is returned from LoadConfig.
+// Config is the main config struct which is returned from LoadConfig; dashica_config.example.yaml is its reference,
+// every key with its default and its environment variable.
 type Config struct {
+	// AppSecret is the key of the HMAC on everything the server hands to the browser and takes back (a pill, a filter
+	// button), so that the conditions of a page's URL are the server's own; required (CheckAppSecret). Never in a
+	// checked-in file: set it as APP_SECRET.
+	AppSecret string `koanf:"app_secret"`
 	// Map of ClickHouse configurations indexed by server alias
 	ClickHouse map[string]ClickHouseConfig `koanf:"clickhouse"`
-	Log        LogConfig                   `koanf:"log"`
-	Server     ServerConfig                `koanf:"server"`
-
-	LetsEncrypt LetsEncryptConfig `koanf:"letsencrypt"`
-	// DevMode:
-	// - disables File System embed (=hot reloading during development)
-	// - adds Observable Framework Reverse proxy (to prevent CORS) towards the Observable Framework server (=hot reloading of notebooks during dev)
-	DevMode  bool           `koanf:"dev_mode"`
-	Auth     AuthConfig     `koanf:"auth"`
-	Alerting AlertingConfig `koanf:"alerting"`
-	Explore  ExploreConfig  `koanf:"explore"`
-	Filters  FiltersConfig  `koanf:"filters"`
+	// ServerPort is the port the HTTP server listens on.
+	ServerPort int `koanf:"server_port"`
+	// LogToStdout: the log goes to stderr too, beside the log file.
+	LogToStdout bool `koanf:"log_to_stdout"`
+	// LogFilename is the log file; empty, lumberjack's `<temp dir>/<binary>-lumberjack.log`.
+	LogFilename string `koanf:"log_filename"`
+	// ExploreEnabled: the Explore view is on, and every viewer may edit a chart's SQL in it and run it, read-only, on
+	// the chart's ClickHouse connection, raw rows included; off by default, since they may hold personal data the chart
+	// aggregates away. Off, the client leaves the view out and its endpoints answer 404.
+	ExploreEnabled bool `koanf:"explore_enabled"`
+	// SqlFilterEnabled: the page's SQL chips (`?sql=`) go into every query's WHERE, and the filter bar lets the viewer
+	// type them; off by default, since a SQL chip is the viewer's own SQL. Off, every query a SQL chip would enter
+	// answers it with 400 (httpserver.QueryState.SqlClause).
+	SqlFilterEnabled bool           `koanf:"sql_filter_enabled"`
+	Alerting         AlertingConfig `koanf:"alerting"`
 }
 
-// FiltersConfig is how the server signs the page's pills and whether it takes SQL chips (docs/2026-10-28-workbench.md
-// §3.8, §3.15).
-type FiltersConfig struct {
-	// Secret is the key of the HMAC each pill carries, so that the conditions of a page's URL are the server's own;
-	// required (CheckFilterSecret). Never in a checked-in file: set it as FILTERS__SECRET.
-	Secret string `koanf:"secret"`
-	// SqlEnabled: the page's SQL chips (`?sql=`) go into every query's WHERE, and the filter bar lets the viewer type
-	// them; off by default, since a SQL chip is the viewer's own SQL. Off, every query a SQL chip would enter answers
-	// it with 400 (httpserver.QueryState.SqlClause). FILTERS__SQLENABLED=true sets it from the environment.
-	SqlEnabled bool `koanf:"sqlEnabled"`
-}
+// MinAppSecretLength is the shortest app_secret the server starts with (`openssl rand -hex 32` gives 64).
+const MinAppSecretLength = 32
 
-// MinFilterSecretLength is the shortest filters.secret the server starts with (`openssl rand -hex 32` gives 64).
-const MinFilterSecretLength = 32
-
-// CheckFilterSecret is why the server cannot start with `c`'s filters.secret: missing or shorter than
-// MinFilterSecretLength; nil when it can.
-func (c FiltersConfig) CheckFilterSecret() error {
-	if len(c.Secret) < MinFilterSecretLength {
-		return fmt.Errorf("filters.secret must be set, at least %d characters (signs the page's filters; e.g. FILTERS__SECRET=$(openssl rand -hex 32))", MinFilterSecretLength)
+// CheckAppSecret is why the server cannot start with `c`'s app_secret: missing or shorter than MinAppSecretLength;
+// nil when it can.
+func (c *Config) CheckAppSecret() error {
+	if len(c.AppSecret) < MinAppSecretLength {
+		return fmt.Errorf("app_secret must be set, at least %d characters (signs the page's filters; e.g. APP_SECRET=$(openssl rand -hex 32))", MinAppSecretLength)
 	}
 	return nil
-}
-
-// ExploreConfig is what the Explore view may show beyond what the charts show.
-type ExploreConfig struct {
-	// Enabled: the Explore view is on, and every viewer may edit a chart's SQL in it and run it, read-only, on the
-	// chart's ClickHouse connection, raw rows included; off by default, since they may hold personal data the chart
-	// aggregates away. Off, the client leaves the view out and its endpoints answer 404.
-	Enabled bool `koanf:"enabled"`
-}
-
-type ServerConfig struct {
-	Port int `koanf:"port"`
-}
-
-type LogConfig struct {
-	ToStdout  bool   `koanf:"to_stdout"`
-	FileName  string `koanf:"filename"`
-	HostGroup string `koanf:"host_group"`
-	HostName  string `koanf:"host_name"`
 }
 
 // ClickHouseConfig holds configuration for a single ClickHouse server
@@ -85,33 +61,11 @@ type ClickHouseConfig struct {
 	Database string `koanf:"database"`
 }
 
-// TODO: currently not supported
-type AuthConfig struct {
-	Enabled  bool   `koanf:"enabled"`
-	Username string `koanf:"username"`
-	Password string `koanf:"password"`
-}
-
 type AlertingConfig struct {
 	HelvetikitAlertingUrl    string `koanf:"helvetikit_alerting_url"`
 	HelvetikitIdGroup        string `koanf:"helvetikit_id_group"`
 	AlertCronMonitorSchedule string `koanf:"alert_cron_monitor_schedule"`
 	AlertCronMonitorUrl      string `koanf:"alert_cron_monitor_url"`
-}
-
-// TODO: currently not supported
-type LetsEncryptConfig struct {
-	Enabled               bool          `koanf:"enabled"`
-	DevUseStagingCa       bool          `koanf:"dev_use_staging_ca"`
-	DevCustomCa           string        `koanf:"dev_custom_ca"`
-	Email                 string        `koanf:"email"`
-	Domain                string        `koanf:"domain"`
-	DevHttpPort           int           `koanf:"dev_http_port"`
-	DevHttpsPort          int           `koanf:"dev_https_port"`
-	DevCertRenewInterval  time.Duration `koanf:"dev_cert_renew_interval"`
-	ManualRefreshInterval time.Duration `koanf:"manual_refresh_interval"`
-	ManualCertfile        string        `koanf:"manual_certfile"`
-	ManualKeyfile         string        `koanf:"manual_keyfile"`
 }
 
 // LoadConfig loads configuration from various sources and returns the parsed config
@@ -155,14 +109,8 @@ func LoadConfig(appEnv string, forTesting bool) (*Config, error) {
 func loadDefaultConfig(k *koanf.Koanf) error {
 	// Setup default values
 	defaultConfig := map[string]interface{}{
-		"server.port":                         8081,
-		"log.to_stdout":                       true,
-		"letsencrypt.enabled":                 false,
-		"letsencrypt.dev_http_port":           80,
-		"letsencrypt.dev_https_port":          443,
-		"letsencrypt.dev_cert_renew_interval": time.Hour * 24,
-		"letsencrypt.manual_refresh_interval": time.Hour * 24,
-		"auth.password":                       "",
+		"server_port":   8081,
+		"log_to_stdout": true,
 	}
 
 	return k.Load(confmap.Provider(defaultConfig, "."), nil)
@@ -186,8 +134,8 @@ func envTransformFunc(s string) string {
 	return s
 }
 
-// loadEnvVariables loads env vars to config:
-// Format: SECTION__KEY_stuff -> section.key_stuff
+// loadEnvVariables loads env vars to config, lower-cased, "__" joining the levels:
+// APP_SECRET -> app_secret, CLICKHOUSE__DEFAULT__PASSWORD -> clickhouse.default.password
 // see https://github.com/knadh/koanf/issues/74
 func loadEnvVariables(k *koanf.Koanf) error {
 	return k.Load(env.Provider("", ".", envTransformFunc), nil)
@@ -210,16 +158,6 @@ func validateConfig(config *Config) error {
 		}
 	}
 
-	if config.Auth.Enabled {
-		if config.Auth.Username == "" {
-			return fmt.Errorf("username must be configured if auth is enabled")
-		}
-		if config.Auth.Password == "" {
-			// TODO: and password is bcrypt string
-			return fmt.Errorf("password must be configured if auth is enabled")
-		}
-	}
-
 	return nil
 }
 
@@ -235,36 +173,18 @@ func PrintConfig(config *Config) {
 		fmt.Printf("    database: %s\n", ch.Database)
 	}
 
-	fmt.Println("log:")
-	fmt.Printf("  to_stdout: %v\n", config.Log.ToStdout)
-	fmt.Printf("  filename: %s\n", config.Log.FileName)
-	fmt.Printf("  host_group: %s\n", config.Log.HostGroup)
-	fmt.Printf("  host_name: %s\n", config.Log.HostName)
+	fmt.Printf("app_secret: %s\n", maskSecret(config.AppSecret))
+	fmt.Printf("server_port: %d\n", config.ServerPort)
+	fmt.Printf("log_to_stdout: %v\n", config.LogToStdout)
+	fmt.Printf("log_filename: %s\n", config.LogFilename)
+	fmt.Printf("explore_enabled: %v\n", config.ExploreEnabled)
+	fmt.Printf("sql_filter_enabled: %v\n", config.SqlFilterEnabled)
 
-	fmt.Println("Let's Encrypt Configuration:")
-	fmt.Printf("  Enabled: %v\n", config.LetsEncrypt.Enabled)
-	if config.LetsEncrypt.Enabled {
-		fmt.Printf("  Email: %s\n", config.LetsEncrypt.Email)
-		fmt.Printf("  Domain: %s\n", config.LetsEncrypt.Domain)
-		// Print other Let's Encrypt settings if needed
-	}
-
-	fmt.Printf("dev_mode: %v\n", config.DevMode)
-
-	fmt.Println("Authentication Configuration:")
-	fmt.Printf("  Enabled: %v\n", config.Auth.Enabled)
-	if config.Auth.Enabled {
-		fmt.Printf("  Username: %s\n", config.Auth.Username)
-		fmt.Printf("  Password: %s\n", maskSecret(config.Auth.Password))
-	}
-
-	fmt.Printf("explore.enabled: %v\n", config.Explore.Enabled)
-	fmt.Printf("filters.secret: %s\n", maskSecret(config.Filters.Secret))
-	fmt.Printf("filters.sqlEnabled: %v\n", config.Filters.SqlEnabled)
-
-	fmt.Println("Alerting Configuration:")
+	fmt.Println("alerting:")
 	fmt.Printf("  helvetikit_alerting_url: %s\n", config.Alerting.HelvetikitAlertingUrl)
 	fmt.Printf("  helvetikit_id_group: %s\n", config.Alerting.HelvetikitIdGroup)
+	fmt.Printf("  alert_cron_monitor_schedule: %s\n", config.Alerting.AlertCronMonitorSchedule)
+	fmt.Printf("  alert_cron_monitor_url: %s\n", config.Alerting.AlertCronMonitorUrl)
 	fmt.Println("=========================================")
 }
 

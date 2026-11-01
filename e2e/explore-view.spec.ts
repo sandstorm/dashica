@@ -7,7 +7,7 @@
 // opens a blank Explore (a connection picker, an empty editor, its query run on the connection) and "Start from
 // chart…" one with a chart's SQL (§4.8, D10); the SQL editor is CodeMirror's, loaded with the view, highlighting and
 // completing (D12); the sash below the SQL panel sets its height, the editor filling it, kept over a reload (D48). All
-// of it needs `explore.enabled` (workbench.json's `explore`), else
+// of it needs `explore_enabled` (workbench.json's `explore`), else
 // every test is skipped.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
@@ -34,7 +34,7 @@ const tabs = (page: Page) => page.getByTestId('wb-tab-bar').getByRole('tab');
 
 test.beforeEach(async ({request}) => {
     const workbench = await (await request.get('/workbench.json')).json();
-    test.skip(!workbench.explore, 'Explore is off: set explore.enabled: true in the dashica config');
+    test.skip(!workbench.explore, 'Explore is off: set explore_enabled: true in the dashica config');
 });
 
 test('opens the chart’s result in Perspective in a new tab, the dashboard’s URL with #explore=<id>', async ({page}) => {

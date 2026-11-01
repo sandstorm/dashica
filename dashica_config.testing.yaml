@@ -13,7 +13,5 @@ clickhouse:
     password: password
     database: default
 
-log:
-  to_stdout: true
-dev_mode: true
+log_to_stdout: true
 

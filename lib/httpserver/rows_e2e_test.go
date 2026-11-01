@@ -56,7 +56,7 @@ func TestHandleRows_AChartsResultWithItsBucketSize(t *testing.T) {
 func handler(t *testing.T) QueryHandler {
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
-	cfg.Explore.Enabled, cfg.Filters.SqlEnabled = true, true
+	cfg.ExploreEnabled, cfg.SqlFilterEnabled = true, true
 	return QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 }
 
@@ -182,7 +182,7 @@ func TestHandleEditedRows_AnswersExactlyTheLimitWithoutAnError(t *testing.T) {
 
 func TestConnectionRowsHandler_AnswersTheQueryWithItsParametersReadOnly(t *testing.T) {
 	cfg, _ := testServer.LoadTestingConfig(t)
-	cfg.Explore.Enabled = true
+	cfg.ExploreEnabled = true
 	h := ConnectionRowsHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg}
 	ask := func(text string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()

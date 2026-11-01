@@ -277,7 +277,7 @@ An unknown type falls back to Utf8 of the driver's text form; the chart then sho
 ### 3.5 Configuration, connections, what stays on ClickHouse
 
 - `dashica_config.yaml` gets one map per database kind beside `clickhouse:`, same shape (alias, URL / DSN, user,
-  password, `query_file_patterns`):
+  password):
 
   ```yaml
   postgres:

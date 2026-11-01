@@ -13,11 +13,11 @@ describe('commandSearch', () => {
     commands.declareCommands([{ command: 'refresh.now', title: 'Refresh', category: 'Time range' }, { command: 'exploreView.open', title: 'Explore' }]);
     commands.declareKeybindings([{ key: 'Mod+KeyR', command: 'refresh.now' }]);
     commands.registerCommand('refresh.now', () => ran.push('refresh'));
-    commands.registerCommand('exploreView.open', () => ran.push('explore'), { enablement: () => explore, disabledReason: 'Explore is not enabled (explore.enabled)' });
+    commands.registerCommand('exploreView.open', () => ran.push('explore'), { enablement: () => explore, disabledReason: 'Explore is not enabled (explore_enabled)' });
     const items = () => commandSearch(commands).provideItems('', undefined as never) as readonly SearchItem[];
     expect(items().map(({ label, keybinding, disabled, tooltip }) => ({ label, keybinding, disabled, tooltip }))).toEqual([
       { label: 'Time range: Refresh', keybinding: 'Ctrl+R', disabled: undefined, tooltip: undefined },
-      { label: 'Explore', keybinding: undefined, disabled: true, tooltip: 'Explore is not enabled (explore.enabled)' },
+      { label: 'Explore', keybinding: undefined, disabled: true, tooltip: 'Explore is not enabled (explore_enabled)' },
     ]);
     explore = true;
     expect(items()[1].disabled).toBeUndefined();

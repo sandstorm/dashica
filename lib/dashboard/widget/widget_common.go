@@ -253,10 +253,10 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 // Explore view's rows in plain Arrow types, HandleRows: the chart's result; with `?exploreSql=<text>` the query the
 // viewer edited, its `param_<name>` values bound, HandleEditedRows, at most httpserver.ExploreRowLimit rows) and /sql (the
 // chart's query with its parameters, HandleSql), each with the pills of the request on its table (filter.Apply; a
-// pill not signed with filters.secret is a 400, as is a query state that cannot be read, or a SQL chip while
-// filters.sqlEnabled is off); and /pill, the pill of one of its fields (pillHandler); /values, the values of one of
+// pill not signed with app_secret is a 400, as is a query state that cannot be read, or a SQL chip while
+// sql_filter_enabled is off); and /pill, the pill of one of its fields (pillHandler); /values, the values of one of
 // them (valuesHandler); /fields, its table's columns and its computed fields with their types (fieldsHandler). /sql and `exploreSql` answer 404 unless
-// explore.enabled (their handlers check deps.Config).
+// explore_enabled (their handlers check deps.Config).
 func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: deps.ClickhouseClientManager,
@@ -304,7 +304,7 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 // filterBy) with the values of the chart's filterable field `field` that contain `search` (ignoring case), at most
 // httpserver.ValuesLimit, sorted, as JSON `{values}` (HandleValues): sql.Values of its query in the request's time
 // range, SQL chips and pills, the pills on that field left out, so that a value besides one filtered by is still
-// offered. 422 for a field that cannot filter (as /pill), 400 for a pill not signed with filters.secret or a query
+// offered. 422 for a field that cannot filter (as /pill), 400 for a pill not signed with app_secret or a query
 // state that cannot be read.
 func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +341,7 @@ func othersThan(pills []filter.Pill, table filter.Table, field string, column bo
 // /pill's `column`; its computedFields with their types, from a `DESCRIBE` of sql.FieldTypes of its query in the
 // request's time range, which reads no rows (the pills and SQL chips change no type, so none are applied; a field
 // ClickHouse cannot describe has no type, the others keep theirs, HandleFields); with the
-// resolved time range in X-Dashica-Resolved-Time-Range. Not behind explore.enabled: it is only the chart's own table
+// resolved time range in X-Dashica-Resolved-Time-Range. Not behind explore_enabled: it is only the chart's own table
 // and fields. 422 for a chart without a table, 400 for a query state that cannot be read.
 func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +369,7 @@ func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 }
 
 // pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge` with the pill (filter.New) of
-// the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with filters.secret
+// the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with app_secret
 // (filter.FilterService.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that
 // column of its table (filterBy: checked against the schema); a field that is just a column (columnOf) makes that
 // column's pill too, so its key is as short as one from "Add filter" (docs/2026-10-28-workbench.md §3.15 D29). 422 for
@@ -525,7 +525,7 @@ func tableColumns(ctx context.Context, deps rendering.Dependencies, table filter
 }
 
 // openPills are the pills of `keys` (filter.FilterService.Open, a table without database in its connection's from
-// dashica_config); a QueryStateError (400) for the first one not signed with filters.secret.
+// dashica_config); a QueryStateError (400) for the first one not signed with app_secret.
 func openPills(deps rendering.Dependencies, keys []string) ([]filter.Pill, error) {
 	pills := make([]filter.Pill, 0, len(keys))
 	for _, key := range keys {
