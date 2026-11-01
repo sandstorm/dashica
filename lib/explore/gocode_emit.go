@@ -25,8 +25,7 @@ import (
 // (widget.WidgetGocodeJSON(), emitted by dashica-gen and verified at generation
 // time, decoded into widgetGocodeTable); the per-type VALUE emitters
 // (sql.AutoBucket("ts"), color.New(...), literals) live here, next to the wire
-// format they read. go/format lays out the final source (jennifer was rejected:
-// the import set is fixed and small).
+// format they read. go/format lays out the final source.
 //
 // The generator reads the same serialized wire format the round-trip serializers
 // produce, so its output round-trips: emitted Go, compiled and re-marshalled,
@@ -35,9 +34,7 @@ import (
 // WidgetGocode describes how to reconstruct one widget type as a fluent Go
 // builder chain: the constructor call plus the chained option methods. It (and
 // GocodeField / GocodeEnumValue below) is the Go model of the JSON table
-// dashica-gen emits into the widget package (WidgetGocodeJSON()); Go-code
-// generation is an Explore concern, so these types live here, not in
-// lib/dashboard/widget.
+// dashica-gen emits into the widget package (WidgetGocodeJSON()).
 type WidgetGocode struct {
 	// Constructor is the factory function name, e.g. "NewTimeBar", emitted
 	// qualified as widget.NewTimeBar.
@@ -247,7 +244,6 @@ func (g *generator) emitWidget(raw []byte) (string, error) {
 		}
 	}
 
-	// Constructor call with positional arguments.
 	var args []string
 	for _, f := range gc.CtorArgs {
 		expr, err := g.emitValue(f, props[f.JSONKey], true)
@@ -259,7 +255,6 @@ func (g *generator) emitWidget(raw []byte) (string, error) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "widget.%s(%s)", gc.Constructor, strings.Join(args, ", "))
 
-	// Chained builder calls, in field order; only for present (non-zero) fields.
 	for _, f := range gc.Methods {
 		raw, present := props[f.JSONKey]
 		if !present || isNull(raw) {
@@ -503,7 +498,6 @@ func (g *generator) emitField(raw []byte, timestamped bool) (string, error) {
 	return expr, nil
 }
 
-// emitQueryable renders one sql.SqlQueryable from its wire form.
 func (g *generator) emitQueryable(raw []byte) (string, error) {
 	g.imports[pkgSQL] = true
 	var q queryWire
@@ -677,8 +671,6 @@ func (g *generator) emitEnum(f GocodeField, raw []byte) (string, error) {
 	}
 	return "", fmt.Errorf("unknown enum value %q for field %q", s, f.JSONKey)
 }
-
-// --- helpers ---------------------------------------------------------------
 
 func joinOptsMultiline(opts []string) string {
 	if len(opts) == 0 {

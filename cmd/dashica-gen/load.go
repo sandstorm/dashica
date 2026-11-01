@@ -44,7 +44,6 @@ func loadModel(pattern string) (*model, error) {
 		return nil, err
 	}
 
-	// Doc comments per (struct, field), harvested from the syntax trees.
 	docs := harvestDocs(pkg)
 
 	// Registered widgets, in wire-name order.
@@ -281,7 +280,6 @@ func harvestDocs(pkg *packages.Package) map[string]string {
 	return out
 }
 
-// classifyWidget builds a widgetInfo for one registered widget.
 func classifyWidget(pkg *packages.Package, r registration, docs map[string]string, enums map[string]enumInfo) (*widgetInfo, error) {
 	st, ok := r.named.Underlying().(*types.Struct)
 	if !ok {
@@ -363,7 +361,7 @@ func computedFields(pkg *packages.Package, sig *types.Signature, docs map[string
 	return named.Obj().Name(), fields, nil
 }
 
-// classifyField classifies one struct field. Returns (info, skip, error).
+// classifyField returns (info, skip, error) for one struct field.
 func classifyField(pkg *packages.Package, typeName string, f *types.Var, tag string, docs map[string]string, enums map[string]enumInfo, methods map[string]*types.Signature, ctorOrder map[string]int) (*fieldInfo, bool, error) {
 	name := f.Name()
 
@@ -472,7 +470,6 @@ func categoryOf(pkg *packages.Package, t types.Type, enums map[string]enumInfo) 
 		return "", sub, fmt.Errorf("unsupported pointer type %s", t)
 	}
 
-	// sql interfaces.
 	if isSqlInterface(t, "SqlQueryable") {
 		return catQueryable, sub, nil
 	}
@@ -483,7 +480,6 @@ func categoryOf(pkg *packages.Package, t types.Type, enums map[string]enumInfo) 
 		return catField, sub, nil
 	}
 
-	// Basics.
 	if isBasic(t, types.String) {
 		return catString, sub, nil
 	}
@@ -497,7 +493,6 @@ func categoryOf(pkg *packages.Package, t types.Type, enums map[string]enumInfo) 
 		return catBool, sub, nil
 	}
 
-	// map[string]string.
 	if mp, ok := t.(*types.Map); ok {
 		if isBasic(mp.Key(), types.String) && isBasic(mp.Elem(), types.String) {
 			return catKeyValue, sub, nil
@@ -505,7 +500,6 @@ func categoryOf(pkg *packages.Package, t types.Type, enums map[string]enumInfo) 
 		return "", sub, fmt.Errorf("unsupported map type %s", t)
 	}
 
-	// []string.
 	if sl, ok := t.(*types.Slice); ok {
 		if isBasic(sl.Elem(), types.String) {
 			return catStringList, sub, nil

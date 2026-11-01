@@ -72,8 +72,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		Str(logging.EventModule, "dashica").
 		Timestamp().Logger()
 
-	// NOTE: we also register the logger as the default context logger; this is used if for some reason no logger
-	// with a request ID is stored in the context.
+	// the default context logger is used when no logger with a request ID is stored in the context
 	zerolog.DefaultContextLogger = &logger
 
 	logger.Info().
@@ -153,9 +152,7 @@ type DashicaImpl struct {
 	deps             rendering.Dependencies
 
 	// exploreBaseURL is the registration URL of the Explore view once one is
-	// registered (empty otherwise). Every DashboardContext carries a pointer to
-	// this field, so the "Open in Explore" affordance appears regardless of
-	// whether Explore is registered before or after the dashboards.
+	// registered (empty otherwise), rendering.DashboardContext.ExploreBaseURL.
 	//
 	// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 	exploreBaseURL string
@@ -192,9 +189,6 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		Str("url", url).
 		Msg("Registering new dashboard")
 
-	// Record the Explore view's URL so every dashboard's "Open in Explore"
-	// affordance (and its redirect target) can find it, whatever the
-	// registration order.
 	if _, ok := dashb.(exploreView); ok {
 		d.exploreBaseURL = url
 	}

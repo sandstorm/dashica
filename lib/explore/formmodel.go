@@ -50,7 +50,7 @@ type fieldKind struct {
 	Label string `json:"label"`
 	// Roles are the slot roles this kind serves ("dimension" | "measure"). The
 	// picker offers a kind only when the slot's role (from the widget descriptor)
-	// is in this list, so a dimension slot never shows a measure kind (B4). A
+	// is in this list, so a dimension slot never shows a measure kind. A
 	// custom expression serves both.
 	Roles []string `json:"roles"`
 	// RequiresColumn is true when the kind needs a column picked (autoBucket,
