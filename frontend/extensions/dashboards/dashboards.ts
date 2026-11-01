@@ -25,7 +25,7 @@ export const dashboards: Extension = {
     const favoritesChanged = new EventEmitter<void>();
     subscriptions.push(favoritesChanged);
     const menu = new DashboardsMenu(panel.bodyContainer, context, () => favoritesChanged.fire());
-    menu.render();
+    menu.draw();
     subscriptions.push(
       page.registerPageRenderer('home', (pageContainer) => {
         const draw = () => pageContainer.replaceChildren(homePage(page.workbench.menu, favoritesOf(context.globalState)));
@@ -33,7 +33,7 @@ export const dashboards: Extension = {
         return favoritesChanged.event(draw);
       }),
     );
-    subscriptions.push(page.onDidChangePage(() => menu.render()));
+    subscriptions.push(page.onDidChangePage(() => menu.draw()));
     // on a narrow workbench, the panel lies over the dashboard just picked
     subscriptions.push(page.onDidChangePage(() => panel.dismiss()));
 
@@ -61,7 +61,7 @@ export const dashboards: Extension = {
 };
 
 /**
- * The list in the panel "Dashboards": a view per menu group, after the favorites' view; `render` draws it again (the
+ * The list in the panel "Dashboards": a view per menu group, after the favorites' view; `draw` draws it again (the
  * page shown changed, a favorite was toggled or moved). A favorite names its group and moves by its grip (dragged) or
  * with Alt+ArrowUp / Alt+ArrowDown; a star toggled keeps its place on screen, though a favorite added or removed above
  * moves everything below it.
@@ -74,7 +74,7 @@ class DashboardsMenu {
     private readonly onDidChangeFavorites: () => void,
   ) {}
 
-  render(): void {
+  draw(): void {
     const { menu } = this.context.page.workbench;
     const favorites = this.#favorites();
     const groupOf = (url: string) => menu.find((group) => group.entries.some((entry) => entry.url === url));
@@ -170,7 +170,7 @@ class DashboardsMenu {
     this.#store(kept.length < favorites.length ? kept : [...favorites, entry]);
     const top = starElement.getBoundingClientRect().top;
     const hadFocus = document.activeElement === starElement;
-    this.render();
+    this.draw();
     const redrawnStarElement = [...this.menuContainer.querySelectorAll<HTMLElement>('.d-dashboards-menu__star')].find((otherStarElement) => otherStarElement.dataset.key === starElement.dataset.key);
     if (!redrawnStarElement) return;
     this.menuContainer.scrollTop += redrawnStarElement.getBoundingClientRect().top - top;
@@ -185,7 +185,7 @@ class DashboardsMenu {
     if (from === to) return;
     const part = [...(focusedElement.closest('li')?.children ?? [])].indexOf(focusedElement);
     this.#order(moved(urls, from, to));
-    this.render();
+    this.draw();
     const rowElement = [...this.menuContainer.querySelectorAll<HTMLElement>('.d-dashboards-menu__grip')].map((gripElement) => gripElement.parentElement!).find((listItemElement) => listItemElement.dataset.url === url);
     (rowElement?.children[part] as HTMLElement | undefined)?.focus();
   }
@@ -217,11 +217,11 @@ class DashboardsMenu {
     const drop = () => {
       stop();
       this.#order([...listContainer.children].map((listItemElement) => (listItemElement as HTMLElement).dataset.url!));
-      this.render();
+      this.draw();
     };
     const cancel = () => {
       stop();
-      this.render();
+      this.draw();
     };
     const onkeydown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;

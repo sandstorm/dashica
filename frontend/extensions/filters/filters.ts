@@ -64,7 +64,7 @@ export const filters: Extension = {
     subscriptions.push(page.onDidChangePage(showForPage));
     subscriptions.push(
       query.onDidChange(FILTERS, () => {
-        filterBar.show();
+        filterBar.draw();
         showBar();
       }),
     );
@@ -107,7 +107,7 @@ export function conditionCompletion(schemas: Pick<Schemas, 'get'> | undefined, t
 
 /**
  * The filter bar's content (`filterBarContainer`): `chips`, "Add filter" for the page's filterable tables (and, with
- * `askSql`, a SQL condition) and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only
+ * `askSql`, a SQL condition) and the page's buttons (`setButtons`); `draw` draws them again. A SQL chip is edited only
  * with `askSql`.
  */
 class FilterBar {
@@ -149,11 +149,11 @@ class FilterBar {
   setButtons(buttons: readonly FilterButton[], tables: readonly FilterableTable[]): void {
     this.#pageButtons = buttons;
     this.#tables = tables;
-    this.show();
+    this.draw();
   }
 
   /** Draws the chips and the buttons. */
-  show(): void {
+  draw(): void {
     const chips = this.query.get(FILTERS);
     // a button's pill shows as the button pressed, not as a chip
     const ofButton = chips.map((chip) => buttonOf(chip, this.#pageButtons));
