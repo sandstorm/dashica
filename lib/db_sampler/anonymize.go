@@ -89,7 +89,7 @@ const (
 	ScrambleEmail ColumnAction = iota
 	ScrambleIPAction
 	ScrambleName
-	// ReplaceWith uses a literal string replacement; build via NewReplaceWith.
+	// ReplaceWith uses a literal string replacement; build via ReplaceWith.
 	replaceWithSentinel
 )
 
