@@ -30,7 +30,7 @@ beforeEach(async () => {
           title: 'Shop',
           entries: [
             { title: 'Orders', url: '/p/shop', outline: [] },
-            { title: 'Checkout', url: '/p/checkout', outline: [{ id: '3', title: 'Orders per minute', group: 'Details' }] },
+            { title: 'Checkout', url: '/p/checkout', outline: [{ dataUrl: '/p/checkout/api/3', title: 'Orders per minute', group: 'Details' }] },
           ],
         },
       ],

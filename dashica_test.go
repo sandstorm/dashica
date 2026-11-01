@@ -95,16 +95,16 @@ func TestWorkbenchJson_ListsEveryPagesOutline(t *testing.T) {
 	}
 	// the grid mounts its areas by name
 	shop := []rendering.OutlineEntry{
-		{Id: "1", Title: "Errors"},
-		{Id: "2", Title: "Requests"},
+		{DataUrl: "/p/shop/api/1", Title: "Errors"},
+		{DataUrl: "/p/shop/api/2", Title: "Requests"},
 	}
 	for i := range 10 {
-		shop = append(shop, rendering.OutlineEntry{Id: strconv.Itoa(i + 4), Title: fmt.Sprintf("Table %d", i), Group: "Details"})
+		shop = append(shop, rendering.OutlineEntry{DataUrl: "/p/shop/api/" + strconv.Itoa(i+4), Title: fmt.Sprintf("Table %d", i), Group: "Details"})
 	}
-	shop = append(shop, rendering.OutlineEntry{Id: "slow_requests", Title: "Slow requests", Group: "Slow"})
+	shop = append(shop, rendering.OutlineEntry{DataUrl: "/p/shop/api/slow_requests", Title: "Slow requests", Group: "Slow"})
 	want := []rendering.MenuGroupEntry{
 		{Title: "/p/shop", Url: "/p/shop", Outline: shop},
-		{Title: "/p/billing", Url: "/p/billing", Outline: []rendering.OutlineEntry{{Id: "1", Title: "Invoices"}}},
+		{Title: "/p/billing", Url: "/p/billing", Outline: []rendering.OutlineEntry{{DataUrl: "/p/billing/api/1", Title: "Invoices"}}},
 	}
 	if !reflect.DeepEqual(got.Menu[0].Entries, want) {
 		t.Errorf("entries\n got %+v\nwant %+v", got.Menu[0].Entries, want)

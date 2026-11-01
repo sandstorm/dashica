@@ -98,9 +98,10 @@ type MenuGroupEntry struct {
 
 // OutlineEntry is a chart in a page's outline: a widget with data and a title.
 type OutlineEntry struct {
-	// Id is the last part of its dataUrl ("3" of "/p/shop/api/3"); the link "/p/shop#w=3" shows it.
-	Id    string `json:"id"`
-	Title string `json:"title"`
+	// DataUrl is where its data is served ("/p/shop/api/3"); its last part is its id, which the link "/p/shop#w=3"
+	// shows.
+	DataUrl string `json:"dataUrl"`
+	Title   string `json:"title"`
 	// Group is the title of the collapsible group around it; empty outside one.
 	Group string `json:"group"`
 }

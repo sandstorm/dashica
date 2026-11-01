@@ -12,22 +12,22 @@ export const workbench = {
           "url": "/p/shop",
           "outline": [
             {
-              "id": "1",
+              "dataUrl": "/p/shop/api/1",
               "title": "Requests",
               "group": ""
             },
             {
-              "id": "2",
+              "dataUrl": "/p/shop/api/2",
               "title": "Requests over time",
               "group": ""
             },
             {
-              "id": "7",
+              "dataUrl": "/p/shop/api/7",
               "title": "Latest",
               "group": "Details"
             },
             {
-              "id": "11",
+              "dataUrl": "/p/shop/api/11",
               "title": "shop#login_events",
               "group": ""
             }

@@ -13,7 +13,7 @@ export function chartSearch(page: Pick<PageApi, 'workbench' | 'navigate' | 'acti
     group.entries.flatMap((entry) =>
       entry.outline.map((chart) => ({
         url: entry.url,
-        id: chart.id,
+        id: chart.dataUrl.split('/').pop()!,
         label: [entry.title, chart.group, chart.title].filter(Boolean).join(' › '),
       })),
     ),

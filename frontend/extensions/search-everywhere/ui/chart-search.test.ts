@@ -13,13 +13,13 @@ const workbench: WorkbenchJson = {
     {
       title: 'Shop',
       entries: [
-        { title: 'Orders', url: '/p/orders', outline: [{ id: '1', title: 'Requests', group: '' }] },
+        { title: 'Orders', url: '/p/orders', outline: [{ dataUrl: '/p/orders/api/1', title: 'Requests', group: '' }] },
         {
           title: 'Checkout',
           url: '/p/checkout',
           outline: [
-            { id: '1', title: 'Requests', group: '' },
-            { id: 'slow', title: 'Slow requests', group: 'Details' },
+            { dataUrl: '/p/checkout/api/1', title: 'Requests', group: '' },
+            { dataUrl: '/p/checkout/api/slow', title: 'Slow requests', group: 'Details' },
           ],
         },
       ],

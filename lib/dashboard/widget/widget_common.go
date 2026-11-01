@@ -9,7 +9,6 @@ import (
 	"iter"
 	"maps"
 	"net/http"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -175,7 +174,7 @@ func outline(nodes []Node, group string) []rendering.OutlineEntry {
 	entries := []rendering.OutlineEntry{}
 	for _, node := range nodes {
 		if node.DataURL != "" && node.Title != "" {
-			entries = append(entries, rendering.OutlineEntry{Id: path.Base(node.DataURL), Title: node.Title, Group: group})
+			entries = append(entries, rendering.OutlineEntry{DataUrl: node.DataURL, Title: node.Title, Group: group})
 		}
 		inner := group
 		if node.Type == "collapsibleGroup" {
