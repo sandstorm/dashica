@@ -33,12 +33,12 @@ Guiding principle (as in the workbench concept): the least machinery that still 
 
 ### 2.1 How a widget query runs
 
-| Step | Where | What happens |
-|---|---|---|
-| Registration | `dashica.go` `RegisterDashboard` → `dashboard.Builder.CollectHandlers` | each page mounts its widgets below `<page>/api/<id>/` via `widget.Mount` (`lib/dashboard/widget/widget_common.go`); the widget tree is serialized once into `<page>/page.json` (`lib/dashboard/page_json.go`) |
-| Widget handler | `widget.queryHandler(deps, query)` | serves `/query` and `/debug` for one `sql.SqlQueryable`; widgets add their own options first (`Table.Handler` adds `sql.Limit(b.limit)`) |
-| Query resolution | `httpserver.QueryHandler.HandleQuery` (`lib/httpserver/query_new.go`) | picks the ClickHouse client by `queryObj.Database()`, reads `params` (widget params → `param_<name>`) and `filters` (`DashboardFilters`: time range + free SQL), resolves the time range once (`ResolveTimeRange(time.Now())`), adds `Where(filters.SqlClause(...))`, adjusts buckets (`AdjustBuckets`), builds SQL with `sql.BuildWithFS` |
-| Execution | `clickhouse.Client.QueryToHandler` (`lib/clickhouse/query.go`) | HTTP GET to ClickHouse, `default_format=Arrow`, streams the body unchanged to the browser |
+| Step             | Where                                                                  | What happens                                                                                                                                                                                                                                                                                                                               |
+|------------------|------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Registration     | `dashica.go` `RegisterDashboard` → `dashboard.Builder.CollectHandlers` | each page mounts its widgets below `<page>/api/<id>/` via `widget.Mount` (`lib/dashboard/widget/widget_common.go`); the widget tree is serialized once into `<page>/page.json` (`lib/dashboard/page_json.go`)                                                                                                                              |
+| Widget handler   | `widget.queryHandler(deps, query)`                                     | serves `/query` and `/debug` for one `sql.SqlQueryable`; widgets add their own options first (`Table.Handler` adds `sql.Limit(b.limit)`)                                                                                                                                                                                                   |
+| Query resolution | `httpserver.QueryHandler.HandleQuery` (`lib/httpserver/query_new.go`)  | picks the ClickHouse client by `queryObj.Database()`, reads `params` (widget params → `param_<name>`) and `filters` (`DashboardFilters`: time range + free SQL), resolves the time range once (`ResolveTimeRange(time.Now())`), adds `Where(filters.SqlClause(...))`, adjusts buckets (`AdjustBuckets`), builds SQL with `sql.BuildWithFS` |
+| Execution        | `clickhouse.Client.QueryToHandler` (`lib/clickhouse/query.go`)         | HTTP GET to ClickHouse, `default_format=Arrow`, streams the body unchanged to the browser                                                                                                                                                                                                                                                  |
 
 `HandleDebug` repeats the first half of `HandleQuery` (params, filters, time range, buckets, build) line by line.
 The Go side never decodes the result: it is Arrow bytes piped through, and there is no Arrow library in `go.mod`.
@@ -153,13 +153,13 @@ the identifier columns of its tables).
 All tools are read-only (`readOnlyHint: true`). Inputs are small structs; output is JSON text plus a structured
 result.
 
-| Tool | Input | Returns | Source |
-|---|---|---|---|
-| `list_dashboards` | — | groups → `{url, title}` | `/workbench.json` |
-| `describe_dashboard` | `url` (`/p/k8s_gateway`) | title, default time range, filter buttons (titles only), widgets flattened: `{widget_id, type, title, has_data}` | `<page>/page.json` |
-| `get_widget_data` | `url`, `widget_id`, `time` (preset `"6h"` or `from`/`to`), optional `filter_button` titles | `{columns: [{name, type}], rows, row_count, truncated, resolved_time_range, notes}` | `<page>/api/<id>/query` |
-| `list_alerts` | — | per alert: id, message template, condition, `check_every`, current status | `AlertManager` + `AlertResultStore` |
-| `get_alert_history` | `time`, optional `alert_id` | state changes `{alert_id, status, start, end, message}` | `dashica_alert_events` |
+| Tool                 | Input                                                                                      | Returns                                                                                                          | Source                              |
+|----------------------|--------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|-------------------------------------|
+| `list_dashboards`    | —                                                                                          | groups → `{url, title}`                                                                                          | `/workbench.json`                   |
+| `describe_dashboard` | `url` (`/p/k8s_gateway`)                                                                   | title, default time range, filter buttons (titles only), widgets flattened: `{widget_id, type, title, has_data}` | `<page>/page.json`                  |
+| `get_widget_data`    | `url`, `widget_id`, `time` (preset `"6h"` or `from`/`to`), optional `filter_button` titles | `{columns: [{name, type}], rows, row_count, truncated, resolved_time_range, notes}`                              | `<page>/api/<id>/query`             |
+| `list_alerts`        | —                                                                                          | per alert: id, message template, condition, `check_every`, current status                                        | `AlertManager` + `AlertResultStore` |
+| `get_alert_history`  | `time`, optional `alert_id`                                                                | state changes `{alert_id, status, start, end, message}`                                                          | `dashica_alert_events`              |
 
 What is deliberately left out of the first version:
 
@@ -262,13 +262,13 @@ too much, it never leaks; the marks are added where the assistant needs plain va
 
 ```go
 widget.NewTimeBar(requests).
-    X(sql.Timestamp15Min()).
-    Y(sql.Count()).
-    Fill(sql.Field("status").Public())                       // status codes: not secret
+X(sql.Timestamp15Min()).
+Y(sql.Count()).
+Fill(sql.Field("status").Public()) // status codes: not secret
 
 widget.NewBarVertical(sql.FromFile("errors-by-route.sql")).  // a .sql file: its columns have no Go field
-    X(sql.NewFieldAlias("route").Public()).                  // the field names the alias
-    Y(sql.Count())
+X(sql.NewFieldAlias("route").Public()). // the field names the alias
+Y(sql.Count())
 ```
 
 For every result column:
@@ -289,8 +289,8 @@ dashboards). The MCP server reads them from the widget's declared fields; the UI
 
 **Dictionaries** catch known identifiers inside free text (`.Text()` columns, alert messages): a tenant `shop-a` in
 a message or in `shop-a.example.com` becomes its pseudonym. Public columns pass unchanged and scrambled ones are
-replaced whole, so only free text needs them. Two sources, both fresh for every tool call, no cache and no timer
-(a tenant added a minute ago must not pass in plain text):
+replaced whole, so only free text needs them. Two sources, both fresh for every tool call, no cache and no timer (a
+tenant added a minute ago must not pass in plain text):
 
 - **The result itself:** every value of a scrambled column in the same result is also replaced where it appears in
   the result's free text. This needs no query.
@@ -309,8 +309,8 @@ replaced whole, so only free text needs them. Two sources, both fresh for every 
 - **Key:** `HMAC-SHA256(server_secret, connection_id)`. `server_secret` comes from config / env. Stateless,
   stable for the connection's lifetime, so its purpose keeps its joins; different connections and different days are not
   linkable to each other. No mapping table is stored.
-- **Redact:** fixed placeholder (`<EMAIL>`, `<SECRET>`) for values that carry no analytic value as identity
-  (tokens, passwords, IBANs).
+- **Redact:** fixed placeholder (`<EMAIL>`, `<SECRET>`) for values that carry no analytic value as identity (tokens,
+  passwords, IBANs).
 - **Drop:** the column is removed and listed in `notes` ("dropped: event_original"), so the assistant knows why it
   is missing.
 
@@ -327,15 +327,15 @@ values from ClickHouse). Not in the first version.
 The scrubber is the existing `db_sampler` regex chain, moved and extended, with pseudonyms instead of placeholders
 where joinability helps:
 
-| Pattern | Replacement |
-|---|---|
-| IPv4, IPv6 (also `ip:port`) | `ip_…` pseudonym |
-| email, URL-encoded email (`%40`) | `email_…` pseudonym |
-| UUID, long hex ids (≥ 16 hex chars) | `id_…` pseudonym |
-| JWT (`eyJ…`), `Bearer …`, `Basic …`, `password=…`, `token=…`, `api_key=…` | `<SECRET>` |
-| high-entropy tokens (existing `RedactHighEntropyTokens(4.8, 12)`) | `<SECRET>` |
-| IBAN, phone numbers | `<IBAN>`, `<PHONE>` |
-| dictionary values (tenants, projects) | `tenant_…`, `project_…` |
+| Pattern                                                                   | Replacement             |
+|---------------------------------------------------------------------------|-------------------------|
+| IPv4, IPv6 (also `ip:port`)                                               | `ip_…` pseudonym        |
+| email, URL-encoded email (`%40`)                                          | `email_…` pseudonym     |
+| UUID, long hex ids (≥ 16 hex chars)                                       | `id_…` pseudonym        |
+| JWT (`eyJ…`), `Bearer …`, `Basic …`, `password=…`, `token=…`, `api_key=…` | `<SECRET>`              |
+| high-entropy tokens (existing `RedactHighEntropyTokens(4.8, 12)`)         | `<SECRET>`              |
+| IBAN, phone numbers                                                       | `<IBAN>`, `<PHONE>`     |
+| dictionary values (tenants, projects)                                     | `tenant_…`, `project_…` |
 
 URLs (`anonymize.URL()` and URLs found in text): keep scheme and path shape, pseudonymize the host if it is in a
 dictionary, replace path segments that are numeric, UUID, hex or email with `:id` / the pseudonym, and keep query
@@ -379,8 +379,9 @@ question rather than built.
   different pseudonym.
 - **Canary test:** a fixture with known canary values (`203.0.113.77`, `canary-7f3@example.org`, a fixed JWT, the
   tenant `canarytenant`) spread over columns with and without rules and inside free text; the test runs the whole
-  MCP tool pipeline (the catalog and `Run`, with a fake ClickHouse HTTP server that returns `JSONCompact`) and asserts that the
-  **raw bytes of the tool response** contain none of the canaries in any encoding (plain, URL-encoded, lower/upper
+  MCP tool pipeline (the catalog and `Run`, with a fake ClickHouse HTTP server that returns `JSONCompact`) and asserts
+  that the **raw bytes of the tool response** contain none of the canaries in any encoding (plain, URL-encoded,
+  lower/upper
   case). This is the test that guards against regressions in new widgets and new columns.
 - **Review report:** a small dev command (`go run ./cmd/dashica-mcp-check`) that runs every widget of every
   page through the pipeline against a real ClickHouse (run by the maintainer) and lists string columns that had no
@@ -391,16 +392,16 @@ question rather than built.
 
 ### 3.7 Limits
 
-| Limit | Value (default) | Where |
-|---|---|---|
-| time range | ≤ `mcp.max_time_range` (168h); longer requests are refused with a clear message | `lib/mcp`, before the request |
-| execution time | `max_execution_time=20` | ClickHouse setting per query |
-| data read | `max_bytes_to_read=20000000000`, `read_overflow_mode=throw` | ClickHouse setting |
-| result rows from ClickHouse | `max_result_rows=5000`, `result_overflow_mode=break` | ClickHouse setting |
-| rows returned to the assistant | 200 (input `limit` up to 1000), `truncated: true` and `row_count` when cut | `lib/mcp` |
-| string length | 300 characters per value | `lib/mcp` |
-| tool result size | 64 KB; rows are cut from the end until it fits | `lib/mcp` |
-| concurrency | 2 queries in flight per user | `lib/mcp` (semaphore) |
+| Limit                          | Value (default)                                                                 | Where                         |
+|--------------------------------|---------------------------------------------------------------------------------|-------------------------------|
+| time range                     | ≤ `mcp.max_time_range` (168h); longer requests are refused with a clear message | `lib/mcp`, before the request |
+| execution time                 | `max_execution_time=20`                                                         | ClickHouse setting per query  |
+| data read                      | `max_bytes_to_read=20000000000`, `read_overflow_mode=throw`                     | ClickHouse setting            |
+| result rows from ClickHouse    | `max_result_rows=5000`, `result_overflow_mode=break`                            | ClickHouse setting            |
+| rows returned to the assistant | 200 (input `limit` up to 1000), `truncated: true` and `row_count` when cut      | `lib/mcp`                     |
+| string length                  | 300 characters per value                                                        | `lib/mcp`                     |
+| tool result size               | 64 KB; rows are cut from the end until it fits                                  | `lib/mcp`                     |
+| concurrency                    | 2 queries in flight per user                                                    | `lib/mcp` (semaphore)         |
 
 The settings go through the existing `QueryOptions.Settings` (URL parameters). `Client.Query` uses HTTP GET, which
 ClickHouse runs read-only, and the first version sends no client-written SQL, so a dedicated ClickHouse user with a
@@ -426,8 +427,22 @@ query that Dashica composes with the SQL builder (`sql.New(sql.From(...), sql.Se
 sql.GroupBy(...))`):
 
 ```json
-{ "source": "k8s_gateway_access", "groupBy": ["status", "route"], "measure": "count",
-  "where": [{ "field": "status", "op": ">=", "value": 500 }], "time": "now-6h to now" }
+{
+  "source": "k8s_gateway_access",
+  "groupBy": [
+    "status",
+    "route"
+  ],
+  "measure": "count",
+  "where": [
+    {
+      "field": "status",
+      "op": ">=",
+      "value": 500
+    }
+  ],
+  "time": "now-6h to now"
+}
 ```
 
 - **Sources and fields come from the catalog.** A source is a base query the dashboards already use
@@ -454,13 +469,13 @@ extension `mcp`.)
 
 **Connections.** A connection is the permission for one purpose, for a while:
 
-| Field | Example | Use |
-|---|---|---|
-| purpose | "Find the cause of the 502s on the gateway since 14:00" | shown to the assistant in the server instructions, and in the audit log |
-| pages | `/p/k8s_gateway*`, `/p/caddy_ingress*` | narrows the user's own page access (never widens it) |
-| mode | aggregates / rows | rows only if the user's role allows it (`dashica-mcp-rows`) |
-| reveal | `customer_tenant` | columns shown in plain text for this connection, if the role allows it (open question 2) |
-| ends | in 2 hours (choices 1h, 8h, 1 day, 7 days; at most what the role allows) | after that every call is refused |
+| Field   | Example                                                                  | Use                                                                                      |
+|---------|--------------------------------------------------------------------------|------------------------------------------------------------------------------------------|
+| purpose | "Find the cause of the 502s on the gateway since 14:00"                  | shown to the assistant in the server instructions, and in the audit log                  |
+| pages   | `/p/k8s_gateway*`, `/p/caddy_ingress*`                                   | narrows the user's own page access (never widens it)                                     |
+| mode    | aggregates / rows                                                        | rows only if the user's role allows it (`dashica-mcp-rows`)                              |
+| reveal  | `customer_tenant`                                                        | columns shown in plain text for this connection, if the role allows it (open question 2) |
+| ends    | in 2 hours (choices 1h, 8h, 1 day, 7 days; at most what the role allows) | after that every call is refused                                                         |
 
 - **Creating one** opens a form in a side panel; on "Create" it shows the connection's URL
   (`https://dashica.example/mcp/c/<id>`) and the command to copy (`claude mcp add --transport http dashica-502s
@@ -484,18 +499,18 @@ is never stored.
 
 ## 4. Alternatives considered
 
-| Alternative | Why rejected (for now) |
-|---|---|
-| **Separate MCP binary over stdio** on the developer's machine, talking to ClickHouse | needs ClickHouse credentials and the dashboard definitions on each laptop; duplicates query resolution; the anonymization key would live on clients |
-| **Separate binary that calls Dashica's HTTP API** (stdio or HTTP) | needs a decoded result format over the network (Arrow decoding in Go or a public JSON endpoint) and auth between the two; adds a deployment for no gain over a handler in the same process |
-| **Stateful streamable HTTP with sessions** | session state per client, sticky routing; the only state needed (pseudonym key) derives from user + date. Spec 2026-07-28 is stateless in the SDK anyway |
-| **Anonymize in ClickHouse for the widget tools** (masking views, rewritten queries, row policies) | key ends up in query text / view definitions visible to all trusted users; every `.sql` file would need rewriting to read from masked views; row policies restrict rows, they do not mask columns. Only needed for free SQL, which MCP does not offer (§3.9) |
-| **A central policy by column name** (one file per instance, `client_ip` → pseudonym, `status` → keep) | aliases differ between dashboards and `.sql` files, so the policy never knows all columns; it ties Dashica to the instance's tables. Marks on the fields sit where the field is defined, and scrambled-by-default makes a missing mark safe |
-| **Pattern detection only** (no marks) | misses names and tenant identifiers, cannot pseudonymize consistently by meaning, cannot drop `event_original` |
-| **Redaction only** (no pseudonyms) | the assistant cannot follow one client across widgets, which is the main use of reading logs |
-| **Unkeyed hashing** (existing crc32 scramble, plain SHA-256) | reversible by enumerating IPv4 space or known emails and tenant names |
-| **Calling the HTTP handlers in-process** (`ServeHTTP` with a recorder on `/workbench.json`, `page.json`, `<page>/api/<id>/query?format=JSON`) | a fake request and recorder per call, MCP coupled to URLs, query strings and response headers; the catalog and `Run` give the same reuse in plain Go |
-| **Free SQL** (with string checks, or on masked views with a `readonly` ClickHouse user) | string checks are not a security boundary; on arbitrary SQL output the anonymization is unsound (`concat`, `hex(client_ip)` turn a scrambled column into a plain one); masked views would duplicate every table. Builder-made queries keep the field metadata (§3.9) |
+| Alternative                                                                                                                                   | Why rejected (for now)                                                                                                                                                                                                                                               |
+|-----------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Separate MCP binary over stdio** on the developer's machine, talking to ClickHouse                                                          | needs ClickHouse credentials and the dashboard definitions on each laptop; duplicates query resolution; the anonymization key would live on clients                                                                                                                  |
+| **Separate binary that calls Dashica's HTTP API** (stdio or HTTP)                                                                             | needs a decoded result format over the network (Arrow decoding in Go or a public JSON endpoint) and auth between the two; adds a deployment for no gain over a handler in the same process                                                                           |
+| **Stateful streamable HTTP with sessions**                                                                                                    | session state per client, sticky routing; the only state needed (pseudonym key) derives from user + date. Spec 2026-07-28 is stateless in the SDK anyway                                                                                                             |
+| **Anonymize in ClickHouse for the widget tools** (masking views, rewritten queries, row policies)                                             | key ends up in query text / view definitions visible to all trusted users; every `.sql` file would need rewriting to read from masked views; row policies restrict rows, they do not mask columns. Only needed for free SQL, which MCP does not offer (§3.9)         |
+| **A central policy by column name** (one file per instance, `client_ip` → pseudonym, `status` → keep)                                         | aliases differ between dashboards and `.sql` files, so the policy never knows all columns; it ties Dashica to the instance's tables. Marks on the fields sit where the field is defined, and scrambled-by-default makes a missing mark safe                          |
+| **Pattern detection only** (no marks)                                                                                                         | misses names and tenant identifiers, cannot pseudonymize consistently by meaning, cannot drop `event_original`                                                                                                                                                       |
+| **Redaction only** (no pseudonyms)                                                                                                            | the assistant cannot follow one client across widgets, which is the main use of reading logs                                                                                                                                                                         |
+| **Unkeyed hashing** (existing crc32 scramble, plain SHA-256)                                                                                  | reversible by enumerating IPv4 space or known emails and tenant names                                                                                                                                                                                                |
+| **Calling the HTTP handlers in-process** (`ServeHTTP` with a recorder on `/workbench.json`, `page.json`, `<page>/api/<id>/query?format=JSON`) | a fake request and recorder per call, MCP coupled to URLs, query strings and response headers; the catalog and `Run` give the same reuse in plain Go                                                                                                                 |
+| **Free SQL** (with string checks, or on masked views with a `readonly` ClickHouse user)                                                       | string checks are not a security boundary; on arbitrary SQL output the anonymization is unsound (`concat`, `hex(client_ip)` turn a scrambled column into a plain one); masked views would duplicate every table. Builder-made queries keep the field metadata (§3.9) |
 
 ## 5. Risks and migration
 
@@ -524,17 +539,17 @@ is never stored.
 
 ### 5.2 Risks
 
-| Risk | Mitigation |
-|---|---|
-| A new dashboard column with personal data | scrambled by default unless marked `.Public()`, dictionaries for tenants, canary test, review report before granting a page; aggregates only unless the user has `dashica-mcp-rows` |
-| Free text with names or customer content passes the scrubber | `event_original` dropped, `message` truncated, aggregate mode returns no log text; documented as a known limit |
-| Pseudonyms plus context re-identify a person | daily key per user; aggregate mode; only pages on the allowlist |
-| Assistant runs heavy queries in a loop | ClickHouse limits per query, time range cap, concurrency per user, audit log and a dashboard on `dashica.mcp` |
-| Widget ids from the render-order counter change between deploys | ids are re-read via `describe_dashboard`; important widgets get `.Id(...)` |
-| Coupling to handler URLs and request format during the workbench migration | one helper builds the widget request; the canary e2e test fails if the format changes |
-| Access token leak | short-lived Keycloak tokens, audience check, page access per role, audit log; revoking the user in Keycloak |
-| SDK churn (escape-hatch flags removed in v1.9, spec changes) | stateless mode only, few SDK features (tools, HTTP handler, bearer middleware); pin the version |
-| Go version bump for the SDK | check before step 3; both repos build with the CI image's Go |
+| Risk                                                                       | Mitigation                                                                                                                                                                          |
+|----------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| A new dashboard column with personal data                                  | scrambled by default unless marked `.Public()`, dictionaries for tenants, canary test, review report before granting a page; aggregates only unless the user has `dashica-mcp-rows` |
+| Free text with names or customer content passes the scrubber               | `event_original` dropped, `message` truncated, aggregate mode returns no log text; documented as a known limit                                                                      |
+| Pseudonyms plus context re-identify a person                               | daily key per user; aggregate mode; only pages on the allowlist                                                                                                                     |
+| Assistant runs heavy queries in a loop                                     | ClickHouse limits per query, time range cap, concurrency per user, audit log and a dashboard on `dashica.mcp`                                                                       |
+| Widget ids from the render-order counter change between deploys            | ids are re-read via `describe_dashboard`; important widgets get `.Id(...)`                                                                                                          |
+| Coupling to handler URLs and request format during the workbench migration | one helper builds the widget request; the canary e2e test fails if the format changes                                                                                               |
+| Access token leak                                                          | short-lived Keycloak tokens, audience check, page access per role, audit log; revoking the user in Keycloak                                                                         |
+| SDK churn (escape-hatch flags removed in v1.9, spec changes)               | stateless mode only, few SDK features (tools, HTTP handler, bearer middleware); pin the version                                                                                     |
+| Go version bump for the SDK                                                | check before step 3; both repos build with the CI image's Go                                                                                                                        |
 
 ## 6. Open questions
 
@@ -547,8 +562,8 @@ is never stored.
 3. **Key lifetime:** per connection (decided with §3.10; its id is in the URL): pseudonyms stay stable for the
    whole purpose, and two connections cannot be linked.
 4. **Should the assistant be able to filter by a pseudonym** ("show me all requests of `ip_k3x9q2mfa1`")? This
-   needs an in-memory reverse map (pseudonym → value, per connection, bounded LRU) and structured filters
-   (workbench §3.8). Recommendation: yes, after structured filters exist; values are bound as parameters, never put
+   needs an in-memory reverse map (pseudonym → value, per connection, bounded LRU) and structured filters (workbench
+   §3.8). Recommendation: yes, after structured filters exist; values are bound as parameters, never put
    into SQL text.
 5. **Minimum group size in aggregate mode** (suppress groups with fewer than k events)? Requires widgets to mark
    their count column. Recommendation: not now; aggregate widgets group by coarse dimensions, and identifiers in
