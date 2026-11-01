@@ -27,6 +27,8 @@ function renderBarVertical(el: HTMLElement, widget: WidgetOf<'barVertical'>, ctx
 
 function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: DrawOptions, offerFilters: OfferFilters) {
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
+  // the tip points by x, at the bar under the mouse, and so does a click (FilterOnClickOptions.pointer)
+  const pointer = 'x';
   const bars: Plot.BarYOptions = {
     x: props.x.alias,
     y: props.y.alias,
@@ -57,8 +59,8 @@ function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: Dr
       legend: true,
     },
     marks: [
-      Plot.barY(data, { ...bars, tip: tipChannels ? { channels: tipChannels } : true }),
-      filterOnClick(Plot.barY, data, { ...bars, fields: [props.x, props.fill, props.fx, props.fy], offerFilters }),
+      Plot.barY(data, { ...bars, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
+      filterOnClick(Plot.barY, data, { ...bars, pointer, fields: [props.x, props.fill, props.fx, props.fy], offerFilters }),
     ],
   });
 }

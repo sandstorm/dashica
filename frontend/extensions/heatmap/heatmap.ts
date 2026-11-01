@@ -104,6 +104,8 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
     clip: true,
     fill: props.fill?.alias,
   };
+  // the tip points by y, at the row under the mouse, and so does a click (FilterOnClickOptions.pointer)
+  const pointer = 'y';
 
   return Plot.plot({
     height: props.height,
@@ -125,8 +127,8 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
       legend: true,
     },
     marks: [
-      Plot.barX(data, { ...cells, tip: true }),
-      filterOnClick(Plot.barX, data, { ...cells, fields: [props.y], offerFilters }),
+      Plot.barX(data, { ...cells, tip: pointer }),
+      filterOnClick(Plot.barX, data, { ...cells, pointer, fields: [props.y], offerFilters }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

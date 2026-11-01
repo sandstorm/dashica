@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // Tests for time-bar.ts: a time bar drawn from the widget's data; a click on a bar (also through the drag area above
-// it) running filters.offer with its fill and facets, never its time bucket or measure, and the chart's pills.
+// it) running filters.offer with its fill and facets, never its time bucket or measure, and the chart's pills; always
+// those of the row the tip shows.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
-import { clickMark } from '../chart-library/plot-testing';
+import { anchor, clickAtPoint, clickMark } from '../chart-library/plot-testing';
 import { timeBar } from './time-bar';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -80,6 +81,51 @@ describe('timeBar', () => {
       await inView();
       await clickMark(bars(el).at(-1)!);
       expect(offered()).toEqual(['level = info', 'region = us']);
+    });
+
+    describe('offers the row the tip shows', () => {
+      // many buckets, so a bar of the next bucket lies within Plot's pointer radius: bucket 0 holds a short "info",
+      // bucket 1 a short "info" and a tall "error" above it
+      const many = { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from: T0, to: T0 + 16 * QUARTER }) };
+      const stacked = { time: [T0, T0 + QUARTER, T0 + QUARTER], level: ['info', 'info', 'error'], region: ['eu', 'eu', 'eu'], cnt: [1, 1, 10] };
+      const shown = (el: HTMLElement) => /level (\S+)/.exec(el.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
+      /** Clicks the drag area right of bucket 0's bar, at the height of bucket 1's "error", and in a bar's middle. */
+      const clicks = async (el: HTMLElement) => {
+        const overlay = el.querySelector('svg .overlay')!;
+        const [short, , tall] = bars(el);
+        const said: [string | undefined, string | undefined][] = [];
+        const [x] = anchor(short!);
+        const width = Number(short!.getAttribute('width'));
+        for (const at of [[x + 0.4 * width, anchor(tall!)[1]], anchor(tall!), anchor(short!), [x + 0.4 * width, anchor(tall!)[1]]] as [number, number][]) {
+          await clickAtPoint(overlay, at);
+          said.push([shown(el), offers.at(-1)?.candidates[0]?.value as string | undefined]);
+        }
+        return said;
+      };
+
+      it('on stacked bars, where the closest bar is another bucket’s', async () => {
+        testbed.serve('/p/shop/api/1/query', stacked, many);
+        const { el } = testbed.render({ type: 'timeBar', props, dataUrl: '/p/shop/api/1', filterable });
+        await inView();
+        expect(await clicks(el)).toEqual([
+          ['info', 'info'],
+          ['error', 'error'],
+          ['info', 'info'],
+          ['info', 'info'],
+        ]);
+      });
+
+      it('on a faceted chart', async () => {
+        testbed.serve('/p/shop/api/1/query', { time: [...stacked.time, T0], level: [...stacked.level, 'error'], region: [...stacked.region, 'us'], cnt: [...stacked.cnt, 4] }, many);
+        const { el } = testbed.render({ type: 'timeBar', props: { ...props, fy: { kind: 'expr', alias: 'region' } }, dataUrl: '/p/shop/api/1', filterable });
+        await inView();
+        expect(await clicks(el)).toEqual([
+          ['info', 'info'],
+          ['error', 'error'],
+          ['info', 'info'],
+          ['info', 'info'],
+        ]);
+      });
     });
 
     it('on a bar without a fill offers its facet', async () => {

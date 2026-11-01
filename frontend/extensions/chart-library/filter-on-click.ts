@@ -7,8 +7,8 @@ import './filter-on-click.css';
 
 /**
  * A Plot mark with which a click offers to filter by a category of the row the chart's tip shows: `mark` (the chart's
- * mark function, `Plot.barY`) with the chart mark's `options` (its tip left out) under Plot's pointer transform, so it
- * points at the same row as the tip, stacking included. A click while it points at a row hands `offerFilters` the row's
+ * mark function, `Plot.barY`) with the chart mark's `options` (its tip left out) under the pointer transform the tip
+ * uses (`pointer`, the chart mark's `tip` pointer), so it points at the same row as the tip, stacking included. A click while it points at a row hands `offerFilters` the row's
  * categories as candidates: one per field of `fields` that is a category with a value, in order, each by its alias
  * (`candidateOf`, with the column's type the answer names, `columnTypesOf`). Its
  * element is an empty `g`, with `d-filter-on-click--pointing` while it points at a row (the pointer cursor).
@@ -17,7 +17,7 @@ import './filter-on-click.css';
 export function filterOnClick<O extends Plot.MarkOptions>(
   mark: (data: QueryResult, options: Omit<O & FilterOnClickOptions, keyof FilterOnClickOptions>) => Plot.Markish,
   data: QueryResult,
-  { fields, offerFilters, ...options }: O & FilterOnClickOptions,
+  { fields, offerFilters, pointer, ...options }: O & FilterOnClickOptions,
 ): Plot.Markish {
   const categories = fields.filter((field, at): field is SqlFieldProps => {
     return field !== undefined && isCategory(field) && fields.findIndex((other) => other?.alias === field.alias) === at;
@@ -69,15 +69,25 @@ export function filterOnClick<O extends Plot.MarkOptions>(
     }
     return g;
   };
-  // Plot.pointer, as Plot points a mark's tip (`tip: true`, `tip: {channels}`: its "xy" pointer)
-  return mark(data, Plot.pointer({ ...options, render }));
+  return mark(data, POINTERS[pointer]({ ...options, render }));
 }
 
 export interface FilterOnClickOptions {
   /** The fields whose categories a click offers, each a channel's field as the chart maps it, in order. */
   readonly fields: readonly (SqlFieldProps | undefined)[];
   readonly offerFilters: OfferFilters;
+  /**
+   * The pointer of the chart mark's tip, which the chart names in its `tip` option: Plot points a tip with `"x"`
+   * (`Plot.pointerX`, mostly by x), `"y"` or `"xy"` (`Plot.pointer`, the closest point), and without one it picks it
+   * per mark: `"x"` for a stacked `barY` or `rectY`, `"y"` for `barX` or `rectX`, else `"xy"` (Plot's source only,
+   * transforms/stack.js: `withTip(options, "x")` in `maybeStackY`). A pointer of another kind points at another row
+   * than the tip (by x, the bar under the mouse; by distance, a bar of the next bucket closer to it).
+   */
+  readonly pointer: Plot.TipPointer;
 }
+
+/** Plot's pointer transform for each tip pointer. */
+const POINTERS = { x: Plot.pointerX, y: Plot.pointerY, xy: Plot.pointer } as const;
 
 /** Whether `field` holds categories: not a measure (`count`), not a time bucket (`autoBucket`, a bucket size). */
 function isCategory(field: SqlFieldProps): boolean {

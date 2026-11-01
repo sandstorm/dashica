@@ -914,7 +914,9 @@ highlighted.
 through **a Plot interaction mark** of its own, `chart-library/selectOnClick(mark, data, {...options, fields,
 choose})`, put after its mark as Plot's tip is: `mark` is the chart's mark function (`Plot.barY`), `options` the chart
 mark's options without its tip, so the mark under Plot's pointer transform (`Plot.pointer`, as Plot points a
-`tip: true` or `tip: {channels}`) points at the same row as the tip, a stack included. It draws an empty `g`, with
+`tip: true` or `tip: {channels}`) points at the same row as the tip, a stack included. (Wrong for bars: Plot points a
+`barY` / `rectY` tip with `Plot.pointerX` and a `barX` one with `Plot.pointerY`; since 9as, D45 (d), each chart
+names its tip's pointer and hands the same to `filterOnClick` as `pointer`.) It draws an empty `g`, with
 `d-select-on-click--pointing` while it points at a row (the SVG then has the pointer cursor, `svg:has(…)`); its render
 function gets the pointed row's index (documented: a render transform, `context.ownerSVGElement`), and reads the row
 as Plot's pointer does (`data.get(i)`, Plot's source). A field is a candidate when it is a category: not a `count`,
@@ -1850,7 +1852,18 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   itself, and the quick input's `validation()` helper is gone. (b, 9aq; the maintainer saw two identical
   "shopAction = LogonAction" in a click's quick pick, filter and exclude differing by their icon only) each op is
   labelled with its own sign (`OP_SIGNS`), the exclude "shopAction ≠ LogonAction". (c, 9ar) the concepts name the
-  global menu's Explore entries as c56c7cc renamed them: "Explore (from scratch)", "Explore (from chart…)".
+  global menu's Explore entries as c56c7cc renamed them: "Explore (from scratch)", "Explore (from chart…)". (d, 9as;
+  the maintainer saw a stacked time bar's tip show "shopAction zipCompletion" while the click offered "shopAction =
+  LogonAction") the root cause: Plot points a stacked mark's tip by one axis, `barY` / `rectY` with `Plot.pointerX`,
+  `barX` / `rectX` with `Plot.pointerY` (Plot's source only: transforms/stack.js, `withTip(options, "x")` in
+  `maybeStackY`), while `filterOnClick` pointed with `Plot.pointer`, the closest middle. Within Plot's pointer radius
+  (40 px) of a bar of the next bucket, closer to its middle than to the bar under the mouse, the two pointed at
+  different rows: on a short chart with many buckets (the Oekokiste "Successful Upstream Requests", 150 px high) often.
+  Not the cause: a pinned tip (the mismatch is the same without any pointerdown) and the faceted elements (each facet
+  points as its tip does). Fix: `FilterOnClickOptions.pointer` (`Plot.TipPointer`: `"x"`, `"y"`, `"xy"`, mapped to
+  `Plot.pointerX`, `Plot.pointerY`, `Plot.pointer`), and each chart names its tip's pointer in its `tip` option
+  (documented) and passes the same: time bars and vertical bars `"x"`, horizontal bars and the ordinal heatmap `"y"`,
+  the time line `"xy"`.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2201,6 +2214,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ap ✅ 2026-11-01 | **D45 (a) `validateInput` simplified** (§3.11, §3.15): `InputBoxOptions.validateInput?: (value) => InputBoxValidationMessage \| undefined`; `filters.ts` `#press` writes "Enter a value." as an `Error` message; `validation()` in `quick-input.ts` gone. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,test.ts}`, `frontend/extensions/filters/filters.{ts,test.ts}` | |
 | 9aq ✅ 2026-11-01 | **D45 (b) the exclude reads ≠** (§3.8, §3.15): `filterPicks` (`frontend/extensions/filters/offer.ts`) labels each op with its own sign (`OP_SIGNS`). Files: `frontend/extensions/filters/offer.{ts,test.ts}`, `filters.test.ts`, `e2e/bar-selection.spec.ts` (written, not run) | |
 | 9ar ✅ 2026-11-01 | **D45 (c) the Explore entries' names in the concepts** (§3.15; Perspective §4.4, §4.7, §4.8, §8.1): "Explore (from scratch)" and "Explore (from chart…)", as c56c7cc renamed them; the decisions' wording kept, with a note. Files: `docs/2026-10-28-workbench.md`, `docs/2026-10-30-perspective.md` (text only) | |
+| 9as ✅ 2026-11-01 | **D45 (d) a click offers the row the tip shows** (§3.8, §3.15): root cause Plot's tip pointer of a stacked mark (`pointerX` for `barY` / `rectY`, `pointerY` for `barX`) against `filterOnClick`'s `Plot.pointer`; `FilterOnClickOptions.pointer` (`Plot.TipPointer`), each chart's `tip` names it (`time-bars.ts`, `bar-vertical.ts` `"x"`; `bar-horizontal.ts`, `heatmap.ts` `"y"`; `time-line.ts` `"xy"`). Reproduced first in vitest (`time-bar.test.ts`: stacked bars where the next bucket's bar is closer, also faceted; `bar-horizontal.test.ts`: the same by y), `plot-testing.ts` `clickAtPoint`, `anchor` exported. Files: `frontend/extensions/chart-library/{filter-on-click,time-bars,plot-testing}.ts`, `frontend/extensions/{bar-vertical,bar-horizontal,heatmap,time-line}/*.ts`, `time-bar.test.ts`, `bar-horizontal.test.ts` | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

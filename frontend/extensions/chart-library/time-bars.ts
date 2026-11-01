@@ -33,6 +33,8 @@ export function drawTimeBars(
   const range = resolvedTimeRangeOf(data);
   const buckets = range ? Math.floor((range.to - range.from) / xBucketSize) : undefined;
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
+  // the tip points by x, at the bucket under the mouse, and so does a click (FilterOnClickOptions.pointer)
+  const pointer = 'x';
   const bars: Plot.RectYOptions = {
     x1: x,
     x2: (d: Record<string, number>) => d[x] + xBucketSize,
@@ -75,8 +77,8 @@ export function drawTimeBars(
       legend: true,
     },
     marks: [
-      Plot.rectY(data, { ...bars, tip: tipChannels ? { channels: tipChannels } : true }),
-      offerFilters ? filterOnClick(Plot.rectY, data, { ...bars, fields: [props.fill, props.fx, props.fy], offerFilters }) : null,
+      Plot.rectY(data, { ...bars, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
+      offerFilters ? filterOnClick(Plot.rectY, data, { ...bars, pointer, fields: [props.fill, props.fx, props.fy], offerFilters }) : null,
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
       thresholds.length > 0 ? Plot.ruleY(thresholds, { stroke: 'red', strokeWidth: 2 }) : null,

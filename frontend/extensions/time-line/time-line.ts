@@ -35,6 +35,8 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
   }
   const range = resolvedTimeRangeOf(data);
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
+  // the tip points at the closest point, and so does a click (FilterOnClickOptions.pointer)
+  const pointer = 'xy';
   const lines: Plot.LineOptions = {
     x: schema.requiredColumn(props.x.alias, 'x'),
     y: schema.requiredColumn(props.y.alias, 'y'),
@@ -74,8 +76,8 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
       legend: true,
     },
     marks: [
-      Plot.line(data, { ...lines, tip: tipChannels ? { channels: tipChannels } : true }),
-      filterOnClick(Plot.line, data, { ...lines, fields: [props.zField, props.strokeField, props.fx, props.fy], offerFilters }),
+      Plot.line(data, { ...lines, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
+      filterOnClick(Plot.line, data, { ...lines, pointer, fields: [props.zField, props.strokeField, props.fx, props.fy], offerFilters }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

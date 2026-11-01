@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
 import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
-import { clickMark } from '../chart-library/plot-testing';
+import { anchor, clickAtPoint, clickMark } from '../chart-library/plot-testing';
 import { barHorizontal } from './bar-horizontal';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -49,5 +49,21 @@ describe('barHorizontal', () => {
         source: { dataUrl: '/p/shop/api/1', filterable },
       },
     ]);
+  });
+
+  it('offers the row the tip shows, the bar under the mouse, though another one’s middle is closer', async () => {
+    // many categories, so a bar of the next one lies within Plot's pointer radius: /0 a short "a", /1 a short "a" and a
+    // long "b" right of it
+    const paths = Array.from({ length: 16 }, (_, at) => `/${at}`);
+    testbed.serve('/p/shop/api/1/query', { path: ['/0', '/1', '/1', ...paths.slice(2)], host: ['a', 'a', 'b', ...paths.slice(2).map(() => 'a')], cnt: [1, 1, 10, ...paths.slice(2).map(() => 1)] });
+    const props = { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } } as const;
+    const { el } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
+    await inView();
+    const [short, , long] = el.querySelectorAll('g[aria-label="bar"] rect');
+    const [, y] = anchor(short!);
+    // below /0's middle, still on its band, as far right as /1's "b" is in its middle
+    await clickAtPoint((short as SVGElement).ownerSVGElement!, [anchor(long!)[0], y + 0.4 * Number(short!.getAttribute('height'))]);
+    const shown = /path (\S+)/.exec(el.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
+    expect([shown, offers.at(-1)?.candidates.map(({ value }) => value)]).toEqual(['/0', ['/0', 'a']]);
   });
 });

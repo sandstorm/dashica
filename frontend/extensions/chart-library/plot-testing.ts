@@ -12,23 +12,38 @@ if (!('getBBox' in SVGElement.prototype)) {
  * the groups around it.
  */
 export async function pointAt(mark: Element): Promise<[number, number]> {
-  const [x, y] = anchor(mark);
-  mark.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  return [x, y];
+  const at = anchor(mark);
+  await moveTo(mark, at);
+  return at;
 }
 
 /** Clicks `target` (by default `mark`) with a mouse once Plot points at `mark`'s row, see pointAt. */
 export async function clickMark(mark: Element, target: Element = mark): Promise<void> {
-  const [x, y] = await pointAt(mark);
-  // a mouse's pointerdown (Plot pins its tip on one), then the click
+  clickAt(target, await pointAt(mark));
+}
+
+/** Moves the pointer onto `target` at the client point `at`, then clicks it there with a mouse, see pointAt. */
+export async function clickAtPoint(target: Element, at: [number, number]): Promise<void> {
+  await moveTo(target, at);
+  clickAt(target, at);
+}
+
+/** A `pointermove` on `target` at the client point `[x, y]`, then an animation frame, see pointAt. */
+async function moveTo(target: Element, [x, y]: [number, number]): Promise<void> {
+  target.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+/** A mouse's pointerdown (Plot pins its tip on one), then the click, on `target` at `[x, y]`. */
+function clickAt(target: Element, [x, y]: [number, number]): void {
   const down = new MouseEvent('pointerdown', { bubbles: true, clientX: x, clientY: y });
   Object.defineProperty(down, 'pointerType', { value: 'mouse' });
   target.dispatchEvent(down);
   target.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
 }
 
-function anchor(mark: Element): [number, number] {
+/** Where pointAt points at `mark`, as client coordinates: a rect's centre, a path's first point. */
+export function anchor(mark: Element): [number, number] {
   const number = (name: string) => Number(mark.getAttribute(name) ?? 0);
   let [x, y] =
     mark.tagName === 'path'

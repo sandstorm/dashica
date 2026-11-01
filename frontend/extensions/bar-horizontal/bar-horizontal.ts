@@ -26,6 +26,8 @@ function renderBarHorizontal(el: HTMLElement, widget: WidgetOf<'barHorizontal'>,
 
 function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options: DrawOptions, offerFilters: OfferFilters) {
   const bars: Plot.BarXOptions = { x: props.x.alias, y: props.y.alias, fill: props.fill?.alias ?? '#A8C1D1' };
+  // the tip points by y, at the bar under the mouse, and so does a click (FilterOnClickOptions.pointer)
+  const pointer = 'y';
   return Plot.plot({
     height: props.height,
     width: options.width,
@@ -47,8 +49,8 @@ function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options
       legend: true,
     },
     marks: [
-      Plot.barX(data, { ...bars, tip: true }),
-      filterOnClick(Plot.barX, data, { ...bars, fields: [props.y, props.fill], offerFilters }),
+      Plot.barX(data, { ...bars, tip: pointer }),
+      filterOnClick(Plot.barX, data, { ...bars, pointer, fields: [props.y, props.fill], offerFilters }),
     ],
   });
 }
