@@ -56,6 +56,58 @@ export class WidgetsHost implements WidgetsApi {
     return this.#active.get(this.tabs.activeQuery);
   }
 
+  registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
+    if (this.#renderers.has(type)) throw new Error(`There is a renderer for the widget type ${type} already`);
+    this.#renderers.set(type, renderer);
+    return new Disposable(() => this.#renderers.delete(type));
+  }
+
+  /** Renders `widget` into `widgetContainer` with `query` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
+  render(widgetContainer: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable {
+    if ('dataUrl' in widget && widget.dataUrl) widgetContainer.dataset.dataUrl = widget.dataUrl;
+    const renderer = this.#renderers.get(widget.type);
+    if (!renderer) {
+      showWidgetError(widgetContainer, new Error('no renderer for this widget type'), widget);
+      return new Disposable(() => widgetContainer.replaceChildren());
+    }
+    const ctx = new WidgetInstance(widget, widgetContainer, this, query, this.ui);
+    this.#rendered.add(ctx);
+    try {
+      const rendered = renderer(widgetContainer, widget, ctx);
+      const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(widgetContainer, ctx) : Disposable.from();
+      return new Disposable(() => {
+        listening.dispose();
+        this.deactivate(ctx);
+        this.#rendered.delete(ctx);
+        rendered.dispose();
+        ctx.dispose();
+        widgetContainer.replaceChildren();
+      });
+    } catch (error) {
+      // a widget that failed to render is no rendered one: nothing redecorates it
+      this.#rendered.delete(ctx);
+      ctx.dispose();
+      showWidgetError(widgetContainer, error, widget);
+      return new Disposable(() => widgetContainer.replaceChildren());
+    }
+  }
+
+  /**
+   * A press or the focus anywhere in `widgetContainer` makes `ctx` active, unless it lands in a widget with data inside
+   * it. The press is heard on its way down (capture), since a chart may stop the presses on its marks.
+   */
+  #activateOn(widgetContainer: HTMLElement, ctx: WidgetInstance): Disposable {
+    const onEvent = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest('[data-data-url]') === widgetContainer) this.activate(ctx);
+    };
+    widgetContainer.addEventListener('pointerdown', onEvent, true);
+    widgetContainer.addEventListener('focusin', onEvent);
+    return new Disposable(() => {
+      widgetContainer.removeEventListener('pointerdown', onEvent, true);
+      widgetContainer.removeEventListener('focusin', onEvent);
+    });
+  }
+
   /** Makes `widget` its tab's active widget, outlining its element in place of the one before. */
   activate(widget: WidgetInstance): void {
     const before = this.#active.get(widget.query);
@@ -73,7 +125,6 @@ export class WidgetsHost implements WidgetsApi {
     this.#active.delete(widget.query);
     this.#tell();
   }
-
 
   /** Fires `onDidChangeActive` when the active tab's active widget is another one than told last. */
   #tell(): void {
@@ -163,62 +214,16 @@ export class WidgetsHost implements WidgetsApi {
     this.#onDidChangeActive.dispose();
     this.#active.clear();
   }
-
-  registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable {
-    if (this.#renderers.has(type)) throw new Error(`There is a renderer for the widget type ${type} already`);
-    this.#renderers.set(type, renderer);
-    return new Disposable(() => this.#renderers.delete(type));
-  }
-
-  /** Renders `widget` into `widgetContainer` with `query` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
-  render(widgetContainer: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable {
-    if ('dataUrl' in widget && widget.dataUrl) widgetContainer.dataset.dataUrl = widget.dataUrl;
-    const renderer = this.#renderers.get(widget.type);
-    if (!renderer) {
-      showWidgetError(widgetContainer, new Error('no renderer for this widget type'), widget);
-      return new Disposable(() => widgetContainer.replaceChildren());
-    }
-    const ctx = new WidgetInstance(widget, widgetContainer, this, query, this.ui);
-    this.#rendered.add(ctx);
-    try {
-      const rendered = renderer(widgetContainer, widget, ctx);
-      const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(widgetContainer, ctx) : Disposable.from();
-      return new Disposable(() => {
-        listening.dispose();
-        this.deactivate(ctx);
-        this.#rendered.delete(ctx);
-        rendered.dispose();
-        ctx.dispose();
-        widgetContainer.replaceChildren();
-      });
-    } catch (error) {
-      // a widget that failed to render is no rendered one: nothing redecorates it
-      this.#rendered.delete(ctx);
-      ctx.dispose();
-      showWidgetError(widgetContainer, error, widget);
-      return new Disposable(() => widgetContainer.replaceChildren());
-    }
-  }
-
-  /**
-   * A press or the focus anywhere in `widgetContainer` makes `ctx` active, unless it lands in a widget with data inside
-   * it. The press is heard on its way down (capture), since a chart may stop the presses on its marks.
-   */
-  #activateOn(widgetContainer: HTMLElement, ctx: WidgetInstance): Disposable {
-    const onEvent = (event: Event) => {
-      if (event.target instanceof Element && event.target.closest('[data-data-url]') === widgetContainer) this.activate(ctx);
-    };
-    widgetContainer.addEventListener('pointerdown', onEvent, true);
-    widgetContainer.addEventListener('focusin', onEvent);
-    return new Disposable(() => {
-      widgetContainer.removeEventListener('pointerdown', onEvent, true);
-      widgetContainer.removeEventListener('focusin', onEvent);
-    });
-  }
 }
 
-/** The class of the active widget's element in each tab: its outline. */
-const ACTIVE = 'd-widget--active';
+/** Shows `error` in `widgetContainer` in place of the widget: its message and the widget's type. */
+function showWidgetError(widgetContainer: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const errorElement = widgetContainer.ownerDocument.createElement('div');
+  errorElement.className = 'd-widget-error';
+  errorElement.textContent = `${message} (${widget.type})`;
+  widgetContainer.replaceChildren(errorElement);
+}
 
 /**
  * One rendered widget: its renderer's context, what its menu `widget/context` is shown for, and, with data, the
@@ -321,14 +326,8 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   }
 }
 
-/** Shows `error` in `widgetContainer` in place of the widget: its message and the widget's type. */
-function showWidgetError(widgetContainer: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
-  const message = error instanceof Error ? error.message : String(error);
-  const errorElement = widgetContainer.ownerDocument.createElement('div');
-  errorElement.className = 'd-widget-error';
-  errorElement.textContent = `${message} (${widget.type})`;
-  widgetContainer.replaceChildren(errorElement);
-}
+/** The class of the active widget's element in each tab: its outline. */
+const ACTIVE = 'd-widget--active';
 
 /** The Arrow table at `url` with the answer's headers; an empty table for a 204 (no content). */
 async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<QueryResult> {

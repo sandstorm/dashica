@@ -16,9 +16,9 @@ import { WidgetsHost, type DataPoint, type QueryResult, type RenderedWidget, typ
  * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
- * shown, `dataPointMenus` the data point menus. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
- * `RenderedWidget` whose status and decorations the test sets. `sqlEnabled` is `page.workbench`'s (default on); `keys`
- * are the query keys declared, as their extensions would (`[TIME, FILTERS]`).
+ * shown, `dataPointMenus` the data point menus. `dispose` in `afterEach`. For the tests of an extension that follows
+ * the active widget, `fakeWidget` is a `RenderedWidget` whose status and decorations the test sets. `sqlEnabled` is
+ * `page.workbench`'s (default on); `keys` are the query keys declared, as their extensions would (`[TIME, FILTERS]`).
  */
 export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: boolean; keys?: readonly QueryKey<unknown>[] } = {}) {
   history.replaceState(null, '', '/p/shop');

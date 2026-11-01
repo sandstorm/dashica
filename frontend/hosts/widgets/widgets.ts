@@ -11,14 +11,13 @@ import type { MenuAnchor, QuickPickItem } from '../ui/ui';
  * and a `WidgetContext`: that query state (`query`), its data (`runQuery()`), its children, its menu. Charts put
  * themselves into the chart library's `ChartFrame` (title, spinner, error, menu button).
  * Each tab has an active widget: the widget with data the viewer last pressed or focused in (its menu button, a mark,
- * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
- * and the widget itself tells its status with its own event: Debug follows it. As VS Code's file decorations, an
- * extension may decorate a widget's answer (`registerDecorationProvider`): a badge with its tooltip, the drawing muted;
- * the chart frame and Debug show a widget's decorations without knowing what they mean. As VS Code's code actions, an
- * extension may offer what to do with a widget's data points (`registerDataPointMenuProvider`): a click on a chart's
- * mark, a table's cell shows the items of all providers (`WidgetContext.showDataPointMenu`), the `filters` extension's
- * "status = 500" among them, without the chart knowing what they do. What only one widget type has (a table's ticked
- * rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
+ * a table cell or checkbox), outlined. `active` refers to the active tab's one, and the widget itself tells its status
+ * with its own event: Debug follows it. An extension may decorate a widget's answer (`registerDecorationProvider`): a
+ * badge with its tooltip, the drawing muted; the chart frame and Debug show a widget's decorations as they are given.
+ * An extension may offer what to do with a widget's data points (`registerDataPointMenuProvider`): a click on a
+ * chart's mark, a table's cell shows the items of all providers (`WidgetContext.showDataPointMenu`), the `filters`
+ * extension's "status = 500" among them, each running its provider's command. What only one widget type has (a
+ * table's ticked rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -37,15 +36,14 @@ export interface WidgetsApi {
   /** Fires when `active` is another widget: another one pressed, another tab shown, the widget removed. */
   readonly onDidChangeActive: Event<void>;
   /**
-   * Decorates the widgets' answers until disposed, as VS Code's `window.registerFileDecorationProvider`: the host asks
-   * `provider` when a widget's query answered, and every answered widget again when `provider` fires its
-   * `onDidChangeDecorations`. A widget's decorations are those of all providers, in the order registered.
+   * Decorates the widgets' answers until disposed: the host asks `provider` when a widget's query answered, and every
+   * answered widget again when `provider` fires its `onDidChangeDecorations`. A widget's decorations are those of all
+   * providers, in the order registered.
    */
   registerDecorationProvider(provider: WidgetDecorationProvider): Disposable;
   /**
-   * Offers what to do with the widgets' data points until disposed, as VS Code's `languages.registerCodeActionsProvider`:
-   * the host asks `provider` each time a data point menu is shown (`showDataPointMenu`); the menu has the items of all
-   * providers, in the order registered.
+   * Offers what to do with the widgets' data points until disposed: the host asks `provider` each time a data point
+   * menu is shown (`showDataPointMenu`); the menu has the items of all providers, in the order registered.
    */
   registerDataPointMenuProvider(provider: DataPointMenuProvider): Disposable;
   /**
@@ -75,8 +73,8 @@ export interface DataPoint {
 }
 
 /**
- * An entry of the data point menu: how it shows, as a quick pick item, and the command it runs with `arguments`, as VS
- * Code's `CodeAction.command` (the `filters` extension's "status = 500": `filters.addPill`).
+ * An entry of the data point menu: how it shows, as a quick pick item, and the command it runs with `arguments` (the
+ * `filters` extension's "status = 500": `filters.addPill`).
  */
 export interface DataPointMenuItem extends QuickPickItem {
   readonly command: string;
@@ -92,8 +90,8 @@ export interface WidgetDecorationProvider {
 }
 
 /**
- * What is shown on a widget about its answer, as VS Code's `FileDecoration`: only how it shows, not what it means
- * (the `filters` extension's "ignores customer = acme", muted).
+ * What is shown on a widget about its answer: how it shows (the `filters` extension's "ignores customer = acme",
+ * muted); what it means stays its provider's.
  */
 export interface WidgetDecoration {
   /** A short text beside the widget's title (`ignores customer = acme`). */
