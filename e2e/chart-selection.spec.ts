@@ -43,11 +43,9 @@ test('a click on a table cell offers its value; "Exclude" adds it as ≠; its me
     const cell = frame.locator(`.tabulator-cell.d-table__filterable[tabulator-field="${COLUMN}"]`).first();
     await expect(cell).toBeVisible();
 
-    // a right click shows the menu table/cell
     await cell.click({button: 'right'});
     const menu = page.getByRole('dialog', {name: 'table'});
     await expect(menu.getByRole('option')).toHaveText(['Filter: Contains this value']);
-    // a click outside the menu closes it
     await frame.getByText(TABLE, {exact: true}).click();
     await expect(menu).toHaveCount(0);
 
