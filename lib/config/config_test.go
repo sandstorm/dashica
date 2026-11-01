@@ -23,15 +23,17 @@ func TestCheckAppSecret_WantsALongEnoughSecret(t *testing.T) {
 	}
 }
 
-// loadIn is LoadConfig("testing") in a directory holding `file` as dashica_config.testing.yaml.
-func loadIn(t *testing.T, file string) *Config {
+// loadIn is LoadConfig("testing") in a directory holding `file` as dashica_config.testing.yaml;
+// with `withEnvironment` false it skips the process environment, so the developer's shell (e.g. an
+// exported APP_SECRET) does not reach the result.
+func loadIn(t *testing.T, file string, withEnvironment bool) *Config {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "dashica_config.testing.yaml"), []byte("clickhouse:\n  default:\n    url: http://127.0.0.1:1\n    database: default\n"+file), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
-	cfg, err := LoadConfig("testing", false)
+	cfg, err := LoadConfig("testing", !withEnvironment)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,14 +41,14 @@ func loadIn(t *testing.T, file string) *Config {
 }
 
 func TestLoadConfig_TheDefaults(t *testing.T) {
-	cfg := loadIn(t, "")
+	cfg := loadIn(t, "", false)
 	if cfg.ServerPort != 8081 || !cfg.LogToStdout || cfg.LogFilename != "" || cfg.ExploreEnabled || cfg.SqlFilterEnabled || cfg.AppSecret != "" {
 		t.Errorf("defaults: %+v", cfg)
 	}
 }
 
 func TestLoadConfig_TheFileOverTheDefaults(t *testing.T) {
-	cfg := loadIn(t, "server_port: 9000\nlog_to_stdout: false\nexplore_enabled: true\nsql_filter_enabled: true\napp_secret: from-the-file\n")
+	cfg := loadIn(t, "server_port: 9000\nlog_to_stdout: false\nexplore_enabled: true\nsql_filter_enabled: true\napp_secret: from-the-file\n", false)
 	if cfg.ServerPort != 9000 || cfg.LogToStdout || !cfg.ExploreEnabled || !cfg.SqlFilterEnabled || cfg.AppSecret != "from-the-file" {
 		t.Errorf("from the file: %+v", cfg)
 	}
@@ -60,7 +62,7 @@ func TestLoadConfig_TheEnvironmentOverTheFile(t *testing.T) {
 			t.Setenv("SERVER_PORT", "9001")
 			t.Setenv("APP_SECRET", "from-the-environment")
 			t.Setenv("CLICKHOUSE__DEFAULT__PASSWORD", "from-the-environment")
-			cfg := loadIn(t, "server_port: 9000\nexplore_enabled: "+map[bool]string{true: "false", false: "true"}[want]+"\nsql_filter_enabled: "+map[bool]string{true: "false", false: "true"}[want]+"\napp_secret: from-the-file\n")
+			cfg := loadIn(t, "server_port: 9000\nexplore_enabled: "+map[bool]string{true: "false", false: "true"}[want]+"\nsql_filter_enabled: "+map[bool]string{true: "false", false: "true"}[want]+"\napp_secret: from-the-file\n", true)
 			if cfg.SqlFilterEnabled != want || cfg.ExploreEnabled != want || cfg.ServerPort != 9001 || cfg.AppSecret != "from-the-environment" || cfg.ClickHouse["default"].Password != "from-the-environment" {
 				t.Errorf("SQL_FILTER_ENABLED=%s: %+v", value, cfg)
 			}
