@@ -56,7 +56,8 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 - **Files read general to specific:** the main export first, then other exports, then private helpers in order of
   use.
 - **Module scope holds constants and pure functions only.** State lives in an instance with its owner's lifetime (a
-  host's constructor, an extension's `activate`). Exception: a `WeakMap` memo on immutable values.
+  host's constructor, an extension's `activate`). Exceptions: a `WeakMap` memo on immutable values; a named singleton
+  for what the library allows only once per page (Perspective's wasm engine in `explore-view/perspective.ts`).
 
 ## Extension API
 
