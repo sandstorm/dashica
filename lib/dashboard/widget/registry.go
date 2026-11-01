@@ -40,7 +40,9 @@ type WidgetFactory func() WidgetDefinition
 //
 //   - CategoryChart:     a data/display widget shown in the flat add-widget list.
 //   - CategoryParameter: provides a {name:String} query parameter for OTHER
-//     widgets (Text Input, Checkbox Group); kept out of the add-widget list.
+//     widgets (Text Input, Checkbox Group) — meaningless standing alone in
+//     Explore, so it is kept out of the add-widget list until the query section
+//     can reference parameters.
 //   - CategoryContainer: lays out child widgets (Grid, Collapsible Group) —
 //     also kept out of the flat list.
 //
