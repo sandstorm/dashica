@@ -275,18 +275,17 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
   return html`<span class="d-table__header-title">${title}${buttonElement}</span>`;
 }
 
-const canvasElement = document.createElement('canvas');
-const ctx = canvasElement.getContext('2d');
-
 function calculateSizeOfColumn(rows: RowComponent[], fieldName: string) {
-
-  if (!ctx) {
-    return true;
-  }
+  let ctx: CanvasRenderingContext2D | null = null;
 
   if (rows.length > 0) {
     const cell = rows[0].getCell(fieldName)
     if (!cell) {
+      return true;
+    }
+
+    ctx = cell.getElement().ownerDocument.createElement('canvas').getContext('2d');
+    if (!ctx) {
       return true;
     }
 
