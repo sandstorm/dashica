@@ -1,5 +1,5 @@
 /*
- * The controls every part shares (docs/2026-10-30-styling.md §3.3), all `--control-height` high with one border, so
+ * The controls every part shares (docs/2026-10-30-styling.md), all `--control-height` high with one border, so
  * that they line up in a bar: button, segmented group, field, form field, checkbox, badge, list, spinner, notice, kbd.
  */
 

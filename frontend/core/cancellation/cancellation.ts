@@ -3,8 +3,8 @@ import { EventEmitter, type Event } from '../event-emitter/event-emitter';
 
 /**
  * Whether the result of some work is still wanted. Work that takes a while (a search provider asking the server) gets
- * the token and checks it between steps; whoever asked keeps the `CancellationTokenSource` and cancels it once the
- * result is no longer wanted (the viewer typed on).
+ * the token and checks it between steps; whoever asked keeps the `CancellationTokenSource` and cancels it once it has
+ * moved on (the viewer typed on).
  */
 export interface CancellationToken {
   /** True once cancelled: stop and return what is there (or nothing). */

@@ -1,5 +1,5 @@
 /*
- * The base every element starts from (docs/2026-10-30-styling.md §3.2): no default margins and paddings, border-box,
+ * The base every element starts from (docs/2026-10-30-styling.md): no default margins and paddings, border-box,
  * controls in the page's font, lists and buttons without the browser's styles, `hidden` always hiding.
  */
 *,

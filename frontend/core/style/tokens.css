@@ -1,5 +1,5 @@
 /*
- * The design tokens (docs/2026-10-30-styling.md §3.1): the only place with raw values. Components take colors, spaces,
+ * The design tokens (docs/2026-10-30-styling.md): the only place with raw values. Components take colors, spaces,
  * type sizes, radii, depths and the muted look from here; dark mode redefines the colors only.
  */
 :root {

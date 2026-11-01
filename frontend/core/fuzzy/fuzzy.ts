@@ -25,11 +25,11 @@ export interface FuzzyMatch {
   readonly ranges: readonly (readonly [number, number])[];
 }
 
+/** Bonus of a whole substring, of each character right after the previous one, of a match at the start of the target, at a word start. */
 const SUBSTRING = 10;
 const CONSECUTIVE = 5;
-
-/** Bonus of a match at the start of the target, of a whole substring, of each character right after the previous one, at a word start. */
 const START = 8;
+const WORD_START = 3;
 
 /** At the start, after a non-letter-or-digit, or an upper-case letter after a lower-case one. */
 function isWordStart(target: string, index: number): boolean {
@@ -38,8 +38,6 @@ function isWordStart(target: string, index: number): boolean {
   const char = target[index];
   return !/[\p{L}\p{N}]/u.test(before) || (/\p{Lu}/u.test(char) && /\p{Ll}/u.test(before));
 }
-
-const WORD_START = 3;
 
 /** The characters of `wanted` in order in `text` (the target lowercased), preferring word starts; null if they are not all there. */
 function scattered(wanted: string, text: string, target: string): FuzzyMatch | null {
