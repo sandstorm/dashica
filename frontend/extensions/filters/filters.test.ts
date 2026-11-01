@@ -186,7 +186,6 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-/** The filter button `title`. */
 const button = (title: string) => [...barContainer.querySelectorAll<HTMLButtonElement>('.d-filter-bar__buttons button')].find((buttonElement) => buttonElement.textContent === title)!;
 /** The values shown beside the pressed `...` button `title`. */
 const values = (title: string) => [...barContainer.querySelectorAll<HTMLButtonElement>(`[aria-label="${title}"] .d-filter-button__value`)];

@@ -422,7 +422,6 @@ async function fieldItems(table: FilterableTable, fields: FieldsCache, params: U
 /** Asks for the value in a box of its own (a time's input box) in place of `pickValue`'s. */
 type AskInstead = () => Promise<string | undefined>;
 
-/** A value `pickValue` offers. */
 interface ValueItem extends QuickPickItem {
   readonly value: string;
 }

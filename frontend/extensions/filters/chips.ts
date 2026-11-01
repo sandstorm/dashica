@@ -4,9 +4,8 @@ import { queryKey, type QueryEntries } from '../../hosts/query/query';
 /**
  * The filter chips of a tab's query state (`query.get(FILTERS)`), the `filters` extension's. In the URL, in the order
  * they were added: one `f` per pill, one `sql` per SQL chip (`?f=<key>&sql=status >= 500`), none by default; the data
- * handlers read them as they are. Each `f` and `sql` is one chip, in their order; an empty `f` and an `sql` of only
- * spaces are left out. An `f` is kept as it is, whatever it holds: the server checks its signature. A `?sql=`
- * holding several conditions is one chip.
+ * handlers read them as they are. An empty `f` and an `sql` of only spaces are left out. An `f` is kept as it is,
+ * whatever it holds: the server checks its signature. A `?sql=` holding several conditions is one chip.
  */
 export const FILTERS = queryKey<readonly FilterChip[]>(['f', 'sql'], {
   parse: (url) => [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),

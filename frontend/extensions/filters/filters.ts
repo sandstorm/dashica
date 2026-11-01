@@ -39,7 +39,6 @@ export const filters: Extension = {
           showSqlInputBox(ui, loadSqlEditors, { ...options, completion: conditionCompletion(schemas, filterableTables(page.current?.widgets ?? [])) })
       : undefined;
     subscriptions.push(
-      // what a click on a chart's mark, a table's cell or an Explore view's group row offers to filter by
       widgets.registerDataPointMenuProvider(filterMenuProvider),
       commands.registerCommand(ADD_PILL, (dataUrl: string, field: string, op: FilterOp, value: string) => addPill(query, dataUrl, field, op, value)),
       // what a chart did with the pills: "ignores host = a" (muted), "skipped: …"
