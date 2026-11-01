@@ -19,6 +19,10 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 - **Values and pure functions over gathered state:** things return what they built (`CollectHandlers` returns
   `PageJson`), derived data is a function of those values. No context objects that collect side results, no
   registries looked up by key, no getters with side effects.
+- **Compute, don't copy:** one owner computes a value from its source where it is needed; never copy it into a
+  context or a parameter chain to carry it along. Example: the client computes the effective time range from the URL
+  and `page.json`, and every request carries it, so the server needs no page default.
+- **A parser only reads its input:** defaults, policy and config checks happen where the value is used.
 - **Remove what does not work** rather than polish it. No backwards compatibility, shims or migration notes: the
   workbench is young.
 - **Investigate, don't guess.** Find the root cause (in our code, in the library's source); say plainly what you do
@@ -61,8 +65,13 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 - **Register once, in `activate`;** every registration returns a `Disposable` pushed to `subscriptions`. Declarations
   (commands, query keys, menus) happen there too, never on first use. One disposal verb: `dispose()`.
 - **Enablement belongs to the command,** a menu item's `when` is only its visibility.
-- **Talk to the user through the `ui` host** (`show…Message`, `showInputBox`, `showQuickPick`, `showContextMenu`),
-  never hand-made popovers. Anything that waits on the server shows that it is busy; nothing fails silently.
+- **Producers say what happened, extensions decide what it means:** a host offers a provider point
+  (`registerDecorationProvider`, `registerDataPointMenuProvider`) and the producer (a chart, a table) only reports
+  ("this answer", "these data points were clicked"); it never names a feature's command or concept.
+- **Talk to the user through the `ui` host** (`showInputBox`, `showQuickPick`, `showContextMenu`), never hand-made
+  popovers. Anything that waits on the server shows that it is busy; nothing fails silently.
+- **Errors show where they happen:** a chart's in the chart, a request after a choice in the still-open pick or input
+  box (its message line). There is no notification area.
 - **State:** `globalState` / `workspaceState`, never `localStorage` directly.
 - **Libraries through their documented API** (Plot's `plot.value`, `plot.scale`; htl's `html.fragment`), never their
   rendered DOM or private fields. Where only the library's source says how it behaves, the comment says so.
@@ -72,9 +81,11 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 ## Server (Go)
 
 - **Dependency injection of what a handler needs:** long-lived services and the loaded config come through
-  `rendering.Dependencies` (`deps.Config`, `deps.FilterService`); nothing request-specific goes there. Page-wide
-  values (the page's default time range) come through the page's context at mount. Handlers check the config where
-  it matters, no copied flags.
+  `rendering.Dependencies` (`deps.Config`, `deps.FilterService`); nothing request-specific goes there. Handlers check
+  the config where it matters, no copied flags. A service built from the config does the config-dependent work
+  itself (signing, the connection's default database) instead of callers passing secrets or lookup functions.
+- **Requests carry effective values:** what the client already knows (the time range, including the page's default)
+  is sent, not re-derived on the server.
 - **Logic local to the widget,** decided server side: what a filter means for a chart is the chart's (its table, its
   fields, `FilterAs`), never a page-wide collection of widgets.
 - **Anything from the browser that becomes SQL is signed** (`filters.secret`) or behind a feature flag
@@ -96,6 +107,8 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
 - **Commands out, events back:** changes go in as commands or `set`, `onDid…` events come back. Nobody calls
   `refresh()` on someone else.
 - **Unions discriminate on `kind`.**
+- **Typed values, parsed once at the edge:** a duration is a `time.Duration`, not a string passed through handlers.
+- **No `nil` for "not needed" arguments:** split the function or put it on an object that knows.
 - **Product name in identifiers:** CSS classes start with `d-`, storage keys with `dashica:`.
 
 ## Comments
@@ -133,4 +146,4 @@ Deliberately kept for now; do not copy the pattern.
 - **Extensions call each other's commands** in two places, against "extensions never depend on each other":
   `details.showRecords` (the table hands its ticked rows to Details) and `filters.addSql` (a table cell adds a SQL
   chip). The click to filter (`filters.offer`) is being replaced by the data point menu
-  (`registerDataPointMenuProvider`, D46).
+  (`registerDataPointMenuProvider`).
