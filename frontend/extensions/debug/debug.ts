@@ -144,7 +144,6 @@ export function clickhouseSummaryOf({ headers }: Pick<QueryResult, 'headers'>): 
   return JSON.parse(headers.get('X-Clickhouse-Summary') || 'null');
 }
 
-/** Fills the status bar's item with how `active`'s last query went; a hint without one. */
 function drawStatus(statusElement: HTMLElement, active: RenderedWidget | undefined): void {
   const parts = statusParts(active);
   statusElement.replaceChildren(...parts.map(({ text, tone }) => html`<span class=${`d-debug-status__part d-debug-status__part--${tone}`}>${text}</span>`));

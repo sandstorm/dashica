@@ -156,7 +156,6 @@ class DashboardsMenu {
     this.onDidChangeFavorites();
   }
 
-  /** Stores the favorites in the order of `urls`. */
   #order(urls: readonly string[]): void {
     const favorites = this.#favorites();
     const ordered = urls.flatMap((url) => favorites.filter((favorite) => favorite.url === url));

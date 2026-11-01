@@ -55,7 +55,6 @@ beforeEach(() => {
 
 afterEach(() => document.body.replaceChildren());
 
-/** A table titled `title`. */
 const tableNode = (title = 'Latest requests', dataUrl = '/p/shop/api/1') => ({ type: 'table', props: { title, height: 500 }, dataUrl }) as WidgetNode;
 /** `widget` gives `records`, as a table does on each change of its ticks. */
 const show = (widget: WidgetNode, records: readonly WidgetRecord[]) => commands['details.showRecords']({ widget, records });

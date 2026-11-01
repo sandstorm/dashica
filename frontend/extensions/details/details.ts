@@ -65,7 +65,7 @@ export function recordsSelected(count: number): string {
   return `${count.toLocaleString('en')} ${count === 1 ? 'record' : 'records'} selected`;
 }
 
-/** `record`'s fields, one below the other: a JSON value pretty-printed, a value of several lines as it is. */
+/** `record`'s fields, one below the other. */
 export function drawRecord(record: WidgetRecord): HTMLElement {
   return html`<dl class="d-details__record">
     ${Object.entries(record).map(

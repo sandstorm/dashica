@@ -204,7 +204,6 @@ const find = <T extends HTMLElement>(testId: string) => viewContainer.querySelec
 /** The SQL editor's text element, and its CodeMirror view. */
 const sqlText = () => find<HTMLElement>('explore-view-sql-text');
 const sqlView = () => EditorView.findFromDOM(sqlText().closest<HTMLElement>('.cm-editor')!)!;
-/** The text in the SQL editor. */
 const sqlValue = () => sqlView().state.doc.toString();
 /** Types `text` into the SQL editor, in place of its text. */
 const type = (text: string) => sqlView().dispatch({ changes: { from: 0, to: sqlView().state.doc.length, insert: text } });
