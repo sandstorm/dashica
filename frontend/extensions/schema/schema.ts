@@ -26,20 +26,20 @@ export const schema: Extension = {
     const panel = ui.registerSidePanel('schema', { label: 'Schema', icon: createElement(Database).outerHTML, order: 30 });
     const schemas = new Schemas();
     const connections = page.workbench.connections.map((name) => connectionNode(name, schemas));
-    const onPage: HTMLElement = html`<div class="d-schema__tree"></div>`;
-    const root: HTMLElement = html`<div class="d-schema">
-      ${createView({ id: 'page', title: 'On this page', state: globalState, body: onPage })}
+    const onPageContainer: HTMLElement = html`<div class="d-schema__tree"></div>`;
+    const rootContainer: HTMLElement = html`<div class="d-schema">
+      ${createView({ id: 'page', title: 'On this page', state: globalState, body: onPageContainer })}
       ${createView({
         id: 'all',
         title: 'All connections',
         state: globalState,
-        body: html`<div class="d-schema__tree">${connections.length === 0 ? html`<div class="d-schema__hint">No connections.</div>` : connections.map((c) => c.element)}</div>`,
+        body: html`<div class="d-schema__tree">${connections.length === 0 ? html`<div class="d-schema__hint">No connections.</div>` : connections.map((c) => c.connectionElement)}</div>`,
       })}
     </div>`;
-    panel.bodyContainer.replaceChildren(root);
+    panel.bodyContainer.replaceChildren(rootContainer);
 
     let showComments = globalState.get('showComments', true);
-    const drawComments = () => root.classList.toggle('d-schema--no-comments', !showComments);
+    const drawComments = () => rootContainer.classList.toggle('d-schema--no-comments', !showComments);
     drawComments();
 
     /** The page "On this page" shows; `null` before it showed one. */
@@ -47,7 +47,7 @@ export const schema: Extension = {
     const drawPage = (again = false) => {
       if (!panel.visible || (!again && drawnFor === page.current)) return;
       drawnFor = page.current;
-      onPage.replaceChildren(...drawPageTables(page.workbench.connections, pageTables(page.current), schemas));
+      onPageContainer.replaceChildren(...drawPageTables(page.workbench.connections, pageTables(page.current), schemas));
     };
     drawPage();
     subscriptions.push(
@@ -119,21 +119,21 @@ export function drawPageTables(all: readonly string[], tables: readonly PageTabl
   const shown = all.filter((name) => tables.some((table) => table.connection === name));
   if (shown.length === 0) return [html`<div class="d-schema__hint">No chart of this page reads a table.</div>`];
   return shown.map((name) => {
-    const body: HTMLElement = html`<div class="d-schema__children"><span class="d-spinner"></span></div>`;
+    const bodyContainer: HTMLElement = html`<div class="d-schema__children"><span class="d-spinner"></span></div>`;
     const names = tables.filter((table) => table.connection === name).map((table) => table.table);
     schemas.get(name).then(
       (schema) => {
         const { schema: only, missing } = onlyTables(schema, names);
-        body.replaceChildren(
+        bodyContainer.replaceChildren(
           ...(only.databases.length > 0 ? drawDatabases(only, true) : []),
           ...missing.map((table) => html`<div class="d-schema__hint">${table}: not in the schema.</div>`),
         );
       },
-      (error: unknown) => void body.replaceChildren(errorNotice(error)),
+      (error: unknown) => void bodyContainer.replaceChildren(errorNotice(error)),
     );
     return html`<details class="d-schema__node" data-testid="schema-connection" open>
       <summary class="d-schema__summary">${createElement(Database, { width: 14, height: 14, 'aria-hidden': 'true' })}<span class="d-schema__name">${name}</span></summary>
-      ${body}
+      ${bodyContainer}
     </details>`;
   });
 }
@@ -143,29 +143,29 @@ export function drawPageTables(all: readonly string[], tables: readonly PageTabl
  * and shows its databases. `refresh` draws it again from `schemas` once it was opened, else nothing. A failed answer
  * shows its error in place; the next opening asks again.
  */
-function connectionNode(name: string, schemas: Schemas): { element: HTMLDetailsElement; refresh(): Promise<void> } {
-  const body: HTMLElement = html`<div class="d-schema__children"></div>`;
-  const element: HTMLDetailsElement = html`<details class="d-schema__node" data-testid="schema-connection">
+function connectionNode(name: string, schemas: Schemas): { connectionElement: HTMLDetailsElement; refresh(): Promise<void> } {
+  const bodyContainer: HTMLElement = html`<div class="d-schema__children"></div>`;
+  const connectionElement: HTMLDetailsElement = html`<details class="d-schema__node" data-testid="schema-connection">
     <summary class="d-schema__summary">${createElement(Database, { width: 14, height: 14, 'aria-hidden': 'true' })}<span class="d-schema__name">${name}</span></summary>
-    ${body}
+    ${bodyContainer}
   </details>`;
   /** Drawn (or drawing); `false` until it is opened, again after a failure. */
   let loaded = false;
   const load = () => {
     loaded = true;
-    body.replaceChildren(html`<span class="d-spinner"></span>`);
+    bodyContainer.replaceChildren(html`<span class="d-spinner"></span>`);
     return schemas.get(name).then(
-      (schema) => void body.replaceChildren(...drawDatabases(schema)),
+      (schema) => void bodyContainer.replaceChildren(...drawDatabases(schema)),
       (error: unknown) => {
         loaded = false;
-        body.replaceChildren(errorNotice(error));
+        bodyContainer.replaceChildren(errorNotice(error));
       },
     );
   };
-  element.addEventListener('toggle', () => {
-    if (element.open && !loaded) void load();
+  connectionElement.addEventListener('toggle', () => {
+    if (connectionElement.open && !loaded) void load();
   });
-  return { element, refresh: () => (loaded ? load() : Promise.resolve()) };
+  return { connectionElement, refresh: () => (loaded ? load() : Promise.resolve()) };
 }
 
 /** A failed answer's text as an error notice. */

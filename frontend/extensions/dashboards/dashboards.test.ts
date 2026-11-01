@@ -11,15 +11,15 @@ import { searchEverywhere } from '../search-everywhere/search-everywhere';
 import { dashboards } from './dashboards';
 
 let workbench: Disposable;
-let host: HTMLElement;
+let hostContainer: HTMLElement;
 
 beforeEach(async () => {
   history.replaceState(null, '', '/p/shop');
   vi.stubGlobal('fetch', async (url: string) =>
     new Response(JSON.stringify({ kind: url === '/page.json' ? 'home' : 'dashboard', title: url, filterBar: false, filterButtons: [], widgets: [] })),
   );
-  host = document.body.appendChild(document.createElement('div'));
-  workbench = createWorkbench(host, {
+  hostContainer = document.body.appendChild(document.createElement('div'));
+  workbench = createWorkbench(hostContainer, {
     extensions: [dashboards, dashboardPage, searchEverywhere],
     workbench: {
       explore: false,
@@ -49,9 +49,9 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const menu = () => host.querySelector<HTMLElement>('.d-dashboards-menu')!;
-const link = (title: string) => [...menu().querySelectorAll('a')].find((a) => a.textContent === title)!;
-const titles = (selector: string) => [...menu().querySelectorAll(selector)].map((el) => el.textContent);
+const menu = () => hostContainer.querySelector<HTMLElement>('.d-dashboards-menu')!;
+const link = (title: string) => [...menu().querySelectorAll('a')].find((linkElement) => linkElement.textContent === title)!;
+const titles = (selector: string) => [...menu().querySelectorAll(selector)].map((titleElement) => titleElement.textContent);
 
 describe('dashboards', () => {
   it('lists the groups as views and marks the page shown', () => {
@@ -68,12 +68,12 @@ describe('dashboards', () => {
   });
 
   it('opens a dashboard in a new tab from its menu; the tab bar shows both, the mark follows the tab shown', async () => {
-    const more = [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__more')][1];
-    more.click();
-    [...host.querySelectorAll<HTMLElement>('[role=option]')].find((item) => item.textContent?.includes('Open in new tab'))!.click();
+    const moreButtonElement = [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__more')][1];
+    moreButtonElement.click();
+    [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')].find((itemElement) => itemElement.textContent?.includes('Open in new tab'))!.click();
     await settle();
-    const tabs = () => [...host.querySelectorAll<HTMLElement>('[role=tab]')];
-    expect(tabs().map((tab) => [tab.textContent, tab.getAttribute('aria-selected')])).toEqual([
+    const tabs = () => [...hostContainer.querySelectorAll<HTMLElement>('[role=tab]')];
+    expect(tabs().map((tabElement) => [tabElement.textContent, tabElement.getAttribute('aria-selected')])).toEqual([
       ['/p/shop/page.json', 'false'],
       ['/p/checkout/page.json', 'true'],
     ]);
@@ -83,7 +83,7 @@ describe('dashboards', () => {
     await settle();
     expect(location.pathname).toBe('/p/shop');
     expect(titles('a.d-list__item--active')).toEqual(['Orders']);
-    host.querySelector<HTMLButtonElement>('[aria-label="Close /p/checkout/page.json"]')!.click();
+    hostContainer.querySelector<HTMLButtonElement>('[aria-label="Close /p/checkout/page.json"]')!.click();
     expect(tabs()).toHaveLength(1);
   });
 
@@ -101,25 +101,25 @@ describe('dashboards', () => {
   });
 
   it('keeps a star toggled where it was on screen and focused, though the favorites above it grow or shrink', () => {
-    const panel = menu().parentElement!;
+    const panelContainer = menu().parentElement!;
     const star = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-dashboards-menu__star')].at(-1)!;
     // jsdom lays out nothing: a favorite pushes the entries below it down by one row
     const rowHeight = 24;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-      const rows = [...menu().querySelectorAll('.d-dashboards-menu__entry')];
-      const top = rows.findIndex((row) => row.contains(this)) * rowHeight - panel.scrollTop;
+      const rowElements = [...menu().querySelectorAll('.d-dashboards-menu__entry')];
+      const top = rowElements.findIndex((rowElement) => rowElement.contains(this)) * rowHeight - panelContainer.scrollTop;
       return { top, bottom: top + rowHeight, left: 0, right: 0, width: 0, height: rowHeight, x: 0, y: top, toJSON: () => ({}) };
     });
     star().focus();
     star().click();
-    expect(panel.scrollTop).toBe(rowHeight);
+    expect(panelContainer.scrollTop).toBe(rowHeight);
     expect(document.activeElement).toBe(star());
     star().click();
-    expect(panel.scrollTop).toBe(0);
+    expect(panelContainer.scrollTop).toBe(0);
   });
 
   it('closes the view of a group, and keeps it closed when the menu is drawn anew and for the next visit', async () => {
-    const shop = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-view__toggle')].find((toggle) => toggle.textContent?.includes('Shop'))!;
+    const shop = () => [...menu().querySelectorAll<HTMLButtonElement>('.d-view__toggle')].find((toggleElement) => toggleElement.textContent?.includes('Shop'))!;
     shop().click();
     expect(shop().getAttribute('aria-expanded')).toBe('false');
     link('Checkout').click();
@@ -132,7 +132,7 @@ describe('dashboards', () => {
 
   describe('moving favorites', () => {
     const favorites = () => [...(menu().querySelector('[data-view=favorites]')?.querySelectorAll<HTMLElement>('.d-dashboards-menu__entry') ?? [])];
-    const favoriteTitles = () => favorites().map((row) => row.querySelector('a')!.firstChild!.textContent);
+    const favoriteTitles = () => favorites().map((rowElement) => rowElement.querySelector('a')!.firstChild!.textContent);
     const stored = () => JSON.parse(localStorage.getItem('dashica:global:dashboards:favorites')!).map((f: { title: string }) => f.title);
 
     beforeEach(() => {
@@ -146,7 +146,7 @@ describe('dashboards', () => {
       });
     });
 
-    const grip = (title: string) => favorites().find((row) => row.querySelector('a')!.firstChild!.textContent === title)!.querySelector('.d-dashboards-menu__grip')!;
+    const grip = (title: string) => favorites().find((rowElement) => rowElement.querySelector('a')!.firstChild!.textContent === title)!.querySelector('.d-dashboards-menu__grip')!;
     const pointer = (target: EventTarget, type: string, clientY: number) => target.dispatchEvent(new PointerEvent(type, { clientY, bubbles: true, cancelable: true }));
 
     it('moves a favorite dragged by its grip past the middle of another, and stores the order', () => {
@@ -175,7 +175,7 @@ describe('dashboards', () => {
     });
 
     it('moves a favorite with Alt+ArrowUp / Alt+ArrowDown, its focused part keeping the focus', () => {
-      const linkOf = (title: string) => favorites().find((row) => row.querySelector('a')!.firstChild!.textContent === title)!.querySelector('a')!;
+      const linkOf = (title: string) => favorites().find((rowElement) => rowElement.querySelector('a')!.firstChild!.textContent === title)!.querySelector('a')!;
       expect(linkOf('Checkout').getAttribute('aria-keyshortcuts')).toBe('Alt+ArrowUp Alt+ArrowDown');
       const press = (key: string, altKey = true) =>
         (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key, altKey, bubbles: true, cancelable: true }));
@@ -196,10 +196,10 @@ describe('dashboards', () => {
   });
 
   describe('the start page', () => {
-    const home = () => host.querySelector<HTMLElement>('.d-home-page')!;
-    const homeTitles = (selector: string) => [...home().querySelectorAll(selector)].map((el) => el.textContent);
+    const home = () => hostContainer.querySelector<HTMLElement>('.d-home-page')!;
+    const homeTitles = (selector: string) => [...home().querySelectorAll(selector)].map((titleElement) => titleElement.textContent);
     /** "+" in the tab bar: the start page in a new tab. */
-    const newTab = () => host.querySelector<HTMLButtonElement>('[data-testid=wb-tab-add]')!.click();
+    const newTab = () => hostContainer.querySelector<HTMLButtonElement>('[data-testid=wb-tab-add]')!.click();
 
     it('is what "+" opens: a hint while there are no favorites, then the groups with their dashboards', async () => {
       newTab();
@@ -229,35 +229,35 @@ describe('dashboards', () => {
   });
 
   it('finds the dashboards in search everywhere, with their group', async () => {
-    host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
+    hostContainer.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
     await settle();
-    const options = [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);
+    const options = [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')].map((optionElement) => optionElement.textContent);
     expect(options).toContain('Orders Shop');
     expect(options).toContain('Checkout Shop');
   });
 
   it('ranks the dashboards before the charts in search everywhere, and opens a chart at its place', async () => {
-    host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
-    const field = host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
-    field.value = 'orders';
-    field.dispatchEvent(new Event('input'));
+    hostContainer.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
+    const fieldElement = hostContainer.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+    fieldElement.value = 'orders';
+    fieldElement.dispatchEvent(new Event('input'));
     await settle();
-    const options = [...host.querySelectorAll<HTMLElement>('[role=option]')];
-    expect(options.map((option) => option.textContent)).toEqual(['Orders Shop', 'Checkout › Details › Orders per minute']);
-    options[1].click();
+    const optionElements = [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')];
+    expect(optionElements.map((optionElement) => optionElement.textContent)).toEqual(['Orders Shop', 'Checkout › Details › Orders per minute']);
+    optionElements[1].click();
     await settle();
     expect(location.pathname + location.hash).toBe('/p/checkout#w=3');
   });
 
   it('opens a dashboard picked with Cmd / Ctrl+Enter in search everywhere in a new tab', async () => {
-    host.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
-    const field = host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
-    field.value = 'checkout';
-    field.dispatchEvent(new Event('input'));
+    hostContainer.querySelector<HTMLButtonElement>('[data-testid=wb-rail-button-search]')!.click();
+    const fieldElement = hostContainer.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+    fieldElement.value = 'checkout';
+    fieldElement.dispatchEvent(new Event('input'));
     await settle();
-    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
+    fieldElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }));
     await settle();
-    expect([...host.querySelectorAll('[role=tab]')]).toHaveLength(2);
+    expect([...hostContainer.querySelectorAll('[role=tab]')]).toHaveLength(2);
     expect(location.pathname).toBe('/p/checkout');
   });
 });

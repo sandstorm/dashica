@@ -100,9 +100,9 @@ afterEach(() => {
 
 /** Renders the tab of the page kind `explore` with `hash`, as the page host does. */
 function renderTab(hash: string) {
-  const el = document.body.appendChild(document.createElement('div'));
+  const tabContainer = document.body.appendChild(document.createElement('div'));
   const context: PageContext = { query, hash, onDidChangeHash: new EventEmitter<void>().event, close: () => closed++ };
-  return { el, rendered: renderers.get('explore')!(el, page, context) };
+  return { tabContainer, rendered: renderers.get('explore')!(tabContainer, page, context) };
 }
 
 describe('exploreView', () => {
@@ -133,12 +133,12 @@ describe('exploreView', () => {
   });
 
   it('renders the tab of the kind explore: the view of the hash’s chart, titled after it, with the tab’s query state', async () => {
-    const { el, rendered } = renderTab('#explore=3');
-    expect([...el.children].map((child) => child.className)).toEqual(['d-explore-view__host']);
-    expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: By status');
+    const { tabContainer, rendered } = renderTab('#explore=3');
+    expect([...tabContainer.children].map((childElement) => childElement.className)).toEqual(['d-explore-view__host']);
+    expect(tabContainer.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: By status');
     expect(rendered.title).toBe('Explore: By status');
     rendered.dispose();
-    expect(el.children).toHaveLength(0);
+    expect(tabContainer.children).toHaveLength(0);
   });
 
   it('puts "Explore (from scratch)" and "Explore (from chart…)" into the global menu, the second’s command enabled only with a chart on the shown page', () => {
@@ -176,9 +176,9 @@ describe('exploreView', () => {
   });
 
   it('renders a blank Explore for the hash #explore= alone, titled "Explore", with a connection picker', () => {
-    const { el, rendered } = renderTab('#explore=&connection=logs');
+    const { tabContainer, rendered } = renderTab('#explore=&connection=logs');
     expect(rendered.title).toBe('Explore');
-    expect(el.querySelector<HTMLSelectElement>('[data-testid="explore-view-connection"]')!.value).toBe('logs');
+    expect(tabContainer.querySelector<HTMLSelectElement>('[data-testid="explore-view-connection"]')!.value).toBe('logs');
   });
 
   it('refuses a hash naming a chart the page lacks, which the tab shows as its error', () => {
@@ -186,8 +186,8 @@ describe('exploreView', () => {
   });
 
   it('closes its tab on Close', () => {
-    const { el } = renderTab('#explore=3');
-    el.querySelector<HTMLButtonElement>('[data-testid="explore-view-close"]')!.click();
+    const { tabContainer } = renderTab('#explore=3');
+    tabContainer.querySelector<HTMLButtonElement>('[data-testid="explore-view-close"]')!.click();
     expect(closed).toBe(1);
   });
 });
@@ -227,16 +227,16 @@ describe('confirmReset', () => {
   });
 
   it('asks in a menu below the button, the question its heading, Reset or Cancel, and says yes only to Reset', async () => {
-    const button = document.createElement('button');
+    const buttonElement = document.createElement('button');
     const shown: { items: { label: string; kind?: number }[]; options: { anchor: unknown; menu?: boolean } }[] = [];
-    expect(await confirmReset(pickLabelled('Reset', shown) as never, button)).toBe(true);
+    expect(await confirmReset(pickLabelled('Reset', shown) as never, buttonElement)).toBe(true);
     expect(shown[0].items.map((item) => [item.kind, item.label])).toEqual([
       [QuickPickItemKind.Separator, 'Reset the viewer’s config?'],
       [undefined, 'Reset'],
       [undefined, 'Cancel'],
     ]);
-    expect([shown[0].options.anchor, shown[0].options.menu]).toEqual([button, true]);
-    expect(await confirmReset(pickLabelled('Cancel', shown) as never, button)).toBe(false);
-    expect(await confirmReset(pickLabelled(undefined, shown) as never, button)).toBe(false);
+    expect([shown[0].options.anchor, shown[0].options.menu]).toEqual([buttonElement, true]);
+    expect(await confirmReset(pickLabelled('Cancel', shown) as never, buttonElement)).toBe(false);
+    expect(await confirmReset(pickLabelled(undefined, shown) as never, buttonElement)).toBe(false);
   });
 });

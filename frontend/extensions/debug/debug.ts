@@ -29,8 +29,8 @@ export const debug: Extension = {
     subscriptions.push(panel);
     // its result table's menus (`table/cell`, `table/header`)
     const showMenu = (menuId: string, anchor: MenuAnchor, context: object) => ui.showContextMenu(menuId, { anchor, title: 'Debug', context, args: [context] });
-    const status: HTMLButtonElement = html`<button type="button" class="d-debug-status" data-testid="debug-status" onclick=${() => panel.show()}></button>`;
-    subscriptions.push(ui.registerBarItem('status', status, { alignment: 'left' }));
+    const statusElement: HTMLButtonElement = html`<button type="button" class="d-debug-status" data-testid="debug-status" onclick=${() => panel.show()}></button>`;
+    subscriptions.push(ui.registerBarItem('status', statusElement, { alignment: 'left' }));
 
     /** What the panel shows while visible: the active widget's debug info, followed. */
     let showing: Disposable | undefined;
@@ -47,9 +47,9 @@ export const debug: Extension = {
     const follow = () => {
       following?.dispose();
       const active = widgets.active;
-      const redraw = () => drawStatus(status, active);
+      const redraw = () => drawStatus(statusElement, active);
       following = active && Disposable.from(active.onDidChangeStatus(redraw), active.onDidChangeDecorations(redraw));
-      drawStatus(status, widgets.active);
+      drawStatus(statusElement, widgets.active);
       showPanel();
     };
     follow();
@@ -66,9 +66,9 @@ export const debug: Extension = {
           if (!active) return;
           return page.popOut({
             title: `Debug: ${widgetTitle(active.widget)}`,
-            render: (el) => {
-              const tab: HTMLElement = el.appendChild(html`<div class="d-debug-tab"></div>`);
-              return followDebug(tab, active, showMenu, globalState);
+            render: (viewContainer) => {
+              const tabElement: HTMLElement = viewContainer.appendChild(html`<div class="d-debug-tab"></div>`);
+              return followDebug(tabElement, active, showMenu, globalState);
             },
           });
         },
@@ -80,23 +80,23 @@ export const debug: Extension = {
 };
 
 /**
- * Shows in `el` what `widget` queried (`showDebug`), and asks again when its query answered or failed. While its query
- * runs, `el` keeps what it shows; an aborted query putting back the status asked for asks nothing. Its decorations are
- * drawn anew on each change.
+ * Shows in `debugContainer` what `widget` queried (`showDebug`), and asks again when its query answered or failed.
+ * While its query runs, `debugContainer` keeps what it shows; an aborted query putting back the status asked for asks
+ * nothing. Its decorations are drawn anew on each change.
  */
-export function followDebug(el: HTMLElement, widget: RenderedWidget, showMenu: ShowTableMenu, state: Memento): Disposable {
+export function followDebug(debugContainer: HTMLElement, widget: RenderedWidget, showMenu: ShowTableMenu, state: Memento): Disposable {
   let loading = new AbortController();
   let asked = widget.status;
-  const decorations: HTMLElement = html`<div class="d-debug__decorations"></div>`;
-  const drawDecorations = () => decorations.replaceChildren(decorationList(widget.decorations));
+  const decorationsContainer: HTMLElement = html`<div class="d-debug__decorations"></div>`;
+  const drawDecorations = () => decorationsContainer.replaceChildren(decorationList(widget.decorations));
   drawDecorations();
-  void showDebug(el, widget, decorations, showMenu, state, loading.signal);
+  void showDebug(debugContainer, widget, decorationsContainer, showMenu, state, loading.signal);
   const listening = widget.onDidChangeStatus(() => {
     if (widget.status.kind === 'loading' || widget.status === asked) return;
     loading.abort();
     loading = new AbortController();
     asked = widget.status;
-    void showDebug(el, widget, decorations, showMenu, state, loading.signal);
+    void showDebug(debugContainer, widget, decorationsContainer, showMenu, state, loading.signal);
   });
   const decorating = widget.onDidChangeDecorations(drawDecorations);
   return new Disposable(() => {
@@ -127,11 +127,11 @@ interface DebugInfo {
 }
 
 /**
- * Fills `el` with what `active` queried, as views (their state in `state`), `decorations` (its decorations, drawn by
- * the caller) among them; a failed request shows its error there.
+ * Fills `debugContainer` with what `active` queried, as views (their state in `state`), `decorationsContainer` (its
+ * decorations, drawn by the caller) among them; a failed request shows its error there.
  */
-async function showDebug(el: HTMLElement, active: RenderedWidget, decorations: HTMLElement, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
-  el.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
+async function showDebug(debugContainer: HTMLElement, active: RenderedWidget, decorationsContainer: HTMLElement, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
+  debugContainer.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
   let info: DebugInfo;
   try {
     const response = await fetch(active.url('/debug'), { signal });
@@ -139,17 +139,17 @@ async function showDebug(el: HTMLElement, active: RenderedWidget, decorations: H
     info = await response.json();
   } catch (error) {
     if (signal.aborted) return;
-    el.replaceChildren(html`<div class="d-debug"><div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div></div>`);
+    debugContainer.replaceChildren(html`<div class="d-debug"><div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div></div>`);
     return;
   }
   if (signal.aborted) return;
 
-  const pipeline: HTMLElement = html`<div class="d-debug__block"></div>`;
-  const result: HTMLElement = html`<div class="d-debug__result"></div>`;
-  const view = (id: string, name: string, body: Node, collapsed = false) => createView({ id, title: name, collapsed, state, body: html`<div class="d-debug__content">${body}</div>` });
-  el.replaceChildren(html`<div class="d-debug">
+  const pipelineContainer: HTMLElement = html`<div class="d-debug__block"></div>`;
+  const resultContainer: HTMLElement = html`<div class="d-debug__result"></div>`;
+  const view = (id: string, name: string, bodyElement: Node, collapsed = false) => createView({ id, title: name, collapsed, state, body: html`<div class="d-debug__content">${bodyElement}</div>` });
+  debugContainer.replaceChildren(html`<div class="d-debug">
     ${view('query', 'Query', pre(info.query))}
-    ${view('decorations', 'Decorations', decorations)}
+    ${view('decorations', 'Decorations', decorationsContainer)}
     ${view(
       'stats',
       'Stats',
@@ -165,26 +165,26 @@ async function showDebug(el: HTMLElement, active: RenderedWidget, decorations: H
       'pipeline',
       'Pipeline',
       html`<div class="d-debug__parts">
-        ${pipeline}
+        ${pipelineContainer}
         <h3 class="d-debug__heading">Steps</h3>
         ${pre(info.explainPipelineText)}
       </div>`,
       true,
     )}
     ${view('syntax', 'Syntax', pre(info.explainSyntax), true)}
-    ${view('result', 'Result', result)}
+    ${view('result', 'Result', resultContainer)}
   </div>`);
 
-  if (active.lastResult) result.append(drawTable(active.lastResult, { height: 400 }, { showMenu }));
-  else result.textContent = 'The chart has not queried yet.';
-  await showPipeline(pipeline, info.explainPipeline);
+  if (active.lastResult) resultContainer.append(drawTable(active.lastResult, { height: 400 }, { showMenu }));
+  else resultContainer.textContent = 'The chart has not queried yet.';
+  await showPipeline(pipelineContainer, info.explainPipeline);
 }
 
 /** Fills the status bar's item with how `active`'s last query went; a hint without one. */
-function drawStatus(el: HTMLElement, active: RenderedWidget | undefined): void {
+function drawStatus(statusElement: HTMLElement, active: RenderedWidget | undefined): void {
   const parts = statusParts(active);
-  el.replaceChildren(...parts.map(({ text, tone }) => html`<span class=${`d-debug-status__part d-debug-status__part--${tone}`}>${text}</span>`));
-  el.title = active ? `${active.status.kind === 'error' ? `${active.status.message}\n` : ''}Show Debug` : 'Show Debug';
+  statusElement.replaceChildren(...parts.map(({ text, tone }) => html`<span class=${`d-debug-status__part d-debug-status__part--${tone}`}>${text}</span>`));
+  statusElement.title = active ? `${active.status.kind === 'error' ? `${active.status.message}\n` : ''}Show Debug` : 'Show Debug';
 }
 
 /** One piece of the status bar's item: its text and how it reads (`error` red, `muted`). */
@@ -229,19 +229,19 @@ function pre(text: string): HTMLElement {
 }
 
 /** The pipeline as a graph when ClickHouse gave a DOT graph, else as text; also as text when the graph cannot be drawn. */
-async function showPipeline(el: HTMLElement, pipeline: string): Promise<void> {
+async function showPipeline(pipelineContainer: HTMLElement, pipeline: string): Promise<void> {
   if (!pipeline.trim().startsWith('digraph')) {
-    el.replaceChildren(pre(pipeline));
+    pipelineContainer.replaceChildren(pre(pipeline));
     return;
   }
   try {
-    const svg = (await viz()).renderSVGElement(pipeline);
-    svg.setAttribute('width', '100%');
-    svg.setAttribute('height', 'auto');
-    svg.style.maxWidth = '100%';
-    el.replaceChildren(svg);
+    const svgElement = (await viz()).renderSVGElement(pipeline);
+    svgElement.setAttribute('width', '100%');
+    svgElement.setAttribute('height', 'auto');
+    svgElement.style.maxWidth = '100%';
+    pipelineContainer.replaceChildren(svgElement);
   } catch (error) {
     console.error('Failed to render DOT graph:', error);
-    el.replaceChildren(pre(pipeline));
+    pipelineContainer.replaceChildren(pre(pipeline));
   }
 }

@@ -36,19 +36,19 @@ export const exploreView: Extension = {
     // the schemas the editors complete from, asked once per connection, shared by the Explore tabs
     const schemas = new Schemas();
     subscriptions.push(
-      page.registerPageRenderer('explore', (el, shown, context) => {
+      page.registerPageRenderer('explore', (pageContainer, shown, context) => {
         const id = new URLSearchParams(context.hash.slice(1)).get('explore') ?? '';
         const widget = id === '' ? undefined : findWidget(shown.widgets, id);
         if (id !== '' && (!widget || !('rowsUrl' in widget) || !widget.rowsUrl)) throw new Error(`${shown.title} has no chart ${id} to explore`);
         // an element of its own: as tall as the tab, whatever the page's element around it does with its content
-        const host = el.appendChild(el.ownerDocument.createElement('div'));
-        host.className = 'd-explore-view__host';
-        const view = renderExploreView(host, {
+        const hostContainer = pageContainer.appendChild(pageContainer.ownerDocument.createElement('div'));
+        hostContainer.className = 'd-explore-view__host';
+        const view = renderExploreView(hostContainer, {
           widget: widget as ChartWithRows | undefined,
           connections: page.workbench.connections,
           query: context.query,
           state: globalState,
-          perspective: () => loadPerspective(el.ownerDocument, PERSPECTIVE_URL),
+          perspective: () => loadPerspective(pageContainer.ownerDocument, PERSPECTIVE_URL),
           sqlEditors: () => loadSqlEditors(),
           schema: (connection) => schemas.get(connection),
           hash: () => context.hash,
@@ -56,12 +56,12 @@ export const exploreView: Extension = {
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
           offerFilters: (at, candidates) => widget && offerFiltersOf(commands, widget as ChartWithRows)(at, candidates),
-          confirmReset: (at) => confirmReset(ui, at),
+          confirmReset: (anchorElement) => confirmReset(ui, anchorElement),
         });
         return {
           dispose: () => {
             view.dispose();
-            host.remove();
+            hostContainer.remove();
           },
           title: widget ? `Explore: ${chartTitle(widget)}` : chartTitle(undefined),
         };
@@ -126,11 +126,11 @@ const RESET_CHOICES: readonly ((QuickPickItem & { readonly reset: boolean }) | Q
 ];
 
 /**
- * Asks in a menu below `at` (the view's "Reset"), under the question as its heading, whether to reset the viewer's
- * config; `true` once "Reset" was picked.
+ * Asks in a menu below `anchorElement` (the view's "Reset"), under the question as its heading, whether to reset the
+ * viewer's config; `true` once "Reset" was picked.
  */
-export async function confirmReset(ui: Pick<UiApi, 'showQuickPick'>, at: Element): Promise<boolean> {
-  const picked = await ui.showQuickPick(RESET_CHOICES, { title: 'Reset the view', anchor: at, menu: true });
+export async function confirmReset(ui: Pick<UiApi, 'showQuickPick'>, anchorElement: Element): Promise<boolean> {
+  const picked = await ui.showQuickPick(RESET_CHOICES, { title: 'Reset the view', anchor: anchorElement, menu: true });
   return picked?.reset === true;
 }
 
@@ -156,10 +156,10 @@ let loaded: Promise<Perspective> | undefined;
 /** The Perspective bundle at `url` (and its stylesheet beside it), loaded once for the page. */
 export function loadPerspective(doc: Document, url: string): Promise<Perspective> {
   loaded ??= (async () => {
-    const link = doc.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = url.replace(/\.js$/, '.css');
-    doc.head.append(link);
+    const linkElement = doc.createElement('link');
+    linkElement.rel = 'stylesheet';
+    linkElement.href = url.replace(/\.js$/, '.css');
+    doc.head.append(linkElement);
     const module: { explorePerspective: Perspective } = await import(/* @vite-ignore */ url);
     return module.explorePerspective;
   })();

@@ -11,8 +11,8 @@ import type { QueryResult, WidgetDecoration, WidgetStatus } from '../../hosts/wi
 import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
 import { clickhouseSummaryOf, debug, statusParts } from './debug';
 
-let body: HTMLElement;
-let status: HTMLElement;
+let bodyContainer: HTMLElement;
+let statusElement: HTMLElement;
 let panel: { visible: boolean; shown: number };
 let visibility: EventEmitter<void>;
 let activeChanged: EventEmitter<void>;
@@ -27,7 +27,7 @@ let requested: string[];
 const memento: Memento = { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento;
 
 beforeEach(() => {
-  body = document.body.appendChild(document.createElement('div'));
+  bodyContainer = document.body.appendChild(document.createElement('div'));
   panel = { visible: false, shown: 0 };
   visibility = new EventEmitter<void>();
   activeChanged = new EventEmitter<void>();
@@ -55,7 +55,7 @@ beforeEach(() => {
     globalState: memento,
     ui: {
       registerSidePanel: () => ({
-        bodyContainer: body,
+        bodyContainer,
         get visible() {
           return panel.visible;
         },
@@ -63,8 +63,8 @@ beforeEach(() => {
         show: () => panel.shown++,
         dispose() {},
       }),
-      registerBarItem: (_bar: string, element: HTMLElement) => {
-        status = element;
+      registerBarItem: (_bar: string, itemElement: HTMLElement) => {
+        statusElement = itemElement;
         return { dispose() {} };
       },
       registerMenuItem: (menuId: string, item: { command: string; title?: string }) => menuItems.push({ menuId, command: item.command, title: item.title }),
@@ -137,11 +137,11 @@ describe('debug', () => {
     expect(enabled()).toBe(true);
     commands['debug.popOut']();
     expect(popped.map((view) => view.title)).toEqual(['Debug: Requests']);
-    const tab = document.body.appendChild(document.createElement('div'));
-    const shown = popped[0].render(tab);
+    const tabElement = document.body.appendChild(document.createElement('div'));
+    const shown = popped[0].render(tabElement);
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
-    expect(tab.querySelector('.d-debug-tab pre')!.textContent).toBe('SELECT count() FROM http_logs');
+    expect(tabElement.querySelector('.d-debug-tab pre')!.textContent).toBe('SELECT count() FROM http_logs');
 
     // another active widget: the tab stays with its own, whose next answer it asks for
     const bound = active!;
@@ -163,7 +163,7 @@ describe('debug', () => {
     expect(requested).toEqual([]);
     active = undefined;
     showPanel();
-    expect(body.textContent).toContain('Click a chart to see what it queried.');
+    expect(bodyContainer.textContent).toContain('Click a chart to see what it queried.');
   });
 
   it('shows the active widget’s query and EXPLAIN as views, and follows it', async () => {
@@ -171,10 +171,10 @@ describe('debug', () => {
     showPanel();
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
-    expect([...body.querySelectorAll('.d-view__title')].map((title) => title.textContent)).toEqual(['Query', 'Decorations', 'Stats', 'EXPLAIN plan', 'Pipeline', 'Syntax', 'Result']);
-    expect(body.querySelector('pre')!.textContent).toBe('SELECT count() FROM http_logs');
-    expect(body.textContent).toContain('ReadFromMergeTree (default.http_logs)');
-    expect(body.textContent).toContain('The chart has not queried yet.');
+    expect([...bodyContainer.querySelectorAll('.d-view__title')].map((titleElement) => titleElement.textContent)).toEqual(['Query', 'Decorations', 'Stats', 'EXPLAIN plan', 'Pipeline', 'Syntax', 'Result']);
+    expect(bodyContainer.querySelector('pre')!.textContent).toBe('SELECT count() FROM http_logs');
+    expect(bodyContainer.textContent).toContain('ReadFromMergeTree (default.http_logs)');
+    expect(bodyContainer.textContent).toContain('The chart has not queried yet.');
 
     // its query running again: kept; answered: asked again
     active!.setStatus({ kind: 'loading' });
@@ -203,10 +203,10 @@ describe('debug', () => {
     activate(chart({ kind: 'done', rows: 3, ms: 12 }));
     showPanel();
     await settle();
-    const decorations = () => body.querySelector('.d-debug__decorations')!;
+    const decorations = () => bodyContainer.querySelector('.d-debug__decorations')!;
     expect(decorations().textContent).toBe('None.');
     active!.setDecorations([{ badge: 'ignores host = a', tooltip: 'not applied', muted: true, source: 'filters' }]);
-    expect([...decorations().querySelectorAll('tbody td')].map((cell) => cell.textContent)).toEqual(['filters', 'ignores host = a', 'not applied', 'yes']);
+    expect([...decorations().querySelectorAll('tbody td')].map((cellElement) => cellElement.textContent)).toEqual(['filters', 'ignores host = a', 'not applied', 'yes']);
     expect(requested).toHaveLength(1);
   });
 
@@ -215,13 +215,13 @@ describe('debug', () => {
     showPanel();
     await settle();
     expect(requested).toHaveLength(1);
-    const drawn = body.querySelector('.d-debug');
+    const drawnElement = bodyContainer.querySelector('.d-debug');
     const answered = active!.status;
     active!.setStatus({ kind: 'loading' });
     active!.setStatus(answered);
     await settle();
     expect(requested).toHaveLength(1);
-    expect(body.querySelector('.d-debug')).toBe(drawn);
+    expect(bodyContainer.querySelector('.d-debug')).toBe(drawnElement);
   });
 
   it('shows the server’s error in the panel', async () => {
@@ -229,17 +229,17 @@ describe('debug', () => {
     activate(chart({ kind: 'idle' }));
     showPanel();
     await settle();
-    expect(body.querySelector('.d-notice--error')!.textContent).toContain('does not exist');
+    expect(bodyContainer.querySelector('.d-notice--error')!.textContent).toContain('does not exist');
   });
 
   it('says the active widget’s status in the status bar; a click opens the panel', () => {
-    expect(status.textContent).toBe('No active chart');
+    expect(statusElement.textContent).toBe('No active chart');
     activate(chart({ kind: 'loading' }));
-    expect(status.textContent).toBe('querying…');
+    expect(statusElement.textContent).toBe('querying…');
     active!.setStatus({ kind: 'done', rows: 1234, ms: 87 });
     active!.setDecorations([{ badge: 'ignores host = a', muted: true, source: 'filters' }]);
-    expect([...status.children].map((part) => part.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host = a']);
-    status.click();
+    expect([...statusElement.children].map((partElement) => partElement.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host = a']);
+    statusElement.click();
     expect(panel.shown).toBe(1);
   });
 });

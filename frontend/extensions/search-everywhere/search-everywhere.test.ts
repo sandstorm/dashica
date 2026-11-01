@@ -14,9 +14,9 @@ afterEach(() => {
 });
 
 function setup() {
-  const host = document.body.appendChild(document.createElement('div'));
+  const hostContainer = document.body.appendChild(document.createElement('div'));
   const ran: string[] = [];
-  workbench = createWorkbench(host, {
+  workbench = createWorkbench(hostContainer, {
     extensions: [
       searchEverywhere,
       {
@@ -33,18 +33,18 @@ function setup() {
     ],
     workbench: { menu: [], explore: false, sqlEnabled: false, connections: [] },
   });
-  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input');
-  const options = () => [...host.querySelectorAll<HTMLElement>('[role=option]')].map((option) => option.textContent);
+  const field = () => hostContainer.querySelector<HTMLInputElement>('.d-workbench__quick-pick input');
+  const options = () => [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')].map((optionElement) => optionElement.textContent);
   const press = (init: KeyboardEventInit) => document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
-  return { host, ran, field, options, press };
+  return { hostContainer, ran, field, options, press };
 }
 
 describe('searchEverywhere', () => {
   it('opens with Ctrl+K and from its button first in the left rail (after the global menu’s "…"), whose tooltip names the key', () => {
-    const { host, field, press } = setup();
-    const button = host.querySelector<HTMLButtonElement>('.d-workbench__side--left .d-workbench__rail > .d-workbench__rail-button')!;
-    expect([button.dataset.testid, button.title]).toEqual(['wb-rail-button-search', 'Search everywhere (Ctrl+K)']);
-    button.click();
+    const { hostContainer, field, press } = setup();
+    const buttonElement = hostContainer.querySelector<HTMLButtonElement>('.d-workbench__side--left .d-workbench__rail > .d-workbench__rail-button')!;
+    expect([buttonElement.dataset.testid, buttonElement.title]).toEqual(['wb-rail-button-search', 'Search everywhere (Ctrl+K)']);
+    buttonElement.click();
     expect(document.activeElement).toBe(field());
     field()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(field()).toBeNull();

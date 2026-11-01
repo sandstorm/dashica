@@ -89,26 +89,26 @@ export interface ExploreViewOptions {
   close(): void;
   /** A click on a group row's value (`perspective-click`): offers to filter by it, at the click. */
   offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
-  /** Asks below `at` (the "Reset" button) whether to reset the viewer's config; `true`: reset. */
-  confirmReset(at: Element): Promise<boolean>;
+  /** Asks below `anchorElement` (the "Reset" button) whether to reset the viewer's config; `true`: reset. */
+  confirmReset(anchorElement: Element): Promise<boolean>;
 }
 
 /**
- * Fills `el` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's result",
- * the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor (sql-library's,
- * loaded with the view, completing the names of the connection's schema; open from the start) with the values of its
- * parameters beside it, the notes of the config mapping, and `<perspective-viewer>`
- * with its settings panel open. Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result
- * with the page's query state and the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`)
- * kept and their values listed, both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the
- * listed values into the hash (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's
- * time range and filters do not change, until "Reset to the chart's query". It keeps the config the viewer changed
- * per chart and mode; "Reset" goes back to the chart's once the viewer confirmed it (`confirmReset`). A blank Explore
- * (no `widget`) has a connection picker in its bar in place of the chart's state: its editor starts empty, Run shows
- * the rows of its text on the picked connection (`/rows?connection=…`), and the pick is the hash's `connection`.
+ * Fills `viewContainer` with the Explore view of `options.widget` until disposed: a bar (title, "24 rows of the chart's
+ * result", the chart's Diagnostics, "SQL" closing and opening the editor, "Reset", "Close"), the SQL editor
+ * (sql-library's, loaded with the view, completing the names of the connection's schema; open from the start) with the
+ * values of its parameters beside it, the notes of the config mapping, and `<perspective-viewer>` with its settings
+ * panel open. Following the chart (no `exploreSql` in the tab's hash) it shows the chart's result with the page's query
+ * state and the editor the chart's SQL for that state, its placeholders (`{__from:DateTime64}`) kept and their values
+ * listed, both fetched again on each `onDidRequestRefresh`. Run puts the editor's text and the listed values into the
+ * hash (`exploreSql`, `param_<name>`): the view then shows that query's rows, which the page's time range and filters
+ * do not change, until "Reset to the chart's query". It keeps the config the viewer changed per chart and mode; "Reset"
+ * goes back to the chart's once the viewer confirmed it (`confirmReset`). A blank Explore (no `widget`) has a
+ * connection picker in its bar in place of the chart's state: its editor starts empty, Run shows the rows of its text
+ * on the picked connection (`/rows?connection=…`), and the pick is the hash's `connection`.
  */
-export function renderExploreView(el: HTMLElement, options: ExploreViewOptions): Disposable {
-  const view = new ExploreView(el, options);
+export function renderExploreView(widgetContainer: HTMLElement, options: ExploreViewOptions): Disposable {
+  const view = new ExploreView(widgetContainer, options);
   return new Disposable(() => view.dispose());
 }
 
@@ -167,29 +167,29 @@ export function persistable(config: ViewerConfig): ViewerConfig {
 }
 
 class ExploreView {
-  readonly #status: HTMLElement = html`<span class="d-explore-view__status"></span>`;
-  readonly #ignored: HTMLElement = html`<span class="d-badge" hidden></span>`;
-  readonly #sqlButton: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="true" data-testid="explore-view-sql">SQL</button>`;
+  readonly #statusElement: HTMLElement = html`<span class="d-explore-view__status"></span>`;
+  readonly #ignoredElement: HTMLElement = html`<span class="d-badge" hidden></span>`;
+  readonly #sqlButtonElement: HTMLButtonElement = html`<button class="d-button" type="button" aria-pressed="true" data-testid="explore-view-sql">SQL</button>`;
   /** Where the SQL editor goes once its bundle loaded. */
-  readonly #sqlHost: HTMLElement = html`<div class="d-explore-view__sql-text"><span class="d-spinner"></span></div>`;
+  readonly #sqlHostContainer: HTMLElement = html`<div class="d-explore-view__sql-text"><span class="d-spinner"></span></div>`;
   /** The SQL editor; `undefined` while its bundle loads (or did not), its text meanwhile `#draft`. */
   #editor: SqlEditor | undefined;
   #draft = '';
   /** The connection whose names the editor completes (or is about to). */
   #completing: string | undefined;
-  readonly #sqlNote: HTMLElement = html`<span class="d-explore-view__status" data-testid="explore-view-sql-note"></span>`;
-  readonly #parameters: HTMLElement = html`<dl class="d-explore-view__parameters" aria-label="Parameters" data-testid="explore-view-parameters"></dl>`;
-  readonly #sqlError: HTMLElement = html`<div class="d-notice d-notice--error" hidden></div>`;
-  readonly #sqlPanel: HTMLElement = html`<div class="d-explore-view__sql" data-testid="explore-view-sql-panel"></div>`;
-  readonly #editedNote: HTMLElement = html`<div class="d-notice d-explore-view__edited" hidden data-testid="explore-view-edited"></div>`;
-  readonly #notes: HTMLElement = html`<ul class="d-explore-view__notes" hidden></ul>`;
-  readonly #body: HTMLElement = html`<div class="d-explore-view__body"></div>`;
-  readonly #message: HTMLElement = html`<div class="d-explore-view__message"><span class="d-spinner"></span></div>`;
-  readonly #connection: HTMLSelectElement = html`<select class="d-field" aria-label="Connection" data-testid="explore-view-connection"></select>`;
+  readonly #sqlNoteElement: HTMLElement = html`<span class="d-explore-view__status" data-testid="explore-view-sql-note"></span>`;
+  readonly #parametersContainer: HTMLElement = html`<dl class="d-explore-view__parameters" aria-label="Parameters" data-testid="explore-view-parameters"></dl>`;
+  readonly #sqlErrorElement: HTMLElement = html`<div class="d-notice d-notice--error" hidden></div>`;
+  readonly #sqlPanelContainer: HTMLElement = html`<div class="d-explore-view__sql" data-testid="explore-view-sql-panel"></div>`;
+  readonly #editedNoteElement: HTMLElement = html`<div class="d-notice d-explore-view__edited" hidden data-testid="explore-view-edited"></div>`;
+  readonly #notesContainer: HTMLElement = html`<ul class="d-explore-view__notes" hidden></ul>`;
+  readonly #bodyContainer: HTMLElement = html`<div class="d-explore-view__body"></div>`;
+  readonly #messageElement: HTMLElement = html`<div class="d-explore-view__message"><span class="d-spinner"></span></div>`;
+  readonly #connectionElement: HTMLSelectElement = html`<select class="d-field" aria-label="Connection" data-testid="explore-view-connection"></select>`;
   readonly #listening: Disposable;
   #loading: AbortController | undefined;
   #disposed = false;
-  #shown: { viewer: PerspectiveViewer; table: PerspectiveTable; schema: Record<string, string> } | undefined;
+  #shown: { viewerElement: PerspectiveViewer; table: PerspectiveTable; schema: Record<string, string> } | undefined;
   /** The rows being shown; the next rows wait for it, so one viewer and table come of loads that overlap. */
   #showing: Promise<void> = Promise.resolve();
   /** The viewer was used (a press or a key in it): its config changes are the viewer's own, kept. */
@@ -204,46 +204,46 @@ class ExploreView {
   #pointer = { x: 0, y: 0 };
 
   constructor(
-    private readonly el: HTMLElement,
+    private readonly viewContainer: HTMLElement,
     private readonly options: ExploreViewOptions,
   ) {
     const title = chartTitle(options.widget);
-    const reset: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-reset">Reset</button>`;
-    const close: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-close">Close</button>`;
-    reset.onclick = async () => {
-      if ((await options.confirmReset(reset)) && !this.#disposed) await this.#reset();
+    const resetButtonElement: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-reset">Reset</button>`;
+    const closeButtonElement: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-close">Close</button>`;
+    resetButtonElement.onclick = async () => {
+      if ((await options.confirmReset(resetButtonElement)) && !this.#disposed) await this.#reset();
     };
-    close.onclick = () => options.close();
-    this.#sqlButton.onclick = () => this.#setSqlOpen(!this.#sqlOpen);
-    const run: HTMLButtonElement = html`<button class="d-button d-button--primary" type="button" data-testid="explore-view-run">Run</button>`;
-    run.onclick = () => this.#run();
+    closeButtonElement.onclick = () => options.close();
+    this.#sqlButtonElement.onclick = () => this.#setSqlOpen(!this.#sqlOpen);
+    const runButtonElement: HTMLButtonElement = html`<button class="d-button d-button--primary" type="button" data-testid="explore-view-run">Run</button>`;
+    runButtonElement.onclick = () => this.#run();
     const backToChart = () => options.navigate(withEditedQuery(options.hash(), undefined));
-    const resetSql: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-sql-reset">Reset to the chart’s query</button>`;
-    resetSql.onclick = backToChart;
-    this.#editedNote.append('Edited query: the page’s time range and filters do not apply. ', resetSql);
-    this.#sqlPanel.append(
-      html`<div class="d-explore-view__sql-edit">${this.#sqlHost}${this.#parameters}</div>`,
-      html`<div class="d-explore-view__sql-bar">${run}${this.#sqlNote}</div>`,
-      this.#sqlError,
+    const resetSqlButtonElement: HTMLButtonElement = html`<button class="d-button" type="button" data-testid="explore-view-sql-reset">Reset to the chart’s query</button>`;
+    resetSqlButtonElement.onclick = backToChart;
+    this.#editedNoteElement.append('Edited query: the page’s time range and filters do not apply. ', resetSqlButtonElement);
+    this.#sqlPanelContainer.append(
+      html`<div class="d-explore-view__sql-edit">${this.#sqlHostContainer}${this.#parametersContainer}</div>`,
+      html`<div class="d-explore-view__sql-bar">${runButtonElement}${this.#sqlNoteElement}</div>`,
+      this.#sqlErrorElement,
     );
-    this.#connection.replaceChildren(...options.connections.map((name) => html`<option value=${name}>${name}</option>`));
-    this.#connection.value = pickedConnection(options.hash(), options.connections);
-    this.#connection.onchange = () => options.navigate(withConnection(options.hash(), this.#connection.value));
+    this.#connectionElement.replaceChildren(...options.connections.map((name) => html`<option value=${name}>${name}</option>`));
+    this.#connectionElement.value = pickedConnection(options.hash(), options.connections);
+    this.#connectionElement.onchange = () => options.navigate(withConnection(options.hash(), this.#connectionElement.value));
     void this.#createEditor();
-    el.replaceChildren(html`<div class="d-explore-view" data-testid="explore-view">
+    viewContainer.replaceChildren(html`<div class="d-explore-view" data-testid="explore-view">
       <div class="d-explore-view__bar">
         <h2 class="d-explore-view__title">${options.widget ? `Explore: ${title}` : title}</h2>
-        ${options.widget ? '' : this.#connection}${this.#status}${this.#ignored}
-        <span class="d-explore-view__actions">${this.#sqlButton}${reset}${close}</span>
+        ${options.widget ? '' : this.#connectionElement}${this.#statusElement}${this.#ignoredElement}
+        <span class="d-explore-view__actions">${this.#sqlButtonElement}${resetButtonElement}${closeButtonElement}</span>
       </div>
-      ${this.#sqlPanel}${this.#editedNote}${this.#notes}${this.#body}
+      ${this.#sqlPanelContainer}${this.#editedNoteElement}${this.#notesContainer}${this.#bodyContainer}
     </div>`);
-    this.#body.append(this.#message);
+    this.#bodyContainer.append(this.#messageElement);
     this.#edited = editedQuery(options.hash());
     this.#showEdited();
     // the page's colour scheme, followed while the view is open
-    const scheme = el.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
-    const restyle = () => void this.#shown?.viewer.restore({ theme: this.#theme() });
+    const scheme = viewContainer.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)');
+    const restyle = () => void this.#shown?.viewerElement.restore({ theme: this.#theme() });
     scheme?.addEventListener('change', restyle);
     this.#listening = Disposable.from(
       options.query.onDidRequestRefresh(() => void this.#load()),
@@ -259,8 +259,8 @@ class ExploreView {
     this.#loadingSql?.abort();
     this.#listening.dispose();
     this.#editor?.dispose();
-    void this.#shown?.viewer.delete().then(() => this.#shown?.table.delete());
-    this.el.replaceChildren();
+    void this.#shown?.viewerElement.delete().then(() => this.#shown?.table.delete());
+    this.viewContainer.replaceChildren();
   }
 
   /**
@@ -273,7 +273,7 @@ class ExploreView {
     try {
       editors = await this.options.sqlEditors();
     } catch (error) {
-      this.#sqlHost.replaceChildren(html`<div class="d-notice d-notice--error">The SQL editor did not load: ${error instanceof Error ? error.message : String(error)}</div>`);
+      this.#sqlHostContainer.replaceChildren(html`<div class="d-notice d-notice--error">The SQL editor did not load: ${error instanceof Error ? error.message : String(error)}</div>`);
       return;
     }
     if (this.#disposed) return;
@@ -281,7 +281,7 @@ class ExploreView {
     editor.onDidAccept(() => this.#run());
     editor.onDidChangeValue(() => this.#showSqlNote());
     this.#editor = editor;
-    this.#sqlHost.replaceChildren(editor.fieldElement);
+    this.#sqlHostContainer.replaceChildren(editor.fieldElement);
     this.#complete();
   }
 
@@ -297,7 +297,7 @@ class ExploreView {
 
   /** The connection the editor's SQL runs on: the chart's, else the picked one. */
   #runsOn(): string {
-    return this.options.widget ? (this.options.widget.connection ?? 'default') : this.#connection.value;
+    return this.options.widget ? (this.options.widget.connection ?? 'default') : this.#connectionElement.value;
   }
 
   /** Lets the editor complete the names of `#runsOn`'s schema once it answered (none while it fails), the chart's table the default. */
@@ -322,14 +322,14 @@ class ExploreView {
     this.#loading?.abort();
     const loading = new AbortController();
     this.#loading = loading;
-    this.#status.textContent = 'loading…';
+    this.#statusElement.textContent = 'loading…';
     const { widget, query } = this.options;
     if (widget === undefined && this.#edited === undefined) {
       this.#showMessage('Write a query; Run shows its rows.', 'notice');
       return;
     }
-    if (widget !== undefined && this.#edited === undefined && !this.#sqlPanel.hidden) void this.#loadSql();
-    const url = widget === undefined ? connectionRowsRequest(this.#connection.value, this.#edited!) : rowsRequest(widget.rowsUrl, query.requestParams(), this.#edited);
+    if (widget !== undefined && this.#edited === undefined && !this.#sqlPanelContainer.hidden) void this.#loadSql();
+    const url = widget === undefined ? connectionRowsRequest(this.#connectionElement.value, this.#edited!) : rowsRequest(widget.rowsUrl, query.requestParams(), this.#edited);
     let answer: RowsAnswer;
     try {
       answer = await fetchRows(url, loading.signal);
@@ -339,8 +339,8 @@ class ExploreView {
     }
     if (loading.signal.aborted) return;
     const ignored = answer.diagnostics.ignored ?? [];
-    this.#ignored.hidden = ignored.length === 0;
-    this.#ignored.textContent = `ignores ${ignored.join(', ')}`;
+    this.#ignoredElement.hidden = ignored.length === 0;
+    this.#ignoredElement.textContent = `ignores ${ignored.join(', ')}`;
     if (!answer.arrow) {
       this.#showMessage(`skipped: ${answer.diagnostics.skipped ?? 'no rows'}`, 'notice');
       return;
@@ -348,7 +348,7 @@ class ExploreView {
     try {
       await this.#show(answer.arrow, loading.signal);
       if (loading.signal.aborted || !this.#shown) return;
-      this.#status.textContent = describeRows(answer, await this.#shown.table.size());
+      this.#statusElement.textContent = describeRows(answer, await this.#shown.table.size());
     } catch (error) {
       if (!loading.signal.aborted) this.#showMessage(error, 'error');
     }
@@ -373,7 +373,7 @@ class ExploreView {
         return;
       } catch {
         // other columns than before: a new table under the viewer's config
-        const config = persistable(await this.#shown.viewer.save());
+        const config = persistable(await this.#shown.viewerElement.save());
         const old = this.#shown.table;
         const table = await (await (await this.options.perspective()).worker()).table(arrow);
         const schema = await table.schema();
@@ -382,7 +382,7 @@ class ExploreView {
           return;
         }
         this.#shown = { ...this.#shown, table, schema };
-        await this.#shown.viewer.load(table);
+        await this.#shown.viewerElement.load(table);
         await this.#restore(config);
         await old.delete();
         return;
@@ -395,15 +395,15 @@ class ExploreView {
       await table.delete();
       return;
     }
-    const viewer = perspective.createViewer(this.el.ownerDocument);
-    viewer.classList.add('d-explore-view__viewer');
-    this.#shown = { viewer, table, schema };
-    this.#message.remove();
-    this.#body.append(viewer);
-    this.#listen(viewer);
-    await viewer.load(table);
+    const viewerElement = perspective.createViewer(this.viewContainer.ownerDocument);
+    viewerElement.classList.add('d-explore-view__viewer');
+    this.#shown = { viewerElement, table, schema };
+    this.#messageElement.remove();
+    this.#bodyContainer.append(viewerElement);
+    this.#listen(viewerElement);
+    await viewerElement.load(table);
     await this.#restore(this.options.state.get<ViewerConfig>(stateKey(this.options.widget, this.#edited !== undefined)));
-    await viewer.toggleConfig(true);
+    await viewerElement.toggleConfig(true);
   }
 
   /**
@@ -420,12 +420,12 @@ class ExploreView {
       chartSql = await fetchSql(sqlRequest(this.options.widget.dataUrl, this.options.query.requestParams()), loading.signal);
     } catch (error) {
       if (loading.signal.aborted) return;
-      this.#sqlError.hidden = false;
-      this.#sqlError.textContent = error instanceof Error ? error.message : String(error);
+      this.#sqlErrorElement.hidden = false;
+      this.#sqlErrorElement.textContent = error instanceof Error ? error.message : String(error);
       return;
     }
     if (loading.signal.aborted || this.#edited !== undefined) return;
-    this.#sqlError.hidden = true;
+    this.#sqlErrorElement.hidden = true;
     const draft = this.#text !== (this.#chartSql?.sql ?? '') && this.#text !== '';
     this.#chartSql = chartSql;
     if (!draft) this.#text = chartSql.sql;
@@ -440,10 +440,10 @@ class ExploreView {
 
   /** Shows the editor while it is open; on showing, the chart's SQL. */
   #showSqlPanel(): void {
-    const wasHidden = this.#sqlPanel.hidden;
-    this.#sqlButton.setAttribute('aria-pressed', String(this.#sqlOpen));
-    this.#sqlPanel.hidden = !this.#sqlOpen;
-    if (wasHidden && !this.#sqlPanel.hidden && this.#edited === undefined) void this.#loadSql();
+    const wasHidden = this.#sqlPanelContainer.hidden;
+    this.#sqlButtonElement.setAttribute('aria-pressed', String(this.#sqlOpen));
+    this.#sqlPanelContainer.hidden = !this.#sqlOpen;
+    if (wasHidden && !this.#sqlPanelContainer.hidden && this.#edited === undefined) void this.#loadSql();
   }
 
   /**
@@ -464,8 +464,8 @@ class ExploreView {
   /** Lists `#shownParameters` beside the editor by name, `{name}` and its value; hidden without any. */
   #showParameters(): void {
     const entries = Object.entries(this.#shownParameters()).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    this.#parameters.replaceChildren(...entries.map(([name, value]) => html.fragment`<dt><code>{${name}}</code></dt><dd>${value}</dd>`));
-    this.#parameters.hidden = entries.length === 0;
+    this.#parametersContainer.replaceChildren(...entries.map(([name, value]) => html.fragment`<dt><code>{${name}}</code></dt><dd>${value}</dd>`));
+    this.#parametersContainer.hidden = entries.length === 0;
   }
 
   /**
@@ -474,7 +474,7 @@ class ExploreView {
    */
   #showEdited(): void {
     const edited = this.#edited !== undefined;
-    this.#editedNote.hidden = !edited || !this.options.widget;
+    this.#editedNoteElement.hidden = !edited || !this.options.widget;
     if (edited) {
       this.#text = this.#edited!.sql;
       this.#setSqlOpen(true);
@@ -486,7 +486,7 @@ class ExploreView {
   /** "not run" while the editor's text is not the SQL whose rows are shown. */
   #showSqlNote(): void {
     const shown = this.#edited?.sql ?? this.#chartSql?.sql;
-    this.#sqlNote.textContent = shown !== undefined && this.#text !== shown ? 'not run' : '';
+    this.#sqlNoteElement.textContent = shown !== undefined && this.#text !== shown ? 'not run' : '';
   }
 
   /**
@@ -494,7 +494,7 @@ class ExploreView {
    * from or to the chart's result.
    */
   #hashChanged(): void {
-    this.#connection.value = pickedConnection(this.options.hash(), this.options.connections);
+    this.#connectionElement.value = pickedConnection(this.options.hash(), this.options.connections);
     if (this.#completing !== this.#runsOn()) this.#complete();
     const edited = editedQuery(this.options.hash());
     const otherRows = (edited === undefined) !== (this.#edited === undefined);
@@ -510,9 +510,9 @@ class ExploreView {
     this.#loading?.abort();
     // after the rows being shown, so that no viewer of the other rows stays
     this.#showing = this.#showing.then(() => this.#dropViewer());
-    this.#body.replaceChildren(this.#message);
-    this.#message.className = 'd-explore-view__message';
-    this.#message.replaceChildren(html`<span class="d-spinner"></span>`);
+    this.#bodyContainer.replaceChildren(this.#messageElement);
+    this.#messageElement.className = 'd-explore-view__message';
+    this.#messageElement.replaceChildren(html`<span class="d-spinner"></span>`);
     void this.#load();
   }
 
@@ -522,14 +522,14 @@ class ExploreView {
     const notes = [...initial.notes];
     if (saved) {
       try {
-        await this.#shown!.viewer.restore({ ...saved, theme: this.#theme() });
+        await this.#shown!.viewerElement.restore({ ...saved, theme: this.#theme() });
         this.#showNotes(notes);
         return;
       } catch (error) {
         notes.push(`the kept view does not fit these rows (${error instanceof Error ? error.message : String(error)}); shown as the chart`);
       }
     }
-    await this.#shown!.viewer.restore({ ...initial.config, theme: this.#theme() });
+    await this.#shown!.viewerElement.restore({ ...initial.config, theme: this.#theme() });
     this.#showNotes(notes);
   }
 
@@ -538,7 +538,7 @@ class ExploreView {
    * viewer's config documents `theme`; both themes' stylesheets are loaded with Perspective (perspective.ts).
    */
   #theme(): string {
-    return this.el.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'Pro Dark' : 'Pro Light';
+    return this.viewContainer.ownerDocument.defaultView?.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'Pro Dark' : 'Pro Light';
   }
 
   /** "Reset": the chart's config, the kept one forgotten. */
@@ -546,7 +546,7 @@ class ExploreView {
     if (!this.#shown) return;
     this.#touched = false;
     await this.options.state.update(stateKey(this.options.widget, this.#edited !== undefined), undefined);
-    await this.#shown.viewer.reset(true);
+    await this.#shown.viewerElement.reset(true);
     await this.#restore(undefined);
   }
 
@@ -554,19 +554,19 @@ class ExploreView {
     return initialView(this.options.widget, { kind: this.#edited !== undefined ? 'edited' : 'result', columns: Object.keys(this.#shown?.schema ?? {}) });
   }
 
-  #listen(viewer: PerspectiveViewer): void {
+  #listen(viewerElement: PerspectiveViewer): void {
     const touch = () => (this.#touched = true);
-    viewer.addEventListener('keydown', touch);
-    viewer.addEventListener('pointerdown', (event: PointerEvent) => {
+    viewerElement.addEventListener('keydown', touch);
+    viewerElement.addEventListener('pointerdown', (event: PointerEvent) => {
       touch();
       this.#pointer = { x: event.clientX, y: event.clientY };
     });
-    viewer.addEventListener('perspective-config-update', (event: Event) => {
+    viewerElement.addEventListener('perspective-config-update', (event: Event) => {
       if (!this.#touched) return;
       const { getConfig } = (event as CustomEvent<{ getConfig(): ViewerConfig }>).detail;
       void this.options.state.update(stateKey(this.options.widget, this.#edited !== undefined), persistable(getConfig()));
     });
-    viewer.addEventListener('perspective-click', (event: Event) => {
+    viewerElement.addEventListener('perspective-click', (event: Event) => {
       const candidate = this.#clicked((event as CustomEvent<{ config?: ViewerConfig }>).detail);
       if (candidate) this.options.offerFilters(this.#pointer, [candidate]);
     });
@@ -589,25 +589,25 @@ class ExploreView {
   }
 
   #showNotes(notes: readonly string[]): void {
-    this.#notes.replaceChildren(...notes.map((note) => html`<li>${note}</li>`));
-    this.#notes.hidden = notes.length === 0;
+    this.#notesContainer.replaceChildren(...notes.map((note) => html`<li>${note}</li>`));
+    this.#notesContainer.hidden = notes.length === 0;
   }
 
   /** Shows `message` in place of the viewer, which goes; the next rows bring a new one. */
   #showMessage(message: unknown, kind: 'error' | 'notice'): void {
-    this.#status.textContent = '';
+    this.#statusElement.textContent = '';
     this.#dropViewer();
-    this.#message.className = kind === 'error' ? 'd-notice d-notice--error' : 'd-notice';
-    this.#message.textContent = message instanceof Error ? message.message : String(message);
-    this.#body.replaceChildren(this.#message);
+    this.#messageElement.className = kind === 'error' ? 'd-notice d-notice--error' : 'd-notice';
+    this.#messageElement.textContent = message instanceof Error ? message.message : String(message);
+    this.#bodyContainer.replaceChildren(this.#messageElement);
   }
 
   /** Takes away the viewer and its table, if one is shown. */
   #dropViewer(): void {
     if (!this.#shown) return;
-    const { viewer, table } = this.#shown;
+    const { viewerElement, table } = this.#shown;
     this.#shown = undefined;
-    void viewer.delete().then(() => table.delete());
-    viewer.remove();
+    void viewerElement.delete().then(() => table.delete());
+    viewerElement.remove();
   }
 }

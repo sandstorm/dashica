@@ -19,30 +19,30 @@ export const refresh: Extension = {
   },
   activate({ ui, query, page, commands, subscriptions }) {
     subscriptions.push(query.declare(REFRESH));
-    const button: HTMLButtonElement = html`<button
+    const buttonElement: HTMLButtonElement = html`<button
       type="button"
       class="d-button d-button--icon d-segmented__item"
       title="Refresh"
       aria-label="Refresh">${createElement(RefreshCw, { width: 16, height: 16 })}</button>`;
-    const interval: HTMLSelectElement = html`<select
+    const intervalElement: HTMLSelectElement = html`<select
       class="d-field d-segmented__item"
       aria-label="Auto refresh"></select>`;
-    button.addEventListener('click', () => query.refresh());
-    const timer = autoRefresh(query, page, button.ownerDocument);
-    interval.addEventListener('change', () => timer.set(interval.value === '' ? undefined : Number(interval.value)));
+    buttonElement.addEventListener('click', () => query.refresh());
+    const timer = autoRefresh(query, page, buttonElement.ownerDocument);
+    intervalElement.addEventListener('change', () => timer.set(intervalElement.value === '' ? undefined : Number(intervalElement.value)));
     const show = () => {
       const shown = query.get(REFRESH);
       const options = INTERVALS.map((option) => ({ label: option.label, value: String(option.seconds ?? '') }));
       // an interval the URL has (`?refresh=45`), though none offered
       if (shown !== undefined && !INTERVALS.some((option) => option.seconds === shown)) options.push({ label: `${shown}s`, value: String(shown) });
-      interval.replaceChildren(...options.map((option) => html`<option value=${option.value}>${option.label}</option>`));
-      interval.value = String(shown ?? '');
+      intervalElement.replaceChildren(...options.map((option) => html`<option value=${option.value}>${option.label}</option>`));
+      intervalElement.value = String(shown ?? '');
     };
     show();
     subscriptions.push(timer, query.onDidChange(REFRESH, show));
     subscriptions.push(commands.registerCommand('refresh.now', () => query.refresh()));
-    const item = html`<div class="d-segmented">${button}${interval}</div>`;
-    subscriptions.push(ui.registerBarItem('top', item, { alignment: 'right', priority: 20 }));
+    const itemElement = html`<div class="d-segmented">${buttonElement}${intervalElement}</div>`;
+    subscriptions.push(ui.registerBarItem('top', itemElement, { alignment: 'right', priority: 20 }));
   },
 };
 

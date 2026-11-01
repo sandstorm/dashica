@@ -71,10 +71,10 @@ describe('showSqlInputBox', () => {
     const asked: InputBoxOptions[] = [];
     const ui = { showInputBox: async (options: InputBoxOptions) => (asked.push(options), options.field!.value) };
     const completion: SqlCompletion = { schema: { default: { http_logs: ['host'] } }, defaultSchema: 'default' };
-    const anchor = document.createElement('button');
-    const answer = await showSqlInputBox(ui, editors, { title: 'SQL condition', prompt: 'p', value: 'a = 1', anchor, completion: Promise.resolve(completion) });
+    const anchorElement = document.createElement('button');
+    const answer = await showSqlInputBox(ui, editors, { title: 'SQL condition', prompt: 'p', value: 'a = 1', anchor: anchorElement, completion: Promise.resolve(completion) });
     expect(answer).toBe('a = 1');
-    expect(asked).toEqual([expect.objectContaining({ title: 'SQL condition', prompt: 'p', anchor, field: made.at(-1) })]);
+    expect(asked).toEqual([expect.objectContaining({ title: 'SQL condition', prompt: 'p', anchor: anchorElement, field: made.at(-1) })]);
     const editor = made.at(-1)!;
     expect(editor.inputElement.getAttribute('aria-label')).toBe('SQL condition');
     expect(editor.setCompletion).toHaveBeenCalledWith(completion);

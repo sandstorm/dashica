@@ -27,8 +27,8 @@ export const dashboards: Extension = {
     const menu = new DashboardsMenu(panel.bodyContainer, context, () => favoritesChanged.fire());
     menu.render();
     subscriptions.push(
-      page.registerPageRenderer('home', (el) => {
-        const draw = () => el.replaceChildren(homePage(page.workbench.menu, favoritesOf(context.globalState)));
+      page.registerPageRenderer('home', (pageContainer) => {
+        const draw = () => pageContainer.replaceChildren(homePage(page.workbench.menu, favoritesOf(context.globalState)));
         draw();
         return favoritesChanged.event(draw);
       }),
@@ -68,7 +68,7 @@ export const dashboards: Extension = {
  */
 class DashboardsMenu {
   constructor(
-    private readonly el: HTMLElement,
+    private readonly menuContainer: HTMLElement,
     private readonly context: ExtensionContext,
     /** Called when the viewer changed the favorites (toggled or moved one). */
     private readonly onDidChangeFavorites: () => void,
@@ -78,7 +78,7 @@ class DashboardsMenu {
     const { menu } = this.context.page.workbench;
     const favorites = this.#favorites();
     const groupOf = (url: string) => menu.find((group) => group.entries.some((entry) => entry.url === url));
-    const groups = menu.map((group) =>
+    const groupElements = menu.map((group) =>
       this.#view(`group.${group.title}`, group.title, group.entries.map((entry) => this.#entry(group.title, entry, favorites))),
     );
     const favoriteView =
@@ -89,16 +89,16 @@ class DashboardsMenu {
             'Favorites',
             favorites.map((favorite) => this.#favorite(favorite, favorites, groupOf(favorite.url)?.title)),
           );
-    this.el.replaceChildren(html`<div class="d-dashboards-menu">${favoriteView}${groups}</div>`);
+    this.menuContainer.replaceChildren(html`<div class="d-dashboards-menu">${favoriteView}${groupElements}</div>`);
   }
 
-  #view(id: string, title: string, entries: readonly HTMLElement[]): HTMLElement {
+  #view(id: string, title: string, entryElements: readonly HTMLElement[]): HTMLElement {
     return createView({
       id,
       title,
-      description: String(entries.length),
+      description: String(entryElements.length),
       state: this.context.globalState,
-      body: html`<ul class="d-list d-dashboards-menu__entries">${entries}</ul>`,
+      body: html`<ul class="d-list d-dashboards-menu__entries">${entryElements}</ul>`,
     });
   }
 
@@ -126,18 +126,18 @@ class DashboardsMenu {
 
   /** An entry of "Favorites": its grip in front, Alt+ArrowUp / Alt+ArrowDown on any of its parts move it. */
   #favorite(entry: MenuGroupEntry, favorites: readonly MenuGroupEntry[], group?: string): HTMLElement {
-    const row = this.#entry('Favorites', entry, favorites, group);
-    const grip = html`<span class="d-dashboards-menu__grip" aria-hidden="true" title="Drag to move (or Alt+↑ / Alt+↓)"
-      onpointerdown=${(event: PointerEvent) => this.#drag(event, row)}>${createElement(GripVertical, { width: 14, height: 14 })}</span>`;
-    row.prepend(grip);
-    row.querySelector('a')!.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
-    row.addEventListener('keydown', (event) => {
+    const rowElement = this.#entry('Favorites', entry, favorites, group);
+    const gripElement = html`<span class="d-dashboards-menu__grip" aria-hidden="true" title="Drag to move (or Alt+↑ / Alt+↓)"
+      onpointerdown=${(event: PointerEvent) => this.#drag(event, rowElement)}>${createElement(GripVertical, { width: 14, height: 14 })}</span>`;
+    rowElement.prepend(gripElement);
+    rowElement.querySelector('a')!.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
+    rowElement.addEventListener('keydown', (event) => {
       const step = ({ ArrowUp: -1, ArrowDown: 1 } as Record<string, number>)[event.key];
       if (step === undefined || !event.altKey) return;
       event.preventDefault();
       this.#moveFromKeyboard(entry.url, step, event.target as HTMLElement);
     });
-    return row;
+    return rowElement;
   }
 
   #link(entry: MenuGroupEntry, group?: string): HTMLElement {
@@ -163,60 +163,60 @@ class DashboardsMenu {
     this.#store(ordered);
   }
 
-  /** Toggles `entry` with its `star`, which then stays where it was on screen and keeps the focus. */
-  #toggleFavorite(entry: MenuGroupEntry, star: HTMLElement): void {
+  /** Toggles `entry` with its `starElement`, which then stays where it was on screen and keeps the focus. */
+  #toggleFavorite(entry: MenuGroupEntry, starElement: HTMLElement): void {
     const favorites = this.#favorites();
     const kept = favorites.filter((favorite) => favorite.url !== entry.url);
     this.#store(kept.length < favorites.length ? kept : [...favorites, entry]);
-    const top = star.getBoundingClientRect().top;
-    const hadFocus = document.activeElement === star;
+    const top = starElement.getBoundingClientRect().top;
+    const hadFocus = document.activeElement === starElement;
     this.render();
-    const again = [...this.el.querySelectorAll<HTMLElement>('.d-dashboards-menu__star')].find((el) => el.dataset.key === star.dataset.key);
-    if (!again) return;
-    this.el.scrollTop += again.getBoundingClientRect().top - top;
-    if (hadFocus) again.focus();
+    const redrawnStarElement = [...this.menuContainer.querySelectorAll<HTMLElement>('.d-dashboards-menu__star')].find((otherStarElement) => otherStarElement.dataset.key === starElement.dataset.key);
+    if (!redrawnStarElement) return;
+    this.menuContainer.scrollTop += redrawnStarElement.getBoundingClientRect().top - top;
+    if (hadFocus) redrawnStarElement.focus();
   }
 
-  /** Moves the favorite `url` by `step` places; the part of it that had the focus (`focused`) keeps it. */
-  #moveFromKeyboard(url: string, step: number, focused: HTMLElement): void {
+  /** Moves the favorite `url` by `step` places; the part of it that had the focus (`focusedElement`) keeps it. */
+  #moveFromKeyboard(url: string, step: number, focusedElement: HTMLElement): void {
     const urls = this.#favorites().map((favorite) => favorite.url);
     const from = urls.indexOf(url);
     const to = Math.min(urls.length - 1, Math.max(0, from + step));
     if (from === to) return;
-    const part = [...(focused.closest('li')?.children ?? [])].indexOf(focused);
+    const part = [...(focusedElement.closest('li')?.children ?? [])].indexOf(focusedElement);
     this.#order(moved(urls, from, to));
     this.render();
-    const row = [...this.el.querySelectorAll<HTMLElement>('.d-dashboards-menu__grip')].map((grip) => grip.parentElement!).find((li) => li.dataset.url === url);
-    (row?.children[part] as HTMLElement | undefined)?.focus();
+    const rowElement = [...this.menuContainer.querySelectorAll<HTMLElement>('.d-dashboards-menu__grip')].map((gripElement) => gripElement.parentElement!).find((listItemElement) => listItemElement.dataset.url === url);
+    (rowElement?.children[part] as HTMLElement | undefined)?.focus();
   }
 
   /**
-   * Drags the favorite `row` from its grip (`event`, the main button): it moves in the list as the pointer passes the
-   * middle of another favorite; releasing stores the order, Escape or a cancelled pointer puts it back.
+   * Drags the favorite `rowElement` from its grip (`event`, the main button): it moves in the list as the pointer
+   * passes the middle of another favorite; releasing stores the order, Escape or a cancelled pointer puts it back.
    */
-  #drag(event: PointerEvent, row: HTMLElement): void {
+  #drag(event: PointerEvent, rowElement: HTMLElement): void {
     if (event.button !== 0) return;
     event.preventDefault();
-    const list = row.parentElement!;
-    const doc = row.ownerDocument;
+    const listContainer = rowElement.parentElement!;
+    const doc = rowElement.ownerDocument;
     const move = (e: PointerEvent) => {
-      const others = [...list.children].filter((other) => other !== row);
-      const next = others.find((other) => {
-        const box = other.getBoundingClientRect();
+      const otherElements = [...listContainer.children].filter((otherElement) => otherElement !== rowElement);
+      const nextElement = otherElements.find((otherElement) => {
+        const box = otherElement.getBoundingClientRect();
         return e.clientY < box.top + box.height / 2;
       });
-      if (row.nextElementSibling !== (next ?? null)) list.insertBefore(row, next ?? null);
+      if (rowElement.nextElementSibling !== (nextElement ?? null)) listContainer.insertBefore(rowElement, nextElement ?? null);
     };
     const stop = () => {
       doc.removeEventListener('pointermove', move);
       doc.removeEventListener('pointerup', drop);
       doc.removeEventListener('pointercancel', cancel);
       doc.removeEventListener('keydown', onkeydown, true);
-      row.classList.remove('d-dashboards-menu__entry--dragged');
+      rowElement.classList.remove('d-dashboards-menu__entry--dragged');
     };
     const drop = () => {
       stop();
-      this.#order([...list.children].map((li) => (li as HTMLElement).dataset.url!));
+      this.#order([...listContainer.children].map((listItemElement) => (listItemElement as HTMLElement).dataset.url!));
       this.render();
     };
     const cancel = () => {
@@ -229,7 +229,7 @@ class DashboardsMenu {
       e.stopPropagation();
       cancel();
     };
-    row.classList.add('d-dashboards-menu__entry--dragged');
+    rowElement.classList.add('d-dashboards-menu__entry--dragged');
     doc.addEventListener('pointermove', move);
     doc.addEventListener('pointerup', drop);
     doc.addEventListener('pointercancel', cancel);

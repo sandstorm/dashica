@@ -63,7 +63,7 @@ export const filters: Extension = {
     let bar: Disposable | undefined;
     const showBar = () => {
       const wanted = page.current?.filterBar === true && filterBar.wanted;
-      if (wanted && !bar) bar = ui.registerBarItem('filter', filterBar.el, { alignment: 'left' });
+      if (wanted && !bar) bar = ui.registerBarItem('filter', filterBar.filterBarContainer, { alignment: 'left' });
       if (!wanted && bar) {
         bar.dispose();
         bar = undefined;
@@ -130,17 +130,18 @@ async function fetchButtonPill(url: string, value: string): Promise<Pill> {
 }
 
 /**
- * The filter bar's content (`el`): `chips`, "Add filter" for the page's filterable tables (and, with `askSql`, a SQL
- * condition) and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only with `askSql`.
+ * The filter bar's content (`filterBarContainer`): `chips`, "Add filter" for the page's filterable tables (and, with
+ * `askSql`, a SQL condition) and the page's buttons (`setButtons`); `show` draws them again. A SQL chip is edited only
+ * with `askSql`.
  */
 class FilterBar {
-  readonly #chips: HTMLElement = html`<div class="d-filter-bar__chips" hidden></div>`;
-  readonly #buttons: HTMLElement = html`<div class="d-filter-bar__buttons" hidden></div>`;
-  readonly #add: HTMLButtonElement = html`<button
+  readonly #chipsContainer: HTMLElement = html`<div class="d-filter-bar__chips" hidden></div>`;
+  readonly #buttonsContainer: HTMLElement = html`<div class="d-filter-bar__buttons" hidden></div>`;
+  readonly #addButtonElement: HTMLButtonElement = html`<button
     type="button"
     class="d-button d-button--ghost"
     title="Add a filter on a column or field of the page's tables">${createElement(ListFilterPlus, { width: 16, height: 16 })}Add filter</button>`;
-  readonly el: HTMLElement = html`<div class="d-filter-bar">${this.#chips}${this.#buttons}</div>`;
+  readonly filterBarContainer: HTMLElement = html`<div class="d-filter-bar">${this.#chipsContainer}${this.#buttonsContainer}</div>`;
   #pageButtons: readonly FilterButton[] = [];
   #tables: readonly FilterableTable[] = [];
 
@@ -154,8 +155,8 @@ class FilterBar {
     /** The charts' `/fields`, by which "Add filter" and a pill's edit know a field's type. */
     private readonly fields: FieldsCache,
   ) {
-    if (askSql) this.#add.title = "Add a filter on a column or field of the page's tables, or a SQL condition";
-    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.fields, this.askSql));
+    if (askSql) this.#addButtonElement.title = "Add a filter on a column or field of the page's tables, or a SQL condition";
+    this.#addButtonElement.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#addButtonElement, this.fields, this.askSql));
   }
 
   /** Whether "Add filter" has something to offer: a table the page's charts read, or a SQL condition. */
@@ -180,34 +181,34 @@ class FilterBar {
     const chips = this.query.get(FILTERS);
     // a button's pill shows as the button pressed, not as a chip
     const ofButton = chips.map((chip) => buttonOf(chip, this.#pageButtons));
-    const shown = chips.flatMap((chip, index) =>
+    const shownElements = chips.flatMap((chip, index) =>
       ofButton[index] ? [] : [this.#chipOf(chip, index)],
     );
-    if (this.#adds) shown.push(this.#add);
-    this.#chips.hidden = shown.length === 0;
-    this.#chips.replaceChildren(...shown);
-    this.#buttons.hidden = this.#pageButtons.length === 0;
-    this.#buttons.replaceChildren(
+    if (this.#adds) shownElements.push(this.#addButtonElement);
+    this.#chipsContainer.hidden = shownElements.length === 0;
+    this.#chipsContainer.replaceChildren(...shownElements);
+    this.#buttonsContainer.hidden = this.#pageButtons.length === 0;
+    this.#buttonsContainer.replaceChildren(
       ...this.#pageButtons.map((button) => {
         const indices = chips.flatMap((_, index) => (ofButton[index]?.button === button ? [index] : []));
         const pressed = indices.length > 0;
-        const el: HTMLButtonElement = html`<button
+        const buttonElement: HTMLButtonElement = html`<button
           type="button"
           class="d-button"
           title=${button.queryPart}
           aria-pressed=${String(pressed)}>${button.title}</button>`;
-        el.addEventListener('click', () => (pressed ? this.#release(button) : void this.#press(button, el)));
-        if (!button.queryPart.includes('...') || !pressed) return el;
+        buttonElement.addEventListener('click', () => (pressed ? this.#release(button) : void this.#press(button, buttonElement)));
+        if (!button.queryPart.includes('...') || !pressed) return buttonElement;
         // a pressed `...` button: its title releases it, each value beside it asks a new one in its chip's place
-        const values = indices.map((index) => {
-          const value: HTMLButtonElement = html`<button
+        const valueElements = indices.map((index) => {
+          const valueElement: HTMLButtonElement = html`<button
             type="button"
             class="d-button d-filter-button__value"
             title=${`Change the value of ${button.title}`}>${ofButton[index]!.value}</button>`;
-          value.addEventListener('click', () => void this.#press(button, value, index));
-          return value;
+          valueElement.addEventListener('click', () => void this.#press(button, valueElement, index));
+          return valueElement;
         });
-        return html`<span class="d-filter-button" role="group" aria-label=${button.title}>${el}${values}</span>`;
+        return html`<span class="d-filter-button" role="group" aria-label=${button.title}>${buttonElement}${valueElements}</span>`;
       }),
     );
   }
@@ -243,21 +244,21 @@ class FilterBar {
    * of its type) and its value (a click asks a new one), each edit made by `source`.
    */
   #pillOf(chip: PillFilter, index: number, made: PillField, source: PillSource): HTMLElement {
-    const op: HTMLButtonElement = html`<button
+    const opElement: HTMLButtonElement = html`<button
       type="button"
       class="d-filter-chip__op"
       title=${`Change the operator of ${made.field}`}>${OP_SIGNS[made.op]}</button>`;
-    op.addEventListener('click', () => void this.#changeOp(chip, index, made, source, op));
-    const value: HTMLButtonElement = html`<button
+    opElement.addEventListener('click', () => void this.#changeOp(chip, index, made, source, opElement));
+    const valueElement: HTMLButtonElement = html`<button
       type="button"
       class="d-filter-chip__value"
       title=${`Change the value of ${made.field}`}>${made.value === '' ? '(empty)' : made.value}</button>`;
-    value.addEventListener('click', () => void this.#changeValue(chip, index, made, source, value));
+    valueElement.addEventListener('click', () => void this.#changeValue(chip, index, made, source, valueElement));
     const label = pillLabel(chip.key);
     return html`<span class="d-filter-chip d-filter-chip--pill" data-testid="filter-chip" title=${label}>
       <span class="d-filter-chip__field">${made.field}</span>
-      ${op}
-      ${value}
+      ${opElement}
+      ${valueElement}
       <button
         type="button"
         class="d-filter-chip__remove"
@@ -268,27 +269,27 @@ class FilterBar {
   }
 
   /**
-   * Asks a new op for the field's pill `chip` in a quick pick below `el` (a menu), the ops of its type (`opsOf`, the type from
-   * `source`'s `/fields`, the key carries none; the one it has checked; busy until the type is there), and makes the
-   * pill again with it.
+   * Asks a new op for the field's pill `chip` in a quick pick below `chipElement` (a menu), the ops of its type
+   * (`opsOf`, the type from `source`'s `/fields`, the key carries none; the one it has checked; busy until the type is
+   * there), and makes the pill again with it.
    */
-  async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
+  async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, chipElement: HTMLElement): Promise<void> {
     const items = this.#typeOf(made, source).then((known) =>
       opsOf(known?.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op })),
     );
-    const picked = await this.ui.showQuickPick(items, { anchor: el, title: `Operator of ${made.field}`, menu: true });
+    const picked = await this.ui.showQuickPick(items, { anchor: chipElement, title: `Operator of ${made.field}`, menu: true });
     if (picked && picked.op !== made.op) await this.#remake(chip, index, source, { ...made, op: picked.op });
   }
 
   /**
-   * Asks a new value for the field's pill `chip` below `el` as "Add filter" does (`askValue`: a time in an input box,
-   * its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s `/fields`,
-   * the value's quick pick busy until it is there), and makes the pill again.
+   * Asks a new value for the field's pill `chip` below `chipElement` as "Add filter" does (`askValue`: a time in an
+   * input box, its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s
+   * `/fields`, the value's quick pick busy until it is there), and makes the pill again.
    */
-  async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
+  async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, chipElement: HTMLElement): Promise<void> {
     const value = await askValue(
       this.ui,
-      el,
+      chipElement,
       `${made.field} ${OP_SIGNS[made.op]}`,
       made.op,
       this.#typeOf(made, source),
@@ -323,24 +324,24 @@ class FilterBar {
   }
 
   /**
-   * Asks a new text for the SQL chip `chip` at `index` in the SQL input box below `el` (the chip), its text filled in
-   * and selected, and puts it in the chip's place unless another chip is there meanwhile; an empty text removes the
-   * chip, Escape or a press elsewhere keeps it.
+   * Asks a new text for the SQL chip `chip` at `index` in the SQL input box below `chipElement` (the chip), its text
+   * filled in and selected, and puts it in the chip's place unless another chip is there meanwhile; an empty text
+   * removes the chip, Escape or a press elsewhere keeps it.
    */
-  async #editSql(chip: SqlFilter, index: number, el: HTMLElement): Promise<void> {
-    const anchor = el.closest<HTMLElement>('.d-filter-chip') ?? el;
-    const sql = await this.askSql?.({ title: 'SQL filter', prompt: SQL_PROMPT, placeholder: SQL_PLACEHOLDER, value: chip.sql, anchor });
+  async #editSql(chip: SqlFilter, index: number, chipElement: HTMLElement): Promise<void> {
+    const anchorElement = chipElement.closest<HTMLElement>('.d-filter-chip') ?? chipElement;
+    const sql = await this.askSql?.({ title: 'SQL filter', prompt: SQL_PROMPT, placeholder: SQL_PLACEHOLDER, value: chip.sql, anchor: anchorElement });
     if (sql !== undefined && this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'sql', sql });
   }
 
   /**
    * Adds `button`'s pill: the one `page.json` signed, or for a button with `...` (`path ILIKE concat(..., '%')`) the
-   * one its page makes of the value the viewer is asked for, in an input box below `el` named after the button, the
-   * condition it makes shown below the field as it is typed (`buttonCondition`), an empty one refused; with `index`,
-   * that pill replaces the chip there (a new value for a pressed button), the value shown first and selected. A
-   * refused value shows the server's message (`showFailed`).
+   * one its page makes of the value the viewer is asked for, in an input box below `buttonElement` named after the
+   * button, the condition it makes shown below the field as it is typed (`buttonCondition`), an empty one refused; with
+   * `index`, that pill replaces the chip there (a new value for a pressed button), the value shown first and selected.
+   * A refused value shows the server's message (`showFailed`).
    */
-  async #press(button: FilterButton, el: HTMLElement, index?: number): Promise<void> {
+  async #press(button: FilterButton, buttonElement: HTMLElement, index?: number): Promise<void> {
     if (!button.url) {
       if (button.key) this.query.set(FILTERS, addChip(this.query.get(FILTERS), { kind: 'pill', key: button.key }));
       return;
@@ -354,7 +355,7 @@ class FilterBar {
         typed === ''
           ? { message: 'Enter a value.', severity: InputBoxValidationSeverity.Error }
           : { message: buttonCondition(button.queryPart, typed), severity: InputBoxValidationSeverity.Info },
-      anchor: el,
+      anchor: buttonElement,
     });
     if (!value) return;
     try {

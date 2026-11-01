@@ -24,14 +24,14 @@ export const details: Extension = {
   id: 'details',
   activate({ ui, page, commands, subscriptions }) {
     const panel = ui.registerSidePanel('details', { label: 'Details', icon: createElement(ListChecks).outerHTML, order: 20 });
-    const status: HTMLButtonElement = html`<button type="button" class="d-details-status" data-testid="details-status" title="Show Details" onclick=${() => panel.show()}></button>`;
-    subscriptions.push(panel, ui.registerBarItem('status', status, { alignment: 'left' }));
+    const statusElement: HTMLButtonElement = html`<button type="button" class="d-details-status" data-testid="details-status" title="Show Details" onclick=${() => panel.show()}></button>`;
+    subscriptions.push(panel, ui.registerBarItem('status', statusElement, { alignment: 'left' }));
 
     /** The records shown, with the widget that gave them; `undefined` while none. */
     let shown: ShownRecords | undefined;
     const update = () => {
-      status.textContent = recordsSelected(shown?.records.length ?? 0);
-      status.hidden = !shown;
+      statusElement.textContent = recordsSelected(shown?.records.length ?? 0);
+      statusElement.hidden = !shown;
       if (panel.visible) panel.bodyContainer.replaceChildren(drawDetails(shown));
     };
     update();
@@ -51,7 +51,7 @@ export const details: Extension = {
           return page.popOut({
             title: `Details: ${title}`,
             // the tab's element is emptied when it closes
-            render: (el) => (el.append(drawComparison(title, records)), Disposable.from()),
+            render: (viewContainer) => (viewContainer.append(drawComparison(title, records)), Disposable.from()),
           });
         },
         { enablement: () => shown !== undefined, disabledReason: 'No records selected' },

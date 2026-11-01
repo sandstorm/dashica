@@ -13,7 +13,7 @@ let checkout: QueryHost;
 let query: ReturnType<typeof activeQuery>;
 let page: { tabs: { id: string; url: string; title: string }[]; activeTab: { id: string; url: string; title: string } };
 let tabsChanged: EventEmitter<void>;
-let bar: HTMLElement;
+let barContainer: HTMLElement;
 let commands: Map<string, () => void>;
 let subscriptions: { dispose(): unknown }[];
 /** The refreshes the shop tab was asked for. */
@@ -36,7 +36,7 @@ beforeEach(() => {
     },
     onDidChangeTabs: tabsChanged.event,
   });
-  bar = document.body.appendChild(document.createElement('div'));
+  barContainer = document.body.appendChild(document.createElement('div'));
   commands = new Map();
   subscriptions = [];
   const context = {
@@ -52,9 +52,9 @@ beforeEach(() => {
     },
     subscriptions,
     ui: {
-      registerBarItem: (_bar: string, el: HTMLElement) => {
-        bar.appendChild(el);
-        return { dispose: () => el.remove() };
+      registerBarItem: (_bar: string, itemElement: HTMLElement) => {
+        barContainer.appendChild(itemElement);
+        return { dispose: () => itemElement.remove() };
       },
     },
     commands: { registerCommand: (id: string, run: () => void) => (commands.set(id, run), { dispose: () => commands.delete(id) }) },
@@ -75,7 +75,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const interval = () => bar.querySelector('select')!;
+const interval = () => barContainer.querySelector('select')!;
 
 function pick(value: string): void {
   interval().value = value;
@@ -96,7 +96,7 @@ const seconds = (tab: QueryHost) => tab.get(REFRESH);
 
 describe('refresh', () => {
   it('refreshes from its button and its command', () => {
-    bar.querySelector<HTMLButtonElement>('button[aria-label=Refresh]')!.click();
+    barContainer.querySelector<HTMLButtonElement>('button[aria-label=Refresh]')!.click();
     commands.get('refresh.now')!();
     expect(refreshes).toBe(2);
   });

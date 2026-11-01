@@ -9,7 +9,7 @@ import './home-page.css';
  */
 export function homePage(menu: readonly MenuGroup[], favorites: readonly MenuGroupEntry[]): HTMLElement {
   const groupOf = (url: string) => menu.find((group) => group.entries.some((entry) => entry.url === url))?.title;
-  const tiles =
+  const tilesContainer =
     favorites.length === 0
       ? html`<p class="d-home-page__hint">No favorites yet: star a dashboard (☆) in the Dashboards panel to find it here.</p>`
       : html`<ul class="d-home-page__tiles">
@@ -25,7 +25,7 @@ export function homePage(menu: readonly MenuGroup[], favorites: readonly MenuGro
   return html`<div class="d-home-page">
     <section>
       <h2 class="d-home-page__heading">Favorites</h2>
-      ${tiles}
+      ${tilesContainer}
     </section>
     ${menu.map(
       (group) =>

@@ -26,8 +26,8 @@ const byPath = chart('/p/shop/api/2', 'default.http_logs', ['path', 'host'], 'de
 const audit = chart('/p/shop/api/3', 'audit', ['action'], 'logs');
 const grid = { type: 'grid', props: {}, children: { a: byPath, b: audit } } as unknown as WidgetNode;
 
-let host: HTMLElement;
-let anchor: HTMLButtonElement;
+let hostContainer: HTMLElement;
+let anchorElement: HTMLButtonElement;
 let quickInput: QuickInput & Pick<UiApi, 'showErrorMessage'>;
 /** The error messages shown (`ui.showErrorMessage`), in order. */
 let errors: string[];
@@ -43,9 +43,9 @@ let computed: Record<string, Column[]>;
 const from = Date.UTC(2026, 9, 31, 9, 0, 0);
 const to = Date.UTC(2026, 9, 31, 10, 0, 0);
 
-const options = () => [...host.querySelectorAll<HTMLElement>('[role=option]')];
-const headings = () => [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick-heading')].map((h) => h.textContent?.trim());
-const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+const options = () => [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')];
+const headings = () => [...hostContainer.querySelectorAll<HTMLElement>('.d-workbench__quick-pick-heading')].map((headingElement) => headingElement.textContent?.trim());
+const field = () => hostContainer.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
 const enter = () => field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 const type = (text: string) => {
   field().value = text;
@@ -53,7 +53,7 @@ const type = (text: string) => {
 };
 /** Waits until the box shows `labels`, then picks the first with Enter. */
 async function pick(...labels: string[]): Promise<void> {
-  await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(labels));
+  await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(labels));
   enter();
 }
 
@@ -65,9 +65,9 @@ beforeEach(() => {
   // declared as by the filters extension
   query.declare(FILTERS);
   query.load();
-  host = document.body.appendChild(document.createElement('div'));
-  anchor = host.appendChild(document.createElement('button'));
-  quickInput = Object.assign(new QuickInput(host), { showErrorMessage: async (message: string) => void errors.push(message) });
+  hostContainer = document.body.appendChild(document.createElement('div'));
+  anchorElement = hostContainer.appendChild(document.createElement('button'));
+  quickInput = Object.assign(new QuickInput(hostContainer), { showErrorMessage: async (message: string) => void errors.push(message) });
   errors = [];
   fetched = [];
   values = () => [];
@@ -144,11 +144,11 @@ describe('addFilter', () => {
   it('asks table, computed field, operator and value, and adds the pill of the field’s chart', async () => {
     values = (search) => ['admin', 'login'].filter((v) => v.includes(search));
     query.set(TIME, presetRange('1h'));
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, new FieldsCache());
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchorElement, new FieldsCache());
 
     await pick('default.http_logs default', 'audit logs');
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toContain('host String'));
-    options().find((o) => o.textContent?.trim() === 'host String')!.click();
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toContain('host String'));
+    options().find((optionElement) => optionElement.textContent?.trim() === 'host String')!.click();
     await pick('host = …', 'host ≠ …');
     await pick('admin', 'login');
     await done;
@@ -171,9 +171,9 @@ describe('addFilter', () => {
     );
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     values = () => ['admin'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toContain('host String'));
-    options().find((o) => o.textContent?.trim() === 'host String')!.click();
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchorElement, new FieldsCache());
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toContain('host String'));
+    options().find((optionElement) => optionElement.textContent?.trim() === 'host String')!.click();
     await pick('host = …', 'host ≠ …');
     await pick('admin');
     await done;
@@ -189,20 +189,20 @@ describe('addFilter', () => {
     const answered = new Promise<void>((resolve) => (answer = resolve));
     const fetchFields = fetch;
     vi.stubGlobal('fetch', async (input: string) => (input.includes('/fields') ? answered.then(() => fetchFields(input)) : fetchFields(input)));
-    void addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
+    void addFilter(quickInput, query, filterableTables([byHost]), anchorElement, new FieldsCache());
 
-    const progress = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress');
+    const progress = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress');
     await vi.waitFor(() => expect(progress()?.hidden).toBe(false));
     expect(options()).toEqual([]);
     answer();
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String']));
     expect(progress()!.hidden).toBe(true);
   });
 
   it('groups the fields into the table’s columns, from the schema, and the computed fields, each once', async () => {
-    void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchor, new FieldsCache());
+    void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchorElement, new FieldsCache());
 
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String']));
     expect(headings()).toEqual(['Table columns', 'Computed fields']);
     // `path` is a column of byPath, but not of the table's schema here: only the schema's columns are listed
     // the computed field's chart is the table's first: its /fields once
@@ -213,18 +213,18 @@ describe('addFilter', () => {
     const other = chart('/p/shop/api/4', 'default.http_logs', ['instance'], 'default', ['instance']);
     computed['/p/shop/api/4'] = [{ name: 'instance', type: 'LowCardinality(String)' }];
     columns['/p/shop/api/4'] = [];
-    void addFilter(quickInput, query, filterableTables([byHost, other]), anchor, new FieldsCache());
+    void addFilter(quickInput, query, filterableTables([byHost, other]), anchorElement, new FieldsCache());
 
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String', 'instance LowCardinality(String)']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String', 'instance LowCardinality(String)']));
     expect(fetched.map((url) => url.pathname).sort()).toEqual(['/p/shop/api/1/fields', '/p/shop/api/4/fields']);
   });
 
   it('lists the charts’ plain fields as columns when the schema is not to be had, its message at the heading', async () => {
     columns = {};
     values = () => ['500'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchorElement, new FieldsCache());
 
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['status', 'timestamp', 'host']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['status', 'timestamp', 'host']));
     // its /fields failed too: no type, so = and ≠
     expect(headings()).toEqual([expect.stringContaining('502: query system.tables: unreachable'), 'Computed fields']);
     options()[0].click();
@@ -238,7 +238,7 @@ describe('addFilter', () => {
 
   it('asks a column’s values and pill by `column`, its type from the schema', async () => {
     values = () => ['bob'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchorElement, new FieldsCache());
 
     await vi.waitFor(() => expect(options()).toHaveLength(4));
     options()[2].click();
@@ -253,11 +253,11 @@ describe('addFilter', () => {
   });
 
   it('offers a time’s operators, ≥ and ≤ first, and asks its value in an input box at the time range’s edge', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchorElement, new FieldsCache());
 
     await vi.waitFor(() => expect(options()).toHaveLength(4));
     options()[0].click();
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp ≥ …', 'timestamp ≤ …', 'timestamp > …', 'timestamp < …', 'timestamp = …', 'timestamp ≠ …']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['timestamp ≥ …', 'timestamp ≤ …', 'timestamp > …', 'timestamp < …', 'timestamp = …', 'timestamp ≠ …']));
     options()[1].click();
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31T10:00:00.000Z'));
     field().value = '2026-10-31T09:30:00Z';
@@ -271,16 +271,16 @@ describe('addFilter', () => {
   });
 
   it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor, new FieldsCache());
+    void addFilter(quickInput, query, filterableTables([audit]), anchorElement, new FieldsCache());
 
     await pick('action LowCardinality(String)');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
-    expect(options().map((o) => o.querySelector('[role=img]')?.innerHTML)).toEqual([OP_ICONS.eq.svg, OP_ICONS.ne.svg]);
-    expect(options().map((o) => o.querySelector('[role=img]')?.getAttribute('aria-label'))).toEqual([OP_ICONS.eq.label, OP_ICONS.ne.label]);
+    expect(options().map((optionElement) => optionElement.querySelector('[role=img]')?.innerHTML)).toEqual([OP_ICONS.eq.svg, OP_ICONS.ne.svg]);
+    expect(options().map((optionElement) => optionElement.querySelector('[role=img]')?.getAttribute('aria-label'))).toEqual([OP_ICONS.eq.label, OP_ICONS.ne.label]);
   });
 
   it('asks no table when the page has one, and adds nothing on Escape', async () => {
-    const done = addFilter(quickInput, query, filterableTables([audit]), anchor, new FieldsCache());
+    const done = addFilter(quickInput, query, filterableTables([audit]), anchorElement, new FieldsCache());
 
     await pick('action LowCardinality(String)');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -295,16 +295,16 @@ describe('addFilter with SQL chips taken', () => {
   /** The SQL input box with the SQL editor of codemirror.ts, as the filters extension asks. */
   const askSql: AskSql = (options) => showSqlInputBox(quickInput, async () => (await import('../sql-library/codemirror')).sqlEditors, options);
   /** The SQL editor in the open box, once it is there. */
-  const editor = () => EditorView.findFromDOM(host.querySelector<HTMLElement>('.d-workbench__quick-pick .cm-editor')!)!;
+  const editor = () => EditorView.findFromDOM(hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick .cm-editor')!)!;
 
   it('ends the table’s pick with "SQL condition…", which asks the condition in the SQL editor’s input box and adds a SQL chip', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, new FieldsCache(), askSql);
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchorElement, new FieldsCache(), askSql);
 
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['default.http_logs default', 'audit logs', expect.stringContaining('SQL condition…')]));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['default.http_logs default', 'audit logs', expect.stringContaining('SQL condition…')]));
     expect(headings()).toEqual(['Advanced']);
     options()[2].click();
     await vi.waitFor(() => expect(options()).toHaveLength(0));
-    await vi.waitFor(() => expect(host.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
+    await vi.waitFor(() => expect(hostContainer.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
     expect(editor().contentDOM.getAttribute('aria-label')).toBe('SQL condition');
     editor().dispatch({ changes: { from: 0, insert: 'duration > 2000' } });
     editor().contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -314,17 +314,17 @@ describe('addFilter with SQL chips taken', () => {
   });
 
   it('ends the field’s pick with it on a page of one table, and is the only entry without one', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor, new FieldsCache(), askSql);
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['action LowCardinality(String)', expect.stringContaining('SQL condition…')]));
-    void addFilter(quickInput, query, [], anchor, new FieldsCache(), askSql);
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual([expect.stringContaining('SQL condition…')]));
+    void addFilter(quickInput, query, filterableTables([audit]), anchorElement, new FieldsCache(), askSql);
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['action LowCardinality(String)', expect.stringContaining('SQL condition…')]));
+    void addFilter(quickInput, query, [], anchorElement, new FieldsCache(), askSql);
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual([expect.stringContaining('SQL condition…')]));
   });
 
   it('adds nothing on Escape in the input box', async () => {
-    const done = addFilter(quickInput, query, [], anchor, new FieldsCache(), askSql);
+    const done = addFilter(quickInput, query, [], anchorElement, new FieldsCache(), askSql);
     await vi.waitFor(() => expect(options()).toHaveLength(1));
     options()[0].click();
-    await vi.waitFor(() => expect(host.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
+    await vi.waitFor(() => expect(hostContainer.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
     editor().contentDOM.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await done;
 
@@ -337,35 +337,35 @@ describe('askValue', () => {
   const load = async () => [];
 
   it('fills in the time range’s start for ≥ and its end for ≤, a day as its date', async () => {
-    void askValue(quickInput, anchor, 'timestamp ≥', 'ge', known('Nullable(DateTime64(3))'), load);
+    void askValue(quickInput, anchorElement, 'timestamp ≥', 'ge', known('Nullable(DateTime64(3))'), load);
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31T09:00:00.000Z'));
-    void askValue(quickInput, anchor, 'day ≤', 'le', known('Date'), load);
+    void askValue(quickInput, anchorElement, 'day ≤', 'le', known('Date'), load);
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31'));
   });
 
   it('offers the values `load` finds for anything else', async () => {
     const asked: string[] = [];
-    void askValue(quickInput, anchor, 'host =', 'eq', known('String'), async (search) => (asked.push(search), ['x']));
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['x']));
+    void askValue(quickInput, anchorElement, 'host =', 'eq', known('String'), async (search) => (asked.push(search), ['x']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['x']));
     expect(asked).toEqual(['']);
   });
   it('opens the value’s quick pick at once for a type still to come, busy, and asks the values once it is there', async () => {
     let answer!: (type: { type: string }) => void;
     const asked: string[] = [];
-    void askValue(quickInput, anchor, 'host =', 'eq', new Promise((resolve) => (answer = resolve)), async (search) => (asked.push(search), ['x']));
+    void askValue(quickInput, anchorElement, 'host =', 'eq', new Promise((resolve) => (answer = resolve)), async (search) => (asked.push(search), ['x']));
 
-    const progress = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
+    const progress = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
     expect([progress().hidden, asked]).toEqual([false, []]);
     answer(known('String'));
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['x']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['x']));
     expect([progress().hidden, asked]).toEqual([true, ['']]);
   });
 
   it('puts a time’s input box in the place of the busy value pick once its type is there', async () => {
-    const done = askValue(quickInput, anchor, 'timestamp ≥', 'ge', Promise.resolve(known('DateTime')), load, '2026-10-31T08:00:00Z');
+    const done = askValue(quickInput, anchorElement, 'timestamp ≥', 'ge', Promise.resolve(known('DateTime')), load, '2026-10-31T08:00:00Z');
 
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31T08:00:00Z'));
-    expect(host.querySelector('[role=listbox]')).toBeNull();
+    expect(hostContainer.querySelector('[role=listbox]')).toBeNull();
     enter();
     expect(await done).toBe('2026-10-31T08:00:00Z');
   });
@@ -374,9 +374,9 @@ describe('askValue', () => {
 describe('pickValue', () => {
   it('asks again as the text rests, offers the typed text first, and resolves with the value chosen', async () => {
     const searches: string[] = [];
-    const done = pickValue(quickInput, anchor, 'host =', async (search) => (searches.push(search), ['shop-1', 'shop-2', ''].filter((v) => v.includes(search))));
+    const done = pickValue(quickInput, anchorElement, 'host =', async (search) => (searches.push(search), ['shop-1', 'shop-2', ''].filter((v) => v.includes(search))));
 
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['shop-1', 'shop-2', '(empty)']));
+    await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['shop-1', 'shop-2', '(empty)']));
     type('shop-');
     await vi.waitFor(() => expect(searches).toEqual(['', 'shop-']));
     await pick('shop- as typed', 'shop-1', 'shop-2');
@@ -385,11 +385,11 @@ describe('pickValue', () => {
   });
 
   it('shows the message of a failed answer', async () => {
-    void pickValue(quickInput, anchor, 'host =', async () => {
+    void pickValue(quickInput, anchorElement, 'host =', async () => {
       throw new Error('500: clickhouse query');
     });
 
-    await vi.waitFor(() => expect(host.textContent).toContain('500: clickhouse query'));
+    await vi.waitFor(() => expect(hostContainer.textContent).toContain('500: clickhouse query'));
   });
 });
 

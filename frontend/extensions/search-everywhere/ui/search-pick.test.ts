@@ -9,22 +9,22 @@ import { SearchPick } from './search-pick';
 afterEach(() => document.body.replaceChildren());
 
 function setup(...providers: SearchProvider[]) {
-  const host = document.body.appendChild(document.createElement('div'));
-  const ui = new UiHost(host, { get: () => undefined, update: async () => {} }, new CommandsHost(host));
+  const hostContainer = document.body.appendChild(document.createElement('div'));
+  const ui = new UiHost(hostContainer, { get: () => undefined, update: async () => {} }, new CommandsHost(hostContainer));
   const search = new SearchPick(ui);
   for (const provider of providers) ui.registerSearchProvider(provider);
-  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+  const field = () => hostContainer.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
   const type = (value: string) => {
     field().value = value;
     field().dispatchEvent(new Event('input'));
   };
   /** The rows shown: `# Heading` for a group's heading, else the item's text. */
   const rows = () =>
-    [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick-heading, [role=option]')].map((row) =>
-      row.getAttribute('role') === 'option' ? row.textContent : `# ${row.textContent}`,
+    [...hostContainer.querySelectorAll<HTMLElement>('.d-workbench__quick-pick-heading, [role=option]')].map((rowElement) =>
+      rowElement.getAttribute('role') === 'option' ? rowElement.textContent : `# ${rowElement.textContent}`,
     );
-  const marked = () => [...host.querySelectorAll('mark')].map((mark) => mark.textContent);
-  return { host, ui, search, field, type, rows, marked };
+  const marked = () => [...hostContainer.querySelectorAll('mark')].map((markElement) => markElement.textContent);
+  return { hostContainer, ui, search, field, type, rows, marked };
 }
 
 function items(...labels: string[]): SearchItem[] {
@@ -69,9 +69,9 @@ describe('SearchPick', () => {
 
   it('narrows to the providers of a prefix, which show more, and says how in the hint and the headings', () => {
     const labels = Array.from({ length: 8 }, (_, i) => `Refresh ${i + 1}`);
-    const { host, search, type, rows } = setup(provider('Commands', labels, { prefix: '>', order: 10 }), provider('Dashboards', ['Refresh rates']));
+    const { hostContainer, search, type, rows } = setup(provider('Commands', labels, { prefix: '>', order: 10 }), provider('Dashboards', ['Refresh rates']));
     search.show();
-    expect(host.querySelector('.d-workbench__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
+    expect(hostContainer.querySelector('.d-workbench__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
     expect(rows()[0]).toBe('# Commands 3 more · type >');
     expect(rows()).toHaveLength(5 + 1 + 2);
     type('>refr');
@@ -81,9 +81,9 @@ describe('SearchPick', () => {
   });
 
   it('narrows a prefix to every provider sharing it, and names it once in the hint', () => {
-    const { host, search, type, rows } = setup(provider('Commands', ['Refresh now'], { prefix: '>', order: 40 }), provider('Actions', ['Refresh cache'], { prefix: '>', order: 41 }));
+    const { hostContainer, search, type, rows } = setup(provider('Commands', ['Refresh now'], { prefix: '>', order: 40 }), provider('Actions', ['Refresh cache'], { prefix: '>', order: 41 }));
     search.show();
-    expect(host.querySelector('.d-workbench__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
+    expect(hostContainer.querySelector('.d-workbench__quick-pick-hint')!.textContent).toBe('Narrow with > Commands');
     type('>refresh');
     expect(rows()).toEqual(['# Commands', 'Refresh now', '# Actions', 'Refresh cache']);
   });
@@ -106,25 +106,25 @@ describe('SearchPick', () => {
         return query ? [{ label: `GET /${query} 500`, highlights: { label: [[5, 5 + query.length]] }, accept() {} }] : [];
       },
     };
-    const { host, search, type, rows, marked } = setup(server, provider('Dashboards', ['Shop overview']));
+    const { hostContainer, search, type, rows, marked } = setup(server, provider('Dashboards', ['Shop overview']));
     search.show();
     type('login');
-    const progress = host.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
-    expect(progress.hidden).toBe(false);
+    const progressElement = hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
+    expect(progressElement.hidden).toBe(false);
     expect(tokens.map((token) => token.isCancellationRequested)).toEqual([true, false]);
     await tick();
     expect(rows()).toEqual(['# Logs', 'GET /login 500']);
     expect(marked()).toEqual(['login']);
-    expect(progress.hidden).toBe(true);
+    expect(progressElement.hidden).toBe(true);
     search.dispose();
     expect(tokens[1].isCancellationRequested).toBe(true);
   });
 
   it('runs the picked item once the search is closed and the focus is back', () => {
-    const { host, ui, search, field, rows } = setup(provider('Dashboards', ['Shop overview', 'Billing']));
-    const button = host.appendChild(document.createElement('button'));
-    button.focus();
-    const picked = vi.fn(() => expect([document.activeElement, host.querySelector('.d-workbench__quick-pick')]).toEqual([button, null]));
+    const { hostContainer, ui, search, field, rows } = setup(provider('Dashboards', ['Shop overview', 'Billing']));
+    const buttonElement = hostContainer.appendChild(document.createElement('button'));
+    buttonElement.focus();
+    const picked = vi.fn(() => expect([document.activeElement, hostContainer.querySelector('.d-workbench__quick-pick')]).toEqual([buttonElement, null]));
     ui.registerSearchProvider({ id: 'more', label: 'More', provideItems: () => [{ label: 'Billing alerts', accept: picked }] });
     search.show();
     expect(rows()).toContain('Billing alerts');
@@ -135,12 +135,12 @@ describe('SearchPick', () => {
 
   it('shows a disabled item greyed with its tooltip and runs nothing when it is picked', () => {
     const accept = vi.fn();
-    const { host, search, field } = setup({ id: 'commands', label: 'Commands', provideItems: () => [{ label: 'Explore', disabled: true, tooltip: 'Explore is not enabled (explore.enabled)', accept }] });
+    const { hostContainer, search, field } = setup({ id: 'commands', label: 'Commands', provideItems: () => [{ label: 'Explore', disabled: true, tooltip: 'Explore is not enabled (explore.enabled)', accept }] });
     search.show('explore');
-    const option = host.querySelector<HTMLElement>('[role=option]')!;
-    expect([option.getAttribute('aria-disabled'), option.title]).toEqual(['true', 'Explore is not enabled (explore.enabled)']);
+    const optionElement = hostContainer.querySelector<HTMLElement>('[role=option]')!;
+    expect([optionElement.getAttribute('aria-disabled'), optionElement.title]).toEqual(['true', 'Explore is not enabled (explore.enabled)']);
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    option.click();
+    optionElement.click();
     expect(accept).not.toHaveBeenCalled();
   });
 

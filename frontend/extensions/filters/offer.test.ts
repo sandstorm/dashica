@@ -10,7 +10,7 @@ import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
 import type { UiApi } from '../../hosts/ui/ui';
 import { fetchPill, offerFilters } from './offer';
 
-let host: HTMLElement;
+let hostContainer: HTMLElement;
 let quickInput: QuickInput & Pick<UiApi, 'showErrorMessage'>;
 /** The error messages shown (`ui.showErrorMessage`), in order. */
 let errors: string[];
@@ -24,13 +24,13 @@ const pill = (field: string, op: string, value: string) => ({ kind: 'pill', key:
 
 /** The quick pick's options as their icon and label read ("Filter status = 500", "Exclude status ≠ 500"). */
 const choices = () =>
-  [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')].map((el) =>
-    `${el.querySelector('[role=img]')?.getAttribute('aria-label') ?? ''} ${el.textContent?.trim()}`.trim(),
+  [...hostContainer.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')].map((optionElement) =>
+    `${optionElement.querySelector('[role=img]')?.getAttribute('aria-label') ?? ''} ${optionElement.textContent?.trim()}`.trim(),
   );
 /** Clicks the option `label` reads as ("Exclude status ≠ 500"). */
 const choose = (label: string) => {
-  const options = [...host.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')];
-  options[choices().indexOf(label)].click();
+  const optionElements = [...hostContainer.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')];
+  optionElements[choices().indexOf(label)].click();
 };
 
 beforeEach(() => {
@@ -39,8 +39,8 @@ beforeEach(() => {
   // declared as by the filters extension
   query.declare(FILTERS);
   query.load();
-  host = document.body.appendChild(document.createElement('div'));
-  quickInput = Object.assign(new QuickInput(host), { showErrorMessage: async (message: string) => void errors.push(message) });
+  hostContainer = document.body.appendChild(document.createElement('div'));
+  quickInput = Object.assign(new QuickInput(hostContainer), { showErrorMessage: async (message: string) => void errors.push(message) });
   errors = [];
   fetched = [];
   refused = undefined;
@@ -64,9 +64,9 @@ describe('offerFilters', () => {
   it('offers to filter by and to exclude each candidate in order, at the click; choosing one adds its pill at once', async () => {
     const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }], source);
     expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500', 'Filter instance = web-1', 'Exclude instance ≠ web-1']);
-    expect(host.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
+    expect(hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
     // a menu: its field out of sight
-    expect(host.querySelector('.d-workbench__quick-pick input')!.classList.contains('d-workbench__quick-pick-field--concealed')).toBe(true);
+    expect(hostContainer.querySelector('.d-workbench__quick-pick input')!.classList.contains('d-workbench__quick-pick-field--concealed')).toBe(true);
     choose('Exclude instance ≠ web-1');
     await done;
 

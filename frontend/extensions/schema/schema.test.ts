@@ -65,22 +65,22 @@ describe('pageTables and onlyTables', () => {
 
 describe('drawTable', () => {
   it('shows the columns with type, default and comment, the keys it has, and the skip indices', () => {
-    const el = drawTable(httpLogs);
-    expect(el.querySelector('summary')!.textContent).toBe('http_logsMergeTree');
-    expect([...el.querySelectorAll('.d-schema__column')].map((c) => c.textContent!.replace(/\s+/g, ' ').trim())).toEqual([
+    const tableElement = drawTable(httpLogs);
+    expect(tableElement.querySelector('summary')!.textContent).toBe('http_logsMergeTree');
+    expect([...tableElement.querySelectorAll('.d-schema__column')].map((columnElement) => columnElement.textContent!.replace(/\s+/g, ' ').trim())).toEqual([
       'timestamp DateTime64(6) when it was asked',
       'day Date MATERIALIZED toDate(timestamp)',
     ]);
-    expect([...el.querySelectorAll('.d-schema__key')].map((k) => k.textContent)).toEqual(['Engine', 'ORDER BY', 'PARTITION BY', 'Primary key', 'TTL']);
+    expect([...tableElement.querySelectorAll('.d-schema__key')].map((keyElement) => keyElement.textContent)).toEqual(['Engine', 'ORDER BY', 'PARTITION BY', 'Primary key', 'TTL']);
     // each key and value its own cell of the two-column grid, not wrapped together in one
-    expect([...el.querySelector('.d-schema__keys')!.children].map((c) => c.tagName)).toEqual(['DT', 'DD', 'DT', 'DD', 'DT', 'DD', 'DT', 'DD', 'DT', 'DD']);
-    expect(el.querySelector('.d-schema__index')!.textContent).toBe('INDEX path_idx path TYPE bloom_filter(0.01) GRANULARITY 4');
+    expect([...tableElement.querySelector('.d-schema__keys')!.children].map((childElement) => childElement.tagName)).toEqual(['DT', 'DD', 'DT', 'DD', 'DT', 'DD', 'DT', 'DD', 'DT', 'DD']);
+    expect(tableElement.querySelector('.d-schema__index')!.textContent).toBe('INDEX path_idx path TYPE bloom_filter(0.01) GRANULARITY 4');
     expect(drawTable({ ...httpLogs, skipIndices: [] }).querySelector('.d-schema__indices')).toBeNull();
   });
 });
 
 describe('schema', () => {
-  let body: HTMLElement;
+  let bodyContainer: HTMLElement;
   let registered: number;
   let pageChanged: EventEmitter<PageJson | undefined>;
   let visibility: EventEmitter<void>;
@@ -102,7 +102,7 @@ describe('schema', () => {
         registerSidePanel: () => (
           registered++,
           {
-            bodyContainer: body,
+            bodyContainer,
             get visible() {
               return visible;
             },
@@ -123,7 +123,7 @@ describe('schema', () => {
     } as unknown as ExtensionContext);
 
   beforeEach(() => {
-    body = document.body.appendChild(document.createElement('div'));
+    bodyContainer = document.body.appendChild(document.createElement('div'));
     registered = 0;
     pageChanged = new EventEmitter();
     visibility = new EventEmitter();
@@ -145,33 +145,33 @@ describe('schema', () => {
     document.body.replaceChildren();
   });
 
-  const view = (id: string) => body.querySelector<HTMLElement>(`[data-view="${id}"]`)!;
-  const connections = (id: string) => [...view(id).querySelectorAll('[data-testid="schema-connection"] > summary')].map((s) => s.textContent);
+  const view = (id: string) => bodyContainer.querySelector<HTMLElement>(`[data-view="${id}"]`)!;
+  const connections = (id: string) => [...view(id).querySelectorAll('[data-testid="schema-connection"] > summary')].map((summaryElement) => summaryElement.textContent);
   /** The tables "On this page" shows, as `<connection> › <database> › <table>`. */
   const pageShown = () =>
-    [...view('page').querySelectorAll('[data-testid="schema-table"]')].map((table) =>
-      [table.closest('[data-testid="schema-connection"]')!, table.parentElement!.closest('details')!, table].map((d) => d.querySelector('.d-schema__name')!.textContent).join(' › '),
+    [...view('page').querySelectorAll('[data-testid="schema-table"]')].map((tableElement) =>
+      [tableElement.closest('[data-testid="schema-connection"]')!, tableElement.parentElement!.closest('details')!, tableElement].map((detailsElement) => detailsElement.querySelector('.d-schema__name')!.textContent).join(' › '),
     );
   const show = () => {
     visible = true;
     visibility.fire();
   };
   const open = async (connection: string) => {
-    const node = [...view('all').querySelectorAll<HTMLDetailsElement>('[data-testid="schema-connection"]')].find((n) => n.querySelector('summary')!.textContent === connection)!;
-    node.open = true; // the browser fires `toggle`
-    await vi.waitFor(() => expect(node.querySelector('[data-testid="schema-table"]')).not.toBeNull());
-    return node;
+    const connectionElement = [...view('all').querySelectorAll<HTMLDetailsElement>('[data-testid="schema-connection"]')].find((detailsElement) => detailsElement.querySelector('summary')!.textContent === connection)!;
+    connectionElement.open = true; // the browser fires `toggle`
+    await vi.waitFor(() => expect(connectionElement.querySelector('[data-testid="schema-table"]')).not.toBeNull());
+    return connectionElement;
   };
 
   it('is not there while Explore is off', () => {
     activate({ explore: false });
     expect(registered).toBe(0);
-    expect(body.childElementCount).toBe(0);
+    expect(bodyContainer.childElementCount).toBe(0);
   });
 
   it('shows in "On this page" the tables the page’s charts read, once the panel shows, and follows the page shown', async () => {
     activate({});
-    expect([...body.querySelectorAll('.d-view__title')].map((t) => t.textContent)).toEqual(['On this page', 'All connections']);
+    expect([...bodyContainer.querySelectorAll('.d-view__title')].map((titleElement) => titleElement.textContent)).toEqual(['On this page', 'All connections']);
     expect(fetched).toEqual([]);
     show();
     await vi.waitFor(() => expect(pageShown()).toEqual(['logs › logs › http_logs']));
@@ -202,26 +202,26 @@ describe('schema', () => {
   it('lists every connection under "All connections", asked when opened the first time, kept open when another page is shown', async () => {
     activate({});
     expect(connections('all')).toEqual(['alert_storage', 'default', 'logs']);
-    const logs = await open('logs');
+    const logsElement = await open('logs');
     expect(fetched).toEqual(['/schema.json?connection=logs']);
-    expect(logs.querySelector('.d-schema__children > details > summary')!.textContent).toBe('default2');
-    logs.open = false;
-    await new Promise((resolve) => logs.addEventListener('toggle', resolve, { once: true }));
-    logs.open = true;
-    await new Promise((resolve) => logs.addEventListener('toggle', resolve, { once: true }));
+    expect(logsElement.querySelector('.d-schema__children > details > summary')!.textContent).toBe('default2');
+    logsElement.open = false;
+    await new Promise((resolve) => logsElement.addEventListener('toggle', resolve, { once: true }));
+    logsElement.open = true;
+    await new Promise((resolve) => logsElement.addEventListener('toggle', resolve, { once: true }));
     show(); // "On this page" takes the schema asked already
     await vi.waitFor(() => expect(pageShown()).toHaveLength(1));
     expect(fetched).toHaveLength(1);
     pageChanged.fire(dashboard('orders'));
-    expect(body.contains(logs)).toBe(true);
-    expect(logs.open).toBe(true);
+    expect(bodyContainer.contains(logsElement)).toBe(true);
+    expect(logsElement.open).toBe(true);
   });
 
   it('keeps whether the viewer closed a view', () => {
     activate({});
     view('all').querySelector<HTMLButtonElement>('.d-view__toggle')!.click();
     expect(stored.get('views.all.collapsed')).toBe(true);
-    body.replaceChildren();
+    bodyContainer.replaceChildren();
     activate({});
     expect(view('all').querySelector<HTMLElement>('.d-view__body')!.hidden).toBe(true);
     expect(view('page').querySelector<HTMLElement>('.d-view__body')!.hidden).toBe(false);
@@ -230,13 +230,13 @@ describe('schema', () => {
   it('shows a failed answer in place and asks again on the next opening', async () => {
     vi.stubGlobal('fetch', async (url: string) => (fetched.push(url), new Response('connection refused', { status: 502 })));
     activate({});
-    const node = view('all').querySelector<HTMLDetailsElement>('[data-testid="schema-connection"]')!;
-    node.open = true;
-    await vi.waitFor(() => expect(node.querySelector('.d-notice--error')!.textContent).toBe('502 connection refused'));
+    const connectionElement = view('all').querySelector<HTMLDetailsElement>('[data-testid="schema-connection"]')!;
+    connectionElement.open = true;
+    await vi.waitFor(() => expect(connectionElement.querySelector('.d-notice--error')!.textContent).toBe('502 connection refused'));
     expect(fetched).toHaveLength(1);
-    node.open = false;
-    await new Promise((resolve) => node.addEventListener('toggle', resolve, { once: true }));
-    node.open = true;
+    connectionElement.open = false;
+    await new Promise((resolve) => connectionElement.addEventListener('toggle', resolve, { once: true }));
+    connectionElement.open = true;
     await vi.waitFor(() => expect(fetched).toHaveLength(2));
     show();
     await vi.waitFor(() => expect(view('page').querySelector('.d-notice--error')!.textContent).toBe('502 connection refused'));
@@ -248,27 +248,27 @@ describe('schema', () => {
     await open('logs');
     show();
     await vi.waitFor(() => expect(pageShown()).toHaveLength(1));
-    const before = view('page').querySelector('[data-testid="schema-table"]');
+    const beforeElement = view('page').querySelector('[data-testid="schema-table"]');
     await commands.get('schema.refresh')!();
     expect(fetched).toEqual(['/schema.json?connection=logs', '/schema.json?connection=logs&refresh=1']);
     await vi.waitFor(() => expect(pageShown()).toHaveLength(1));
-    expect(view('page').querySelector('[data-testid="schema-table"]')).not.toBe(before);
+    expect(view('page').querySelector('[data-testid="schema-table"]')).not.toBe(beforeElement);
   });
 
   it('has "Show comments" in its "…", on by default, which hides the comments while off and keeps that', async () => {
     activate({});
     const entry = menu.find((item) => item.command === 'schema.toggleComments')!;
     expect(entry).toMatchObject({ menuId: 'panel/schema', title: 'Show comments' });
-    const root = body.querySelector('.d-schema')!;
+    const rootContainer = bodyContainer.querySelector('.d-schema')!;
     expect(entry.toggled!()).toBe(true);
-    expect(root.classList.contains('d-schema--no-comments')).toBe(false);
+    expect(rootContainer.classList.contains('d-schema--no-comments')).toBe(false);
     await commands.get('schema.toggleComments')!();
     expect(entry.toggled!()).toBe(false);
-    expect(root.classList.contains('d-schema--no-comments')).toBe(true);
+    expect(rootContainer.classList.contains('d-schema--no-comments')).toBe(true);
     expect(stored.get('showComments')).toBe(false);
-    body.replaceChildren();
+    bodyContainer.replaceChildren();
     menu = [];
     activate({});
-    expect(body.querySelector('.d-schema')!.classList.contains('d-schema--no-comments')).toBe(true);
+    expect(bodyContainer.querySelector('.d-schema')!.classList.contains('d-schema--no-comments')).toBe(true);
   });
 });

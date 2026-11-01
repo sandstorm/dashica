@@ -55,7 +55,7 @@ const schemaOf = (connection: string): Schema => ({
 
 /** What the fake Perspective was asked. */
 let tables: { data: string; replaced: string[]; deleted: boolean }[];
-let viewer: PerspectiveViewer & { restored: ViewerConfig[]; resets: number; saved: ViewerConfig; settingsOpen: boolean };
+let viewerElement: PerspectiveViewer & { restored: ViewerConfig[]; resets: number; saved: ViewerConfig; settingsOpen: boolean };
 let schema: Record<string, string>;
 let failRestoreOf: ((config: ViewerConfig) => boolean) | undefined;
 /** While set, a new table waits for it (Perspective still loading). */
@@ -84,24 +84,24 @@ const perspective: Perspective = {
   },
   createViewer(doc) {
     viewersMade++;
-    const el = doc.createElement('div') as unknown as typeof viewer;
-    Object.assign(el, {
+    const madeViewerElement = doc.createElement('div') as unknown as typeof viewerElement;
+    Object.assign(madeViewerElement, {
       restored: [],
       resets: 0,
       saved: {},
       load: async () => {},
       restore: async (config: ViewerConfig) => {
         if (failRestoreOf?.(config)) throw new Error('Invalid column "gone"');
-        el.restored.push(config);
+        madeViewerElement.restored.push(config);
       },
-      save: async () => el.saved,
-      reset: async () => el.resets++,
+      save: async () => madeViewerElement.saved,
+      reset: async () => madeViewerElement.resets++,
       settingsOpen: false,
-      toggleConfig: async (force?: boolean) => (el.settingsOpen = force ?? !el.settingsOpen),
+      toggleConfig: async (force?: boolean) => (madeViewerElement.settingsOpen = force ?? !madeViewerElement.settingsOpen),
       delete: async () => {},
     });
-    viewer = el;
-    return el;
+    viewerElement = madeViewerElement;
+    return madeViewerElement;
   },
 };
 
@@ -112,7 +112,7 @@ const state: Memento = {
 };
 
 let query: QueryHost;
-let el: HTMLElement;
+let viewContainer: HTMLElement;
 let view: Disposable;
 let requests: string[];
 let closed: number;
@@ -165,7 +165,7 @@ beforeEach(() => {
     requests.push(url);
     return answer(new URL(url, location.origin));
   });
-  el = document.body.appendChild(document.createElement('div'));
+  viewContainer = document.body.appendChild(document.createElement('div'));
 });
 
 afterEach(() => {
@@ -177,7 +177,7 @@ afterEach(() => {
 
 /** Opens the view of `shown.widget` (a blank Explore for `undefined`) on the tab's hash `hash`. */
 function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
-  view = renderExploreView(el, {
+  view = renderExploreView(viewContainer, {
     widget: shown.widget,
     connections: ['default', 'logs'],
     query,
@@ -194,12 +194,12 @@ function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
     },
     close: () => closed++,
     offerFilters: (at, candidates) => offered.push({ at, candidates }),
-    confirmReset: async (at) => (confirmations.push(at), confirmed),
+    confirmReset: async (anchorElement) => (confirmations.push(anchorElement), confirmed),
   });
 }
 
 const openBlank = () => open({ widget: undefined });
-const find = <T extends HTMLElement>(testId: string) => el.querySelector<T>(`[data-testid="${testId}"]`)!;
+const find = <T extends HTMLElement>(testId: string) => viewContainer.querySelector<T>(`[data-testid="${testId}"]`)!;
 /** The SQL editor's text element, and its CodeMirror view. */
 const sqlText = () => find<HTMLElement>('explore-view-sql-text');
 const sqlView = () => EditorView.findFromDOM(sqlText().closest<HTMLElement>('.cm-editor')!)!;
@@ -217,8 +217,8 @@ describe('renderExploreView', () => {
     await settle();
     expect(requests).toContain('/p/shop/api/3/rows?time=1h');
     expect(tables.map((t) => t.data)).toEqual(['rows-1']);
-    expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: Requests');
-    expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('3 rows of the chart’s result');
+    expect(viewContainer.querySelector('.d-explore-view__title')!.textContent).toBe('Explore: Requests');
+    expect(viewContainer.querySelector('.d-explore-view__status')!.textContent).toBe('3 rows of the chart’s result');
   });
 
   it('takes Perspective’s theme of the page’s colour scheme, and follows a change of it', async () => {
@@ -229,32 +229,32 @@ describe('renderExploreView', () => {
     );
     open();
     await settle();
-    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar', theme: 'Pro Dark' })]);
+    expect(viewerElement.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar', theme: 'Pro Dark' })]);
     dark = false;
     changes.dispatchEvent(new Event('change'));
-    expect(viewer.restored.at(-1)).toEqual({ theme: 'Pro Light' });
+    expect(viewerElement.restored.at(-1)).toEqual({ theme: 'Pro Light' });
   });
 
   it('starts with the chart rebuilt from its props', async () => {
     open();
     await settle();
-    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar', group_by: ['time'], split_by: ['status'], columns: ['requests'] })]);
-    expect(el.querySelector('.d-explore-view__notes')!.hasAttribute('hidden')).toBe(true);
+    expect(viewerElement.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar', group_by: ['time'], split_by: ['status'], columns: ['requests'] })]);
+    expect(viewContainer.querySelector('.d-explore-view__notes')!.hasAttribute('hidden')).toBe(true);
   });
 
   it('keeps the config the viewer changed per chart, and starts with it next time', async () => {
     open();
     await settle();
-    viewer.dispatchEvent(new Event('perspective-config-update'));
+    viewerElement.dispatchEvent(new Event('perspective-config-update'));
     expect(stored.size).toBe(0);
-    viewer.dispatchEvent(new Event('pointerdown'));
+    viewerElement.dispatchEvent(new Event('pointerdown'));
     const changed = { plugin: 'Datagrid', group_by: ['host'], table: 'a1b2', theme: 'Pro Light' };
-    viewer.dispatchEvent(new CustomEvent('perspective-config-update', { detail: { getConfig: () => changed } }));
+    viewerElement.dispatchEvent(new CustomEvent('perspective-config-update', { detail: { getConfig: () => changed } }));
     expect(stored.get(stateKey(widget))).toEqual({ plugin: 'Datagrid', group_by: ['host'] });
     view.dispose();
     open();
     await settle();
-    expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
+    expect(viewerElement.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
   });
 
   it('shows the chart when the kept config does not fit the rows, with a note', async () => {
@@ -262,33 +262,33 @@ describe('renderExploreView', () => {
     failRestoreOf = (config) => config.group_by?.[0] === 'gone';
     open();
     await settle();
-    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar' })]);
-    expect(el.querySelector('.d-explore-view__notes')!.textContent).toContain('the kept view does not fit these rows (Invalid column "gone")');
+    expect(viewerElement.restored).toEqual([expect.objectContaining({ plugin: 'Y Bar' })]);
+    expect(viewContainer.querySelector('.d-explore-view__notes')!.textContent).toContain('the kept view does not fit these rows (Invalid column "gone")');
   });
 
   it('opens the viewer with its settings panel open, after its config', async () => {
     open();
     await settle();
-    expect(viewer.settingsOpen).toBe(true);
+    expect(viewerElement.settingsOpen).toBe(true);
   });
 
   it('goes back to the chart’s config on Reset once confirmed, forgetting the kept one', async () => {
     stored.set(stateKey(widget), { plugin: 'Datagrid' });
     open();
     await settle();
-    const reset = el.querySelector<HTMLButtonElement>('[data-testid="explore-view-reset"]')!;
+    const resetButtonElement = viewContainer.querySelector<HTMLButtonElement>('[data-testid="explore-view-reset"]')!;
     confirmed = false;
-    reset.click();
+    resetButtonElement.click();
     await settle();
-    expect(confirmations).toEqual([reset]);
+    expect(confirmations).toEqual([resetButtonElement]);
     expect(stored.size).toBe(1);
-    expect(viewer.resets).toBe(0);
+    expect(viewerElement.resets).toBe(0);
     confirmed = true;
-    reset.click();
+    resetButtonElement.click();
     await settle();
     expect(stored.size).toBe(0);
-    expect(viewer.resets).toBe(1);
-    expect(viewer.restored.at(-1)).toMatchObject({ plugin: 'Y Bar' });
+    expect(viewerElement.resets).toBe(1);
+    expect(viewerElement.restored.at(-1)).toMatchObject({ plugin: 'Y Bar' });
   });
 
   it('fetches the rows again on a refresh and puts them into the same table, the config kept', async () => {
@@ -300,7 +300,7 @@ describe('renderExploreView', () => {
     expect(requests.at(-1)).toBe('/p/shop/api/3/rows?time=3h');
     expect(tables).toHaveLength(1);
     expect(tables[0].replaced).toEqual(['rows-2']);
-    expect(viewer.restored).toHaveLength(1);
+    expect(viewerElement.restored).toHaveLength(1);
   });
 
   it('shows one viewer when a refresh comes while Perspective still loads, the older rows’ table deleted', async () => {
@@ -318,7 +318,7 @@ describe('renderExploreView', () => {
       { data: 'rows-2', deleted: false },
     ]);
     expect(viewersMade).toBe(1);
-    expect(el.querySelectorAll('.d-explore-view__viewer')).toHaveLength(1);
+    expect(viewContainer.querySelectorAll('.d-explore-view__viewer')).toHaveLength(1);
   });
 
   it('makes no viewer when disposed while Perspective still loads, the table deleted', async () => {
@@ -337,16 +337,16 @@ describe('renderExploreView', () => {
     schema = { time: 'datetime', requests: 'integer' };
     open();
     await settle();
-    expect([...el.querySelectorAll('.d-explore-view__notes li')].map((li) => li.textContent)).toEqual(['`fill` (`status`) is not a column of the chart’s result']);
+    expect([...viewContainer.querySelectorAll('.d-explore-view__notes li')].map((liElement) => liElement.textContent)).toEqual(['`fill` (`status`) is not a column of the chart’s result']);
   });
 
   it('shows the SQL editor from the start, with the chart’s SQL as the server writes it for the page’s state, and again on a refresh', async () => {
     open();
     await settle();
     await settle();
-    const button = find<HTMLButtonElement>('explore-view-sql');
-    expect(button.hidden).toBe(false);
-    expect(button.getAttribute('aria-pressed')).toBe('true');
+    const sqlButtonElement = find<HTMLButtonElement>('explore-view-sql');
+    expect(sqlButtonElement.hidden).toBe(false);
+    expect(sqlButtonElement.getAttribute('aria-pressed')).toBe('true');
     expect(find('explore-view-sql-panel').hidden).toBe(false);
     expect(requests).toEqual(['/p/shop/api/3/sql?time=1h', '/p/shop/api/3/rows?time=1h']);
     expect(sqlValue()).toBe('SELECT time=1h');
@@ -360,15 +360,15 @@ describe('renderExploreView', () => {
     open();
     await settle();
     await settle();
-    const button = find<HTMLButtonElement>('explore-view-sql');
-    button.click();
-    expect(button.getAttribute('aria-pressed')).toBe('false');
+    const sqlButtonElement = find<HTMLButtonElement>('explore-view-sql');
+    sqlButtonElement.click();
+    expect(sqlButtonElement.getAttribute('aria-pressed')).toBe('false');
     expect(find('explore-view-sql-panel').hidden).toBe(true);
     const asked = requests.length;
     query.set(TIME, presetRange('3h'));
     await settle();
     expect(requests.slice(asked)).toEqual(['/p/shop/api/3/rows?time=3h']);
-    button.click();
+    sqlButtonElement.click();
     await settle();
     expect(find('explore-view-sql-panel').hidden).toBe(false);
     expect(sqlValue()).toBe('SELECT time=3h');
@@ -377,7 +377,7 @@ describe('renderExploreView', () => {
   it('lists the values of the chart’s parameters beside the editor, fetched again on a refresh', async () => {
     open();
     await settle();
-    const listed = () => [...find('explore-view-parameters').children].map((child) => child.textContent);
+    const listed = () => [...find('explore-view-parameters').children].map((parameterElement) => parameterElement.textContent);
     expect(listed()).toEqual(['{__from}', 'from-1h']);
     query.set(TIME, presetRange('3h'));
     await settle();
@@ -399,8 +399,8 @@ describe('renderExploreView', () => {
       { data: 'edited:SELECT * FROM http_logs', deleted: false },
     ]);
     expect(viewersMade).toBe(2);
-    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: ['timestamp', 'status', 'host'] })]);
-    expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
+    expect(viewerElement.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: ['timestamp', 'status', 'host'] })]);
+    expect(viewContainer.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
     expect(find('explore-view-edited').hidden).toBe(false);
     expect(find('explore-view-edited').textContent).toContain('the page’s time range and filters do not apply');
 
@@ -420,7 +420,7 @@ describe('renderExploreView', () => {
     expect(requests).toEqual(['/p/shop/api/3/rows?exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1']);
     expect(find('explore-view-sql-panel').hidden).toBe(false);
     expect(sqlValue()).toBe('SELECT {v:UInt8}');
-    expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
+    expect([...find('explore-view-parameters').children].map((parameterElement) => parameterElement.textContent)).toEqual(['{v}', '1']);
     query.set(TIME, presetRange('3h'));
     await settle();
     expect(requests.at(-1)).toBe('/p/shop/api/3/rows?exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1');
@@ -444,7 +444,7 @@ describe('renderExploreView', () => {
   });
 
   it('says so in the editor’s place when the SQL editor does not load', async () => {
-    view = renderExploreView(el, {
+    view = renderExploreView(viewContainer, {
       widget, connections: ['default'], query, state, perspective: async () => perspective,
       sqlEditors: () => Promise.reject(new Error('404 sql-editor.js')),
       schema: async () => schemaOf('default'),
@@ -452,7 +452,7 @@ describe('renderExploreView', () => {
       offerFilters: () => undefined, confirmReset: async () => false,
     });
     await settle();
-    expect(el.querySelector('.d-explore-view__sql-text')!.textContent).toBe('The SQL editor did not load: 404 sql-editor.js');
+    expect(viewContainer.querySelector('.d-explore-view__sql-text')!.textContent).toBe('The SQL editor did not load: 404 sql-editor.js');
   });
 
   it('runs with Cmd/Ctrl+Enter in the editor', async () => {
@@ -486,7 +486,7 @@ describe('renderExploreView', () => {
     type('SELEC 1');
     find<HTMLButtonElement>('explore-view-run').click();
     await settle();
-    expect(el.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 62. DB::Exception: Syntax error');
+    expect(viewContainer.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 62. DB::Exception: Syntax error');
     expect(sqlValue()).toBe('SELEC 1');
     expect(find('explore-view-sql-panel').hidden).toBe(false);
   });
@@ -504,22 +504,22 @@ describe('renderExploreView', () => {
     stored.set(stateKey(widget, true), { plugin: 'Datagrid', group_by: ['host'] });
     open();
     await settle();
-    expect(viewer.restored).toEqual([{ plugin: 'Y Line', theme: 'Pro Light' }]);
+    expect(viewerElement.restored).toEqual([{ plugin: 'Y Line', theme: 'Pro Light' }]);
     hash = withEditedQuery(hash, { sql: 'SELECT 1', parameters: {} });
     hashChanged.fire();
     await settle();
-    expect(viewer.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
+    expect(viewerElement.restored).toEqual([{ plugin: 'Datagrid', group_by: ['host'], theme: 'Pro Light' }]);
   });
 
   it('shows the chart’s Diagnostics: the filters it ignores, a skipped chart', async () => {
     answer = () => new Response(null, { status: 204, headers: { 'X-Dashica-Diagnostics': '{"skipped":"pick a host first"}' } });
     open();
     await settle();
-    expect(el.querySelector('.d-explore-view__body')!.textContent).toBe('skipped: pick a host first');
+    expect(viewContainer.querySelector('.d-explore-view__body')!.textContent).toBe('skipped: pick a host first');
     answer = () => rowsResponse('rows', { 'X-Dashica-Diagnostics': '{"ignored":["host"]}' });
     query.refresh();
     await settle();
-    expect(el.querySelector('.d-badge')!.textContent).toBe('ignores host');
+    expect(viewContainer.querySelector('.d-badge')!.textContent).toBe('ignores host');
     expect(tables).toHaveLength(1);
   });
 
@@ -527,14 +527,14 @@ describe('renderExploreView', () => {
     answer = () => new Response('Code: 47. Unknown identifier host', { status: 500 });
     open();
     await settle();
-    expect(el.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 47. Unknown identifier host');
+    expect(viewContainer.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 47. Unknown identifier host');
   });
 
   it('offers the deepest group value of a clicked row on a column of the rows, no time, at the pointer', async () => {
     open();
     await settle();
-    viewer.dispatchEvent(new MouseEvent('pointerdown', { clientX: 30, clientY: 40 }));
-    const click = (filter: unknown[]) => viewer.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter } } }));
+    viewerElement.dispatchEvent(new MouseEvent('pointerdown', { clientX: 30, clientY: 40 }));
+    const click = (filter: unknown[]) => viewerElement.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter } } }));
     click([['time', '==', 1], ['status', '==', 500], ['host', '==', 'a']]);
     click([['time', '==', 1]]);
     click([]);
@@ -546,13 +546,13 @@ describe('renderExploreView', () => {
     schema = { customer_project: 'string' };
     open();
     await settle();
-    viewer.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter: [['customer_project', '==', 'sandstorm.shop']] } } }));
+    viewerElement.dispatchEvent(new CustomEvent('perspective-click', { detail: { config: { filter: [['customer_project', '==', 'sandstorm.shop']] } } }));
     expect(offered).toEqual([]);
   });
 
   it('closes on Close', async () => {
     open();
-    el.querySelector<HTMLButtonElement>('[data-testid="explore-view-close"]')!.click();
+    viewContainer.querySelector<HTMLButtonElement>('[data-testid="explore-view-close"]')!.click();
     expect(closed).toBe(1);
   });
 
@@ -562,7 +562,7 @@ describe('renderExploreView', () => {
     view.dispose();
     await settle();
     expect(tables[0].deleted).toBe(true);
-    expect(el.children).toHaveLength(0);
+    expect(viewContainer.children).toHaveLength(0);
   });
 });
 
@@ -575,11 +575,11 @@ describe('renderExploreView of a blank Explore', () => {
     openBlank();
     await settle();
     expect(requests).toEqual([]);
-    expect(el.querySelector('.d-explore-view__title')!.textContent).toBe('Explore');
+    expect(viewContainer.querySelector('.d-explore-view__title')!.textContent).toBe('Explore');
     expect(find<HTMLSelectElement>('explore-view-connection').value).toBe('logs');
-    expect([...find<HTMLSelectElement>('explore-view-connection').options].map((option) => option.value)).toEqual(['default', 'logs']);
+    expect([...find<HTMLSelectElement>('explore-view-connection').options].map((optionElement) => optionElement.value)).toEqual(['default', 'logs']);
     expect(sqlValue()).toBe('');
-    expect(el.querySelector('.d-explore-view__body')!.textContent).toBe('Write a query; Run shows its rows.');
+    expect(viewContainer.querySelector('.d-explore-view__body')!.textContent).toBe('Write a query; Run shows its rows.');
     expect(find('explore-view-edited').hidden).toBe(true);
   });
 
@@ -592,8 +592,8 @@ describe('renderExploreView of a blank Explore', () => {
     expect(navigations).toEqual(['#explore=&connection=logs&exploreSql=SELECT+1']);
     expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+1']);
     expect(tables.map((t) => t.data)).toEqual(['edited:SELECT 1']);
-    expect(viewer.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: Object.keys(schema) })]);
-    expect(el.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
+    expect(viewerElement.restored).toEqual([expect.objectContaining({ plugin: 'Datagrid', group_by: [], columns: Object.keys(schema) })]);
+    expect(viewContainer.querySelector('.d-explore-view__status')!.textContent).toBe('the first 3 rows (limit)');
     expect(find('explore-view-edited').hidden).toBe(true);
   });
 
@@ -601,9 +601,9 @@ describe('renderExploreView of a blank Explore', () => {
     openBlank();
     await settle();
     expect(schemasAsked).toEqual(['logs']);
-    const picker = find<HTMLSelectElement>('explore-view-connection');
-    picker.value = 'default';
-    picker.dispatchEvent(new Event('change'));
+    const pickerElement = find<HTMLSelectElement>('explore-view-connection');
+    pickerElement.value = 'default';
+    pickerElement.dispatchEvent(new Event('change'));
     await settle();
     expect(schemasAsked).toEqual(['logs', 'default']);
     expect(madeEditors[0].setCompletion).toHaveBeenLastCalledWith(expect.objectContaining({ schema: { default: { t_default: [] } } }));
@@ -613,9 +613,9 @@ describe('renderExploreView of a blank Explore', () => {
     hash = withEditedQuery(hash, { sql: 'SELECT 1', parameters: {} });
     openBlank();
     await settle();
-    const picker = find<HTMLSelectElement>('explore-view-connection');
-    picker.value = 'default';
-    picker.dispatchEvent(new Event('change'));
+    const pickerElement = find<HTMLSelectElement>('explore-view-connection');
+    pickerElement.value = 'default';
+    pickerElement.dispatchEvent(new Event('change'));
     await settle();
     expect(navigations).toEqual(['#explore=&connection=default&exploreSql=SELECT+1']);
     expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+1', '/rows?connection=default&exploreSql=SELECT+1']);
@@ -628,7 +628,7 @@ describe('renderExploreView of a blank Explore', () => {
     await settle();
     expect(requests).toEqual(['/rows?connection=logs&exploreSql=SELECT+%7Bv%3AUInt8%7D&param_v=1']);
     expect(sqlValue()).toBe('SELECT {v:UInt8}');
-    expect([...find('explore-view-parameters').children].map((child) => child.textContent)).toEqual(['{v}', '1']);
+    expect([...find('explore-view-parameters').children].map((parameterElement) => parameterElement.textContent)).toEqual(['{v}', '1']);
   });
 
   it('keeps one viewer config for every blank Explore', () => {
