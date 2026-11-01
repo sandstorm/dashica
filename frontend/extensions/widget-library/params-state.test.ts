@@ -16,7 +16,7 @@ describe('PARAMS', () => {
 
   it('writes and sends them as one wp, none while there is no param', () => {
     expect(PARAMS.format({ path: '/x' }, undefined)).toEqual([['wp', '{"path":"/x"}']]);
-    expect(PARAMS.request!({ path: '/x' })).toEqual([['wp', '{"path":"/x"}']]);
+    expect(PARAMS.sentToServer).toBe(true);
     expect(PARAMS.format({}, undefined)).toEqual([]);
   });
 

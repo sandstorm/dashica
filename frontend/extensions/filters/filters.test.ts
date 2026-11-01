@@ -539,7 +539,7 @@ describe('filters, a field’s pill edited', () => {
     expect(asked()).toHaveLength(1);
     expect(new URL(asked()[0], 'http://x').searchParams.has('f') || new URL(asked()[0], 'http://x').searchParams.has('sql')).toBe(false);
 
-    query.set(TIME, presetRange('24h'));
+    query.set(TIME, presetRange('1h'));
     picked = undefined;
     op(chips()[0]).click();
     await vi.waitFor(() => expect(asked()).toHaveLength(2));

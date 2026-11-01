@@ -36,7 +36,7 @@ func queryStatusRowsBy(t *testing.T, field string, op sql.Op, value string) (*ht
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, DefaultTimeRange)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestHandleQuery_AButtonsQuotedValueComparesAUInt16ColumnAsANumber(t *testin
 		cfg, _ := testServer.LoadTestingConfig(t)
 		qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 		r := httptest.NewRequest(http.MethodGet, "/query?time=1h", nil)
-		state, _ := ParseQueryState(r)
+		state, _ := ParseQueryState(r, DefaultTimeRange)
 		button, err := filter.NewButton("Status >= …", "status >= ...", value)
 		if err != nil {
 			t.Fatal(err)
@@ -132,7 +132,7 @@ func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	for search, want := range map[string]string{"": `{"values":["200","500"]}`, "50": `{"values":["500"]}`, "x": `{"values":[]}`} {
 		r := httptest.NewRequest(http.MethodGet, "/values?time=1h", nil)
-		state, err := ParseQueryState(r)
+		state, err := ParseQueryState(r, DefaultTimeRange)
 		if err != nil {
 			t.Fatalf("ParseQueryState: %v", err)
 		}

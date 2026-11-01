@@ -17,6 +17,10 @@ type DashboardContext struct {
 	// current handler URL - to determine the current page
 	CurrentHandlerUrl string
 	FilterButtons     []FilterButton
+	// DefaultTime is the page's default time range as a Go duration ("168h"; "24h" when it declares none), the one
+	// page.json carries: its widgets' handlers read a request without `time` with it (httpserver.ParseQueryState), as
+	// the page's URL leaves it out.
+	DefaultTime string
 
 	// ExploreBaseURL points at the registration URL of the Explore view (e.g.
 	// "/explore"), or is nil / empty when Explore is not registered. It is a

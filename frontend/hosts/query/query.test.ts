@@ -2,6 +2,7 @@
 // Tests for QueryHost: typed keys (queryKey) read from the URL, written into it after a pause with its other keys
 // kept, sent, asking for a refresh, shared by the tabs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PageJson } from '../../generated/zz_generated.dashica';
 import { QueryHost, QueryKeys, queryKey, type QueryKey } from './query';
 
 let query: QueryHost;
@@ -35,11 +36,9 @@ function listKey(name: string, sent: boolean): QueryKey<readonly string[]> {
 const COLORS = listKey('colors', false);
 
 describe('queryKey', () => {
-  it('sends its URL entries for `sentToServer: true`, the function’s for a function, nothing without', () => {
-    expect(listKey('colors', true).request?.(['red'])).toEqual([['colors', 'red']]);
-    expect(COLORS.request).toBeUndefined();
-    const always = queryKey<string>('size', { parse: () => '', format: () => [], sentToServer: (size) => [['size', size]] });
-    expect(always.request?.('xl')).toEqual([['size', 'xl']]);
+  it('is sent for `sentToServer: true`, not without', () => {
+    expect(listKey('colors', true).sentToServer).toBe(true);
+    expect(COLORS.sentToServer).toBe(false);
     expect(queryKey('size', { parse: () => '', format: () => [] }).urlKeys).toEqual(['size']);
   });
 });
@@ -122,6 +121,22 @@ describe('QueryHost', () => {
     query.set(sent, ['blue']);
     expect(refreshes).toBe(1);
     expect(query.requestParams().get('colors')).toBe('blue');
+  });
+
+  it('sends a key’s URL entries with the page loaded: its default left out, as in the URL', () => {
+    const size = queryKey<string>('size', {
+      parse: (url, page) => url.get('size') ?? page?.defaultTime ?? '24h',
+      format: (value, page) => (value !== (page?.defaultTime ?? '24h') ? [['size', value]] : []),
+      sentToServer: true,
+    });
+    const page: PageJson = { kind: 'dashboard', title: 'Shop', defaultTime: '168h', filterBar: false, filterButtons: [], widgets: [] };
+    query.load({ search: '', page });
+    expect(query.get(size)).toBe('168h');
+    expect(query.requestParams().has('size')).toBe(false);
+    query.set(size, '24h');
+    expect(query.requestParams().get('size')).toBe('24h');
+    query.load({ search: '?size=168h', page });
+    expect(query.requestParams().has('size')).toBe(false);
   });
 
   it('knows a key used in one tab in every tab sharing the keys, each tab with its own value', () => {

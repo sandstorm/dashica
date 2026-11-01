@@ -78,7 +78,7 @@ export class QueryHost implements QueryApi {
     held.known = true;
     held.changed.fire();
     this.#writeSearchSoon();
-    if (key.request) this.refresh();
+    if (key.sentToServer) this.refresh();
   }
 
   onDidChange<T>(key: QueryKey<T>, listener: () => void): Disposable {
@@ -92,7 +92,7 @@ export class QueryHost implements QueryApi {
   requestParams(): URLSearchParams {
     const request = new URLSearchParams();
     for (const key of this.keys.all()) {
-      if (key.request) for (const [name, value] of key.request(this.get(key))) request.append(name, value);
+      if (key.sentToServer) for (const [name, value] of key.format(this.get(key), this.#page)) request.append(name, value);
     }
     return request;
   }

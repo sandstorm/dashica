@@ -36,7 +36,7 @@ func (a *AlertDetail) Title(title string) *AlertDetail {
 	return &cloned
 }
 
-func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
+func (a *AlertDetail) Handler(deps rendering.Dependencies, defaultTime string) http.Handler {
 	alertId := alerting.AlertId{Group: a.alertGroup, Key: a.alertKey}
 	mux := http.NewServeMux()
 
@@ -59,7 +59,7 @@ func (a *AlertDetail) Handler(deps rendering.Dependencies) http.Handler {
 		opts.Parameters = alertDef.Params
 
 		query := alertDef.Query
-		state, err := httpserver.ParseQueryState(r)
+		state, err := httpserver.ParseQueryState(r, defaultTime)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

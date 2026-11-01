@@ -111,14 +111,14 @@ func WriteResolvedTimeRange(w http.ResponseWriter, timeRange *querying.TimeRange
 	w.Header().Add("X-Dashica-Resolved-Time-Range", string(b))
 }
 
-// TimeRangeHandler serves the window of the request's query state (ParseQueryState, as every data handler reads it)
-// at now, as `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be read. The time picker asks it before it applies
-// a range, and for the window it shifts or zooms out. It applies no SQL chip, so it takes one also while
+// TimeRangeHandler serves the window of the request's query state (ParseQueryState, as every data handler reads it;
+// DefaultTimeRange without `time`: it has no page) at now, as `{"from": <ms>, "to": <ms>}`, or 400 with what cannot be
+// read. The time picker asks it, always with `time`, before it applies a range, and for the window it shifts or zooms out. It applies no SQL chip, so it takes one also while
 // filters.sqlEnabled is off.
 type TimeRangeHandler struct{}
 
 func (h TimeRangeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, DefaultTimeRange)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

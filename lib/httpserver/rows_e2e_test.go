@@ -31,7 +31,7 @@ func rowsOf(t *testing.T, query sql.SqlQueryable, queryString string) (*httptest
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
 	r := httptest.NewRequest(http.MethodGet, "/rows?"+queryString, nil)
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, DefaultTimeRange)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -71,7 +71,7 @@ func editedRows(t *testing.T, text string, params map[string]string, limit int) 
 // chartSql is what HandleSql answers for `chart` with the query state of `r`.
 func chartSql(t *testing.T, chart sql.SqlQueryable, r *http.Request) ChartSql {
 	t.Helper()
-	state, err := ParseQueryState(r)
+	state, err := ParseQueryState(r, DefaultTimeRange)
 	if err != nil {
 		t.Fatalf("ParseQueryState: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestHandleSql_ItsParametersSentAgainAreTheValuesTheChartBinds(t *testing.T)
 			chart := sql.FromStringWithoutFilters("SELECT " + p + " = " + p + " AS same, " + p + " AS v")
 			r := httptest.NewRequest(http.MethodGet, "/sql?time=1h&wp="+url.QueryEscape(`{"v":"`+strings.ReplaceAll(tt.value, `\`, `\\`)+`"}`), nil)
 			answer := chartSql(t, chart, r)
-			state, _ := ParseQueryState(r)
+			state, _ := ParseQueryState(r, DefaultTimeRange)
 			bound := httptest.NewRecorder()
 			if err := handler(t).HandleRows(chart, state, filter.Diagnostics{}, bound, r); err != nil {
 				t.Fatalf("HandleRows: %v", err)

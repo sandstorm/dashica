@@ -19,7 +19,7 @@ import (
 // original request intact — without a ClickHouse connection.
 type echoWidget struct{}
 
-func (e *echoWidget) Handler(rendering.Dependencies) http.Handler {
+func (e *echoWidget) Handler(rendering.Dependencies, string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, "QUERY time="+r.URL.Query().Get("time")+" f="+strings.Join(r.URL.Query()["f"], ","))

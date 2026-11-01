@@ -24,8 +24,8 @@ export interface QueryApi {
   /** Asks the widgets to query again with the same state (the refresh button, auto refresh). */
   refresh(): void;
   /**
-   * What the data handlers read: the entries of each key sent to the server (`sentToServer`), in the order the keys
-   * were first used, each as its key gives them (also a default, when the key says so).
+   * What the data handlers read: the URL entries of each key sent to the server (`sentToServer`), in the order the
+   * keys were first used, a default left out as in the URL (the handlers know their page's `defaultTime`).
    */
   requestParams(): URLSearchParams;
 }
@@ -41,11 +41,8 @@ export interface QueryKey<T> {
   parse(url: URLSearchParams, page: PageJson | undefined): T;
   /** As `QueryKeySpec.format`. */
   format(value: T, page: PageJson | undefined): QueryEntries;
-  /**
-   * What the data handlers read of `value` (`requestParams`); none for a key not sent, whose change queries nothing
-   * again (auto refresh).
-   */
-  request?(value: T): QueryEntries;
+  /** As `QueryKeySpec.sentToServer`. */
+  readonly sentToServer: boolean;
 }
 
 /** How a key is kept in the URL (`queryKey`), and whether the data handlers read it. */
@@ -58,11 +55,11 @@ export interface QueryKeySpec<T> {
   /** The entries of the URL that hold `value`, in order (`[['refresh', '30']]`); none for the default (`page`: as `parse`). */
   format(value: T, page: PageJson | undefined): QueryEntries;
   /**
-   * Whether the data handlers read it: `true` its URL entries (`format` without a page), or a function giving other
-   * entries (the time range, sent also when it is the default: the server does not know the page's). Without it the
-   * key is not sent, and its change queries nothing again.
+   * Whether the data handlers read it: sent, it sends its URL entries (`format` with the tab's page, so a default is
+   * left out: the server knows its page's). Without it the key is not sent, and its change queries nothing again
+   * (auto refresh).
    */
-  readonly sentToServer?: true | ((value: T) => QueryEntries);
+  readonly sentToServer?: boolean;
 }
 
 /**
@@ -70,14 +67,12 @@ export interface QueryKeySpec<T> {
  * (`queryKey<AutoRefresh>('refresh', { parse, format })`); a URL key belongs to one key only.
  */
 export function queryKey<T>(urlKeys: string | readonly string[], spec: QueryKeySpec<T>): QueryKey<T> {
-  const { sentToServer } = spec;
-  const key: QueryKey<T> = {
+  return {
     urlKeys: typeof urlKeys === 'string' ? [urlKeys] : urlKeys,
     parse: (url, page) => spec.parse(url, page),
     format: (value, page) => spec.format(value, page),
+    sentToServer: spec.sentToServer ?? false,
   };
-  if (sentToServer) key.request = sentToServer === true ? (value) => spec.format(value, undefined) : sentToServer;
-  return key;
 }
 
 /** Entries of a query string, in order (`[['f', '<key>'], ['sql', 'a > 1']]`). */

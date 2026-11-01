@@ -125,8 +125,10 @@ describe('WidgetsHost', () => {
       await expect(ctx.runQuery()).rejects.toThrow('Unknown identifier status');
     });
 
-    it('names URLs below the widget’s handler with the page’s query state', () => {
-      expect(ctx.url('/speedscope-query')).toMatch(/^\/p\/shop\/api\/1\/speedscope-query\?time=24h$/);
+    it('names URLs below the widget’s handler with the page’s query state, its default time range left out', () => {
+      expect(ctx.url('/speedscope-query')).toBe('/p/shop/api/1/speedscope-query?');
+      testbed.query.set(TEST_TIME, '1h');
+      expect(ctx.url('/speedscope-query')).toBe('/p/shop/api/1/speedscope-query?time=1h');
     });
 
     it('shows a menu for the widget, with what it queried last', async () => {
@@ -229,7 +231,7 @@ describe('WidgetsHost', () => {
       const status = testbed.widgets.active?.status;
       expect(status).toMatchObject({ kind: 'done', rows: 3 });
       expect(testbed.widgets.active?.lastResult?.numRows).toBe(3);
-      expect(testbed.widgets.active?.url('/debug')).toBe('/p/shop/api/1/debug?time=24h');
+      expect(testbed.widgets.active?.url('/debug')).toBe('/p/shop/api/1/debug?');
       testbed.serveText('/p/shop/api/1/query', 'Code: 60. Table default.http_logs does not exist', 500);
       await expect(contexts[0].runQuery()).rejects.toThrow();
       expect(testbed.widgets.active?.status).toMatchObject({ kind: 'error', message: 'Code: 60. Table default.http_logs does not exist' });

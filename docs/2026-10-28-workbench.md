@@ -531,9 +531,10 @@ a key from its first use, in any tab (`QueryKeys`, shared by the tabs), so it wr
 then on; ownership is who defines the key. The host keeps each tab's values (parsed from the tab's query string when
 first read, so a key first used after a load reads the URL loaded), writes them into their URL keys a moment after a
 change (the other keys kept as they are), fires the change, and `requestParams()` sends each key's server entries in
-the order the keys were first used. A key sent to the server (`sentToServer: true`, its `format` entries without a
-page; or a function, its own entries: `TIME`, sent also when it is the default) asks the widgets to query again on its
-change; one without does not (auto refresh). A `set` the URL would hold alike changes nothing. *(proposed)* The page
+the order the keys were first used. A key sent to the server (`sentToServer: true`; since 9al, D40, a boolean) sends
+exactly its URL entries, `format(value, page)` with the tab's page, so a default is left out of the request as of the
+URL (the data handlers know their page's `defaultTime`), and asks the widgets to query again on its change; one
+without does not (auto refresh). A `set` the URL would hold alike changes nothing. *(proposed)* The page
 shown is given to `parse` / `format` for the defaults it declares (`defaultTime`), in place of a `default` per key;
 one key may span several URL keys (`time` + `range`, `f` + `sql` in chip order), so `parse` reads the whole query
 string; the first argument of `queryKey` is the URL key or keys, not a separate name; a key the server reads is sent
@@ -542,7 +543,7 @@ widgets) *(proposed)*.
 
 | Key | Defined in, used by | Holds | URL | Notes |
 |---|---|---|---|---|
-| `TIME` | `time-library/time-state.ts`; `time-range`, `ChartFrame` | time range | `?time=1h`, `?time=custom&range=…` | default the page's (`.DefaultTimeRange("168h")`, fallback `24h`); sent also when the default |
+| `TIME` | `time-library/time-state.ts`; `time-range`, `ChartFrame` | time range | `?time=1h`, `?time=custom&range=…` | default the page's (`.DefaultTimeRange("168h")`, fallback `24h`); sent as the URL has it, the default left out (the handlers take their page's, D40) |
 | `REFRESH` | `time-library/refresh-state.ts`; `refresh`, `time-range` | auto refresh | `?refresh=30` | not sent |
 | `FILTERS` | `filters/chips.ts`; `filters` | one list of chips: pills and SQL chips (step 7b, §3.8); later a time-window filter | `?f=…&sql=…`, each repeatable, in chip order | `addChip` / `replaceChip` / `removeChips` |
 | `PARAMS` | `widget-library/params-state.ts`; the form widgets | values of form widgets | `?wp=…` | `withParam` |
@@ -558,12 +559,15 @@ Every data handler reads the same query parameters; the server parses them once 
 client owns the UI, the server only binds.
 
 ✅ (step 6.1) **The request carries the page URL's own keys:** `time`, `range`, `sql`, `wp` (no JSON parameters
-`filters` / `params`). `requestParams()` sends `time` also when it is the page's default, since the server does not
-know the page's default. `httpserver.ParseQueryState(r)` reads them once per request; a missing `time`, a
-`time` that is neither a Go duration nor `custom`, or a `wp` that is not a JSON object of strings fails the request
-with that reason (chart error, 400 from `/time-range` and the alert widgets). A `sql` while `filters.sqlEnabled` is off
+`filters` / `params`). Since 9al (D40) `requestParams()` leaves `time` out when it is the page's default, as the URL
+does: the data handlers know their page's default. `httpserver.ParseQueryState(r, defaultTime)` reads them once per
+request, a missing `time` as `defaultTime` (a widget's handlers get their page's at mount,
+`rendering.DashboardContext.DefaultTime`; the handlers without a page, `/time-range` and the old Explore's preview,
+`httpserver.DefaultTimeRange`, `24h`); a `time` that is neither a Go duration nor `custom`, or a `wp` that is not a
+JSON object of strings fails the request with that reason (chart error, 400 from `/time-range` and the alert
+widgets). A `sql` while `filters.sqlEnabled` is off
 (§3.15, step 9a) fails it where the chip would enter the query (`QueryState.SqlClause`, since step 9v). A chart with `FromFileWithoutFilters` /
-`SkipFilters()` still needs `time` in its request, but its query ignores it.
+`SkipFilters()` takes the time range like any other, but its query ignores it.
 
 ✅ (2026-10-30, with the time picker) **The time range is resolved once per request, in Go:**
 `QueryState.ResolveTimeRange(time.Now())` gives the window in ms, and every handler passes it to `SqlClause` and
@@ -1184,7 +1188,8 @@ interface QueryApi {                        // knows no key of its own: typed ke
   requestParams(): URLSearchParams;         // what every data handler reads; one format with step 6
 }
 // defined once where the state belongs (time-library, filters, widget-library), known to the host from its first use
-export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value, page), sentToServer });
+export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value, page), sentToServer: true });
+// a sent key sends format(value, page) with the tab's page: a default is left out as in the URL (D40)
 
 // widgets — renderers per widget type (§3.6)
 interface WidgetsApi {
@@ -1720,7 +1725,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   (§3.7). *(proposed)* The data fetch that was `ctx.query()` is `ctx.runQuery()`, as `ctx.query` is now the query
   state; `queryKey`'s first argument is the URL key or keys (`['time', 'range']`); `sentToServer` is `true` (its URL
   entries) or a function (`TIME`'s own entries, sent also when it is the default, since the server needs a time range
-  and does not know the page's); the form widgets' "No extension keeps the page params" error is gone, as `PARAMS` is
+  and does not know the page's; since 9al, D40, a boolean only); the form widgets' "No extension keeps the page params" error is gone, as `PARAMS` is
   always there; `dashboardPage` no longer touches `wp`.
 - **D37 The input box validates as typst-experiment's (9z, decided 2026-10-31):** `InputBoxOptions` gets
   `valueSelection` (the part of `value` selected at first, else all of it) and `validateInput(value)`, as VS Code's:
@@ -1763,7 +1768,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   run *(proposed: a scalar subquery inside a SQL file is still evaluated by the analysis, as for a chart's own
   query)*. It is filled in with the time range of the request (the placeholders and `{{DASHICA_FILTERS}}` of a SQL
   file), takes no pills and no SQL chips (they change no type; since 9ai `HandleFields` drops the chips), and carries the resolved time range for a time's default. Not behind
-  `explore.enabled`; 422 for a chart without a table, 400 without a time range. `<dataUrl>/values` answers only
+  `explore.enabled`; 422 for a chart without a table, 400 for a time range it cannot read (since 9al, D40, a request
+  without one is for the page's default). `<dataUrl>/values` answers only
   `{values}`. The client (`FieldsCache` in `add-filter.ts`, one per `filters` extension) keeps one answer per chart
   for the query state without the filter chips (`FILTERS`' `f` and `sql`), so "Add filter" asks each chart's
   `/fields` once with its field step (the table's first chart and every chart a computed field comes from, at once;
@@ -1774,6 +1780,21 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `sql.ValuesTypeColumn` (`any(…) AS __type`), the `type` of `/values`' answer and `pickValue`'s `initial` values.
   Explore's `/explore/api/values` stays. Without the schema (a failed `/fields`) the computed fields of that chart
   have no type either, so they offer `=` and `≠` *(proposed)*.
+- **D40 The data handlers know their page's default time range; `sentToServer` a boolean (9al, decided 2026-11-01;
+  maintainer, on `key.request = sentToServer === true ? (value) => spec.format(value, undefined) : sentToServer`:
+  "maybe this is too magic … OR WE SIMPLY MAKE A BOOLEAN (should this be sent to a server?)", the design answered
+  "YES THIS IS GOOD"):** `Builder.CollectHandlers` puts its validated default time range (`24h` when unset,
+  `httpserver.DefaultTimeRange`) into the page's `rendering.DashboardContext.DefaultTime`, the value `page.json`'s
+  `defaultTime` stands for; `widget.Mount` hands it to the widget's handlers (`DataHandler(deps, defaultTime, w)`,
+  `queryHandler`, a widget's own `Handler(deps, defaultTime)`), which read the state with
+  `httpserver.ParseQueryState(r, defaultTime)`: no `time` is the page's default, `time=1h` is 1h. The handlers without
+  a page (`/time-range`, the old Explore's preview) pass `httpserver.DefaultTimeRange`; the blank Explore's `/rows`
+  reads no time range. The missing-time `QueryStateError` is gone. Client: `QueryKeySpec.sentToServer?: boolean`; a
+  sent key sends exactly its URL entries, `format(value, page)` with the tab's page, so a default is left out of the URL
+  and the request alike; a key without it is not sent and its change queries nothing again. Gone: the function form,
+  `QueryKey.request` (now `QueryKey.sentToServer`), `format(value, undefined)`, `TIME`'s own function. *(proposed)* The
+  default reaches the handlers as a value (`DataHandler`'s parameter) rather than the context itself; `page.json` keeps
+  `defaultTime` empty for a page that declares none, the client's fallback is the same `24h`.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2117,6 +2138,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ai ✅ 2026-10-31 | **BUGFIX `/fields` takes no SQL chips** (§3.15 D39): `HandleFields` describes the computed fields without the request's `sql` chips, as D39 says, so a chip neither breaks the `DESCRIBE` nor is a 400 while `filters.sqlEnabled` is off. Test: Go `httpserver` (`HandleFields` with a chip while SQL filters are off gets to the `DESCRIBE`) | |
 | 9aj ✅ 2026-10-31 | **BUGFIX a computed field that cannot be described costs `/fields` nothing else** (§3.15 D39): `HandleFields` takes the chart's query and its computed fields (`fieldTypes`): one `DESCRIBE` of all, should it fail one per field, a field whose own fails left out of `computed` and logged, so the table's columns and the other fields keep their types. Tests: Go `httpserver` (`fieldTypes` one of all else one of each; `HandleFields` with an unreachable ClickHouse answers the columns). Deviation: a computed field without a type whose alias is also a column of the table shows the column's type (`typeIn`) *(proposed)* | |
 | 9ak ✅ 2026-10-31 | **BUGFIX a widget whose renderer throws is no rendered widget** (§3.5): `WidgetsHost.render` takes its `WidgetInstance` out of the rendered ones again and disposes it, so it is neither kept nor redecorated. Test: vitest (no provider asked for a widget whose renderer threw) | |
+| 9al ✅ 2026-11-01 | **D40 the handlers know their page's default time range; `sentToServer` a boolean** (§3.7, §3.15): Go `rendering.DashboardContext.DefaultTime` (set by `Builder.CollectHandlers`, `24h` when unset), `httpserver.DefaultTimeRange`, `httpserver.ParseQueryState(r, defaultTime)` (no `time` is the default; the missing-time error gone), `widget.DataHandler(deps, defaultTime, w)`, `queryHandler`, `fieldsHandler`, `valuesHandler`, Speedscope and the alert widgets with it, `withHandler.Handler(deps, defaultTime)`; `/time-range` and the old Explore's preview pass `24h`. Client: `QueryKeySpec.sentToServer?: boolean`, `QueryKey.sentToServer` in place of `request`, `requestParams()` appends `format(value, page)` of each sent key; `TIME`, `TEST_TIME` `sentToServer: true`. Tests: Go `dashboard` (a chart's `/sql` without `time` covers the dashboard's 168h, with `time=1h` 1h, 24h on a page declaring none), `httpserver` (`ParseQueryState` takes the default), `widget` (an unreadable time range is a 400); vitest: `QueryHost.requestParams` leaves out a key's default, `TIME` sent without the page's default, refresh not sent (kept), the widget's URLs, Speedscope, the filter bar's `/fields` with another range. Playwright (adjusted, not run): `e2e/explore-view.spec.ts`'s link test uses `time=1h`, as the default is no longer in the request. Deviation: the default reaches the handlers as a parameter, not the context *(proposed)* | the page's default once, in Go |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

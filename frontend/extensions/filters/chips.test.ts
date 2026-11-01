@@ -21,7 +21,7 @@ describe('FILTERS', () => {
       ['sql', "level != 'info'"],
     ];
     expect(FILTERS.format(chips, undefined)).toEqual(entries);
-    expect(FILTERS.request!(chips)).toEqual(entries);
+    expect(FILTERS.sentToServer).toBe(true);
     expect(FILTERS.parse(new URLSearchParams(entries as [string, string][]), undefined)).toEqual(chips);
   });
 });

@@ -56,7 +56,7 @@ type withDimensions interface {
 // withHandler is a widget with data beyond a query (alerts, Speedscope, the schema table): its handler answers the
 // requests below its URL ("/viewer/index.html", "/schema").
 type withHandler interface {
-	Handler(deps rendering.Dependencies) http.Handler
+	Handler(deps rendering.Dependencies, defaultTime string) http.Handler
 }
 
 // withChildren is a widget that lays out other widgets: a grid's areas by name, a group's widgets by position.
@@ -129,7 +129,7 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 	if titled, ok := w.(withTitle); ok {
 		node.Title = titled.widgetTitle()
 	}
-	if data := DataHandler(ctx.Deps, w); data != nil {
+	if data := DataHandler(ctx.Deps, ctx.DefaultTime, w); data != nil {
 		id := ""
 		if chosen, ok := w.(withExplicitId); ok {
 			id = chosen.explicitId()
@@ -239,13 +239,14 @@ func (w WidgetsMap) all() iter.Seq2[string, WidgetDefinition] {
 }
 
 // DataHandler answers the requests below a widget's URL: a withQuery's query (queryHandler), a withHandler's Handler;
-// nil for a widget without data.
-func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
+// nil for a widget without data. A request without `time` is for the time range `defaultTime`, its page's default
+// (rendering.DashboardContext.DefaultTime; httpserver.DefaultTimeRange without a page).
+func DataHandler(deps rendering.Dependencies, defaultTime string, w WidgetDefinition) http.Handler {
 	if chart, ok := w.(withQuery); ok {
-		return queryHandler(deps, chart)
+		return queryHandler(deps, defaultTime, chart)
 	}
 	if data, ok := w.(withHandler); ok {
-		return data.Handler(deps)
+		return data.Handler(deps, defaultTime)
 	}
 	return nil
 }
@@ -258,7 +259,7 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 // filters.sqlEnabled is off); and /pill, the pill of one of its fields (pillHandler); /values, the values of one of
 // them (valuesHandler); /fields, its table's columns and its computed fields with their types (fieldsHandler). /sql and `exploreSql` answer 404 unless
 // explore.enabled (their handlers check deps.Config).
-func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
+func queryHandler(deps rendering.Dependencies, defaultTime string, chart withQuery) http.Handler {
 	qh := httpserver.QueryHandler{
 		ClickhouseClientManager: deps.ClickhouseClientManager,
 		Logger:                  deps.Logger,
@@ -268,7 +269,7 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	query := chart.Query()
 	serve := func(handle func(sql.SqlQueryable, httpserver.QueryState, filter.Diagnostics, http.ResponseWriter, *http.Request) error) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			state, err := httpserver.ParseQueryState(r)
+			state, err := httpserver.ParseQueryState(r, defaultTime)
 			if err != nil {
 				httpError(w, err)
 				return
@@ -296,8 +297,8 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	})
 	mux.Handle("/sql", serve(qh.HandleSql))
 	mux.Handle("/pill", pillHandler(deps, chart))
-	mux.Handle("/fields", fieldsHandler(deps, qh, chart))
-	mux.Handle("/values", valuesHandler(deps, qh, chart))
+	mux.Handle("/fields", fieldsHandler(deps, qh, defaultTime, chart))
+	mux.Handle("/values", valuesHandler(deps, qh, defaultTime, chart))
 	return mux
 }
 
@@ -307,14 +308,14 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 // range, SQL chips and pills, the pills on that field left out, so that a value besides one filtered by is still
 // offered. 422 for a field that cannot filter (as /pill), 400 for a pill not signed with filters.secret or a query
 // state that cannot be read.
-func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
+func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, defaultTime string, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		table, target, err := filterBy(r, deps, chart)
 		if err != nil {
 			httpError(w, err)
 			return
 		}
-		state, err := httpserver.ParseQueryState(r)
+		state, err := httpserver.ParseQueryState(r, defaultTime)
 		if err != nil {
 			httpError(w, err)
 			return
@@ -344,16 +345,16 @@ func othersThan(pills []filter.Pill, table filter.Table, field string, column bo
 // ClickHouse cannot describe has no type, the others keep theirs, HandleFields); with the
 // resolved time range in X-Dashica-Resolved-Time-Range. Not behind explore.enabled: it is only the chart's own table
 // and fields. 422 for a chart without a table, 400 for a query state that cannot be read.
-func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
+func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, defaultTime string, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		table, ok := tableOf(deps, chart.Query())
 		if !ok {
 			httpError(w, fmt.Errorf("this chart has no table: %w", filter.ErrCannotFilter))
 			return
 		}
-		state, err := httpserver.ParseQueryState(r)
+		state, err := httpserver.ParseQueryState(r, defaultTime)
 		if err == nil {
-			// a state without a time range is refused before the schema is asked
+			// a time range that cannot be resolved is refused before the schema is asked
 			_, err = state.ResolveTimeRange(time.Now())
 		}
 		if err != nil {

@@ -30,13 +30,14 @@ function profileUrl(link: HTMLAnchorElement): URL {
 
 describe('speedscopeLink', () => {
   it('links the viewer to its query with the page’s time range and params', () => {
+    testbed.query.set(TIME, presetRange('1h'));
     setParam('path', '^/api/');
     const { el } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
     const link = el.querySelector('a')!;
     expect(link.textContent).toBe('Open Speedscope');
     const profile = profileUrl(link);
     expect(profile.pathname).toBe('/p/shop/api/4/speedscope-query');
-    expect(profile.searchParams.get('time')).toBe('24h');
+    expect(profile.searchParams.get('time')).toBe('1h');
     expect(JSON.parse(profile.searchParams.get('wp')!)).toEqual({ path: '^/api/' });
   });
 

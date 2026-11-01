@@ -15,6 +15,7 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
+	"github.com/sandstorm/dashica/lib/httpserver"
 	testServer "github.com/sandstorm/dashica/lib/testutil/testserver"
 )
 
@@ -26,7 +27,7 @@ func askClickHouse(t *testing.T, chart withQuery, path string) *httptest.Respons
 	cfg.Filters.Secret = string(testSecret)
 	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FileSystem: testFiles}
 	rec := httptest.NewRecorder()
-	queryHandler(deps, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	queryHandler(deps, httpserver.DefaultTimeRange, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
 }
 

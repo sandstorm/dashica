@@ -40,7 +40,7 @@ type showTableStructureResult struct {
 }
 
 // Handler serves the table's CREATE TABLE statement as text at "/schema".
-func (s *SchemaTable) Handler(deps rendering.Dependencies) http.Handler {
+func (s *SchemaTable) Handler(deps rendering.Dependencies, _ string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /schema", func(w http.ResponseWriter, r *http.Request) {
 		statement, err := s.showCreateTable(r.Context(), deps)

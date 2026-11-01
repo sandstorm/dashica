@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
+	"github.com/sandstorm/dashica/lib/httpserver"
 )
 
 // handlePreviewQuery executes a JSON-described widget and streams its result in
@@ -57,7 +58,7 @@ func (e *exploreImpl) dispatchPreview(w http.ResponseWriter, r *http.Request, en
 	}
 
 	// The widget's handler, as widget.Mount mounts it: a chart's "/query" and "/debug".
-	data := widget.DataHandler(e.deps, wd)
+	data := widget.DataHandler(e.deps, httpserver.DefaultTimeRange, wd)
 	if data == nil {
 		return fmt.Errorf("preview: widget type %T has no %s to preview", wd, endpoint)
 	}

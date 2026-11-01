@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
+	"github.com/sandstorm/dashica/lib/httpserver"
 )
 
 func TestSchemaTable_RefusesAnInvalidTableName(t *testing.T) {
 	rec := httptest.NewRecorder()
-	NewSchemaTable("http_logs; DROP TABLE http_logs").Handler(rendering.Dependencies{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/schema", nil))
+	NewSchemaTable("http_logs; DROP TABLE http_logs").Handler(rendering.Dependencies{}, httpserver.DefaultTimeRange).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/schema", nil))
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("GET /schema: %d %s", rec.Code, rec.Body)
 	}

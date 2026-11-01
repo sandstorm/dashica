@@ -45,11 +45,11 @@ func (s *SpeedscopeLink) Id(id string) *SpeedscopeLink {
 	return &cloned
 }
 
-func (s *SpeedscopeLink) Handler(deps rendering.Dependencies) http.Handler {
+func (s *SpeedscopeLink) Handler(deps rendering.Dependencies, defaultTime string) http.Handler {
 	query := s.sql
 	mux := http.NewServeMux()
 	mux.HandleFunc("/speedscope-query", func(w http.ResponseWriter, r *http.Request) {
-		httpError(w, serveSpeedscope(query, deps, w, r))
+		httpError(w, serveSpeedscope(query, deps, defaultTime, w, r))
 	})
 	mux.Handle("/viewer/", http.StripPrefix("/viewer", http.FileServerFS(speedscopeViewer)))
 	return mux
@@ -61,7 +61,7 @@ func (s *SpeedscopeLink) explicitId() string { return s.id }
 // Speedscope's profileURL ingestor expects. It takes the page's filters as a chart does: the window, the SQL chips
 // and the pills on its table and of the filter buttons (filter.Apply); a pill not signed with filters.secret, or a SQL
 // chip while filters.sqlEnabled is off, is a 400.
-func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http.ResponseWriter, r *http.Request) error {
+func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, defaultTime string, w http.ResponseWriter, r *http.Request) error {
 	client, err := deps.ClickhouseClientManager.GetClient("default")
 	if err != nil {
 		return fmt.Errorf("get clickhouse client: %w", err)
@@ -72,7 +72,7 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, w http
 	opts.Settings["format_custom_field_delimiter"] = " "
 	opts.Settings["date_time_input_format"] = "best_effort"
 
-	state, err := httpserver.ParseQueryState(r)
+	state, err := httpserver.ParseQueryState(r, defaultTime)
 	if err != nil {
 		return err
 	}

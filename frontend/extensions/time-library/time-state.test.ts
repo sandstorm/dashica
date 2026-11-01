@@ -1,7 +1,7 @@
-// Tests for time-state.ts: the time range read from the URL with the page's default, written back without it, and
-// sent with `time` always.
+// Tests for time-state.ts: the time range read from the URL with the page's default, written back and sent without it.
 import { describe, expect, it } from 'vitest';
 import type { PageJson } from '../../generated/zz_generated.dashica';
+import { QueryHost } from '../../hosts/query/query';
 import { TIME, customRange, presetRange } from './time-state';
 
 const shop = (defaultTime?: string): PageJson => ({ kind: 'dashboard', title: 'Shop', defaultTime, filterBar: false, filterButtons: [], widgets: [] });
@@ -31,11 +31,18 @@ describe('TIME', () => {
     ]);
   });
 
-  it('sends `time` also when it is the default, a custom range with its ends', () => {
-    expect(TIME.request!(presetRange('24h'))).toEqual([['time', '24h']]);
-    expect(TIME.request!(customRange('now-6h', 'now-1h'))).toEqual([
+  it('is sent as the URL has it, the page’s default left out', () => {
+    const query = new QueryHost();
+    query.load({ search: '', page: shop('168h') });
+    expect(query.get(TIME)).toEqual(presetRange('168h'));
+    expect(query.requestParams().toString()).toBe('');
+    query.set(TIME, presetRange('24h'));
+    expect(query.requestParams().toString()).toBe('time=24h');
+    query.set(TIME, customRange('now-6h', 'now-1h'));
+    expect([...query.requestParams()]).toEqual([
       ['time', 'custom'],
       ['range', 'now-6h to now-1h'],
     ]);
+    query.dispose();
   });
 });

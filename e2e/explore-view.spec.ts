@@ -115,10 +115,10 @@ test('the SQL editor highlights the chart’s SQL and completes a column of its 
 test('a link with the hash opens the view, with the link’s time range', async ({page}) => {
     const view = await openExplore(page);
     await expect(view.locator('perspective-viewer')).toBeVisible();
-    const refetched = page.waitForRequest((request) => /\/rows\?time=24h/.test(request.url()));
-    await page.goto(page.url().replace('time=168h', 'time=24h'));
+    const refetched = page.waitForRequest((request) => /\/rows\?time=1h/.test(request.url()));
+    await page.goto(page.url().replace('time=168h', 'time=1h'));
     await refetched;
-    await expect(page).toHaveURL(/time=24h.*#explore=\d+$/);
+    await expect(page).toHaveURL(/time=1h.*#explore=\d+$/);
     await expect(view.locator('perspective-viewer')).toBeVisible();
 });
 
