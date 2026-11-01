@@ -22,9 +22,10 @@ type Fields struct {
 
 // HandleFields answers `columns` (the chart's table's) and the types of the fields `computed` names, their query
 // `typesQuery` (sql.FieldTypes of the chart's query, one column per field in that order) described by ClickHouse
-// (`DESCRIBE (…)`, which reads no rows) in the time range of `state` as HandleQuery fills in a chart's, as the JSON
-// of Fields, with the resolved time range in X-Dashica-Resolved-Time-Range as a chart's answer has it (the filter
-// bar's default for a time). Without computed fields it asks ClickHouse nothing.
+// (`DESCRIBE (…)`, which reads no rows) in the time range of `state` as HandleQuery fills in a chart's, without its
+// SQL chips (they change no type), as the JSON of Fields, with the resolved time range in
+// X-Dashica-Resolved-Time-Range as a chart's answer has it (the filter bar's default for a time). Without computed
+// fields it asks ClickHouse nothing.
 func (qh QueryHandler) HandleFields(columns []clickhouse.SchemaColumn, typesQuery sql.SqlQueryable, computed []string, state QueryState, w http.ResponseWriter, r *http.Request) error {
 	answer := Fields{Columns: make([]clickhouse.ResultColumn, 0, len(columns)), Computed: make([]clickhouse.ResultColumn, 0, len(computed))}
 	for _, column := range columns {
@@ -37,6 +38,7 @@ func (qh QueryHandler) HandleFields(columns []clickhouse.SchemaColumn, typesQuer
 		}
 		WriteResolvedTimeRange(w, timeRange)
 	} else {
+		state.Sql = nil
 		p, err := qh.prepare(typesQuery, state)
 		if err != nil {
 			return err
