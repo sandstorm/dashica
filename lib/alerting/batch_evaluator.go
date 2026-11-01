@@ -17,7 +17,7 @@ import (
 // BatchEvaluator is responsible for evaluating alerts for a batch of time points; required during development
 // when re-evaluating loads of alerts at once with little overhead.
 //
-// It is NOT used during production runs where alerts are checked incrementally.
+// Production runs check the alerts incrementally instead (AlertEvaluator).
 //
 // It works as follows:
 //
@@ -58,12 +58,6 @@ func NewBatchEvaluator(logger zerolog.Logger, alertManager *AlertManager) *Batch
 		alertEvaluator:   alertManager.alertEvaluator,
 		alertResultStore: alertManager.alertResultStore,
 	}
-}
-
-// ExecutionTimePoint represents a single point in time when an alert should be evaluated
-type ExecutionTimePoint struct {
-	ExecutionTime time.Time
-	BucketTime    time.Time
 }
 
 func (e *BatchEvaluator) EvaluateAlerts(ctx context.Context, start time.Time, end time.Time) error {
@@ -107,6 +101,12 @@ func (e *BatchEvaluator) EvaluateSingleAlert(ctx context.Context, start, end tim
 	}
 
 	return nil
+}
+
+// ExecutionTimePoint represents a single point in time when an alert should be evaluated
+type ExecutionTimePoint struct {
+	ExecutionTime time.Time
+	BucketTime    time.Time
 }
 
 // calculateExecutionTimes collects all evaluation timestamps between start and end based on the cron expression.
@@ -213,7 +213,6 @@ func (b *BatchEvaluator) evaluateAlertForTimePoints(ctx context.Context, executi
 		return fmt.Errorf("running batch alert SQL query: %w", err)
 	}
 
-	// Process each execution time point
 	for i, executionTime := range executionTimes {
 		// find the corresponding bucket timestamp for each execution time
 		bucket := buckets[i]
@@ -243,6 +242,5 @@ func findResultsetRowWithBucket(results []alertResultRow, bucket time.Time) []al
 			return results[i : i+1]
 		}
 	}
-	// Empty slice
 	return results[0:0]
 }

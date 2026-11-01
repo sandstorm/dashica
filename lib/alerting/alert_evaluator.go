@@ -11,10 +11,49 @@ import (
 	"github.com/sandstorm/dashica/lib/logging"
 )
 
+// AlertEvaluator runs an alert's query and compares its row with the alert's condition (EvaluateAlert), at the time
+// its TimeProvider says.
 type AlertEvaluator struct {
 	logger            zerolog.Logger
 	clickhouseManager *clickhouse.Manager
 	timeProvider      config.TimeProvider
+}
+
+func NewAlertEvaluator(logger zerolog.Logger, clickhouseManager *clickhouse.Manager, timeProvider config.TimeProvider) *AlertEvaluator {
+	logger = logger.With().
+		Str(logging.EventDataset, logging.EventDataset_Dashica_Alerting_Evaluator).
+		Logger()
+	return &AlertEvaluator{
+		logger:            logger,
+		clickhouseManager: clickhouseManager,
+		timeProvider:      timeProvider,
+	}
+}
+
+func (e AlertEvaluator) EvaluateAlert(definition AlertDefinition) (*AlertResult, error) {
+	clickhouseClient, err := e.clickhouseManager.GetClient("default")
+	if err != nil {
+		return nil, fmt.Errorf("loading clickhouse client for %s: %w", definition.QueryPath, err)
+	}
+
+	alertSql := preprocessSql(definition, e.timeProvider)
+	queryOpts := clickhouse.DefaultQueryOptions()
+	queryOpts.Parameters = definition.Params
+
+	resultset, err := clickhouse.QueryJSON[alertResultRow](context.Background(), clickhouseClient, alertSql, queryOpts)
+	if err != nil {
+		return nil, fmt.Errorf("running alert SQL query: %w", err)
+	}
+
+	return e.evaluateThreshold(definition, resultset.Data)
+}
+
+func (e AlertEvaluator) WithTimeProvider(timeProvider config.TimeProvider) *AlertEvaluator {
+	return &AlertEvaluator{
+		logger:            e.logger,
+		clickhouseManager: e.clickhouseManager,
+		timeProvider:      timeProvider,
+	}
 }
 
 // AlertState is what an evaluated alert says; its String() is stored as the status in dashica_alert_events.
@@ -34,17 +73,6 @@ type AlertResult struct {
 
 	// Execution Timestamp
 	Timestamp config.Time
-}
-
-func NewAlertEvaluator(logger zerolog.Logger, clickhouseManager *clickhouse.Manager, timeProvider config.TimeProvider) *AlertEvaluator {
-	logger = logger.With().
-		Str(logging.EventDataset, logging.EventDataset_Dashica_Alerting_Evaluator).
-		Logger()
-	return &AlertEvaluator{
-		logger:            logger,
-		clickhouseManager: clickhouseManager,
-		timeProvider:      timeProvider,
-	}
 }
 
 // alertResultRow describes the alert result format from the database to the alerter (i.e. the supported result set)
@@ -73,24 +101,6 @@ func (ar alertResultRows) MarshalZerologArray(a *zerolog.Array) {
 	for _, row := range ar {
 		a.Object(row)
 	}
-}
-
-func (e AlertEvaluator) EvaluateAlert(definition AlertDefinition) (*AlertResult, error) {
-	clickhouseClient, err := e.clickhouseManager.GetClient("default")
-	if err != nil {
-		return nil, fmt.Errorf("loading clickhouse client for %s: %w", definition.QueryPath, err)
-	}
-
-	alertSql := preprocessSql(definition, e.timeProvider)
-	queryOpts := clickhouse.DefaultQueryOptions()
-	queryOpts.Parameters = definition.Params
-
-	resultset, err := clickhouse.QueryJSON[alertResultRow](context.Background(), clickhouseClient, alertSql, queryOpts)
-	if err != nil {
-		return nil, fmt.Errorf("running alert SQL query: %w", err)
-	}
-
-	return e.evaluateThreshold(definition, resultset.Data)
 }
 
 // evaluateThreshold evaluates the alert threshold for a SINGLE alert row (i.e. a specific timestamp).
@@ -168,14 +178,6 @@ func (e AlertEvaluator) zeroOrSingleRowWithTimestamp(resultRows []alertResultRow
 func (e AlertEvaluator) withTimestamp(a *AlertResult) *AlertResult {
 	a.Timestamp = e.timeProvider.Now()
 	return a
-}
-
-func (e AlertEvaluator) WithTimeProvider(timeProvider config.TimeProvider) *AlertEvaluator {
-	return &AlertEvaluator{
-		logger:            e.logger,
-		clickhouseManager: e.clickhouseManager,
-		timeProvider:      timeProvider,
-	}
 }
 
 func preprocessSql(alertDefinition AlertDefinition, timeProvider config.TimeProvider) string {

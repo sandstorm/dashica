@@ -16,6 +16,43 @@ type AlertConfiguration struct {
 	Alerts map[string]*AlertDefinition `json:"alerts"`
 }
 
+func ParseAlertConfiguration(fileSystem fs.FS, filePath string) ([]AlertDefinition, error) {
+	contents, err := fs.ReadFile(fileSystem, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("reading file %s: %w", filePath, err)
+	}
+	var config AlertConfiguration
+	if err := yaml.Unmarshal(contents, &config); err != nil {
+		return nil, err
+	}
+
+	for k, definition := range config.Alerts {
+		definition.Id.Group = filePath
+		definition.Id.Key = k
+
+		if definition.QueryPath == "" {
+			return nil, fmt.Errorf("%s - no query path defined", k)
+		}
+		// replace SQL path with full contents
+		alertSqlFilePath := path.Clean(path.Join(path.Dir(filePath), definition.QueryPath))
+		alertContents, err := fs.ReadFile(fileSystem, alertSqlFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("%s - reading file %s: %w", k, alertSqlFilePath, err)
+		}
+		bucketInterval, err := extractBucketExpression(string(alertContents))
+		if err != nil {
+			return nil, fmt.Errorf("%s - extracting bucket interval from %s: %w", k, alertSqlFilePath, err)
+		}
+
+		// Store the query path back in the definition, to ensure it is always normalized.
+		definition.QueryPath = alertSqlFilePath
+		definition.Query = string(alertContents)
+		definition.QueryBucketExpression = bucketInterval
+	}
+
+	return util.ValuesToArray(config.Alerts), nil
+}
+
 // AlertDefinition is the definition of a single alert
 type AlertDefinition struct {
 	Id        AlertId
@@ -66,42 +103,6 @@ type AlertCondition struct {
 	//ResultsetEmpty    *bool    `json:"resultset_empty"`
 }
 
-func ParseAlertConfiguration(fileSystem fs.FS, filePath string) ([]AlertDefinition, error) {
-	contents, err := fs.ReadFile(fileSystem, filePath)
-	if err != nil {
-		return nil, fmt.Errorf("reading file %s: %w", filePath, err)
-	}
-	var config AlertConfiguration
-	if err := yaml.Unmarshal(contents, &config); err != nil {
-		return nil, err
-	}
-
-	for k, definition := range config.Alerts {
-		definition.Id.Group = filePath
-		definition.Id.Key = k
-
-		if definition.QueryPath == "" {
-			return nil, fmt.Errorf("%s - no query path defined", k)
-		}
-		// replace SQL path with full contents
-		alertSqlFilePath := path.Clean(path.Join(path.Dir(filePath), definition.QueryPath))
-		alertContents, err := fs.ReadFile(fileSystem, alertSqlFilePath)
-		if err != nil {
-			return nil, fmt.Errorf("%s - reading file %s: %w", k, alertSqlFilePath, err)
-		}
-		bucketInterval, err := extractBucketExpression(string(alertContents))
-		if err != nil {
-			return nil, fmt.Errorf("%s - extracting bucket interval from %s: %w", k, alertSqlFilePath, err)
-		}
-
-		// Store the query path back in the definition, to ensure it is always normalized.
-		definition.QueryPath = alertSqlFilePath
-		definition.Query = string(alertContents)
-		definition.QueryBucketExpression = bucketInterval
-	}
-
-	return util.ValuesToArray(config.Alerts), nil
-}
 func extractBucketExpression(input string) (string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(input))
 
@@ -113,7 +114,6 @@ func extractBucketExpression(input string) (string, error) {
 		lineCount++
 
 		if idx := strings.Index(line, prefix); idx >= 0 {
-			// Extract everything after the prefix
 			return strings.TrimSpace(line[idx+len(prefix):]), nil
 		}
 	}
