@@ -92,9 +92,8 @@ export const exploreView: Extension = {
           });
           if (!picked) return;
           const { connection, sql, parameters } = await fetchSql(sqlRequest(picked.dataUrl, query.requestParams()));
-          // a chart that did not run (204) names no connection: the first one, as "Explore (from scratch)" falls back to
-          const on = connection || (page.workbench.connections[0] ?? 'default');
-          return page.navigate(blankExploreUrl(page.activeTab.url, on, sql === '' ? undefined : { sql, parameters }), { newTab: true });
+          // a chart that did not run answers its connection with an empty SQL: an empty editor on that connection
+          return page.navigate(blankExploreUrl(page.activeTab.url, connection, sql === '' ? undefined : { sql, parameters }), { newTab: true });
         },
         { enablement: () => menuCharts(page.workbench.menu, '').length > 0, disabledReason: 'No dashboard has a chart' },
       ),

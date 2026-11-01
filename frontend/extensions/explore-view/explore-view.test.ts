@@ -200,10 +200,10 @@ describe('exploreView', () => {
     expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=&connection=audit&exploreSql=SELECT+%7B__from%3ADateTime64%7D&param___from=1', newTab: true }]);
   });
 
-  it('starts from a picked chart that did not run (204) with an empty editor on the first connection', async () => {
-    vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
+  it('starts from a picked chart that did not run with an empty editor on its connection', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ connection: 'logs', sql: '', parameters: {} }));
     await commands.get('exploreView.startFromChart')!();
-    expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=&connection=default', newTab: true }]);
+    expect(navigated).toEqual([{ url: '/p/shop?time=1h#explore=&connection=logs', newTab: true }]);
   });
 
   it('renders a blank Explore for the hash #explore= alone, titled "Explore", with a connection picker', () => {

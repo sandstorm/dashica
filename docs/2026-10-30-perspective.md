@@ -245,7 +245,7 @@ Since 2026-10-31 (§4.7; proposed where §4.7 says so):
 | `GET <dataUrl>/rows?<QueryState>` | the chart's query as at `/query`, Arrow with every column of a plain Arrow type (`clickhouse.PlainArrowCast`: `DateTime*` → `DateTime64(3)`, `Date` → `Date32`, 64-bit+ ints / `Decimal` / `BFloat16` → `Float64`, others → `String`); headers `X-Dashica-Resolved-Time-Range`, `X-Dashica-Bucket-Size`, `X-Dashica-Diagnostics` (`X-Dashica-Sql: editable`, which replaced `X-Dashica-Grouping: removable`, went with step 8g) |
 | `GET <dataUrl>/sql?<QueryState>` | JSON `httpserver.ChartSql` `{connection, sql, parameters}` (since step 8g; `connection` since workbench step 9bc, D51): the chart's query as `/query` sends it to ClickHouse for this state, its `{name:Type}` placeholders kept, the values bound to them (`__from`, `__to`, the form values), and the ClickHouse connection it runs on (`sql.ConnectionOf`); `X-Dashica-Diagnostics`; 404 when Explore is off (`HandleSql` checks it) |
 | `GET <dataUrl>/rows?exploreSql=<text>&param_<name>=<value>…` | `<text>` run as it is on the chart's ClickHouse connection, each `param_<name>` bound to its placeholder (`EditedParameters`, ClickHouse's HTTP names), read-only, the same casts, at most 100,000 rows; header `X-Dashica-Rows-Limit: 100000`; no QueryState read; 404 when Explore is off (`HandleEditedRows` checks it) |
-| any | 204 for a skipped chart (`X-Dashica-Diagnostics`; not for `exploreSql`), 400 for an unreadable query state, 500 for a ClickHouse error with ClickHouse's message (`Code: 62. DB::Exception: Syntax error …`) |
+| any | 204 for a skipped chart (`X-Dashica-Diagnostics`; not for `exploreSql`, and `/sql` answers its `connection` with an empty `sql` instead, since workbench step 9be), 400 for an unreadable query state, 500 for a ClickHouse error with ClickHouse's message (`Code: 62. DB::Exception: Syntax error …`) |
 
 `?grouping=none` and `X-Dashica-Grouping` go.
 
@@ -522,7 +522,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
      Explore (`/sql`: each, `/rows`: one with `xsql`); `HandleEditedRows(queryObj, text, limit, w, r)` takes the limit;
      the shared client lookup is `QueryHandler.client`. An empty `xsql` (spaces, a `;`) is a 400; the 404 says
      "Explore is not enabled (explore_enabled)".
-   - **`/sql` of a skipped chart** answers 204, the editor gets no text.
+   - **`/sql` of a skipped chart** answers 204, the editor gets no text (since workbench step 9be a 200 with its
+     `connection` and an empty `sql`, so "Explore (from chart…)" opens on the chart's connection).
    - **The editor fetches `/sql` only while it is open** (and when it opens), not on every refresh while closed. A
      Run of the same edited text runs it again (the page host fires `onDidChangeHash` for the same hash too).
    - `editedSql` / `withEditedSql` (`view.ts`) read and write `xsql` of the tab's hash; the view gets `hash`,

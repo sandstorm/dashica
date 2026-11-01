@@ -541,7 +541,8 @@ describe('renderExploreView', () => {
   });
 
   it('shows the chart’s Diagnostics: the filters it ignores, a skipped chart', async () => {
-    answer = () => new Response(null, { status: 204, headers: { 'X-Dashica-Diagnostics': '{"skipped":"pick a host first"}' } });
+    const skipped = { 'X-Dashica-Diagnostics': '{"skipped":"pick a host first"}' };
+    answer = (url) => (url.pathname.endsWith('/sql') ? Response.json({ connection: 'default', sql: '', parameters: {} }, { headers: skipped }) : new Response(null, { status: 204, headers: skipped }));
     open();
     await settle();
     expect(viewContainer.querySelector('.d-explore-view__body')!.textContent).toBe('skipped: pick a host first');

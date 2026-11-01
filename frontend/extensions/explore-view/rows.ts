@@ -70,13 +70,13 @@ export async function fetchRows(url: string, signal?: AbortSignal): Promise<Rows
 }
 
 /**
- * The SQL, parameters and connection at `url` (`sqlRequest`); an empty SQL and connection for a chart that did not run
- * (204); rejects with the server's message.
+ * The SQL, parameters and connection at `url` (`sqlRequest`); an empty SQL for a chart that did not run, its connection
+ * still named; rejects with the server's message.
  */
 export async function fetchSql(url: string, signal?: AbortSignal): Promise<ChartSql> {
   const response = await fetch(url, { signal });
-  if (response.status !== 200 && response.status !== 204) throw new Error(`${response.status} ${await response.text()}`);
-  return response.status === 204 ? { connection: '', sql: '', parameters: {} } : response.json();
+  if (response.status !== 200) throw new Error(`${response.status} ${await response.text()}`);
+  return response.json();
 }
 
 /** What the view says about the `shown` rows: "24 rows of the chart's result", "1,234 rows", "the first 100,000 rows (limit)". */

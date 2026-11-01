@@ -36,11 +36,9 @@ describe('sqlRequest', () => {
 });
 
 describe('fetchSql', () => {
-  it('reads the SQL, its parameters and its connection, nothing for a skipped chart, and rejects with the server’s message', async () => {
+  it('reads the SQL, its parameters and its connection, and rejects with the server’s message', async () => {
     vi.stubGlobal('fetch', async () => Response.json({ connection: 'logs', sql: 'SELECT {v:String}', parameters: { v: 'a' } }));
     expect(await fetchSql('/sql')).toEqual({ connection: 'logs', sql: 'SELECT {v:String}', parameters: { v: 'a' } });
-    vi.stubGlobal('fetch', async () => new Response(null, { status: 204 }));
-    expect(await fetchSql('/sql')).toEqual({ connection: '', sql: '', parameters: {} });
     vi.stubGlobal('fetch', async () => new Response('Explore is not enabled', { status: 404 }));
     await expect(fetchSql('/sql')).rejects.toThrow('404 Explore is not enabled');
   });

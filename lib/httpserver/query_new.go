@@ -122,22 +122,23 @@ type ChartSql struct {
 
 // HandleSql answers the SQL HandleQuery sends to ClickHouse for `queryObj` filtered by `state`, the parameters bound
 // to it and its connection, as the JSON of ChartSql. Its window is resolved at the server's now, as for HandleQuery. A skipped
-// chart answers 204; ErrExploreNotEnabled unless explore_enabled (qh.Config).
+// chart answers its connection alone (an empty Sql), so "Explore (from chart…)" still opens on it; ErrExploreNotEnabled
+// unless explore_enabled (qh.Config).
 func (qh QueryHandler) HandleSql(queryObj sql.SqlQueryable, state QueryState, diagnostics filter.Diagnostics, w http.ResponseWriter, r *http.Request) error {
 	if !qh.Config.ExploreEnabled {
 		return ErrExploreNotEnabled
 	}
 	WriteDiagnostics(w, diagnostics)
-	if diagnostics.Skipped != "" {
-		w.WriteHeader(http.StatusNoContent)
-		return nil
-	}
-	p, err := qh.prepare(queryObj, state)
-	if err != nil {
-		return err
+	answer := ChartSql{Connection: sql.ConnectionOf(queryObj), Parameters: map[string]string{}}
+	if diagnostics.Skipped == "" {
+		p, err := qh.prepare(queryObj, state)
+		if err != nil {
+			return err
+		}
+		answer.Sql, answer.Parameters = p.query, p.opts.Parameters
 	}
 	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(ChartSql{Connection: sql.ConnectionOf(queryObj), Sql: p.query, Parameters: p.opts.Parameters})
+	return json.NewEncoder(w).Encode(answer)
 }
 
 // writeHeaders tells the client the window (so that charts also show the full range if they have no data at

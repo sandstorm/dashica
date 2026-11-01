@@ -1,5 +1,5 @@
 // Tests for QueryHandler.HandleRows, HandleSql, HandleEditedRows and ConnectionRowsHandler without ClickHouse: a
-// skipped chart; the LIMIT around an edited query; its `param_<name>` keys (EditedParameters); the Explore handlers
+// skipped chart (its connection alone at /sql); the LIMIT around an edited query; its `param_<name>` keys (EditedParameters); the Explore handlers
 // while Explore is off; a blank Explore tab's query on a connection not in the config, and an empty one.
 package httpserver
 
@@ -31,6 +31,21 @@ func TestHandleRows_ASkippedChartAnswers204WithoutClickHouse(t *testing.T) {
 	}
 	if rec.Code != http.StatusNoContent || rec.Header().Get("X-Dashica-Diagnostics") != `%7B%22skipped%22:%22pick%20a%20host%20first%22%7D` {
 		t.Errorf("status %d, headers %v", rec.Code, rec.Header())
+	}
+}
+
+func TestHandleSql_ASkippedChartAnswersItsConnectionWithoutClickHouse(t *testing.T) {
+	// no ClickHouse manager: asking it would panic
+	qh := QueryHandler{Config: &config.Config{ExploreEnabled: true}}
+	rec := httptest.NewRecorder()
+
+	err := qh.HandleSql(sql.New(sql.From("http_logs"), sql.OnDatabase("logs")), parseQueryState(t, "time=1h"), filter.Diagnostics{Skipped: "pick a host first"}, rec, httptest.NewRequest(http.MethodGet, "/sql", nil))
+
+	if err != nil {
+		t.Fatalf("HandleSql: %v", err)
+	}
+	if want := `{"connection":"logs","sql":"","parameters":{}}` + "\n"; rec.Code != http.StatusOK || rec.Body.String() != want || rec.Header().Get("X-Dashica-Diagnostics") == "" {
+		t.Errorf("status %d, body %s, headers %v", rec.Code, rec.Body, rec.Header())
 	}
 }
 
