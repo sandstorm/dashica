@@ -90,9 +90,9 @@ chart's result. Which slot is the measure is fixed per widget type:
 
 - `lib/explore` is deprecated, its UI is gone; the workbench concept (§6) rebuilds Explore as a page with a widget
   builder. Its Go state in `dashica.go` (`exploreBaseURL`, the `IsExploreView()` marker) is deprecated as well.
-- `lib/explore`'s preview (`preview/query`, registered by `docs/dev-server` only) runs a widget the browser sends as
-  JSON through the same `widget.DataHandler` as a mounted chart, including a query of kind `raw` (`sql.FromString`):
-  SQL from the browser.
+- `lib/explore`'s preview (`preview/query`) ran a widget the browser sent as JSON through the same
+  `widget.DataHandler` as a mounted chart, including a query of kind `raw` (`sql.FromString`): SQL from the browser,
+  without `explore.enabled`. It is deleted (workbench step 9aw), with `lib/explore`'s `schema` and `values`.
 - `public/dist/index.js`: 3.9 MB unminified, ~1.1 MB gzipped, one esbuild entry. Speedscope is a separate build served
   per widget: precedent for a heavy viewer outside the main bundle.
 
@@ -543,7 +543,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
    SQL-file charts alike, behind `explore.enabled`, read-only; "Remove grouping" goes.
    The question as it stood: **Changing the query in the view** (maintainer's note: "a way in Explore to change the SQL query … and drop the
    groupings", more explicit than derived rows). Not built. What exists: the free SQL filter `sql=` (any WHERE, on every
-   chart of the page) and `lib/explore`'s preview (deprecated, dev server only), which already runs a widget the browser
+   chart of the page) and `lib/explore`'s preview (deprecated; deleted since workbench step 9aw), which already ran a widget the browser
    sends, including a `raw` query, through `widget.DataHandler`, so the path from "SQL text in the view" to Arrow exists.
    Open: whether the view edits (a) the chart's whole SQL as text, for builder and SQL-file charts alike, sent as a
    `raw` query, or (b) a few structured parts (columns, GROUP BY, LIMIT) of a builder query; and who may send SQL: the

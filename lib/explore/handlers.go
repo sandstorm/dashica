@@ -18,19 +18,7 @@ import (
 func (e *exploreImpl) registerHandlers(collector handler_collector.HandlerCollector) error {
 	api := collector.Nested("/api")
 
-	if err := api.Handle("preview/query", apiHandler(e.handlePreviewQuery).asHTTP()); err != nil {
-		return err
-	}
-	if err := api.Handle("preview/debug", apiHandler(e.handlePreviewDebug).asHTTP()); err != nil {
-		return err
-	}
 	if err := api.Handle("formmodel", apiHandler(e.handleFormModel).asHTTP()); err != nil {
-		return err
-	}
-	if err := api.Handle("schema", apiHandler(e.handleSchema).asHTTP()); err != nil {
-		return err
-	}
-	if err := api.Handle("values", apiHandler(e.handleValues).asHTTP()); err != nil {
 		return err
 	}
 	if err := api.Handle("gocode", apiHandler(e.handleGocode).asHTTP()); err != nil {

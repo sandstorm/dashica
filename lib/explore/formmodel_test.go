@@ -12,7 +12,7 @@ import (
 )
 
 func TestFormModel_ServesDescriptorsDefaultsAndLayouts(t *testing.T) {
-	e := newTestExplore()
+	e := &exploreImpl{title: "Explore"}
 	rec := httptest.NewRecorder()
 	if err := e.handleFormModel(rec, httptest.NewRequest(http.MethodGet, "/explore/api/formmodel", nil)); err != nil {
 		t.Fatalf("handleFormModel: %v", err)

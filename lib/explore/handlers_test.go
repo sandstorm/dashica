@@ -27,15 +27,19 @@ func TestCollectHandlers_RegistersAllRoutes(t *testing.T) {
 
 	want := []string{
 		"/explore",
-		"/explore/api/preview/query",
-		"/explore/api/preview/debug",
 		"/explore/api/formmodel",
-		"/explore/api/schema",
-		"/explore/api/values",
+		"/explore/api/gocode",
 	}
 	for _, path := range want {
 		if !collector.IsRegistered(path) {
 			t.Errorf("route %s not registered", path)
+		}
+	}
+	// The browser's widget and SQL run only behind explore.enabled, in the workbench's handlers; the old Explore
+	// API runs no query.
+	for _, path := range []string{"/explore/api/preview/query", "/explore/api/preview/debug", "/explore/api/schema", "/explore/api/values"} {
+		if collector.IsRegistered(path) {
+			t.Errorf("route %s still registered", path)
 		}
 	}
 }

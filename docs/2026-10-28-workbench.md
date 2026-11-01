@@ -705,7 +705,7 @@ the server made:
   pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
   a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
-- **The Explore preview** (`lib/explore`) still drops `f`: its widget comes from the request.
+- **The old Explore preview** (`lib/explore`, it dropped `f`) is gone since 9aw.
 - **Tests:** `sql` (Quote, Condition, FilterAs, TableOf), `filter` (TableOf, New, Sign / Open and every refused
   key, Apply's grouping and two bases on one table), `widget` (`/pill`, its 422 and 400, pills applied and ignored,
   a SQL file with `sql.Table`, a tampered pill 400, `filterableFields`), `config` (the secret's length); vitest for the
@@ -789,8 +789,6 @@ SQL chip) fails that chart only, with the column named. No query parsing.
 - **A column a select aliases with another expression is ignored** (`sum(bytes) AS bytes`, `toStartOfHour(ts) AS
   ts`): ClickHouse resolves the alias in WHERE, so the column would compare the select. Checked on 25.9: the
   aggregate fails the query (`ILLEGAL_AGGREGATION`), the bucket matches other rows.
-- **Explore's preview drops `f`:** its widget, fields and From come from the request; without filters it asks no
-  `DESCRIBE`, so the cache holds the tables of mounted dashboards.
 - **`timeHeatmap`'s `y` is one of its own fields on the server:** its query groups by y's raw value (the client
   buckets it into rows), so a filter by y's alias compares that raw value, as a base-table column would, and also
   works for an expression (`JSONExtract(attrs, 'duration', 'UInt64') AS duration`). Only its click selection is off.
@@ -811,7 +809,7 @@ only conditions (`filter.Condition(i, f, expression)` writes one) and the handle
 not name (the form widgets' `wp` values are bound so for every chart already; the integration test
 `TestHandleQuery_AValueOfAnIgnoredFilterIsBoundUnnamed` checks it, run against CI's ClickHouse, not in the sandbox).
 Debug's `stats` has `filterClause` (the window and the SQL filter; the structured conditions are in its `query`),
-`parameters` (all bound values) and `diagnostics`. Explore's preview serves the same handler and sends no `f`.
+`parameters` (all bound values) and `diagnostics`. 
 
 `SqlQuery.With` appends a request's `Where` to its own copy of the chart's WHERE list, so concurrent requests cannot
 write into the same backing array (from the first 6.4).
@@ -1804,7 +1802,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   *(proposed: the resolved time range of a relative range kept with it is as old as the answer, the default of a
   time's input box only)*. Gone: `/type`, `/columns`, `fetchType`, `fetchColumns`, `sql.ValueType`,
   `sql.ValuesTypeColumn` (`any(…) AS __type`), the `type` of `/values`' answer and `pickValue`'s `initial` values.
-  Explore's `/explore/api/values` stays. Without the schema (a failed `/fields`) the computed fields of that chart
+  Explore's `/explore/api/values` stayed (gone since 9aw). Without the schema (a failed `/fields`) the computed fields of that chart
   have no type either, so they offer `=` and `≠` *(proposed)*.
 - **D40 The data handlers know their page's default time range; `sentToServer` a boolean (9al, decided 2026-11-01;
   maintainer, on `key.request = sentToServer === true ? (value) => spec.format(value, undefined) : sentToServer`:
@@ -2150,7 +2148,8 @@ rewrites or deliberately deletes a file's content removes the marker (or the fil
 commit message where the content went. Before the merge, `grep -rl UNMIGRATED frontend` must be empty.
 
 **Explore's Go API is kept, marked deprecated:** its UI is gone with step 3a; its Go code (`lib/explore`, the form
-model, the Go-code emitter, open-in-explore, the generator parts for both) stays for the rebuild (§6). Whole files start
+model, the Go-code emitter, open-in-explore, the generator parts for both) stays for the rebuild (§6); its handlers
+that ran queries (preview, schema, values) are deleted (9aw). Whole files start
 with `// DEPRECATED (workbench): …`; Explore-only symbols in shared files carry Go's `Deprecated: (workbench) …`
 paragraph, so editors and linters flag their use. These may outlive the merge; the Explore rebuild ports or deletes
 each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Explore is being rebuilt" meanwhile.
@@ -2268,6 +2267,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9at ✅ 2026-11-01 | **D45 (e) a failed filter is shown** (§3.8, §3.11, §3.15): `UiApi.showErrorMessage(message): Promise<void>` (`hosts/ui/notifications/notifications.{ts,css,test.ts}`, `Notifications`, in `UiHost`); `showFailed` (`filters/offer.ts`) in `offerFilters`, `addFilter`, the filter bar's `#press` and `#remake`, the console log kept. Tests: `notifications.test.ts`, `offer.test.ts`, `add-filter.test.ts` (a refused `/pill`), `filters.test.ts` (a refused button value, a refused edit) | *(proposed)* error kind only, no items; stays until closed; the HTTP status kept in the text |
 | 9au ✅ 2026-11-01 | **D47 DOM nodes end in `Element` / `Container`** (§3.15; docs/conventions.md "Names and types"): every field, variable, parameter and property in `frontend/**/*.ts` that holds a DOM node renamed by role (e.g. `#body` → `#bodyContainer`, `#title` → `#titleElement`, `#spinner` → `#spinnerElement`, `#frame` → `#frameElement`, a renderer's `el` → `widgetContainer` / `pageContainer` / `viewContainer`, `Panel.body` → `bodyContainer`, `InputBoxField.element` / `input` → `fieldElement` / `inputElement`, `WindowLayout.topBar` → `topBarContainer`), with all users and tests; the chart frame's `#decorations` → `#badgeContainer`, `#showDecorations` → `#drawDecorations`; the widgets host's `decorate()` → `decorationsOf(widget, result)`, `#redecorate` → `#askProvidersAgain`; the sticky tooltip's parts object (data) `TooltipEl` → `Tooltip`, `Pin.el` → `Pin.tooltip`; the concept's API sketches follow. Four commits (hosts and workbench; chart library and widget types; the other extensions; the leftovers with these docs), each green. ✅ 2026-11-01 (vitest, typecheck, top comments green; Playwright not run, no spec names a renamed identifier), deviations: several nodes end in `Elements`; a `Document` and a text node keep their names; `MenuAnchor.anchor` and a rendered widget's `redecorate()` stay; commits `REFACTOR:` *(all proposed)* | one name for what a node is |
 | 9av ✅ 2026-11-01 | **D48 a sash; Explore's SQL panel resizable** (§3.5, §3.15; Perspective §4.7): `Sash` (`frontend/core/sash/sash.{ts,css,test.ts}`: orientation, label, size, min / max, step, `reverse`, `perPixel`, `shownSize`, `onDidChange`, keys and pointer drag); `SideBar` uses it (`#createSash`, `window-layout.css` `.d-workbench__sash` places it); the Explore view's `#createSqlSash` below the SQL panel, height in `globalState` `sqlHeight`, hidden with the panel, the editor filling the panel (`explore-view.css`). Tests: `sash.test.ts` (keys, drag, bounds, kept size, `shownSize`, dispose), the side bars' tests unchanged and green, `view.test.ts` (the split: keys, drag, kept, hidden with the panel), `e2e/explore-view.spec.ts` (written, not run) | *(proposed)* `core/` as the place; the owner keeps the size; `shownSize`; Explore's bounds and CSS minimum for the viewer |
+| 9aw ✅ 2026-11-01 | **BUGFIX the old Explore API runs no query** (§3.8, §5; Perspective §2.5): `lib/explore`'s `preview/query`, `preview/debug`, `schema` and `values` deleted (`preview.go`, `schema.go`, `values.go` and their tests): they ran a widget, its SQL and value samples the browser sent, without `explore.enabled` (D8), and nothing calls them; `exploreImpl` keeps no `deps`. `formmodel` and `gocode` (no query) stay. Tests: `handlers_test.go` (the remaining routes; the deleted ones not registered) | deleted rather than gated: no caller, the rebuilt Explore has its own handlers behind the flag |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

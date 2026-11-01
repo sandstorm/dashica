@@ -5,13 +5,9 @@
 //
 // explore.New() returns a dashboard.Dashboard, so it plugs into the existing
 // RegisterDashboard mechanism unchanged. Its CollectHandlers registers the
-// editor page (root) plus the API sub-routes under "/api" (preview, formmodel,
-// schema, values). net/http's trailing-slash subtree matching dispatches every
+// editor page (root) plus the API sub-routes under "/api" (formmodel, gocode),
+// which run no query. net/http's trailing-slash subtree matching dispatches every
 // request under the registration URL.
-//
-// Phase 2 (this file + handlers.go, preview.go, schema.go, values.go) is the
-// server-side runtime: it executes a JSON-described widget and serves the raw
-// material the (Phase 4) editor UI needs. Persistence (WithFileStore) is Phase 6.
 //
 // Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 package explore
@@ -40,19 +36,11 @@ func New(opts ...Option) dashboard.Dashboard {
 }
 
 // exploreImpl implements dashboard.Dashboard. Unlike a standard dashboard it
-// holds no widget list — its page is the editor, and the widgets it renders
-// arrive at request time as JSON. It satisfies the (small) Dashboard interface
+// holds no widget list — its page is the editor (until the rebuild the
+// "Explore is being rebuilt" notice). It satisfies the (small) Dashboard interface
 // with just Title + CollectHandlers; the fluent builder API does not apply.
 type exploreImpl struct {
 	title string
-
-	// Captured at CollectHandlers time so the API handler closures can build
-	// per-request child contexts (see preview.go). deps carries the ClickHouse
-	// manager, logger and projectFS; baseURL is the registration URL (e.g.
-	// "/explore"); mainMenu is the shared boot-time menu slice.
-	deps     rendering.Dependencies
-	baseURL  string
-	mainMenu *[]rendering.MenuGroup
 }
 
 func (e *exploreImpl) Title() string { return e.title }
@@ -63,9 +51,6 @@ func (e *exploreImpl) Title() string { return e.title }
 func (e *exploreImpl) IsExploreView() bool { return true }
 
 func (e *exploreImpl) CollectHandlers(ctx *rendering.DashboardContext, collector handler_collector.HandlerCollector) (dashboard.PageJson, error) {
-	e.deps = ctx.Deps
-	e.baseURL = ctx.CurrentHandlerUrl
-	e.mainMenu = ctx.MainMenu
 	page, err := rebuildNotice.CollectHandlers(ctx, collector)
 	if err != nil {
 		return dashboard.PageJson{}, err
