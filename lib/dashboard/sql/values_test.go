@@ -1,4 +1,5 @@
-// Tests for Values: the distinct values of a field on a builder query's base and on a SQL file's result.
+// Tests for Values and FieldTypes: the distinct values of a field, and the fields' types without rows, on a builder
+// query's base and on a SQL file's result.
 package sql
 
 import (
@@ -12,8 +13,7 @@ func TestValues_OfABuilderQueryIsItsBaseGroupedByTheField(t *testing.T) {
 	got := Values(chart, JsonExtractString("attrs", "host"), 100).With(Where("time_clause")).Build()
 
 	want := `SELECT
-    toString(JSONExtractString(attrs, 'host')) AS __value,
-    any(JSONExtractString(attrs, 'host')) AS __type
+    toString(JSONExtractString(attrs, 'host')) AS __value
 FROM
     http_logs
 WHERE
@@ -41,7 +41,7 @@ func TestValues_OfASqlStringIsItsResultInASubquery(t *testing.T) {
 
 	got, err := BuildWithFS(Values(file, NewFieldAlias("host"), 100).With(Where("time_clause")), nil)
 
-	want := `SELECT toString(host) AS __value, any(host) AS __type
+	want := `SELECT toString(host) AS __value
 FROM (
 SELECT host, count() AS cnt FROM http_logs WHERE (time_clause) GROUP BY host -- by host
 
@@ -58,13 +58,14 @@ LIMIT 100`
 	}
 }
 
-func TestValueType_OfABuilderQueryIsItsBaseWithoutRows(t *testing.T) {
+func TestFieldTypes_OfABuilderQueryIsItsBaseWithoutRows(t *testing.T) {
 	chart := New(From("http_logs"), Where("path != '/'"), Select(Field("status")), Select(Count()), GroupBy(Field("status")), OrderBy(Count()), Limit(5), OnDatabase("logs"))
 
-	got := ValueType(chart, Field("timestamp")).With(Where("time_clause")).Build()
+	got := FieldTypes(chart, []SqlField{Field("lower(host_name)").WithAlias("host"), Field("timestamp")}).With(Where("time_clause")).Build()
 
 	want := `SELECT
-    timestamp AS __type
+    lower(host_name) AS host,
+    timestamp
 FROM
     http_logs
 WHERE
@@ -74,17 +75,17 @@ WHERE
 	if !strings.HasSuffix(got, want) {
 		t.Errorf("got:\n%s", got)
 	}
-	if db := ValueType(chart, Field("status")).Database(); db != "logs" {
+	if db := FieldTypes(chart, []SqlField{Field("status")}).Database(); db != "logs" {
 		t.Errorf("database %q", db)
 	}
 }
 
-func TestValueType_OfASqlStringIsItsResultInASubqueryWithoutRows(t *testing.T) {
-	file := FromString("SELECT timestamp, host FROM http_logs WHERE {{DASHICA_FILTERS}}").With(Table("http_logs"))
+func TestFieldTypes_OfASqlStringIsItsResultInASubqueryWithoutRows(t *testing.T) {
+	file := FromString("SELECT timestamp, host FROM http_logs WHERE {{DASHICA_FILTERS}};").With(Table("http_logs"))
 
-	got, err := BuildWithFS(ValueType(file, NewFieldAlias("timestamp")).With(Where("time_clause")), nil)
+	got, err := BuildWithFS(FieldTypes(file, []SqlField{NewFieldAlias("timestamp"), NewFieldAlias("host")}).With(Where("time_clause")), nil)
 
-	want := `SELECT timestamp AS __type
+	want := `SELECT timestamp, host
 FROM (
 SELECT timestamp, host FROM http_logs WHERE (time_clause)
 )

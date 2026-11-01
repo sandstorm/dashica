@@ -696,7 +696,7 @@ filters):
 - **The node names its table:** `table` beside `filterable` in `page.json` (`default.http_logs`, as `filter.Table`
   names it), set when the node has filterable fields (since 9p whenever its query has a table, §3.15 D27); with its
   `connection` it groups the page's fields by table (`filterableTables`: each field once, served by the first chart
-  naming it; since 9p the table's columns from its first chart's `/columns`).
+  naming it; since 9p the table's columns from its first chart's `/columns`, since 9ah its `/fields`, §3.15 D39).
 - **The filter bar's "Add filter"** after the chips, while a chart of the page filters a table (so the bar shows on
   such a page even without chips or buttons *(proposed)*): quick picks below the button for the table (skipped when
   there is one *(proposed)*), the field, `=` or `≠` (since 9k the ops of the field's type, §3.15 D25), then the value;
@@ -705,7 +705,8 @@ filters):
   in the tab's query state, asked again 200 ms after the typing rests (the request before aborted); the typed text
   itself first, "as typed", when it is none of them, so a value beyond the first 100 can be chosen *(proposed)*.
 - **`/values`** (`valuesHandler`, `sql.Values`, `httpserver.HandleValues`): a JSON array of at most 100 strings, sorted
-  (since 9k `{type, values}`, the field's type beside them, §3.15 D25).
+  (since 9k `{type, values}`, the field's type beside them, §3.15 D25; since 9ah `{values}` alone, the type from the
+  chart's `/fields`, D39).
   A builder query's base (its From and Where, without its own SELECT, GROUP BY, ORDER BY and LIMIT): `SELECT
   toString(<definition>) AS __value FROM <table> WHERE <its Where> AND positionCaseInsensitive(toString(<definition>),
   {__search:String}) > 0 AND <time range, SQL chips, pills> GROUP BY __value ORDER BY __value LIMIT 100`. A SQL file's
@@ -1601,7 +1602,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   offers depends on its ClickHouse type: text (a String, an Enum, a Bool, an unknown type) `=` and `≠`; a number also
   `<`, `≤`, `>`, `≥`; a time or a day `≥` and `≤` first (`opsOf`). The type comes from the server, never guessed:
   `<dataUrl>/values` answers `{type, values}`, the type as ClickHouse reports it in the answer's metadata; "Add filter"
-  asks the type alone (`<dataUrl>/type`, since 9l) once the field is chosen, before the op. A time's value is no list of DISTINCT timestamps but an input box,
+  asks the type alone (`<dataUrl>/type`, since 9l) once the field is chosen, before the op (until 9ah; since then
+  every type comes from the chart's `/fields`, asked once with the field step, and `/values` answers only values, D39). A time's value is no list of DISTINCT timestamps but an input box,
   the edge of the time range filled in, read by ClickHouse best effort. A click on a table's timestamp cell or a
   chart's time value offers `≥` and `≤` it (beside `=` / `≠`); the table cell menu's time windows (±5 minutes …) stay.
   A pill's op button opens a quick pick of its type's ops (a menu since 9s, D30). `FilterAs(func(op sql.Op, value string) string)`; the
@@ -1627,13 +1629,14 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   - **The field step in two groups:** "Table columns", every column of the table as the server's cached schema of
     the chart's connection has it (the Schema view's `Client.Schema`, D11), with its type, from
     `<dataUrl>/columns` (`{columns: [{name, type, …}]}`, the resolved time range in its header for a time's default;
-    not behind `explore.enabled`: it is only the chart's own table), asked of the table's first chart; then
+    not behind `explore.enabled`: it is only the chart's own table; since 9ah `<dataUrl>/fields`, D39), asked of the
+    table's first chart; then
     "Computed fields", the charts' fields that are more than a column, each alias once. `page.json` names them per
     chart (`computed` beside `filterable`): an expression, a `FilterAs`, a renamed column (`sql.Field("customer_project").WithAlias("instance")`) and every field of a SQL file
     (a column of its result, not of the table) *(proposed)*; a builder query's field that is just a column
-    (`sql.ColumnOf`) appears once, under the columns. Without the schema (a failed `/columns`, its message beside
+    (`sql.ColumnOf`) appears once, under the columns. Without the schema (a failed `/columns`, since 9ah `/fields`, its message beside
     the heading) the columns are the charts' plain fields, each made by its chart *(proposed)*.
-  - **A column's pill is signed by the server too:** `<dataUrl>/pill?column=<name>&…` (and `/values`, `/type`) takes
+  - **A column's pill is signed by the server too:** `<dataUrl>/pill?column=<name>&…` (and `/values`; `/type` until 9ah) takes
     a column of the chart's base table, checked against the cached schema (never the client's word), its name quoted
     as an identifier (`sql.QuoteIdentifier`, `` (`host`) = 'shop-1' ``, `sql.ColumnField`); 422 for a column the table
     lacks. The ops of D25 come from the column's type in the schema (the client asks no `/type` for it; the key's
@@ -1673,7 +1676,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
     `Open` writes its condition again (`NewButton`). Its label is its condition: the title is not in the key, so a
     button's chip on a page without that button shows `duration_ms >= ...: 500` *(proposed)*.
   - **No label and no type:** the chip shows `field op value`. The field's type (D25's ops of a pill's edit) is asked
-    of the editing chart (`<dataUrl>/type`) when its operator or value is clicked; `/pill` takes no `type` any more
+    of the editing chart (`<dataUrl>/type`; since 9ah its `/fields`, kept per chart, D39) when its operator or value is clicked; `/pill` takes no `type` any more
     *(proposed: the format has no place for it, one request per edit)*.
   - **The mac** is HMAC-SHA256 over everything before it (without its `~`), its first 128 bits, unpadded base64url:
     22 characters.
@@ -1745,6 +1748,30 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   is read by its user through a pure function next to it. (9af) Widget decorations as VS Code's file decorations: the
   `filters` extension decorates a chart that ignores pills or did not run; `ChartFrame` and Debug draw decorations
   without knowing their meaning. (9ag) What is left of filters, alerts and charts in `hosts/` goes.
+- **D39 One endpoint per question (9ah, decided 2026-11-01; maintainer, on `fetchValues` / `fetchType`: "should this
+  be a single API endpoint? not sure if 2 make sense here", the proposal answered "ok good"):** a chart answers what
+  "Add filter" and the filter bar ask in two endpoints, one per question. `<dataUrl>/fields` (`fieldsHandler`,
+  `httpserver.HandleFields`) replaces `/columns` and `/type`: `{columns: [{name, type}], computed: [{name, type}]}`,
+  the columns of the chart's table from the connection's cached schema (as `/columns` had them, D27), the chart's
+  computed fields (`computedFields`, `page.json`'s `computed`) with their types from one `DESCRIBE (…)` of
+  `sql.FieldTypes` (a builder query's base selecting the fields, its Where and `WHERE 0`; a SQL file's or string's
+  result in a subquery, `WHERE 0` around it), matched by position; without computed fields it asks ClickHouse
+  nothing. ClickHouse answers a `DESCRIBE` of a query by analysing it, not running it: `ensureArrowCompatible` relies
+  on that for every Arrow query (`Client.Describe`, exported for this); the `WHERE 0` reads nothing should it ever
+  run *(proposed: a scalar subquery inside a SQL file is still evaluated by the analysis, as for a chart's own
+  query)*. It is filled in with the time range of the request (the placeholders and `{{DASHICA_FILTERS}}` of a SQL
+  file), takes no pills (they change no type), and carries the resolved time range for a time's default. Not behind
+  `explore.enabled`; 422 for a chart without a table, 400 without a time range. `<dataUrl>/values` answers only
+  `{values}`. The client (`FieldsCache` in `add-filter.ts`, one per `filters` extension) keeps one answer per chart
+  for the query state without the filter chips (`FILTERS`' `f` and `sql`), so "Add filter" asks each chart's
+  `/fields` once with its field step (the table's first chart and every chart a computed field comes from, at once;
+  a computed field shows its type beside it) and nothing for the op step, and the filter bar's op button and value
+  edit take the type from the same answer; another state (a new time range) asks again, a failed answer is not kept
+  *(proposed: the resolved time range of a relative range kept with it is as old as the answer, the default of a
+  time's input box only)*. Gone: `/type`, `/columns`, `fetchType`, `fetchColumns`, `sql.ValueType`,
+  `sql.ValuesTypeColumn` (`any(…) AS __type`), the `type` of `/values`' answer and `pickValue`'s `initial` values.
+  Explore's `/explore/api/values` stays. Without the schema (a failed `/fields`) the computed fields of that chart
+  have no type either, so they offer `=` and `≠` *(proposed)*.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -1788,7 +1815,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   field, op, value, type)`, the label `<alias> <sign> <value>`; `Apply` ORs only the `eq` pills of a field, every other
   op's are AND-ed *(proposed: `ts ≥ a` and `ts ≥ b` both hold)*.
 - **The type in the key (until 9q; since then the key carries no type and the filter bar asks the chart's `/type`
-  when a pill is edited, §3.15 D29):** `Pill.Type` (`type`, omitted when empty) is the field's ClickHouse type as the client
+  when a pill is edited, §3.15 D29; since 9ah its `/fields`, D39):** `Pill.Type` (`type`, omitted when empty) is the field's ClickHouse type as the client
   learned it from the server, sent to `/pill` as `type` and signed into the key, so a reloaded pill's op button offers
   its type's ops without a query *(proposed: the server never reads it as SQL and does not check it against the op;
   any op is valid SQL on any field)*. A pill without one (a link from before 9k, a click on a column the answer named
@@ -1797,7 +1824,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   JSON answer's `meta` is the expression's (also with no rows) *(proposed)*; the answer carries the resolved time
   range (`X-Dashica-Resolved-Time-Range`, as a chart's) for the input box's default. Until 9l "Add filter" asked
   `/values` before the op and reused its values for the value step; since 9l it asks `/type` before the op (no values
-  read), and `/values` only in the value step of a field that is no time or day.
+  read), and `/values` only in the value step of a field that is no time or day. Since 9ah (D39) `/values` answers
+  `{values}` alone, without `__type`; the types come from the chart's `/fields`.
 - **A click's type:** a chart's Arrow answer names its columns' ClickHouse types in `X-Dashica-Column-Types` (`{"timestamp":
   "DateTime"}`, JSON, since 9u percent-encoded as `X-Dashica-Diagnostics`), taken from the `DESCRIBE` that `ensureArrowCompatible` runs for every Arrow query anyway,
   before the casts (a `DateTime` arrives as UInt32 seconds) *(proposed: no extra query; the header is the
@@ -2083,6 +2111,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ae ✅ 2026-11-01 | **D38 (2) the widgets host passes the headers through** (§3.4.4, §3.6, §3.8, §3.11, §3.15): `QueryResult` = Arrow `Table & { headers: Headers }` (`fetchQueryResult` reads no header); `WidgetStatus.done` without `diagnostics`; the `dashica*` fields and `clickhouseSummary` gone. Readers next to their users: `filter-library/diagnostics.ts` (`Diagnostics`, `diagnosticsOf`, also for the Explore view's `fetchRows`), `chart-library/candidate.ts` (`columnTypesOf`), `chart-library/time-axis.ts` (`resolvedTimeRangeOf`, `bucketSizeOf`: time bars, time line, alert overview), `alerts.ts` (`thresholdsOf`; `drawTimeBars(…, { offerFilters, thresholds })` draws the lines it is given), `debug.ts` (`clickhouseSummaryOf`); `fakeWidget` takes a `lastResult` (+ tests of each reader). ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* `headers` the fetch's `Headers` itself; ClickHouse's summary read by Debug, its only user; Debug's status bar reads the Diagnostics from `lastResult` until 9af |
 | 9af ✅ 2026-11-01 | **D38 (3) widget decorations** (§3.4.4, §3.5, §3.6, §3.8, §3.11, §3.15): `WidgetsApi.registerDecorationProvider`, `WidgetDecorationProvider`, `WidgetDecoration {badge, tooltip?, muted?, source}`, `Decorated` (`decorations` + `onDidChangeDecorations` on `RenderedWidget` and `WidgetContext`); `WidgetsHost` asks the providers in order when an answer arrives (before the status tells it), clears them on a failure, asks every rendered widget again when a provider fires or is disposed, skips a provider that throws; the `filters` extension's provider (`filters/decorations.ts`: `filterDecorations`, `filterDecorationProvider`); `ChartFrame` draws a badge per decoration (`d-chart-frame__decoration`, `chart-decoration`), muted while one says so, nothing for an answer without columns, and knows no Diagnostics; Debug's view "Decorations" (`decorationList`) and its status bar's badges; `fakeWidget.setDecorations`; `e2e/filter-chips.spec.ts` finds the badge by `chart-decoration` (written, not run). ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run) | *(proposed)* one badge per ignored pill; "skipped: …" a badge, the 204's body empty; the decorations' tooltips' wording; the status bar's badges after rows and time also for a skipped chart; the provider's event `Event<void>` (all widgets asked again) |
 | 9ag ✅ 2026-11-01 | **D38 (4) nothing of filters, alerts or charts left in the hosts** (§3.5, §3.15): the `query` host's comments name no extension's key (`QueryApi`, `requestParams`, `activeQuery`); `ui-impl.ts`, `page-impl.ts`, `widgets-impl.ts` and `widgets.ts` comments generic; `hosts/page/page.test.ts` and `hosts/widgets/widgets.test.ts` use `TEST_TIME` (`hosts/query/query-testing.ts`) instead of `time-library`'s `TIME`. A grep of `hosts/` for pill, chip, filter, ignores, alert, bucket, ColumnTypes and `-library` finds only the decoration API's examples in comments, the `ui` host's filter bar region, generated `page.json` fields and `Array.filter`. ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* the testbed's fake `filters.offer` already left in 9ad; the `ui` host's region "filter bar" (`registerBarItem('filter', …)`, D5) and the quick input tests' "Filter" sample items kept: a layout region and test data, not the filters' logic |
+| 9ah ✅ 2026-11-01 | **D39 one endpoint per question** (§3.8, §3.15): Go `<dataUrl>/fields` (`fieldsHandler`, `computedFields`, `httpserver.HandleFields`, `httpserver.Fields`) in place of `/columns` and `/type`: the table's columns from the cached schema, the computed fields' types from one `DESCRIBE` of `sql.FieldTypes` (in place of `sql.ValueType`; `clickhouse.Client.Describe` and `ResultColumn`, exported from `describeQuery` / `describeRow`); `/values` answers `{values}` (`sql.Values` without `__type`, `httpserver.Values` without `Type`). Client: `fetchFields`, `typeIn`, `FieldsCache` (one answer per chart and query state without the filter chips), "Add filter" asks each chart's `/fields` once with its field step (computed fields with their types) and nothing for the op, the filter bar's op and value edits from the same cache; `fetchValues` resolves with the values; `fetchType`, `fetchColumns` and `pickValue`'s `initial` gone. Tests: Go `sql` (`FieldTypes` of a builder query and a SQL string, `Values` without `__type`), `widget` (`/fields` 422 / 400 / not behind `explore.enabled`, `computedFields`; against ClickHouse `TestFields_TheColumnsFromTheSchemaTheComputedFieldsDescribed`, not run: the sandbox blocks ClickHouse), `httpserver` (`HandleFields` without computed fields asks ClickHouse nothing); vitest: "Add filter" (one `/fields` per chart, none for the op), `fetchFields`, `typeIn`, `FieldsCache`, the filter bar (one `/fields` for an op and a value edit, again for another time range). Playwright (written, not run): `e2e/add-filter.spec.ts` asks `/fields` (a computed field's type), `/type` is a 404. Deviations: the cached answer's resolved time range ages with it *(proposed)*; without the schema the computed fields have no type *(proposed)* |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

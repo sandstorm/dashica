@@ -6,7 +6,7 @@ import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
 import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../hosts/ui/ui';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
-import { SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchType, fetchValues, fieldSource, filterableTables, type AskSql, type FilterableTable } from './add-filter';
+import { FieldsCache, SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchValues, fieldSource, filterableTables, typeIn, type AskSql, type FieldType, type FilterableTable } from './add-filter';
 import { filterDecorationProvider } from './decorations';
 import { fetchPill, offerFilters } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
@@ -23,7 +23,8 @@ import './filters.css';
  * SQL chip's text asks a new one below the chip. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
  * offers the ops of its type (`opsOf`: `=` / `≠`, for a number or a time also `<` `≤` `>` `≥`), one on its value asks
  * a new one (as "Add filter" does); each edit asks a chart of the page on the pill's table with that field, for a
- * column's pill any chart on it (`fieldSource`), for the pill again and puts it in the chip's place. A pill no chart
+ * column's pill any chart on it (`fieldSource`), for the pill again and puts it in the chip's place; the field's type
+ * is that chart's `/fields` answer, which "Add filter" and the edits share (`FieldsCache`). A pill no chart
  * of the page makes, and a
  * button's pill outside its page, can only be removed. "Add filter"'s advanced entry "SQL condition…" adds a SQL chip
  * (§3.15 D26). Both ask in the input box with sql-library's SQL editor (D12: ClickHouse's words, and with Explore on
@@ -67,7 +68,7 @@ export const filters: Extension = {
         bar = undefined;
       }
     };
-    const filterBar = new FilterBar(query, ui, askSql);
+    const filterBar = new FilterBar(query, ui, askSql, new FieldsCache());
     const showForPage = () => {
       filterBar.setButtons(page.current?.filterBar ? page.current.filterButtons : [], page.current?.filterBar ? filterableTables(page.current.widgets) : []);
       showBar();
@@ -149,9 +150,11 @@ class FilterBar {
     private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
     /** Asks for a SQL condition, while the server takes SQL chips (filters.sqlEnabled). */
     private readonly askSql: AskSql | undefined,
+    /** The charts' `/fields`, by which "Add filter" and a pill's edit know a field's type. */
+    private readonly fields: FieldsCache,
   ) {
     if (askSql) this.#add.title = "Add a filter on a column or field of the page's tables, or a SQL condition";
-    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.askSql));
+    this.#add.addEventListener('click', () => void addFilter(this.ui, this.query, this.#tables, this.#add, this.fields, this.askSql));
   }
 
   /** Whether "Add filter" has something to offer: a table the page's charts read, or a SQL condition. */
@@ -265,7 +268,7 @@ class FilterBar {
 
   /**
    * Asks a new op for the field's pill `chip` in a quick pick below `el` (a menu), the ops of its type (`opsOf`, the type from
-   * `source`'s `/type`, the key carries none; the one it has checked), and makes the pill again with it.
+   * `source`'s `/fields`, the key carries none; the one it has checked), and makes the pill again with it.
    */
   async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
     const known = await this.#typeOf(made, source);
@@ -276,7 +279,7 @@ class FilterBar {
 
   /**
    * Asks a new value for the field's pill `chip` below `el` as "Add filter" does (`askValue`: a time in an input box,
-   * its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s `/type`),
+   * its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s `/fields`),
    * and makes the pill again.
    */
   async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, el: HTMLElement): Promise<void> {
@@ -292,9 +295,15 @@ class FilterBar {
     if (value !== undefined) await this.#remake(chip, index, source, { ...made, value });
   }
 
-  /** The type of the pill's field as `source` answers it (`fetchType`); `undefined` when it fails (= and ≠). */
-  #typeOf(made: PillField, source: PillSource): Promise<Awaited<ReturnType<typeof fetchType>> | undefined> {
-    return fetchType(source.dataUrl, made, this.query.requestParams()).catch(() => undefined);
+  /**
+   * The type of the pill's field as `source`'s `/fields` answers it (`typeIn`, asked once per chart and state,
+   * `FieldsCache`); `undefined` when it fails or lacks the field (= and ≠).
+   */
+  #typeOf(made: PillField, source: PillSource): Promise<FieldType | undefined> {
+    return this.fields.get(source.dataUrl, this.query.requestParams()).then(
+      (fields) => typeIn(fields, made),
+      () => undefined,
+    );
   }
 
   /**

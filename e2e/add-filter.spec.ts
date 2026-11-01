@@ -1,8 +1,9 @@
 // Tests for the filter bar's "Add filter" (docs/2026-10-28-workbench.md §3.14 D15, step 8m): a column of a table the
 // page's charts read, `=`, a value from the chart's `/values` (narrowed as one types), added as a signed pill; the
-// field step's "Table columns" (the schema's, `/columns`) and "Computed fields", no constant (a fixed colour such as
+// field step's "Table columns" (the schema's) and "Computed fields", both from the charts' `/fields`, no constant (a fixed colour such as
 // `'#D73027' AS darkred`) among them (D27); its last entry "SQL condition…" under "Advanced" only while SQL chips are
-// taken (D26); `/values` answers 422 for a field that cannot filter, `/pill` for a column the table lacks.
+// taken (D26); `/fields` answers the columns and the computed fields with their types (D39), `/values` 422 for a
+// field that cannot filter, `/pill` for a column the table lacks.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", whose charts filter its table;
 // another page: DASHICA_E2E_ADD_FILTER_PAGE.
@@ -52,21 +53,30 @@ test('"Add filter" groups the table’s columns and the computed fields, without
     expect(new Set(labels).size).toBe(labels.length);
 });
 
-test('/columns answers the table’s columns; /pill refuses a column it lacks', async ({page}) => {
+test('/fields answers the table’s columns and the computed fields with their types; /pill refuses a column it lacks', async ({page}) => {
     const json = await (await page.request.get(`${PAGE}/page.json`)).json();
-    const find = (nodes: {dataUrl?: string; table?: string; children?: Record<string, unknown>}[]): string | undefined => {
+    type Node = {dataUrl?: string; table?: string; computed?: string[]; children?: Record<string, unknown>};
+    const find = (nodes: Node[], wanted: (node: Node) => boolean): Node | undefined => {
         for (const node of nodes) {
-            if (node.dataUrl && node.table) return node.dataUrl;
-            const inner = find(Object.values(node.children ?? {}) as typeof nodes);
+            if (node.dataUrl && node.table && wanted(node)) return node;
+            const inner = find(Object.values(node.children ?? {}) as Node[], wanted);
             if (inner) return inner;
         }
         return undefined;
     };
-    const dataUrl = find(json.widgets);
+    const dataUrl = find(json.widgets, () => true)?.dataUrl;
     expect(dataUrl).toBeDefined();
-    const columns = await (await page.request.get(`${dataUrl}/columns?time=1h`)).json();
-    expect(columns.columns.length).toBeGreaterThan(0);
-    expect(columns.columns[0]).toEqual(expect.objectContaining({name: expect.any(String), type: expect.any(String)}));
+    const fields = await (await page.request.get(`${dataUrl}/fields?time=1h`)).json();
+    expect(fields.columns.length).toBeGreaterThan(0);
+    expect(fields.columns[0]).toEqual({name: expect.any(String), type: expect.any(String)});
+    // a chart with a computed field answers its type, by its alias
+    const withComputed = find(json.widgets, (node) => (node.computed?.length ?? 0) > 0);
+    if (withComputed) {
+        const answer = await (await page.request.get(`${withComputed.dataUrl}/fields?time=1h`)).json();
+        expect(answer.computed.map((f: {name: string}) => f.name)).toEqual(withComputed.computed);
+        expect(answer.computed.every((f: {type: string}) => f.type !== '')).toBe(true);
+    }
+    expect((await page.request.get(`${dataUrl}/type?time=1h&column=x`)).status()).toBe(404);
     const refused = await page.request.get(`${dataUrl}/pill?column=__no_such_column&op=eq&value=1`);
     expect(refused.status()).toBe(422);
 });

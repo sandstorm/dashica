@@ -46,7 +46,7 @@ func TestTrimTrailingSemicolons(t *testing.T) {
 }
 
 func TestBuildArrowWrap(t *testing.T) {
-	got, ok := buildArrowWrap("SELECT * FROM full_logs", []describeRow{{"event_original", "JSON"}, {"host", "String"}, {"attrs", "Dynamic"}}, castArrowUnsafe)
+	got, ok := buildArrowWrap("SELECT * FROM full_logs", []ResultColumn{{"event_original", "JSON"}, {"host", "String"}, {"attrs", "Dynamic"}}, castArrowUnsafe)
 
 	if !ok {
 		t.Fatal("JSON and Dynamic are cast")
@@ -68,7 +68,7 @@ func TestBuildArrowWrap(t *testing.T) {
 }
 
 func TestBuildArrowWrap_KeepsAQueryWhoseColumnsItKeeps(t *testing.T) {
-	got, ok := buildArrowWrap("SELECT 1", []describeRow{{"host", "String"}}, castArrowUnsafe)
+	got, ok := buildArrowWrap("SELECT 1", []ResultColumn{{"host", "String"}}, castArrowUnsafe)
 
 	if ok || got != "SELECT 1" {
 		t.Errorf("got %q, %v", got, ok)
@@ -109,7 +109,7 @@ func TestPlainArrowCast(t *testing.T) {
 }
 
 func TestColumnTypesHeader_IsEachColumnsTypeByNamePercentEncoded(t *testing.T) {
-	got := columnTypesHeader([]describeRow{{"timestamp", "DateTime"}, {"größe", "Nullable(Float64)"}})
+	got := columnTypesHeader([]ResultColumn{{"timestamp", "DateTime"}, {"größe", "Nullable(Float64)"}})
 	if want := `%7B%22gr%C3%B6%C3%9Fe%22:%22Nullable%28Float64%29%22%2C%22timestamp%22:%22DateTime%22%7D`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}

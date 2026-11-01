@@ -84,7 +84,7 @@ func testQueryJSON(t *testing.T, ctx context.Context, clickhouseManager *Manager
 // cannot be serialized to Arrow (JSON/Object/Dynamic/Variant), or "" if none.
 func findArrowUnsafeColumn(t *testing.T, ctx context.Context, c *Client) string {
 	t.Helper()
-	cols, err := c.describeQuery(ctx, "SELECT * FROM full_logs", DefaultQueryOptions())
+	cols, err := c.Describe(ctx, "SELECT * FROM full_logs", DefaultQueryOptions())
 	require.NoError(t, err, "DESCRIBE full_logs")
 	for _, col := range cols {
 		if arrowUnsafeType(col.Type) {

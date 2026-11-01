@@ -62,7 +62,7 @@ export interface FieldRef {
   readonly column?: boolean;
 }
 
-/** `ref` as `/pill`, `/values` and `/type` take it: `field=<alias>`, or `column=<name>` for a column. */
+/** `ref` as `/pill` and `/values` take it: `field=<alias>`, or `column=<name>` for a column. */
 export function fieldParam(ref: FieldRef): [string, string] {
   return [ref.column ? 'column' : 'field', ref.field];
 }

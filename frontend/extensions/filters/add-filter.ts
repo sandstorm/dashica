@@ -14,9 +14,9 @@ export interface FilterableTable {
   readonly connection: string;
   /** With its database: `default.http_logs`. */
   readonly table: string;
-  /** The first chart on it: its `/columns` answers the table's columns, its `/values` and `/pill` serve each column. */
+  /** The first chart on it: its `/fields` answers the table's columns, its `/values` and `/pill` serve each column. */
   readonly widget: PillSource;
-  /** Each field once, with the first chart naming it `filterable`: its `/values` and `/pill` serve the field. */
+  /** Each field once, with the first chart naming it `filterable`: its `/fields`, `/values` and `/pill` serve the field. */
   readonly fields: readonly FilterableField[];
 }
 
@@ -65,9 +65,9 @@ export function fieldSource(
 /**
  * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15, §3.15 D25, D27):
  * asks in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its columns or
- * computed fields (`fieldItems`), an op of its type (`opsOf`, in a menu; a column's type from the schema, a field's from its
- * chart's `/type` in `query`'s state, asked once the field is chosen, which reads no values, so a time's are never
- * asked), and a value (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
+ * computed fields (`fieldItems`, with their types from the charts' `/fields` in `query`'s state, kept in `fields`), an
+ * op of its type (`opsOf`, in a menu, asking nothing more; a time's values are never asked), and a value
+ * (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
  * chips of `query`. With `askSql` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
  * under "Advanced" (its only entry while no chart filters a table), which asks the condition in the SQL input box
  * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` goes to the console.
@@ -77,6 +77,7 @@ export async function addFilter(
   query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
   tables: readonly FilterableTable[],
   anchor: MenuAnchor,
+  fields: FieldsCache,
   askSql?: AskSql,
 ): Promise<void> {
   const advanced: readonly (SqlItem | QuickPickSeparator)[] = askSql
@@ -93,21 +94,20 @@ export async function addFilter(
     if (!table) return;
   }
   const field = await ui.showQuickPick<FieldItem | SqlItem>(
-    [...(await fieldItems(table, query.requestParams())), ...(tables.length === 1 ? advanced : [])],
+    [...(await fieldItems(table, fields, query.requestParams())), ...(tables.length === 1 ? advanced : [])],
     { anchor, title: 'Add filter', placeholder: `A column or field of ${table.table}` },
   );
   if (field && 'sql' in field) return addSqlCondition(askSql!, query, anchor);
   if (!field) return;
-  const { ref, widget } = field;
-  // the type decides the ops; a failed answer leaves it unknown (= and ≠), the value step shows the message
-  const first = field.known ?? (await fetchType(widget.dataUrl, ref, query.requestParams()).catch(() => undefined));
+  const { ref, widget, known } = field;
+  // the type decides the ops; without one (a failed `/fields`) they are = and ≠
   const op = await ui.showQuickPick(
-    opsOf(first?.type).map((op) => ({ label: `${ref.field} ${OP_SIGNS[op]} …`, icon: OP_ICONS[op], op })),
+    opsOf(known?.type).map((op) => ({ label: `${ref.field} ${OP_SIGNS[op]} …`, icon: OP_ICONS[op], op })),
     { anchor, title: 'Add filter', menu: true },
   );
   if (!op) return;
   const sign = OP_SIGNS[op.op];
-  const value = await askValue(ui, anchor, `${ref.field} ${sign}`, op.op, first, (search, signal) =>
+  const value = await askValue(ui, anchor, `${ref.field} ${sign}`, op.op, known, (search, signal) =>
     fetchValues(widget.dataUrl, ref, search, query.requestParams(), signal),
   );
   if (value === undefined) return;
@@ -119,36 +119,47 @@ export async function addFilter(
   }
 }
 
-/** A column or a computed field "Add filter" offers, the chart that serves it, a column's type and time range. */
+/** A column or a computed field "Add filter" offers, the chart that serves it, its type and the time range. */
 interface FieldItem extends QuickPickItem {
   readonly ref: FieldRef;
   readonly widget: PillSource;
-  readonly known?: Omit<Values, 'values'>;
+  readonly known?: FieldType;
 }
 
 /**
- * The entries of "Add filter"'s field step for `table` (§3.15 D27): under "Table columns" each column of the table,
- * with its type, as its first chart's `/columns` answers them in the query state `params` (the schema, so also the
- * columns no chart shows); under "Computed fields" the charts' fields that are more than a column (`computed`), each
- * once. Without the schema (a failed `/columns`, its message beside the heading) the columns are the charts' fields
- * that are one, each made by its chart.
+ * The entries of "Add filter"'s field step for `table` (§3.15 D27, D39): under "Table columns" each column of the
+ * table, with its type, as its first chart's `/fields` answers them in the query state `params` (the schema, so also
+ * the columns no chart shows); under "Computed fields" the charts' fields that are more than a column (`computed`),
+ * each once, with its type as its chart's `/fields` answers it. Each chart's `/fields` is asked once, all at once,
+ * through `fields`. Without the schema (a failed `/fields`, its message beside the heading) the columns are the
+ * charts' fields that are one, each made by its chart.
  */
-async function fieldItems(table: FilterableTable, params: URLSearchParams): Promise<(FieldItem | QuickPickSeparator)[]> {
-  const ofField = (f: FilterableField): FieldItem => ({ label: f.field, ref: { field: f.field }, widget: f.widget });
-  const computed = table.fields.filter((f) => f.computed).map(ofField);
-  let columns: (FieldItem | QuickPickSeparator)[];
-  try {
-    const { columns: schema, timeRange } = await fetchColumns(table.widget.dataUrl, params);
-    columns = [
-      { kind: QuickPickItemKind.Separator, label: 'Table columns' },
-      ...schema.map(({ name, type }) => ({ label: name, description: type, ref: { field: name, column: true }, widget: table.widget, known: { type, ...(timeRange ? { timeRange } : {}) } })),
-    ];
-  } catch (error) {
-    columns = [
-      { kind: QuickPickItemKind.Separator, label: 'Table columns', description: error instanceof Error ? error.message : String(error) },
-      ...table.fields.filter((f) => !f.computed).map(ofField),
-    ];
-  }
+async function fieldItems(table: FilterableTable, fields: FieldsCache, params: URLSearchParams): Promise<(FieldItem | QuickPickSeparator)[]> {
+  const answerOf = (widget: PillSource) => fields.get(widget.dataUrl, params);
+  const ofField = (f: FilterableField, answer?: Fields): FieldItem => {
+    const known = answer && typeIn(answer, { field: f.field });
+    return { label: f.field, ref: { field: f.field }, widget: f.widget, ...(known ? { description: known.type, known } : {}) };
+  };
+  const [schema, ...computed] = await Promise.all([
+    answerOf(table.widget).then(
+      (answer) => ({ answer }),
+      (error: unknown) => ({ error }),
+    ),
+    ...table.fields.filter((f) => f.computed).map((f) => answerOf(f.widget).then((answer) => ofField(f, answer), () => ofField(f))),
+  ]);
+  const columns: (FieldItem | QuickPickSeparator)[] =
+    'answer' in schema
+      ? [
+          { kind: QuickPickItemKind.Separator, label: 'Table columns' },
+          ...schema.answer.columns.map(({ name }) => {
+            const known = typeIn(schema.answer, { field: name, column: true })!;
+            return { label: name, description: known.type, ref: { field: name, column: true }, widget: table.widget, known };
+          }),
+        ]
+      : [
+          { kind: QuickPickItemKind.Separator, label: 'Table columns', description: schema.error instanceof Error ? schema.error.message : String(schema.error) },
+          ...table.fields.filter((f) => !f.computed).map((f) => ofField(f)),
+        ];
   return [...columns, ...(computed.length > 0 ? [{ kind: QuickPickItemKind.Separator, label: 'Computed fields' } as const, ...computed] : [])];
 }
 
@@ -180,22 +191,22 @@ async function addSqlCondition(askSql: AskSql, query: Pick<QueryApi, 'get' | 'se
 
 /**
  * Asks for a value to compare by `op` at `anchor`, titled `title`, for a field of the type `known` names (as its
- * `/values` answered): for a time or a day an input box with `current` filled in, else the edge of the time range
- * (its start for `≥`, `>`, `=` and `≠`, its end for `≤` and `<`, now without one) as ISO 8601 in UTC, a day as its
- * date, which ClickHouse reads best effort; else the quick pick of `pickValue`, its first values `known`'s when it
- * has them. Resolves with the value, or `undefined` when it was hidden without.
+ * chart's `/fields` answered): for a time or a day an input box with `current` filled in, else the edge of `known`'s
+ * time range (its start for `≥`, `>`, `=` and `≠`, its end for `≤` and `<`, now without one) as ISO 8601 in UTC, a
+ * day as its date, which ClickHouse reads best effort; else the quick pick of `pickValue`, the values from `load`.
+ * Resolves with the value, or `undefined` when it was hidden without.
  */
 export function askValue(
   ui: Pick<UiApi, 'createQuickPick' | 'showInputBox'>,
   anchor: MenuAnchor,
   title: string,
   op: FilterOp,
-  known: Partial<Values> | undefined,
-  load: (search: string, signal: AbortSignal) => Promise<Values>,
+  known: FieldType | undefined,
+  load: (search: string, signal: AbortSignal) => Promise<readonly string[]>,
   current?: string,
 ): Promise<string | undefined> {
   const kind = typeKind(known?.type);
-  if (kind !== 'time' && kind !== 'day') return pickValue(ui, anchor, title, (search, signal) => load(search, signal).then(({ values }) => values), known?.values);
+  if (kind !== 'time' && kind !== 'day') return pickValue(ui, anchor, title, load);
   const edge = new Date((op === 'le' || op === 'lt' ? known?.timeRange?.to : known?.timeRange?.from) ?? Date.now()).toISOString();
   return ui.showInputBox({
     title,
@@ -215,7 +226,7 @@ const SEARCH_DELAY = 200;
 
 /**
  * Asks for a value in a quick pick at `anchor` titled `title`: the values `load` finds for the typed text (asked at
- * first with '' unless `initial` has them already, again once the typing rests, the request before aborted), and the
+ * first with '', again once the typing rests, the request before aborted), and the
  * typed text itself first when it is none of them, so a value beyond the ones found can be chosen. A failed `load`
  * shows its message below the list. Resolves with the value chosen, or `undefined` when the box was hidden without.
  */
@@ -224,7 +235,6 @@ export function pickValue(
   anchor: MenuAnchor,
   title: string,
   load: (search: string, signal: AbortSignal) => Promise<readonly string[]>,
-  initial?: readonly string[],
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
     const box = ui.createQuickPick<ValueItem>();
@@ -279,74 +289,93 @@ export function pickValue(
       resolve(picked);
     });
     box.show();
-    if (initial) {
-      found = initial;
-      draw();
-    } else ask('');
+    ask('');
   });
 }
 
-/** What `<dataUrl>/values` answers for a field. */
-export interface Values {
-  /** The field's ClickHouse type (`DateTime`, `LowCardinality(String)`). */
-  readonly type: string;
-  /** Its values that contain the search, at most 100, sorted. */
-  readonly values: readonly string[];
-  /** The time range the server resolved, in ms since the epoch (X-Dashica-Resolved-Time-Range); none without it. */
-  readonly timeRange?: { readonly from: number; readonly to: number };
+/** The time range the server resolved, in ms since the epoch (X-Dashica-Resolved-Time-Range). */
+export interface ResolvedTimeRange {
+  readonly from: number;
+  readonly to: number;
 }
 
 /**
- * The type of `field` (a chart's field or a column, `FieldRef`) and its values that contain `search`, as
+ * The values of `field` (a chart's field or a column, `FieldRef`) that contain `search`, at most 100, sorted, as
  * `<dataUrl>/values` answers them in the query state `params`; rejects with the server's message.
  */
-export function fetchValues(dataUrl: string, field: FieldRef, search: string, params: URLSearchParams, signal?: AbortSignal): Promise<Values> {
+export async function fetchValues(dataUrl: string, field: FieldRef, search: string, params: URLSearchParams, signal?: AbortSignal): Promise<readonly string[]> {
   const asked = new URLSearchParams(params);
   asked.set(...fieldParam(field));
   asked.set('search', search);
-  return fetchAnswer(`${dataUrl}/values?${asked}`, signal);
+  const response = await fetch(`${dataUrl}/values?${asked}`, { signal });
+  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
+  const { values } = (await response.json()) as { values: readonly string[] };
+  return values;
 }
 
-/**
- * The type of `field` alone, as `<dataUrl>/type` answers it in the query state `params` without reading the field's
- * values (its `values` are empty, so none are kept: the value step asks them); rejects with the server's message.
- */
-export async function fetchType(dataUrl: string, field: FieldRef, params: URLSearchParams): Promise<Omit<Values, 'values'>> {
-  const asked = new URLSearchParams(params);
-  asked.set(...fieldParam(field));
-  const { values: _none, ...type } = await fetchAnswer(`${dataUrl}/type?${asked}`);
-  return type;
-}
-
-/** A column of a table, as `<dataUrl>/columns` answers it (the server's schema, `clickhouse.SchemaColumn`). */
+/** A column of a table or a computed field of a chart, as `<dataUrl>/fields` answers it. */
 export interface Column {
   readonly name: string;
   /** Its ClickHouse type (`LowCardinality(String)`). */
   readonly type: string;
 }
 
+/** What `<dataUrl>/fields` answers for a chart (docs/2026-10-28-workbench.md §3.15 D39). */
+export interface Fields {
+  /** The columns of its table, from the server's schema. */
+  readonly columns: readonly Column[];
+  /** Its fields that are more than a column (`page.json`'s `computed`), by alias. */
+  readonly computed: readonly Column[];
+  /** The time range the server resolved; none without the header. */
+  readonly timeRange?: ResolvedTimeRange;
+}
+
+/** The type of a field and the time range of its chart's answer: what the op and value steps go by. */
+export interface FieldType {
+  readonly type: string;
+  readonly timeRange?: ResolvedTimeRange;
+}
+
 /**
- * The columns of the table of the chart at `dataUrl`, as `<dataUrl>/columns` answers them in the query state `params`,
- * with the resolved time range (a time column's default value); rejects with the server's message.
+ * The type of `ref` in `fields`: a column's among the columns, a chart's field among the computed fields, else the
+ * column of its name (a field that is a column); `undefined` for one it does not have.
  */
-export async function fetchColumns(dataUrl: string, params: URLSearchParams): Promise<{ readonly columns: readonly Column[]; readonly timeRange?: Values['timeRange'] }> {
-  const response = await fetch(`${dataUrl}/columns?${params}`);
-  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { columns } = (await response.json()) as { columns: readonly Column[] };
-  const timeRange = timeRangeOf(response);
-  return { columns: columns.map(({ name, type }) => ({ name, type })), ...(timeRange ? { timeRange } : {}) };
+export function typeIn(fields: Fields, ref: FieldRef): FieldType | undefined {
+  const named = (columns: readonly Column[]) => columns.find((c) => c.name === ref.field);
+  const found = (ref.column ? undefined : named(fields.computed)) ?? named(fields.columns);
+  return found && { type: found.type, ...(fields.timeRange ? { timeRange: fields.timeRange } : {}) };
 }
 
-/** The answer of `/values` or `/type` at `url`, with the resolved time range. */
-async function fetchAnswer(url: string, signal?: AbortSignal): Promise<Values> {
-  const response = await fetch(url, { signal });
+/**
+ * The fields of the chart at `dataUrl`, as `<dataUrl>/fields` answers them in the query state `params`, with the
+ * resolved time range (a time's default value); rejects with the server's message.
+ */
+export async function fetchFields(dataUrl: string, params: URLSearchParams): Promise<Fields> {
+  const response = await fetch(`${dataUrl}/fields?${params}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { type, values } = (await response.json()) as Values;
-  const timeRange = timeRangeOf(response);
-  return { type, values, ...(timeRange ? { timeRange } : {}) };
+  const { columns, computed } = (await response.json()) as Fields;
+  const timeRange = JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null') as ResolvedTimeRange | null;
+  return { columns, computed, ...(timeRange ? { timeRange } : {}) };
 }
 
-/** The time range the server resolved for `response` (X-Dashica-Resolved-Time-Range); none without the header. */
-function timeRangeOf(response: Response): Values['timeRange'] | undefined {
-  return (JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null') as Values['timeRange'] | null) ?? undefined;
+/**
+ * The charts' `/fields` answers (`fetchFields`), one kept per chart for the query state it was asked in without the
+ * filter chips (`FILTERS`: pills and SQL chips change no field's type), so that "Add filter" and the filter bar's
+ * edits ask a chart once; another state (a new time range) asks again, a failed answer is not kept.
+ */
+export class FieldsCache {
+  readonly #answers = new Map<string, { readonly params: string; readonly answer: Promise<Fields> }>();
+
+  /** The fields of the chart at `dataUrl` in the query state `params`. */
+  get(dataUrl: string, params: URLSearchParams): Promise<Fields> {
+    const asked = new URLSearchParams([...params].filter(([key]) => !FILTERS.urlKeys.includes(key)));
+    const kept = this.#answers.get(dataUrl);
+    if (kept && kept.params === asked.toString()) return kept.answer;
+    const answer = fetchFields(dataUrl, asked);
+    this.#answers.set(dataUrl, { params: asked.toString(), answer });
+    answer.catch(() => {
+      if (this.#answers.get(dataUrl)?.answer === answer) this.#answers.delete(dataUrl);
+    });
+    return answer;
+  }
 }

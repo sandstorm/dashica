@@ -53,7 +53,7 @@ func arrowUnsafeType(chType string) bool {
 // Cost is one DESCRIBE round-trip per Arrow query (~ms, reads no data);
 // negligible next to the actual query and not cached (simpler, never stale).
 // The DESCRIBE's columns come back too: their ClickHouse types before any cast (columnTypesHeader).
-func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts QueryOptions) (string, []describeRow, error) {
+func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts QueryOptions) (string, []ResultColumn, error) {
 	if !strings.EqualFold(opts.Format, "Arrow") {
 		return query, nil, nil
 	}
@@ -62,7 +62,7 @@ func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts Q
 	// `( ... )`, where a trailing statement terminator is a syntax error.
 	inner := trimTrailingSemicolons(query)
 
-	cols, err := c.describeQuery(ctx, inner, opts)
+	cols, err := c.Describe(ctx, inner, opts)
 	if err != nil {
 		return "", nil, fmt.Errorf("arrow-compat describe: %w", err)
 	}
@@ -83,7 +83,7 @@ func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts Q
 // reads it; a column's name may be any text), the types the query's expressions have before the Arrow casts (a
 // DateTime travels as UInt32 seconds), by which a click on a chart offers the ops its type allows
 // (docs/2026-10-28-workbench.md §3.15 D25); "" without columns.
-func columnTypesHeader(columns []describeRow) string {
+func columnTypesHeader(columns []ResultColumn) string {
 	if len(columns) == 0 {
 		return ""
 	}
@@ -139,7 +139,7 @@ func trimTrailingSemicolons(query string) string {
 // The outer SELECT has no ORDER BY of its own; ClickHouse preserves the
 // subquery's order for a plain pass-through in practice. If that ever proves
 // unreliable, apply SETTINGS max_threads=1 to wrapped queries only.
-func buildArrowWrap(query string, columns []describeRow, cast func(column, columnType string) string) (string, bool) {
+func buildArrowWrap(query string, columns []ResultColumn, cast func(column, columnType string) string) (string, bool) {
 	var repls []string
 	for _, col := range columns {
 		name := "`" + strings.NewReplacer(`\`, `\\`, "`", "\\`").Replace(col.Name) + "`"
@@ -153,17 +153,17 @@ func buildArrowWrap(query string, columns []describeRow, cast func(column, colum
 	return fmt.Sprintf("SELECT * REPLACE(%s) FROM (\n%s\n)", strings.Join(repls, ", "), query), true
 }
 
-// describeRow is one row of DESCRIBE output (only the columns we need).
-type describeRow struct {
+// ResultColumn is a column of a query's result as DESCRIBE reports it: its name and ClickHouse type.
+type ResultColumn struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
-// describeQuery returns the result columns (name + type) of an arbitrary query
-// WITHOUT executing it, via DESCRIBE (<query>). The same parameters/settings
+// Describe returns the result columns (name + type) of an arbitrary query, in their order,
+// WITHOUT executing it, via DESCRIBE (<query>), a trailing `;` of the query trimmed. The same parameters/settings
 // are passed through so parameterized queries ({param:Type}) describe fine.
-func (c *Client) describeQuery(ctx context.Context, query string, opts QueryOptions) ([]describeRow, error) {
-	res, err := QueryJSON[describeRow](ctx, c, "DESCRIBE (\n"+query+"\n)", opts)
+func (c *Client) Describe(ctx context.Context, query string, opts QueryOptions) ([]ResultColumn, error) {
+	res, err := QueryJSON[ResultColumn](ctx, c, "DESCRIBE (\n"+trimTrailingSemicolons(query)+"\n)", opts)
 	if err != nil {
 		return nil, err
 	}

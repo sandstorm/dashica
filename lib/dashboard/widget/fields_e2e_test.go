@@ -1,12 +1,13 @@
-// Tests for a chart's table columns against a real ClickHouse (columnsHandler, pillHandler with `column`): the
-// columns from the connection's schema, a column's pill signed with the schema's type, a column the table does not
-// have refused.
+// Tests for a chart's fields against a real ClickHouse (fieldsHandler, pillHandler with `column`): the columns from
+// the connection's schema and the computed fields' types from a DESCRIBE, a column's pill signed, a column the table
+// does not have refused.
 package widget
 
 import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -29,19 +30,24 @@ func askClickHouse(t *testing.T, chart withQuery, path string) *httptest.Respons
 	return rec
 }
 
-func TestColumns_TheColumnsOfTheChartsTableFromTheSchema(t *testing.T) {
-	one := NewStats(sql.New(sql.From("system.one")))
-
-	rec := askClickHouse(t, one, "/columns?time=1h")
-	var body struct{ Columns []clickhouse.SchemaColumn }
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil {
-		t.Fatalf("%d %s", rec.Code, rec.Body)
-	}
-	if len(body.Columns) != 1 || body.Columns[0].Name != "dummy" || body.Columns[0].Type != "UInt8" {
-		t.Errorf("columns %+v", body.Columns)
-	}
-	if rec.Header().Get("X-Dashica-Resolved-Time-Range") == "" {
-		t.Errorf("no resolved time range")
+func TestFields_TheColumnsFromTheSchemaTheComputedFieldsDescribed(t *testing.T) {
+	builder := NewBarVertical(sql.New(sql.From("system.one"))).X(sql.Field("toString(dummy)").WithAlias("shown")).Y(sql.Count()).Fill(sql.Field("dummy"))
+	file := NewBarVertical(sql.FromString("SELECT toUInt16(dummy) + 1 AS next, count() AS cnt FROM system.one WHERE {{DASHICA_FILTERS}} GROUP BY next").With(sql.Table("system.one"))).
+		X(sql.NewFieldAlias("next")).Y(sql.NewFieldAlias("cnt"))
+	for name, tt := range map[string]struct {
+		chart withQuery
+		want  string
+	}{
+		"a builder query": {builder, `{"columns":[{"name":"dummy","type":"UInt8"}],"computed":[{"name":"shown","type":"String"}]}`},
+		"a SQL string":    {file, `{"columns":[{"name":"dummy","type":"UInt8"}],"computed":[{"name":"next","type":"UInt32"}]}`},
+	} {
+		rec := askClickHouse(t, tt.chart, "/fields?time=1h")
+		if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != tt.want {
+			t.Errorf("%s: %d %s, want %s", name, rec.Code, got, tt.want)
+		}
+		if rec.Header().Get("X-Dashica-Resolved-Time-Range") == "" {
+			t.Errorf("%s: no resolved time range", name)
+		}
 	}
 }
 

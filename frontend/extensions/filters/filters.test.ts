@@ -6,8 +6,8 @@
 // refused), made a pill by its page and shown beside it, a new value in its chip's
 // place, "Add filter" while a chart filters a table or SQL chips are taken, its "SQL condition…" adding a SQL chip; a
 // field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
-// input box), each made again by a chart of the page (a column's by the table's first chart), one no chart makes only
-// removed; with SQL filters off
+// input box), each made again by a chart of the page (a column's by the table's first chart), its type from that
+// chart's /fields asked once per time range, one no chart makes only removed; with SQL filters off
 // (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; a chart
 // click's `filters.offer` adding the pill chosen to the tab shown; the charts' answers decorated with the pills they ignore.
 import { Table } from 'apache-arrow';
@@ -21,6 +21,7 @@ import { FILTERS, addChip, replaceChip, type FilterChip } from './chips';
 import type { InputBoxField } from '../../hosts/ui/ui';
 import { buttonCondition, buttonOf, conditionCompletion, filters } from './filters';
 import { filterableTables } from './add-filter';
+import { TIME, presetRange } from '../time-library/time-state';
 
 // the SQL editor's bundle, which the browser loads from public/dist, from its source
 vi.mock('../sql-library/sql-editor', async (importOriginal) => ({
@@ -123,6 +124,7 @@ beforeEach(() => {
   fetched = [];
   vi.stubGlobal('fetch', async (url: string) => {
     fetched.push(url);
+    if (url.includes('/fields')) return new Response('query system.tables: unreachable', { status: 502 });
     return new Response(JSON.stringify(pathPill(new URL(url, 'http://x').searchParams.get('value')!)));
   });
 });
@@ -385,7 +387,7 @@ describe('filters', () => {
     expect(bar.children.length).toBe(1);
     expect(bar.querySelector('.d-filter-bar__chips')!.lastElementChild).toBe(add());
     add()!.click();
-    // the fetch of this test answers no columns: the chart's plain field stands in for them
+    // the fetch of this test answers no fields: the chart's plain field stands in for the columns
     await vi.waitFor(() => expect(picks).toEqual([{ labels: ['— Table columns', 'host', '— Advanced', 'SQL condition…'], anchor: add() }]));
   });
 
@@ -443,8 +445,11 @@ describe('filters, a field’s pill edited', () => {
     vi.stubGlobal('fetch', async (url: string) => {
       fetched.push(url);
       const args = new URL(url, 'http://x').searchParams;
-      if (url.includes('/values')) return new Response(JSON.stringify({ type: 'String', values: ['b', 'c'] }));
-      if (url.includes('/type')) return new Response(JSON.stringify({ type: args.get('field') === 'timestamp' ? 'DateTime' : 'String', values: [] }));
+      if (url.includes('/values')) return new Response(JSON.stringify({ values: ['b', 'c'] }));
+      if (url.includes('/fields')) {
+        const columns = [{ name: 'timestamp', type: 'DateTime' }, { name: 'user', type: 'String' }];
+        return new Response(JSON.stringify({ columns, computed: [{ name: 'host', type: 'String' }] }));
+      }
       return new Response(JSON.stringify(hostPill(args.get('op') as 'eq' | 'ne', args.get('value')!)));
     });
     activate(true);
@@ -474,7 +479,7 @@ describe('filters, a field’s pill edited', () => {
     expect(chips().map(chipText)).toEqual([`timestamp ≥ ${at}`]);
     op(chips()[0]).click();
     await vi.waitFor(() => expect(picks.length).toBe(1));
-    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/1\/type\?.*field=timestamp$/);
+    expect(fetched[0]).toMatch(/^\/p\/shop\/api\/1\/fields\?/);
     expect(picks[0].labels).toEqual([`timestamp ≥ ${at}`, `timestamp ≤ ${at}`, `timestamp > ${at}`, `timestamp < ${at}`, `timestamp = ${at}`, `timestamp ≠ ${at}`]);
 
     answer = '2026-10-31T09:00:00Z';
@@ -483,6 +488,8 @@ describe('filters, a field’s pill edited', () => {
     await vi.waitFor(() => expect(fetched.some((url) => url.includes('/pill'))).toBe(true));
     expect(asked).toEqual([expect.objectContaining({ title: 'timestamp ≥', value: at, anchor: clicked })]);
     expect(fetched.filter((url) => url.includes('/values'))).toEqual([]);
+    // the value's edit knew the type from the operator's
+    expect(fetched.filter((url) => url.includes('/fields'))).toHaveLength(1);
     expect(fetched.at(-1)).toBe(`/p/shop/api/1/pill?field=timestamp&op=ge&value=${encodeURIComponent(answer).replace(/%20/g, '+')}`);
   });
 
@@ -518,6 +525,24 @@ describe('filters, a field’s pill edited', () => {
     await vi.waitFor(() => expect(logged).toHaveBeenCalled());
     expect(held()[0]).toEqual(hostChip('eq', 'a'));
     logged.mockRestore();
+  });
+
+  it('asks the chart’s /fields once for its edits, without the filter chips, again for another time range', async () => {
+    query.load({ search: `?${f(hostPill('eq', 'a').key)}&sql=b` });
+    picked = 'host ≠ a';
+    op(chips()[0]).click();
+    await vi.waitFor(() => expect(held()).toEqual([hostChip('ne', 'a'), { kind: 'sql', sql: 'b' }]));
+    picked = 'host = a';
+    op(chips()[0]).click();
+    await vi.waitFor(() => expect(held()).toEqual([hostChip('eq', 'a'), { kind: 'sql', sql: 'b' }]));
+    const asked = () => fetched.filter((url) => url.includes('/fields'));
+    expect(asked()).toHaveLength(1);
+    expect(new URL(asked()[0], 'http://x').searchParams.has('f') || new URL(asked()[0], 'http://x').searchParams.has('sql')).toBe(false);
+
+    query.set(TIME, presetRange('24h'));
+    picked = undefined;
+    op(chips()[0]).click();
+    await vi.waitFor(() => expect(asked()).toHaveLength(2));
   });
 
   it('only removes a pill no chart of the page makes, saying why', () => {

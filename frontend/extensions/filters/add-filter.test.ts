@@ -3,8 +3,8 @@
 // (fieldSource), "add filter" through table, column or computed field, operator (of its type) and value to the pill of
 // its chart (addFilter), the field step's table columns from the schema and computed fields, its advanced "SQL
 // condition…" while SQL chips are taken (asked in the SQL editor's input box), a time's value in an input box at the edge of the time range (askValue), the
-// value's quick pick asking the server as the text changes (pickValue), and the requests of /values, /type and
-// /columns (fetchValues, fetchType, fetchColumns).
+// value's quick pick asking the server as the text changes (pickValue), the requests of /values and /fields
+// (fetchValues, fetchFields) and the /fields kept per chart and query state (FieldsCache).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
@@ -13,7 +13,7 @@ import { TIME, presetRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
 import { EditorView } from '@codemirror/view';
 import { showSqlInputBox } from '../sql-library/sql-editor';
-import { addFilter, askValue, fetchColumns, fetchType, fetchValues, fieldSource, filterableTables, pickValue, type AskSql, type Column } from './add-filter';
+import { FieldsCache, addFilter, askValue, fetchFields, fetchValues, fieldSource, filterableTables, pickValue, typeIn, type AskSql, type Column } from './add-filter';
 import { OP_ICONS } from './ops';
 
 const chart = (dataUrl: string, table: string | undefined, filterable: string[], connection = 'default', computed: string[] = []) =>
@@ -29,13 +29,14 @@ let host: HTMLElement;
 let anchor: HTMLButtonElement;
 let quickInput: QuickInput;
 let query: QueryHost;
-/** The URLs fetched, and what `/values` answers (by `search`; the type by field, else `String`; `/type` no values). */
+/** The URLs fetched, and what `/values` answers (by `search`). */
 let fetched: URL[];
 let values: (search: string) => string[];
-const types: Record<string, string> = { timestamp: 'DateTime' };
-/** What `<dataUrl>/columns` answers, by the chart's URL; a chart without an entry answers 502. */
+/** What `<dataUrl>/fields` answers as the table's columns, by the chart's URL; a chart without an entry answers 502. */
 let columns: Record<string, Column[]>;
-/** The resolved time range `/values` and `/type` answer in their header. */
+/** What `<dataUrl>/fields` answers as the computed fields, by the chart's URL. */
+let computed: Record<string, Column[]>;
+/** The resolved time range `/fields` answers in its header. */
 const from = Date.UTC(2026, 9, 31, 9, 0, 0);
 const to = Date.UTC(2026, 9, 31, 10, 0, 0);
 
@@ -72,21 +73,18 @@ beforeEach(() => {
     ],
     '/p/shop/api/3': [{ name: 'action', type: 'LowCardinality(String)' }],
   };
+  computed = { '/p/shop/api/1': [{ name: 'host', type: 'String' }], '/p/shop/api/2': [{ name: 'host', type: 'String' }] };
   vi.stubGlobal('fetch', async (input: string) => {
     const url = new URL(input, location.href);
     fetched.push(url);
     const args = url.searchParams;
-    if (url.pathname.endsWith('/columns')) {
-      const shown = columns[url.pathname.slice(0, -'/columns'.length)];
-      if (!shown) return new Response('query system.tables: unreachable', { status: 502 });
-      // the schema's answer has more than name and type
-      const answer = { columns: shown.map((c) => ({ ...c, defaultKind: '', comment: '' })) };
+    if (url.pathname.endsWith('/fields')) {
+      const chart = url.pathname.slice(0, -'/fields'.length);
+      if (!columns[chart]) return new Response('query system.tables: unreachable', { status: 502 });
+      const answer = { columns: columns[chart], computed: computed[chart] ?? [] };
       return new Response(JSON.stringify(answer), { headers: { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from, to }) } });
     }
-    if (url.pathname.endsWith('/values') || url.pathname.endsWith('/type')) {
-      const answer = { type: types[args.get('field') ?? ''] ?? 'String', values: url.pathname.endsWith('/type') ? [] : values(args.get('search') ?? '') };
-      return new Response(JSON.stringify(answer), { headers: { 'X-Dashica-Resolved-Time-Range': JSON.stringify({ from, to }) } });
-    }
+    if (url.pathname.endsWith('/values')) return new Response(JSON.stringify({ values: values(args.get('search') ?? '') }));
     const by = args.get('field') ?? `column ${args.get('column')}`;
     return new Response(JSON.stringify({ key: `key:${by}:${args.get('op')}:${args.get('value')}`, label: `${by} ${args.get('op')} ${args.get('value')}` }));
   });
@@ -140,21 +138,20 @@ describe('addFilter', () => {
   it('asks table, computed field, operator and value, and adds the pill of the field’s chart', async () => {
     values = (search) => ['admin', 'login'].filter((v) => v.includes(search));
     query.set(TIME, presetRange('1h'));
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, new FieldsCache());
 
     await pick('default.http_logs default', 'audit logs');
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toContain('host'));
-    options().find((o) => o.textContent?.trim() === 'host')!.click();
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toContain('host String'));
+    options().find((o) => o.textContent?.trim() === 'host String')!.click();
     await pick('host = …', 'host ≠ …');
     await pick('admin', 'login');
     await done;
 
     expect(query.get(FILTERS)).toEqual([{ kind: 'pill', key: 'key:host:eq:admin' }]);
-    // the type before the operator, the values for the value step
+    // the fields once, with their types, for the field and the operator; the values for the value step
     const asked = fetched.filter((url) => url.pathname.startsWith('/p/shop/api/1/') && !url.pathname.endsWith('/pill'));
     expect(asked.map((url) => [url.pathname, url.searchParams.get('field'), url.searchParams.get('search'), url.searchParams.get('time')])).toEqual([
-      ['/p/shop/api/1/columns', null, null, '1h'],
-      ['/p/shop/api/1/type', 'host', null, '1h'],
+      ['/p/shop/api/1/fields', null, null, '1h'],
       ['/p/shop/api/1/values', 'host', '', '1h'],
     ]);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');
@@ -162,19 +159,32 @@ describe('addFilter', () => {
   });
 
   it('groups the fields into the table’s columns, from the schema, and the computed fields, each once', async () => {
-    void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchor);
+    void addFilter(quickInput, query, filterableTables([byHost, byPath]), anchor, new FieldsCache());
 
-    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host']));
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String']));
     expect(headings()).toEqual(['Table columns', 'Computed fields']);
     // `path` is a column of byPath, but not of the table's schema here: only the schema's columns are listed
+    // the computed field's chart is the table's first: its /fields once
+    expect(fetched.map((url) => url.pathname)).toEqual(['/p/shop/api/1/fields']);
+  });
+
+  it('asks the /fields of each chart a computed field comes from, its type from there', async () => {
+    const other = chart('/p/shop/api/4', 'default.http_logs', ['instance'], 'default', ['instance']);
+    computed['/p/shop/api/4'] = [{ name: 'instance', type: 'LowCardinality(String)' }];
+    columns['/p/shop/api/4'] = [];
+    void addFilter(quickInput, query, filterableTables([byHost, other]), anchor, new FieldsCache());
+
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['timestamp DateTime', 'status UInt16', 'user String', 'host String', 'instance LowCardinality(String)']));
+    expect(fetched.map((url) => url.pathname).sort()).toEqual(['/p/shop/api/1/fields', '/p/shop/api/4/fields']);
   });
 
   it('lists the charts’ plain fields as columns when the schema is not to be had, its message at the heading', async () => {
     columns = {};
     values = () => ['500'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
 
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['status', 'timestamp', 'host']));
+    // its /fields failed too: no type, so = and ≠
     expect(headings()).toEqual([expect.stringContaining('502: query system.tables: unreachable'), 'Computed fields']);
     options()[0].click();
     await pick('status = …', 'status ≠ …');
@@ -185,9 +195,9 @@ describe('addFilter', () => {
     expect(fetched.at(-1)!.searchParams.get('field')).toBe('status');
   });
 
-  it('asks a column’s values and pill by `column`, its type from the schema without /type', async () => {
+  it('asks a column’s values and pill by `column`, its type from the schema', async () => {
     values = () => ['bob'];
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
 
     await vi.waitFor(() => expect(options()).toHaveLength(4));
     options()[2].click();
@@ -196,13 +206,13 @@ describe('addFilter', () => {
     await done;
 
     expect(query.get(FILTERS)).toEqual([{ kind: 'pill', key: 'key:column user:eq:bob' }]);
-    expect(fetched.map((url) => url.pathname)).toEqual(['/p/shop/api/1/columns', '/p/shop/api/1/values', '/p/shop/api/1/pill']);
+    expect(fetched.map((url) => url.pathname)).toEqual(['/p/shop/api/1/fields', '/p/shop/api/1/values', '/p/shop/api/1/pill']);
     expect(fetched[1].searchParams.get('column')).toBe('user');
     expect(fetched[2].searchParams.has('type')).toBe(false);
   });
 
   it('offers a time’s operators, ≥ and ≤ first, and asks its value in an input box at the time range’s edge', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
 
     await vi.waitFor(() => expect(options()).toHaveLength(4));
     options()[0].click();
@@ -220,7 +230,7 @@ describe('addFilter', () => {
   });
 
   it('shows the operators with the icons of a chart click (OP_ICONS)', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor);
+    void addFilter(quickInput, query, filterableTables([audit]), anchor, new FieldsCache());
 
     await pick('action LowCardinality(String)');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -229,7 +239,7 @@ describe('addFilter', () => {
   });
 
   it('asks no table when the page has one, and adds nothing on Escape', async () => {
-    const done = addFilter(quickInput, query, filterableTables([audit]), anchor);
+    const done = addFilter(quickInput, query, filterableTables([audit]), anchor, new FieldsCache());
 
     await pick('action LowCardinality(String)');
     await vi.waitFor(() => expect(options()).toHaveLength(2));
@@ -247,7 +257,7 @@ describe('addFilter with SQL chips taken', () => {
   const editor = () => EditorView.findFromDOM(host.querySelector<HTMLElement>('.d-workbench__quick-pick .cm-editor')!)!;
 
   it('ends the table’s pick with "SQL condition…", which asks the condition in the SQL editor’s input box and adds a SQL chip', async () => {
-    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, askSql);
+    const done = addFilter(quickInput, query, filterableTables([byHost, audit]), anchor, new FieldsCache(), askSql);
 
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['default.http_logs default', 'audit logs', expect.stringContaining('SQL condition…')]));
     expect(headings()).toEqual(['Advanced']);
@@ -263,14 +273,14 @@ describe('addFilter with SQL chips taken', () => {
   });
 
   it('ends the field’s pick with it on a page of one table, and is the only entry without one', async () => {
-    void addFilter(quickInput, query, filterableTables([audit]), anchor, askSql);
+    void addFilter(quickInput, query, filterableTables([audit]), anchor, new FieldsCache(), askSql);
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['action LowCardinality(String)', expect.stringContaining('SQL condition…')]));
-    void addFilter(quickInput, query, [], anchor, askSql);
+    void addFilter(quickInput, query, [], anchor, new FieldsCache(), askSql);
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual([expect.stringContaining('SQL condition…')]));
   });
 
   it('adds nothing on Escape in the input box', async () => {
-    const done = addFilter(quickInput, query, [], anchor, askSql);
+    const done = addFilter(quickInput, query, [], anchor, new FieldsCache(), askSql);
     await vi.waitFor(() => expect(options()).toHaveLength(1));
     options()[0].click();
     await vi.waitFor(() => expect(host.querySelector('.d-workbench__quick-pick .cm-editor')).not.toBeNull());
@@ -282,8 +292,8 @@ describe('addFilter with SQL chips taken', () => {
 });
 
 describe('askValue', () => {
-  const known = (type: string) => ({ type, values: ['x'], timeRange: { from, to } });
-  const load = async () => ({ type: 'String', values: [] });
+  const known = (type: string) => ({ type, timeRange: { from, to } });
+  const load = async () => [];
 
   it('fills in the time range’s start for ≥ and its end for ≤, a day as its date', async () => {
     void askValue(quickInput, anchor, 'timestamp ≥', 'ge', known('Nullable(DateTime64(3))'), load);
@@ -292,11 +302,11 @@ describe('askValue', () => {
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31'));
   });
 
-  it('offers the values known for anything else, without asking again', async () => {
+  it('offers the values `load` finds for anything else', async () => {
     const asked: string[] = [];
-    void askValue(quickInput, anchor, 'host =', 'eq', known('String'), async (search) => (asked.push(search), { type: 'String', values: [] }));
+    void askValue(quickInput, anchor, 'host =', 'eq', known('String'), async (search) => (asked.push(search), ['x']));
     await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toEqual(['x']));
-    expect(asked).toEqual([]);
+    expect(asked).toEqual(['']);
   });
 });
 
@@ -326,7 +336,7 @@ describe('fetchValues', () => {
   it('asks <dataUrl>/values with the query state, the field and the search', async () => {
     values = () => ['a'];
 
-    expect(await fetchValues('/p/shop/api/1', { field: 'host' }, 'sh', new URLSearchParams({ time: '1h', f: 'k' }))).toEqual({ type: 'String', values: ['a'], timeRange: { from, to } });
+    expect(await fetchValues('/p/shop/api/1', { field: 'host' }, 'sh', new URLSearchParams({ time: '1h', f: 'k' }))).toEqual(['a']);
     expect(fetched[0].pathname + fetched[0].search).toBe('/p/shop/api/1/values?time=1h&f=k&field=host&search=sh');
   });
 
@@ -336,23 +346,47 @@ describe('fetchValues', () => {
   });
 });
 
-describe('fetchType', () => {
-  it('asks <dataUrl>/type with the query state and the field', async () => {
-    expect(await fetchType('/p/shop/api/1', { field: 'timestamp' }, new URLSearchParams({ time: '1h', f: 'k' }))).toEqual({ type: 'DateTime', timeRange: { from, to } });
-    expect(fetched[0].pathname + fetched[0].search).toBe('/p/shop/api/1/type?time=1h&f=k&field=timestamp');
-  });
-});
-
-describe('fetchColumns', () => {
-  it('asks <dataUrl>/columns with the query state: the names and types, and the resolved time range', async () => {
-    expect(await fetchColumns('/p/shop/api/3', new URLSearchParams({ time: '1h' }))).toEqual({
-      columns: [{ name: 'action', type: 'LowCardinality(String)' }],
+describe('fetchFields', () => {
+  it('asks <dataUrl>/fields with the query state: the columns and computed fields with their types, and the resolved time range', async () => {
+    expect(await fetchFields('/p/shop/api/1', new URLSearchParams({ time: '1h' }))).toEqual({
+      columns: columns['/p/shop/api/1'],
+      computed: [{ name: 'host', type: 'String' }],
       timeRange: { from, to },
     });
-    expect(fetched[0].pathname + fetched[0].search).toBe('/p/shop/api/3/columns?time=1h');
+    expect(fetched[0].pathname + fetched[0].search).toBe('/p/shop/api/1/fields?time=1h');
   });
 
   it('rejects with the server’s message', async () => {
-    await expect(fetchColumns('/p/shop/api/9', new URLSearchParams())).rejects.toThrow('502: query system.tables: unreachable');
+    await expect(fetchFields('/p/shop/api/9', new URLSearchParams())).rejects.toThrow('502: query system.tables: unreachable');
+  });
+});
+
+describe('typeIn', () => {
+  const fields = { columns: [{ name: 'host', type: 'String' }, { name: 'status', type: 'UInt16' }], computed: [{ name: 'host', type: 'LowCardinality(String)' }], timeRange: { from, to } };
+
+  it('is a column’s among the columns, a field’s among the computed fields, else the column of its name', () => {
+    expect(typeIn(fields, { field: 'host', column: true })).toEqual({ type: 'String', timeRange: { from, to } });
+    expect(typeIn(fields, { field: 'host' })).toEqual({ type: 'LowCardinality(String)', timeRange: { from, to } });
+    expect(typeIn(fields, { field: 'status' })?.type).toBe('UInt16');
+    expect(typeIn(fields, { field: 'path' })).toBeUndefined();
+  });
+});
+
+describe('FieldsCache', () => {
+  it('asks a chart once per query state, the filter chips left out', async () => {
+    const cache = new FieldsCache();
+    await cache.get('/p/shop/api/1', new URLSearchParams({ time: '1h', f: 'a' }));
+    await cache.get('/p/shop/api/1', new URLSearchParams({ time: '1h', f: 'b', sql: 'x' }));
+    await cache.get('/p/shop/api/3', new URLSearchParams({ time: '1h' }));
+    await cache.get('/p/shop/api/1', new URLSearchParams({ time: '24h' }));
+
+    expect(fetched.map((url) => url.pathname + url.search)).toEqual(['/p/shop/api/1/fields?time=1h', '/p/shop/api/3/fields?time=1h', '/p/shop/api/1/fields?time=24h']);
+  });
+
+  it('asks again after a failed answer', async () => {
+    const cache = new FieldsCache();
+    await expect(cache.get('/p/shop/api/9', new URLSearchParams())).rejects.toThrow('502');
+    await expect(cache.get('/p/shop/api/9', new URLSearchParams())).rejects.toThrow('502');
+    expect(fetched).toHaveLength(2);
   });
 });

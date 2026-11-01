@@ -1,5 +1,5 @@
 // Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields), a
-// filter button's among them, the values it offers for them (valuesHandler), its table's columns (columnsHandler)
+// filter button's among them, the values it offers for them (valuesHandler), its fields (fieldsHandler, computedFields)
 // without a schema, the table and computed fields its node names and the pills of Speedscope's query.
 package widget
 
@@ -204,7 +204,7 @@ func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 		queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path+chip, nil))
 		return rec
 	}
-	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status", "/type?time=1h&field=status"} {
+	for _, path := range []string{"/query?time=1h", "/debug?time=1h", "/rows?time=1h", "/sql?time=1h", "/values?time=1h&field=status"} {
 		if rec := ask(false, path); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "filters.sqlEnabled") {
 			t.Errorf("off, %s: %d %s", path, rec.Code, rec.Body)
 		}
@@ -298,7 +298,7 @@ func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
 func TestValues_AFieldThatCannotFilterIs422AnUnsignedPill400(t *testing.T) {
 	bar := NewTimeBar(sql.New(sql.From("http_logs"))).X(sql.Timestamp15Min()).Y(sql.Count()).Fill(sql.Field("status"))
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
-	for _, path := range []string{"/values", "/type"} {
+	for _, path := range []string{"/values"} {
 		for name, tt := range map[string]struct {
 			chart withQuery
 			field string
@@ -387,10 +387,10 @@ func TestMount_TheComputedFieldsAreThoseThatAreMoreThanAColumn(t *testing.T) {
 	}
 }
 
-func TestColumns_AChartWithoutATableIs422TheSchemaAskedOtherwise(t *testing.T) {
+func TestFields_AChartWithoutATableIs422TheSchemaAskedOtherwise(t *testing.T) {
 	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("status")).Y(sql.Count())
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
-	for _, path := range []string{"/columns?time=1h", "/pill?op=eq&value=1&column=host", "/values?time=1h&column=host", "/type?time=1h&column=host"} {
+	for _, path := range []string{"/fields?time=1h", "/pill?op=eq&value=1&column=host", "/values?time=1h&column=host"} {
 		if rec := askPath(noTable, path); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("no table, %s: %d %s", path, rec.Code, rec.Body)
 		}
@@ -399,7 +399,36 @@ func TestColumns_AChartWithoutATableIs422TheSchemaAskedOtherwise(t *testing.T) {
 			t.Errorf("a table, %s: %d %s", path, rec.Code, rec.Body)
 		}
 	}
-	if rec := askPath(bar, "/columns"); rec.Code != http.StatusBadRequest {
+	if rec := askPath(bar, "/fields"); rec.Code != http.StatusBadRequest {
 		t.Errorf("no time range: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestFields_IsNotBehindExplore(t *testing.T) {
+	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("lower(host_name)").WithAlias("host")).Y(sql.Count())
+	deps := testDeps()
+	deps.Config.Explore.Enabled = false
+	rec := httptest.NewRecorder()
+	queryHandler(deps, bar).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fields?time=1h", nil))
+	// the ClickHouse of testDeps is unreachable: the request got to the schema, not a 404
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "system.tables") {
+		t.Errorf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestComputedFields_TheFilterableFieldsThatAreMoreThanAColumn(t *testing.T) {
+	bar := NewBarVertical(sql.New(sql.From("http_logs"))).X(sql.Field("lower(host_name)").WithAlias("host")).Y(sql.Count()).Fill(sql.Field("status"))
+	file := NewBarVertical(sql.FromFile("colors.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
+	for name, tt := range map[string]struct {
+		chart withQuery
+		want  []string
+	}{"a builder query": {bar, []string{"host"}}, "a SQL file": {file, []string{"host"}}} {
+		var got []string
+		for _, f := range computedFields(testDeps(), tt.chart) {
+			got = append(got, f.Alias())
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%s: %q, want %q", name, got, tt.want)
+		}
 	}
 }

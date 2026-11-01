@@ -96,7 +96,7 @@ type Node struct {
 	Computed []string `json:"computed,omitempty"`
 	// Table is the table its pills are on as their keys name it (filter.ShortName: "http_logs" on a connection to
 	// `default`, "monitoring.full_logs" else), when its query has one and takes filters: the filter bar's "add
-	// filter" offers the page's columns (`<dataUrl>/columns`) and fields by table (`<dataUrl>/values`), and finds the
+	// filter" offers the page's columns and fields by table (`<dataUrl>/fields`, their values `<dataUrl>/values`), and finds the
 	// chart that edits a pill by it.
 	Table string `json:"table,omitempty"`
 	// Connection is the ClickHouse connection its query runs on (sql.ConnectionOf: "default", "logs"); empty for a
@@ -144,9 +144,9 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 			node.Connection = sql.ConnectionOf(chart.Query())
 			for _, field := range filterableFields(ctx.Deps, chart) {
 				node.Filterable = append(node.Filterable, field.Alias())
-				if _, plain := columnOf(chart, field); !plain {
-					node.Computed = append(node.Computed, field.Alias())
-				}
+			}
+			for _, field := range computedFields(ctx.Deps, chart) {
+				node.Computed = append(node.Computed, field.Alias())
 			}
 			if table, ok := tableOf(ctx.Deps, chart.Query()); ok {
 				node.Table = filter.ShortName(table, ctx.Deps.ClickhouseClientManager.Database)
@@ -256,7 +256,7 @@ func DataHandler(deps rendering.Dependencies, w WidgetDefinition) http.Handler {
 // chart's query with its parameters, HandleSql), each with the pills of the request on its table (filter.Apply; a
 // pill not signed with filters.secret is a 400, as is a query state that cannot be read, or a SQL chip while
 // filters.sqlEnabled is off); and /pill, the pill of one of its fields (pillHandler); /values, the values of one of
-// them (valuesHandler); /columns, its table's columns (columnsHandler). /sql and `exploreSql` answer 404 unless
+// them (valuesHandler); /fields, its table's columns and its computed fields with their types (fieldsHandler). /sql and `exploreSql` answer 404 unless
 // explore.enabled (their handlers check deps.Config).
 func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	qh := httpserver.QueryHandler{
@@ -296,23 +296,18 @@ func queryHandler(deps rendering.Dependencies, chart withQuery) http.Handler {
 	})
 	mux.Handle("/sql", serve(qh.HandleSql))
 	mux.Handle("/pill", pillHandler(deps, chart))
-	mux.Handle("/columns", columnsHandler(deps, chart))
-	mux.Handle("/values", valuesHandler(deps, qh, chart, func(q sql.SqlQueryable, field sql.SqlField) sql.SqlQueryable {
-		return sql.Values(q, field, httpserver.ValuesLimit)
-	}))
-	mux.Handle("/type", valuesHandler(deps, qh, chart, sql.ValueType))
+	mux.Handle("/fields", fieldsHandler(deps, qh, chart))
+	mux.Handle("/values", valuesHandler(deps, qh, chart))
 	return mux
 }
 
 // valuesHandler answers `GET /values?field=<alias>&search=<text>` (or `column=<name>` for a column of its table,
-// filterBy) with the ClickHouse type of the chart's filterable field `field` and its values that contain `search`
-// (ignoring case), at most httpserver.ValuesLimit, sorted, as JSON `{type, values}` (HandleValues): sql.Values of its
-// query in the request's time range, SQL chips and pills, the pills on that field left out, so that a value besides
-// one filtered by is still offered. 422 for a field that cannot filter (as /pill), 400 for a pill not signed with
-// filters.secret or a query state that cannot be read. `of` makes the query from the chart's filtered one: sql.Values
-// for `/values`, sql.ValueType for `/type` (`{type, values: []}`, the type alone, for "add filter"'s op step without
-// reading the field's values).
-func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery, of func(sql.SqlQueryable, sql.SqlField) sql.SqlQueryable) http.HandlerFunc {
+// filterBy) with the values of the chart's filterable field `field` that contain `search` (ignoring case), at most
+// httpserver.ValuesLimit, sorted, as JSON `{values}` (HandleValues): sql.Values of its query in the request's time
+// range, SQL chips and pills, the pills on that field left out, so that a value besides one filtered by is still
+// offered. 422 for a field that cannot filter (as /pill), 400 for a pill not signed with filters.secret or a query
+// state that cannot be read.
+func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		table, target, err := filterBy(r, deps, chart)
 		if err != nil {
@@ -331,7 +326,7 @@ func valuesHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 		}
 		_, plain := columnOf(chart, target.field)
 		filtered, _ := filter.Apply(target.query, table, true, othersThan(pills, table, target.field.Alias(), target.column || plain))
-		httpError(w, qh.HandleValues(of(filtered, target.field), state, r.URL.Query().Get("search"), w, r))
+		httpError(w, qh.HandleValues(sql.Values(filtered, target.field, httpserver.ValuesLimit), state, r.URL.Query().Get("search"), w, r))
 	}
 }
 
@@ -341,12 +336,14 @@ func othersThan(pills []filter.Pill, table filter.Table, field string, column bo
 	return slices.DeleteFunc(slices.Clone(pills), func(p filter.Pill) bool { return p.Table == table && p.Field == field && p.Column == column })
 }
 
-// columnsHandler answers `GET /columns` with the columns of the chart's table as the schema of its connection has
-// them (tableColumns: system.columns, kept once asked), as JSON `{columns: [{name, type, …}]}` (clickhouse.SchemaColumn),
-// with the request's resolved time range in X-Dashica-Resolved-Time-Range as /type has it: "add filter"'s table
-// columns, each a pill through /pill's `column` (docs/2026-10-28-workbench.md §3.15 D27). Not behind explore.enabled:
-// it is only the chart's own table. 422 for a chart without a table, 400 for a query state that cannot be read.
-func columnsHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc {
+// fieldsHandler answers `GET /fields` with the fields "add filter" offers of the chart (docs/2026-10-28-workbench.md
+// §3.15 D27, D39), as JSON `{columns: [{name, type}], computed: [{name, type}]}` (HandleFields): the columns of its
+// table as the schema of its connection has them (tableColumns: system.columns, kept once asked), each a pill through
+// /pill's `column`; its computedFields with their types, from one `DESCRIBE` of sql.FieldTypes of its query in the
+// request's time range, which reads no rows (the pills and SQL chips change no type, so none are applied); with the
+// resolved time range in X-Dashica-Resolved-Time-Range. Not behind explore.enabled: it is only the chart's own table
+// and fields. 422 for a chart without a table, 400 for a query state that cannot be read.
+func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		table, ok := tableOf(deps, chart.Query())
 		if !ok {
@@ -354,11 +351,10 @@ func columnsHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFu
 			return
 		}
 		state, err := httpserver.ParseQueryState(r)
-		if err != nil {
-			httpError(w, err)
-			return
+		if err == nil {
+			// a state without a time range is refused before the schema is asked
+			_, err = state.ResolveTimeRange(time.Now())
 		}
-		timeRange, err := state.ResolveTimeRange(time.Now())
 		if err != nil {
 			httpError(w, err)
 			return
@@ -368,11 +364,12 @@ func columnsHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFu
 			httpError(w, err)
 			return
 		}
-		httpserver.WriteResolvedTimeRange(w, timeRange)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(struct {
-			Columns []clickhouse.SchemaColumn `json:"columns"`
-		}{columns})
+		computed := computedFields(deps, chart)
+		aliases := make([]string, len(computed))
+		for i, field := range computed {
+			aliases[i] = field.Alias()
+		}
+		httpError(w, qh.HandleFields(columns, sql.FieldTypes(chart.Query(), computed), aliases, state, w, r))
 	}
 }
 
@@ -445,6 +442,15 @@ func filterableFields(deps rendering.Dependencies, chart withQuery) []sql.SqlFie
 	return fields
 }
 
+// computedFields are those of the filterableFields of `chart` that are more than a column of its table (columnOf):
+// an expression, a FilterAs, a renamed column, any field of a SQL file.
+func computedFields(deps rendering.Dependencies, chart withQuery) []sql.SqlField {
+	return slices.DeleteFunc(filterableFields(deps, chart), func(field sql.SqlField) bool {
+		_, plain := columnOf(chart, field)
+		return plain
+	})
+}
+
 // columnOf is the column of its table `field` of `chart` is (sql.ColumnOf), for a builder query only: a SQL file's
 // field is a column of its result.
 func columnOf(chart withQuery, field sql.SqlField) (string, bool) {
@@ -459,11 +465,11 @@ type filterTarget struct {
 	field sql.SqlField
 	// column is set for a column of the chart's table.
 	column bool
-	// query is the query whose rows have the field: the values of /values and /type are asked over it.
+	// query is the query whose rows have the field: the values of /values are asked over it.
 	query sql.SqlQueryable
 }
 
-// filterBy is what a request to /pill, /values or /type filters `chart` by, on its table: with `?field=<alias>` one
+// filterBy is what a request to /pill or /values filters `chart` by, on its table: with `?field=<alias>` one
 // of its filterableFields, over its query; with `?column=<name>` the column `name` of its table as the connection's
 // schema has it (tableColumns; the name is checked there, never taken from the client as SQL), its name quoted
 // (sql.ColumnField), over its query when that is a builder query (its From and Where) or else the table itself (a SQL

@@ -12,11 +12,8 @@ import (
 // ValuesLimit is the number of values `<dataUrl>/values` answers at most (docs/2026-10-28-workbench.md §3.14 D15).
 const ValuesLimit = 100
 
-// Values is what HandleValues answers: the type of a field and some of its values.
+// Values is what HandleValues answers: some of a field's values (its type is the chart's /fields', HandleFields).
 type Values struct {
-	// Type is the field's ClickHouse type as the answer's metadata reports it (sql.ValuesTypeColumn:
-	// "DateTime64(3)", "LowCardinality(String)"), by which the filter bar offers the ops it allows.
-	Type string `json:"type"`
 	// Values are the values as text, sorted (`["shop-1","shop-2"]`).
 	Values []string `json:"values"`
 }
@@ -38,11 +35,6 @@ func (qh QueryHandler) HandleValues(valuesQuery sql.SqlQueryable, state QuerySta
 		return fmt.Errorf("clickhouse query: %w", err)
 	}
 	answer := Values{Values: make([]string, 0, len(result.Data))}
-	for _, column := range result.Meta {
-		if column.Name == sql.ValuesTypeColumn {
-			answer.Type = column.Type
-		}
-	}
 	for _, row := range result.Data {
 		answer.Values = append(answer.Values, row.Value)
 	}

@@ -1,6 +1,6 @@
 // Tests for pills against a real ClickHouse (QueryHandler.HandleQuery with filter.Apply's conditions): a quoted value
 // compared with a column of another type, a filter button's value and a time as the filter bar writes it among them;
-// the type and the values of a field (HandleValues).
+// the values of a field (HandleValues).
 package httpserver
 
 import (
@@ -130,7 +130,7 @@ func TestHandleQuery_AValueWithQuotesStaysOneLiteral(t *testing.T) {
 func TestHandleValues_TheValuesOfAFieldThatContainTheSearch(t *testing.T) {
 	cfg, _ := testServer.LoadTestingConfig(t)
 	qh := QueryHandler{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Logger: zerolog.Nop(), Config: cfg}
-	for search, want := range map[string]string{"": `{"type":"UInt16","values":["200","500"]}`, "50": `{"type":"UInt16","values":["500"]}`, "x": `{"type":"UInt16","values":[]}`} {
+	for search, want := range map[string]string{"": `{"values":["200","500"]}`, "50": `{"values":["500"]}`, "x": `{"values":[]}`} {
 		r := httptest.NewRequest(http.MethodGet, "/values?time=1h", nil)
 		state, err := ParseQueryState(r)
 		if err != nil {

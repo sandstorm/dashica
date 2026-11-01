@@ -14,22 +14,17 @@ const ValuesSearchParameter = "__search"
 // valuesColumn is the column Values answers its values in.
 const valuesColumn = "__value"
 
-// ValuesTypeColumn is the column of Values whose type, as ClickHouse reports it in the answer's metadata, is the type
-// of the field's expression (`any(<definition>)`: "DateTime64(3)", "LowCardinality(String)"), also for no rows.
-const ValuesTypeColumn = "__type"
-
 // Values is the query of the distinct values `field` shows on `q`, as text, sorted, at most `limit`, those containing
-// the parameter ValuesSearchParameter, beside one of them as it is (ValuesTypeColumn, for the field's type;
-// docs/2026-10-28-workbench.md §3.14 D15, §3.15 D25, the filter bar's "add filter"): of a builder query its base, the
-// From and its Where without its own SELECT, GROUP BY, ORDER BY and LIMIT (`SELECT toString(host) AS __value,
-// any(host) AS __type FROM http_logs WHERE … GROUP BY __value ORDER BY __value LIMIT 100`); of a SQL file or
+// the parameter ValuesSearchParameter (docs/2026-10-28-workbench.md §3.14 D15, the filter bar's "add filter"): of a
+// builder query its base, the From and its Where without its own SELECT, GROUP BY, ORDER BY and LIMIT (`SELECT
+// toString(host) AS __value FROM http_logs WHERE … GROUP BY __value ORDER BY __value LIMIT 100`); of a SQL file or
 // string, whose field is a column of its result, its result (`SELECT … FROM (<file>) …`). The handler adds the time
 // range and the filters with With, as to the chart's query.
 func Values(q SqlQueryable, field SqlField, limit int) SqlQueryable {
 	if b, ok := q.(*SqlQuery); ok {
 		value := Field("toString(" + field.Definition() + ")").WithAlias(valuesColumn)
 		base := *b
-		base.selectF = []SqlField{value, Field("any(" + field.Definition() + ")").WithAlias(ValuesTypeColumn)}
+		base.selectF = []SqlField{value}
 		base.groupBy = []SqlField{value}
 		base.orderBy = []SqlField{value}
 		base.fillStep = ""
@@ -37,18 +32,30 @@ func Values(q SqlQueryable, field SqlField, limit int) SqlQueryable {
 		base.where = append(slices.Clip(b.where), searched(value.Definition()))
 		return &base
 	}
-	return &valuesOf{result: q, definition: field.Definition(), limit: limit}
+	definition := field.Definition()
+	return &around{result: q, wrap: func(inner string) string {
+		return "SELECT toString(" + definition + ") AS " + valuesColumn +
+			"\nFROM (\n" + inner + "\n)\n" +
+			"WHERE " + searched(valuesColumn) + "\n" +
+			"GROUP BY " + valuesColumn + "\nORDER BY " + valuesColumn + "\nLIMIT " + strconv.Itoa(limit)
+	}}
 }
 
-// ValueType is the query of no rows whose ValuesTypeColumn has the type of `field` on `q`, as Values' has it, for a
-// field whose values are not asked (a time, docs/2026-10-28-workbench.md §3.15 D25): of a builder query its base
-// with `WHERE 0`, which ClickHouse answers without reading the table (`SELECT timestamp AS __type FROM http_logs
-// WHERE (0) AND …`); of a SQL file or string its result in a subquery, `WHERE 0` around it (whether ClickHouse runs
-// the subquery then is not checked; it costs at most what the chart's own query does).
-func ValueType(q SqlQueryable, field SqlField) SqlQueryable {
+// FieldTypes is the query of no rows with one column per field of `fields` on `q`, in their order (an alias as
+// the builder writes it: a field without one is named as ClickHouse formats its expression), whose types
+// ClickHouse's `DESCRIBE (<query>)` reports without running it (docs/2026-10-28-workbench.md §3.15 D39, a chart's
+// `/fields`): of a builder query its base, its Where and `WHERE 0` (`SELECT lower(host_name) AS host FROM http_logs
+// WHERE (path != '/') AND (0) AND …`); of a SQL file or string, whose fields are columns of its result, its result in
+// a subquery, `WHERE 0` around it. The handler adds the time range with With, as to the chart's query, so that the
+// placeholders and {{DASHICA_FILTERS}} of a SQL file are filled in.
+func FieldTypes(q SqlQueryable, fields []SqlField) SqlQueryable {
+	columns := make([]SqlField, len(fields))
+	for i, field := range fields {
+		columns[i] = Field(field.Definition()).WithAlias(field.Alias())
+	}
 	if b, ok := q.(*SqlQuery); ok {
 		base := *b
-		base.selectF = []SqlField{Field(field.Definition()).WithAlias(ValuesTypeColumn)}
+		base.selectF = columns
 		base.groupBy = nil
 		base.orderBy = nil
 		base.fillStep = ""
@@ -56,7 +63,16 @@ func ValueType(q SqlQueryable, field SqlField) SqlQueryable {
 		base.where = append(slices.Clip(b.where), "0")
 		return &base
 	}
-	return &valuesOf{result: q, definition: field.Definition(), typeOnly: true}
+	return &around{result: q, wrap: func(inner string) string {
+		selected := make([]string, len(columns))
+		for i, column := range columns {
+			selected[i] = column.Definition()
+			if column.Alias() != column.Definition() {
+				selected[i] += " AS " + column.Alias()
+			}
+		}
+		return "SELECT " + strings.Join(selected, ", ") + "\nFROM (\n" + inner + "\n)\nWHERE 0"
+	}}
 }
 
 // searched is the condition that `expression` contains the search (ValuesSearchParameter), ignoring case.
@@ -64,56 +80,47 @@ func searched(expression string) string {
 	return "positionCaseInsensitive(" + expression + ", {" + ValuesSearchParameter + ":String}) > 0"
 }
 
-// valuesOf is Values of a SQL file or string: the distinct values of `definition` over its `result`; with
-// `typeOnly` ValueType's: no rows, only the type.
-type valuesOf struct {
-	result     SqlQueryable
-	definition string
-	limit      int
-	typeOnly   bool
+// around is Values or FieldTypes of a SQL file or string: `wrap` puts a query around its `result`.
+type around struct {
+	result SqlQueryable
+	wrap   func(inner string) string
 }
 
 // Build is the result's SQL in a subquery, one trailing `;` trimmed, on lines of their own so that a trailing
 // `-- comment` ends before the `)`.
-func (v *valuesOf) Build() string {
-	return v.around(v.result.Build())
+func (a *around) Build() string {
+	return a.wrap(trimmed(a.result.Build()))
 }
 
-func (v *valuesOf) buildWithFS(fileSystem fs.ReadFileFS) (string, error) {
-	inner, err := BuildWithFS(v.result, fileSystem)
+func (a *around) buildWithFS(fileSystem fs.ReadFileFS) (string, error) {
+	inner, err := BuildWithFS(a.result, fileSystem)
 	if err != nil {
 		return "", err
 	}
-	return v.around(inner), nil
+	return a.wrap(trimmed(inner)), nil
 }
 
-func (v *valuesOf) around(inner string) string {
-	inner = strings.TrimSuffix(strings.TrimSpace(inner), ";")
-	if v.typeOnly {
-		return "SELECT " + v.definition + " AS " + ValuesTypeColumn + "\nFROM (\n" + inner + "\n)\nWHERE 0"
-	}
-	return "SELECT toString(" + v.definition + ") AS " + valuesColumn + ", any(" + v.definition + ") AS " + ValuesTypeColumn +
-		"\nFROM (\n" + inner + "\n)\n" +
-		"WHERE " + searched(valuesColumn) + "\n" +
-		"GROUP BY " + valuesColumn + "\nORDER BY " + valuesColumn + "\nLIMIT " + strconv.Itoa(v.limit)
+// trimmed is `inner` without its spaces around and one trailing `;`.
+func trimmed(inner string) string {
+	return strings.TrimSuffix(strings.TrimSpace(inner), ";")
 }
 
 // With applies `opts` to the result (its Where goes to its {{DASHICA_FILTERS}}).
-func (v *valuesOf) With(opts ...SqlBuilderOption) SqlQueryable {
-	return &valuesOf{result: v.result.With(opts...), definition: v.definition, limit: v.limit, typeOnly: v.typeOnly}
+func (a *around) With(opts ...SqlBuilderOption) SqlQueryable {
+	return &around{result: a.result.With(opts...), wrap: a.wrap}
 }
 
-func (v *valuesOf) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
-	result, size := v.result.AdjustBuckets(widthS)
-	return &valuesOf{result: result, definition: v.definition, limit: v.limit, typeOnly: v.typeOnly}, size
+func (a *around) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
+	result, size := a.result.AdjustBuckets(widthS)
+	return &around{result: result, wrap: a.wrap}, size
 }
 
-func (v *valuesOf) ShouldSkipFilters() bool {
-	return v.result.ShouldSkipFilters()
+func (a *around) ShouldSkipFilters() bool {
+	return a.result.ShouldSkipFilters()
 }
 
-func (v *valuesOf) Database() string {
-	return v.result.Database()
+func (a *around) Database() string {
+	return a.result.Database()
 }
 
-var _ SqlQueryable = (*valuesOf)(nil)
+var _ SqlQueryable = (*around)(nil)
