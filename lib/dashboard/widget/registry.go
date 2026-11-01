@@ -40,9 +40,7 @@ type WidgetFactory func() WidgetDefinition
 //
 //   - CategoryChart:     a data/display widget shown in the flat add-widget list.
 //   - CategoryParameter: provides a {name:String} query parameter for OTHER
-//     widgets (Text Input, Checkbox Group) — meaningless standing alone in
-//     Explore, so it is kept out of the add-widget list until the query section
-//     can reference parameters.
+//     widgets (Text Input, Checkbox Group); kept out of the add-widget list.
 //   - CategoryContainer: lays out child widgets (Grid, Collapsible Group) —
 //     also kept out of the flat list.
 //
@@ -117,11 +115,9 @@ type widgetEnvelope struct {
 }
 
 // ErrWidgetNotRegistered is returned by MarshalWidget for a widget type that
-// has no registry entry. It is a sentinel so callers can distinguish "this
-// widget type is out of scope" from a genuine marshalling failure — the Explore
-// export path (dashboard.MarshalForExplore) skips these and errors on everything
-// else. Matched with errors.Is, so it survives the %w wrapping the Widgets /
-// WidgetsMap encoders add around it.
+// has no registry entry; dashboard.MarshalForExplore skips these. Matched with
+// errors.Is, so it survives the %w wrapping the Widgets / WidgetsMap encoders
+// add around it.
 var ErrWidgetNotRegistered = errors.New("widget: type not registered")
 
 // MarshalWidget serializes any registered widget to its tagged envelope,

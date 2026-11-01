@@ -42,9 +42,7 @@ func FromFile(path string, opts ...SqlBuilderOption) *SqlFile {
 // FromFileWithoutFilters is the explicit opt-out from dashboard filter handling.
 // It skips __from/__to parameter injection, time-range resolution, and the
 // {{DASHICA_FILTERS}} placeholder check. Use this only for queries that must
-// not be filtered by the dashboard time range — e.g. queries against ClickHouse
-// system tables, alerts that own their WHERE clause, or week-over-week
-// comparisons that compute their own time bounds.
+// not be filtered by the dashboard time range (see FromFile).
 func FromFileWithoutFilters(path string) *SqlFile {
 	return &SqlFile{
 		path:              path,
@@ -195,8 +193,7 @@ func substitutePlaceholders(content string, where []string, autoBucket bool, buc
 	}
 	out := strings.ReplaceAll(content, DashicaFiltersPlaceholder, clause)
 
-	// substitutes the bucket placeholder only when AutoBucketPlaceholder() was attached AND AdjustBuckets has chosen a rounding
-	// function; else it stays, and ClickHouse fails to parse it (DashicaBucketPlaceholder)
+	// else the bucket placeholder stays, and ClickHouse fails to parse it (DashicaBucketPlaceholder)
 	if autoBucket && bucketRounding != "" {
 		out = strings.ReplaceAll(out, DashicaBucketPlaceholder, bucketRounding)
 	}

@@ -251,7 +251,6 @@ func (s *FilterService) database(connection string) string {
 	return s.config.ClickHouse[connection].Database
 }
 
-// secret is app_secret, the key of each pill's HMAC.
 func (s *FilterService) secret() []byte {
 	return []byte(s.config.AppSecret)
 }

@@ -130,7 +130,6 @@ func UnmarshalField(b []byte) (SqlField, error) {
 	}, nil
 }
 
-// marshalFields serializes a slice of SqlField to a slice of raw JSON envelopes.
 func marshalFields(fields []SqlField) ([]json.RawMessage, error) {
 	if len(fields) == 0 {
 		return nil, nil
@@ -146,7 +145,6 @@ func marshalFields(fields []SqlField) ([]json.RawMessage, error) {
 	return out, nil
 }
 
-// unmarshalFields is the inverse of marshalFields.
 func unmarshalFields(raw []json.RawMessage) ([]SqlField, error) {
 	if len(raw) == 0 {
 		return nil, nil

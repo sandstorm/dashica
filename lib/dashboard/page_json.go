@@ -20,7 +20,6 @@ type PageJson struct {
 	Widgets       []widget.Node            `json:"widgets"`
 }
 
-// jsonHandler serves `body` as JSON.
 func jsonHandler(body []byte) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

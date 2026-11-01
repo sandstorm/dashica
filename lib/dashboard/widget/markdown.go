@@ -86,7 +86,6 @@ func (m *Markdown) renderHTML(fsys fs.ReadFileFS, untrusted bool) (string, error
 	var markdownSource []byte
 	var err error
 
-	// Determine the markdown source: file or inline content
 	if m.file != "" {
 		// File() reads from the project filesystem, never the host filesystem, and
 		// is forbidden entirely for untrusted content. Markdown.file is serialized
@@ -113,7 +112,6 @@ func (m *Markdown) renderHTML(fsys fs.ReadFileFS, untrusted bool) (string, error
 		return "", fmt.Errorf("markdown widget requires either Content() or File()")
 	}
 
-	// Convert markdown to HTML.
 	var buf bytes.Buffer
 
 	// Raw HTML in the markdown source passes through only for TRUSTED (compiled-in)

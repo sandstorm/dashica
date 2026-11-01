@@ -158,9 +158,7 @@ type withProps interface {
 	marshalProps(ctx *rendering.DashboardContext) ([]byte, error)
 }
 
-// withQuery is a chart: Mount serves the query it runs, with its own selects and limits, at "/query" (the data,
-// Arrow) and "/debug" (the query, EXPLAIN), and for the Explore view at "/rows" and "/sql" (the query as text, which
-// the viewer edits).
+// withQuery is a chart: Mount serves the query it runs (queryHandler).
 type withQuery interface {
 	Query() sql.SqlQueryable
 }
@@ -194,7 +192,6 @@ type withExplicitId interface {
 	explicitId() string
 }
 
-// all yields the widgets by position: "0", "1", ….
 func (w Widgets) all() iter.Seq2[string, WidgetDefinition] {
 	return func(yield func(string, WidgetDefinition) bool) {
 		for i, child := range w {
@@ -338,9 +335,8 @@ func httpError(w http.ResponseWriter, err error) {
 // the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with app_secret
 // (filter.FilterService.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that
 // column of its table (filterBy: checked against the schema); a field that is just a column (columnOf) makes that
-// column's pill too, so its key is as short as one from "Add filter". 422 for a field that cannot filter (none of
-// filterableFields: a count, a time bucket, a constant, any field of a chart without a table) and a column its table
-// does not have, 400 for a request without `value` or with another op.
+// column's pill too, so its key is as short as one from "Add filter". 422 for a field that cannot filter
+// (filterableFields) or a column its table does not have, 400 for a request without `value` or with another op.
 func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		args := r.URL.Query()
@@ -481,13 +477,9 @@ func columnOf(chart withQuery, field sql.SqlField) (string, bool) {
 }
 
 // fieldsHandler answers `GET /fields` with the fields "add filter" offers of the chart, as JSON `{columns: [{name,
-// type}], computed: [{name, type}]}` (HandleFields): the columns of its table as the schema of its connection has them
-// (tableColumns: system.columns, kept once asked), each a pill through /pill's `column`; its computedFields with their
-// types, from a `DESCRIBE` of sql.FieldTypes of its query in the request's time range, which reads no rows (the pills
-// and SQL chips change no type, so none are applied; a field ClickHouse cannot describe has no type, the others keep
-// theirs, HandleFields); with the resolved time range in X-Dashica-Resolved-Time-Range. It answers without
-// explore_enabled: it serves only the chart's own table and fields. 422 for a chart without a table, 400 for a query
-// state that cannot be read.
+// type}], computed: [{name, type}]}` (HandleFields): the columns of its table (tableColumns), each a pill through
+// /pill's `column`, and its computedFields with their types. It answers without explore_enabled: it serves only the
+// chart's own table and fields. 422 for a chart without a table, 400 for a query state that cannot be read.
 func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		table, ok := deps.FilterService.TableOf(chart.Query())
