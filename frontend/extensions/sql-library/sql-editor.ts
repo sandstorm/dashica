@@ -3,13 +3,13 @@ import type { Schema } from '../../generated/zz_generated.dashica';
 import type { InputBoxField, MenuAnchor, UiApi } from '../../hosts/ui/ui';
 
 /**
- * Dashica's SQL editor as its users see it (docs/2026-10-28-workbench.md §3.15 D12, D26): CodeMirror 6 with a
- * ClickHouse dialect, from the bundle public/dist/sql-editor.js (codemirror.ts, frontendBuild.mjs), which is loaded on
- * first use (`loadSqlEditors`), so pages without an editor load none of it. The Explore view's editor and the filter
- * bar's SQL condition (`showSqlInputBox`) are both one of these.
+ * Dashica's SQL editor as its users see it: CodeMirror 6 with a ClickHouse dialect, from the bundle
+ * public/dist/sql-editor.js (codemirror.ts, frontendBuild.mjs), which is loaded on first use (`loadSqlEditors`), so
+ * only the pages that open an editor load it. The Explore view's editor and the filter bar's SQL condition
+ * (`showSqlInputBox`) are both one of these.
  */
 export interface SqlEditors {
-  /** A new editor, not yet in the document: its owner puts `element` where it wants it and disposes it. */
+  /** A new editor, outside the document: its owner puts `fieldElement` where it wants it and disposes it. */
   create(options: SqlEditorOptions): SqlEditor;
 }
 
@@ -62,7 +62,7 @@ export async function loadSqlEditors(url = SQL_EDITOR_URL): Promise<SqlEditors> 
 }
 
 /**
- * The completion of `schema` (`/schema.json`'s, D11): each database with its tables, each table with its columns (the
+ * The completion of `schema` (`/schema.json`'s): each database with its tables, each table with its columns (the
  * type as the detail, the comment as the info); its own database the default, so that its tables complete without it;
  * with `table` (`page.json`'s short form, `http_logs` or `logs.http_logs`) that table's columns also alone.
  */
@@ -97,7 +97,7 @@ export interface SqlInputBoxOptions {
 /**
  * Asks for SQL in the input box at `options.anchor`, its field the SQL editor of `editors` (Enter takes the text,
  * Shift+Enter a new line, completion as `options.completion` says once it is known): resolves as `showInputBox` does.
- * While the editor's bundle does not load (it says so on the console), the box's own one-line field asks instead.
+ * When the editor's bundle fails to load (logged on the console), the box's own one-line field asks instead.
  */
 export async function showSqlInputBox(
   ui: Pick<UiApi, 'showInputBox'>,

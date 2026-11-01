@@ -20,7 +20,7 @@ export class Schemas {
     return asking;
   }
 
-  /** The connections asked so far (a failed one not). */
+  /** The connections asked so far, those that failed left out. */
   get asked(): string[] {
     return [...this.#asked.keys()];
   }

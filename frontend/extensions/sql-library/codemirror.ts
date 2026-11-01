@@ -1,5 +1,5 @@
 // See SqlEditors in sql-editor.ts. The entry of the bundle public/dist/sql-editor.js (frontendBuild.mjs), which
-// `loadSqlEditors` imports on first use, so dashboards load none of CodeMirror.
+// `loadSqlEditors` imports on first use, so only the pages that open an editor load CodeMirror.
 import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, insertNewlineAndIndent } from '@codemirror/commands';
 import { SQLDialect, sql } from '@codemirror/lang-sql';

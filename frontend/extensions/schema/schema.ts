@@ -7,17 +7,14 @@ import { Schemas } from '../sql-library/schemas';
 import './schema.css';
 
 /**
- * The left side panel "Schema", only with Explore enabled (`workbench.json`'s `explore`: it is part of Explore,
- * Perspective concept §4.8), as two views: "On this page", the tables the shown page's charts read (`page.json`'s
- * `table` and `connection` of each chart) as connection › database › table, drawn anew for each page shown; and "All
- * connections", the tree connection › database › table of every ClickHouse connection of dashica_config
- * (`workbench.json`'s `connections`). A connection's schema is asked from `/schema.json` once (`Schemas`), by "On this
- * page" while the panel shows, by a connection of "All connections" when it is opened the first time; a table opens to
- * what DataGrip shows of one: its columns (type, default, comment), engine, ORDER BY, PARTITION BY, primary key, TTL
- * and skip indices. The server keeps each connection's schema; "Refresh" in the panel's "…" asks it again for the
- * connections asked so far, "Show comments" there shows or hides the columns' and tables' comments (kept in
- * `globalState`, as whether a view is closed). A tree element of "All connections" stays as the viewer left it (open
- * or closed) when another page is shown.
+ * The left side panel "Schema", part of Explore (only with `workbench.json`'s `explore`), as two views: "On this page",
+ * the tables the shown page's charts read (`page.json`'s `table` and `connection` of each chart) as connection ›
+ * database › table, drawn anew for each page shown while the panel shows; and "All connections", that tree for every
+ * ClickHouse connection of dashica_config (`workbench.json`'s `connections`), a connection asked when first opened.
+ * Each connection's schema comes from `/schema.json` once (`Schemas`), kept by the server; a table opens to its columns
+ * (type, default, comment), engine, ORDER BY, PARTITION BY, primary key, TTL and skip indices. The panel's "…" holds
+ * "Refresh" (asks the connections asked so far again) and "Show comments" (kept in `globalState`, as whether a view is
+ * closed). A tree element of "All connections" stays open or closed as the viewer left it when another page is shown.
  */
 export const schema: Extension = {
   id: 'schema',
@@ -138,41 +135,6 @@ export function drawPageTables(all: readonly string[], tables: readonly PageTabl
   });
 }
 
-/**
- * The tree element of the connection `name` in "All connections", closed; opened the first time it asks `schemas`
- * and shows its databases. `refresh` draws it again from `schemas` once it was opened, else nothing. A failed answer
- * shows its error in place; the next opening asks again.
- */
-function connectionNode(name: string, schemas: Schemas): { connectionElement: HTMLDetailsElement; refresh(): Promise<void> } {
-  const bodyContainer: HTMLElement = html`<div class="d-schema__children"></div>`;
-  const connectionElement: HTMLDetailsElement = html`<details class="d-schema__node" data-testid="schema-connection">
-    <summary class="d-schema__summary">${createElement(Database, { width: 14, height: 14, 'aria-hidden': 'true' })}<span class="d-schema__name">${name}</span></summary>
-    ${bodyContainer}
-  </details>`;
-  /** Drawn (or drawing); `false` until it is opened, again after a failure. */
-  let loaded = false;
-  const load = () => {
-    loaded = true;
-    bodyContainer.replaceChildren(html`<span class="d-spinner"></span>`);
-    return schemas.get(name).then(
-      (schema) => void bodyContainer.replaceChildren(...drawDatabases(schema)),
-      (error: unknown) => {
-        loaded = false;
-        bodyContainer.replaceChildren(errorNotice(error));
-      },
-    );
-  };
-  connectionElement.addEventListener('toggle', () => {
-    if (connectionElement.open && !loaded) void load();
-  });
-  return { connectionElement, refresh: () => (loaded ? load() : Promise.resolve()) };
-}
-
-/** A failed answer's text as an error notice. */
-function errorNotice(error: unknown): HTMLElement {
-  return html`<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div>`;
-}
-
 /** A tree element per database of `schema`, closed unless `open`, its tables in it; a hint for a connection without any. */
 export function drawDatabases(schema: Schema, open = false): HTMLElement[] {
   if (schema.databases.length === 0) return [html`<div class="d-schema__hint">No tables.</div>`];
@@ -185,9 +147,8 @@ export function drawDatabases(schema: Schema, open = false): HTMLElement[] {
 }
 
 /**
- * A closed tree element of `table`, as DataGrip shows a table: its columns (name, type, default, comment), then its
- * engine, ORDER BY, PARTITION BY, primary key, TTL and comment (each only when it has one), then its skip indices. The
- * comments (`d-schema__comment`, `d-schema__table-comment`) are what "Show comments" hides.
+ * A closed tree element of `table`: its columns (name, type, default, comment), then its engine, ORDER BY, PARTITION
+ * BY, primary key, TTL and comment (each only when it has one), then its skip indices. The comments (`d-schema__comment`, `d-schema__table-comment`) are what "Show comments" hides.
  */
 export function drawTable(table: SchemaTable): HTMLElement {
   const keys: [string, string][] = [
@@ -229,4 +190,39 @@ export function drawTable(table: SchemaTable): HTMLElement {
           </ul>`}
     </div>
   </details>`;
+}
+
+/**
+ * The tree element of the connection `name` in "All connections", closed; opened the first time it asks `schemas`
+ * and shows its databases. `refresh` draws it again from `schemas` once it was opened, else nothing. A failed answer
+ * shows its error in place; the next opening asks again.
+ */
+function connectionNode(name: string, schemas: Schemas): { connectionElement: HTMLDetailsElement; refresh(): Promise<void> } {
+  const bodyContainer: HTMLElement = html`<div class="d-schema__children"></div>`;
+  const connectionElement: HTMLDetailsElement = html`<details class="d-schema__node" data-testid="schema-connection">
+    <summary class="d-schema__summary">${createElement(Database, { width: 14, height: 14, 'aria-hidden': 'true' })}<span class="d-schema__name">${name}</span></summary>
+    ${bodyContainer}
+  </details>`;
+  /** Drawn (or drawing); `false` until it is opened, again after a failure. */
+  let loaded = false;
+  const load = () => {
+    loaded = true;
+    bodyContainer.replaceChildren(html`<span class="d-spinner"></span>`);
+    return schemas.get(name).then(
+      (schema) => void bodyContainer.replaceChildren(...drawDatabases(schema)),
+      (error: unknown) => {
+        loaded = false;
+        bodyContainer.replaceChildren(errorNotice(error));
+      },
+    );
+  };
+  connectionElement.addEventListener('toggle', () => {
+    if (connectionElement.open && !loaded) void load();
+  });
+  return { connectionElement, refresh: () => (loaded ? load() : Promise.resolve()) };
+}
+
+/** A failed answer's text as an error notice. */
+function errorNotice(error: unknown): HTMLElement {
+  return html`<div class="d-notice d-notice--error">${error instanceof Error ? error.message : String(error)}</div>`;
 }

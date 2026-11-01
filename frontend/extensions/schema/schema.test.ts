@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for schema.ts: the panel only with Explore, "On this page" the page's tables, "All connections" a connection
-// asked when opened, the views' closed state kept, a table as DataGrip shows it, Refresh, Show comments.
+// asked when opened, the views' closed state kept, a table's columns and keys, Refresh, Show comments.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, Schema, SchemaTable, WorkbenchJson } from '../../generated/zz_generated.dashica';
