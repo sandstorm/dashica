@@ -465,9 +465,9 @@ title, else its type), `time-library` `formatTime` (an end of a custom range, as
 query states `time` and `refresh` (§3.7)
 (9h, §3.15 D22); `sql-library` the SQL editor (CodeMirror 6, its own bundle loaded on first use), the completion of a
 schema and the store of the connections' schemas (`Schemas`), shared by the Explore view, the filters and the Schema
-view (9d, §3.15 D12); `filter-library` the contract between the charts, the Explore view and the `filters` extension:
-the command `filters.offer` (`OFFER`), its argument types `FilterCandidate`, `PillSource`, `OfferFilters`, and
-`offerFiltersOf`, which runs it (9ad, §3.15 D38).
+view (9d, §3.15 D12); `filter-library` what the `filters` extension and the Explore view both read of a chart's answer
+(`diagnosticsOf`, §3.8); until 9bb also the click to filter's command `filters.offer` and its types, replaced by the
+widgets host's data point menu (§3.15 D46).
 
 What hosts and extensions both draw lives in `frontend/core/`: `core/sash` (since 9av, §3.15 D48) is the `Sash`, as
 VS Code's: a line between two parts that the viewer drags or moves with the arrow keys (`role=separator`,
@@ -486,7 +486,7 @@ the sash needs no `Memento`.
 |---|---|
 | `commands` | `registerCommand` (with the command's `enablement` / `disabledReason`, 9t), `executeCommand`, `enablement`; keys via `contributes.keybindings` |
 | `ui` | side panels, views inside them (`createView`, §3.4.2), top bar, filter bar and status bar items, rail buttons (`registerRailButton`, 8d), `registerMenuItem`, `showContextMenu`, the quick input (`showQuickPick` / `showInputBox` / `createQuickPick`, 8c, §3.14 D3), messages, search providers |
-| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status, widget decorations (`registerDecorationProvider`, a widget's `decorations` / `onDidChangeDecorations`, as VS Code's file decorations; 9af, §3.15 D38); it knows nothing of filtering: a click to filter is the `filters` extension's command `filters.offer`, its types in `filter-library` (§3.8, 9f, 9ad); the chart frame is `chart-library`'s (9h) |
+| `widgets` | `registerWidget` (§3.6), the active widget (`active`, `onDidChangeActive`, §3.4.4) and its status, widget decorations (`registerDecorationProvider`, a widget's `decorations` / `onDidChangeDecorations`, as VS Code's file decorations; 9af, §3.15 D38); the data point menu (`registerDataPointMenuProvider`, `showDataPointMenu`, a widget context's `showDataPointMenu`, as VS Code's code actions; 9bb, §3.15 D46); it knows nothing of filtering: the `filters` extension is a data point menu provider (§3.8); the chart frame is `chart-library`'s (9h) |
 | `page` | the open tabs and the page each shows (`page.json`), the active one's `onDidChangePage`, `navigate(url, { newTab })` (§3.4.1), `popOut(view)` (§3.4.6) |
 | `query` | the state every query depends on (§3.7), one per tab; extensions see the active tab's; it knows no key: typed keys carry their URL format (`queryKey`, `get` / `set` / `onDidChange`, 9w) |
 | state | `globalState` / `workspaceState` instead of direct `localStorage` |
@@ -520,7 +520,7 @@ ctx.url(path)                              // below the widget's handler, with t
 ctx.renderChild(childContainer, child)     // grid, collapsible
 ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
 ctx.decorations, ctx.onDidChangeDecorations // what providers say about its answer (9af): badges, muted; drawn by ChartFrame
-// click to filter: commands.executeCommand('filters.offer', at, candidates, { dataUrl, filterable }) (§3.8, 9f)
+ctx.showDataPointMenu(at, dataPoints)      // a click's data points ({field, value, type?}): the providers' items (9bb, D46)
 ```
 
 - Function, not class: Plot draws a fresh SVG anyway; a prop change disposes and renders again.
@@ -569,8 +569,8 @@ server reads is sent on every page, read or not: `?wp` also on a page without fo
 
 Who writes another extension's state: a range dragged across a time chart sets `TIME` (`ChartFrame`);
 a fixed range applied or shifted turns `REFRESH` off (`time-range`); a table cell's SQL filter runs the
-command `filters.addSql` *(proposed: a command, as `filters.offer`, so the chip rules stay the filters
-extension's)*; the form widgets set their param in `PARAMS`.
+command `filters.addSql` *(proposed: a command, so the chip rules stay the filters extension's)*; a data point menu's
+filter runs `filters.addPill` (§3.15 D46); the form widgets set their param in `PARAMS`.
 
 Every data handler reads the same query parameters; the server parses them once in `lib/httpserver` into one
 `QueryState` (time, filters, params). Params stay what they are today: ClickHouse parameters (`param_<name>`); the
@@ -701,14 +701,16 @@ the server made:
 - **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
   (`addChip` on the query state `filters` since 9j, before `FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and shows the server's message in the still-open quick pick's message line (`QuickPickOptions.accept`, since 9ay; 9at showed it in an error notification, D45 (e); before only the console). Since 9f (§3.15 D20) the quick
   pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
-  a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
+  a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. Since
+  9bb (§3.15 D46) the click shows the widgets host's data point menu, the `filters` extension's items in it
+  (`filterMenuProvider`), each running `filters.addPill(dataUrl, field, op, value)` (`addPill`). A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
 - **The old Explore preview** (`lib/explore`, it dropped `f`) is gone since 9aw.
 - **Tests:** `sql` (Quote, Condition, FilterAs, TableOf), `filter` (TableOf, New, Sign / Open and every refused
   key, Apply's grouping and two bases on one table), `widget` (`/pill`, its 422 and 400, pills applied and ignored,
   a SQL file with `sql.Table`, a tampered pill 400, `filterableFields`), `config` (the secret's length); vitest for the
-  chip model, the filter bar, `offerFilters` asking `/pill` (since 9f in `extensions/filters/offer.test.ts`; the
-  renderers' tests check the runs of `filters.offer`, `widgetTestbed().offers`). Playwright (written, not run): `e2e/filter-chips.spec.ts` signs its pills through a chart's `/pill`, an
+  chip model, the filter bar, `filterMenuProvider` and `addPill` asking `/pill` (`extensions/filters/offer.test.ts`;
+  the renderers' tests check the data point menus shown, `widgetTestbed().dataPointMenus`, since 9bb). Playwright (written, not run): `e2e/filter-chips.spec.ts` signs its pills through a chart's `/pill`, an
   unsigned `f` fails the charts with 400.
 
 ✅ **Built in 8m (2026-10-31): "Add filter"**, a pill without a click on a chart (§3.14 D15, as Grafana's ad hoc
@@ -853,9 +855,10 @@ on ClickHouse 25.10 (`clickhouse local`), `'1761730000'` as a `String` parameter
 `selectOnClick`, its candidates as in 6.8), on a category cell of a table, or on a group row of the Explore view calls
 `offerFilters(at, candidates)` (until 9f `WidgetContext` / `WidgetsApi`; since 9f, §3.15 D20, the command
 `filters.offer(at, candidates, { dataUrl, filterable })` that the click runs itself, `offerFiltersOf` (`chart-library` until
-9ad, since then `filter-library`, §3.15 D38);
-the `filters` extension registers it, owns the quick pick, `OP_ICONS`, `fetchPill`, and adds to the tab shown;
-without it a click offers nothing): the quick pick "Filter" at the click (a table cell: below the cell) lists, per candidate in order,
+9ad, since then `filter-library`, §3.15 D38); since 9bb, §3.15 D46, `ctx.showDataPointMenu(at, dataPoints)`, the
+Explore view `widgets.showDataPointMenu(chart, at, dataPoints)`, and the `filters` extension is a data point menu
+provider (`filterMenuProvider`) that owns the items, `OP_ICONS`, `fetchPill`, and adds to the tab shown;
+without it a click shows nothing): the quick pick "Filter" (since 9bb "Data point") at the click (a table cell: below the cell) lists, per candidate in order,
 `<field> = <value>` with a filter icon (accessible name "Filter …", op `eq`) and `<field> ≠ <value>` with a minus icon
 ("Exclude …", `ne`; since 9aq, D45, each op with its own sign); it is a menu (§3.15 D30), typing narrows them, choosing one adds the filter to the tab's query state at once, Escape or a
 press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`), the menu `widget/selection` and the
@@ -864,8 +867,9 @@ press elsewhere adds none. Deleted: `ui.registerFloatingBar` (`floating-bar.ts`)
 Explore view's anchor element. The table's `selecting` is `filtering`, its class `d-table__filterable`. Each click
 adds one pill; how pills on the same table and field combine is the server's (8e). The labels show `=` for both ops
 and the icon tells them apart *(proposed: D4 names both "`<field> = <value>`")*. Tests: `offerFilters` in
-`extensions/filters/offer.test.ts` (until 9f `widgets.test.ts`), a click per chart type and the table cell in their
-tests (since 9f the runs of `filters.offer`, `widgetTestbed().offers`; before `choices()` / `candidates()` /
+`extensions/filters/offer.test.ts` (until 9f `widgets.test.ts`; since 9bb `filterMenuProvider`, the menu itself in
+`widgets.test.ts`), a click per chart type and the table cell in their tests (since 9bb the data point menus shown,
+`widgetTestbed().dataPointMenus`; 9f to 9ba the runs of `filters.offer`; before `choices()` / `candidates()` /
 `choose(…)`), the Explore view's click in `view.test.ts`. Playwright (written,
 not run): `e2e/bar-selection.spec.ts`, `e2e/chart-selection.spec.ts`, `e2e/record-details.spec.ts`.
 
@@ -1219,7 +1223,16 @@ interface WidgetsApi {
   readonly active: RenderedWidget | undefined;            // the active tab's active widget: Debug, Details, the status bar (§3.4.4)
   readonly onDidChangeActive: Event<void>;                // another widget or tab, the widget removed
   registerDecorationProvider(provider: WidgetDecorationProvider): Disposable;   // as registerFileDecorationProvider (9af)
-}                                                         // a click to filter runs `filters.offer` (§3.8, 9f)
+  registerDataPointMenuProvider(provider: DataPointMenuProvider): Disposable;   // as registerCodeActionsProvider (9bb, D46)
+  showDataPointMenu(widget: WidgetMenuContext, at: MenuAnchor, dataPoints: readonly DataPoint[]): void;  // the Explore view's
+}
+
+interface DataPointMenuProvider {                         // asked in order each time a menu shows; a failing one skipped
+  provideDataPointMenuItems(widget: WidgetMenuContext, dataPoints: readonly DataPoint[])
+    : readonly DataPointMenuItem[] | Promise<readonly DataPointMenuItem[] | undefined> | undefined;
+}
+interface DataPoint { field: string; value: string; type?: string }   // a clicked value: its alias, as a filter compares it
+interface DataPointMenuItem extends QuickPickItem { command: string; arguments?: unknown[] }   // as CodeAction.command
 
 interface WidgetDecorationProvider {                      // asked when a widget's answer arrives, all again when it fires
   provideDecorations(widget: RenderedWidget, result: QueryResult): readonly WidgetDecoration[] | undefined;
@@ -1241,12 +1254,12 @@ interface WidgetContext {                                 // what a renderer get
   url(path: string): string;
   renderChild(childContainer: HTMLElement, child: WidgetNode): Disposable;
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
+  showDataPointMenu(at: MenuAnchor, dataPoints: readonly DataPoint[]): void;   // a click's: the "Data point" menu (9bb)
 }
 
-// filters — a click's candidates (§3.8, 9f): the renderer runs the filters extension's command; the contract is
-// filter-library's (9ad, D38), the widgets host knows none of it
-commands.executeCommand(OFFER /* 'filters.offer' */, at: MenuAnchor, candidates: FilterCandidate[], source: PillSource);
-// FilterCandidate {fieldId, value, type?}; PillSource {dataUrl, filterable}: whose /pill makes the pill; offerFiltersOf(commands, widget)
+// filters — a data point menu provider (§3.8, 9bb, D46): per data point of a field the widget names filterable, one
+// item per op, running filters.addPill(dataUrl, field, op, value); the charts and the widgets host know none of it
+widgets.registerDataPointMenuProvider(filterMenuProvider);
 ```
 
 Menus open from a visible button ("…", or the widget's menu button), never by a right click: on the web nobody
@@ -1262,8 +1275,8 @@ quick pick** (§3.14 D3), since 9s as a menu (§3.15 D30): `showContextMenu` sho
 groups, a check mark for a `toggled` entry, an entry whose command is not enabled greyed (`aria-disabled`, choosing it
 does nothing) with the command's `disabledReason` on hover (`QuickPickItem.disabled` / `tooltip`, set by `ContextMenu`
 from `commands.enablement`; since 9t, §3.15 D31; 8g had `MenuItem.enabled` / `tooltip`), the command run right after the box closed (still in the viewer's
-gesture). A menu of the moment needs no id: its owner calls `ui.showQuickPick(items, {anchor, title})` (a chart's
-click: the `filters` extension's `filters.offer`, §3.8), with `menu: true` when it is a menu; `showChoices` is gone. A registered menu without entries hides the open box.
+gesture). A menu of the moment needs no id: its owner calls `ui.showQuickPick(items, {anchor, title})` (until 9bb a chart's
+click: the `filters` extension's `filters.offer`; since then the widgets host's data point menu, §3.8), with `menu: true` when it is a menu; `showChoices` is gone. A registered menu without entries hides the open box.
 The "…" buttons say `aria-haspopup="dialog"`, the quick pick's role. The rule "never by a right click" stands, with
 the `table/cell` deviation above *(proposed: D3's "right click" read as that one existing menu, no new right-click
 menus)*.
@@ -1289,7 +1302,7 @@ Built-in extensions:
 | `refresh` | top bar: one split button, ⟳ refresh now (`refresh.now`) and the auto refresh interval (Off, 10s … 1h) |
 | (log scale) | removed (decided 2026-10-30): the charts draw on a linear scale |
 | `theme` | light / dark toggle |
-| `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip, "Add filter"; the command `filters.offer` (a click's quick pick "Filter", its `/pill`, the pill added to the tab shown; 8c, 9f) |
+| `filters` | filter bar: chips, filter buttons (a `...` asked with `showInputBox`), SQL chip, "Add filter"; a data point menu provider (`filterMenuProvider`: a click's "status = 500" / "status ≠ 500" …) and the command `filters.addPill` (its `/pill`, the pill added to the tab shown; 8c, 9f, 9bb) |
 | `debug` | left panel "Debug" (the active widget's query, stats, EXPLAIN, result, as views); the status bar's item (the active widget's status); `widget/context` "Debug" (§3.4.4) |
 | `details` | left panel "Details" (the records `details.showRecords` gave it: a table's ticked rows, a view per record); the status bar's "N records selected" (§3.4.5) |
 | `schema` | left panel "Schema", only with Explore, two views (`createView`): "On this page" (the tables the page's charts read, connection › database › table) and "All connections" (every connection › database › table), from `/schema.json`; `panel/schema` "Refresh" and "Show comments" (toggled, kept in `globalState`) (Perspective §4.8, 8h, 9x) |
@@ -1918,6 +1931,32 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   size (no `Memento` in the sash); `shownSize`, where a move starts, so a kept height larger than the stylesheet
   allows does not swallow the start of a drag; Explore's bounds 96–2000 px, at first 216 px, 19 px per key, at
   least 160 px for the viewer (CSS).
+- **D46 The data point menu (9bb, decided 2026-11-01; maintainer, on `registerDataPointMenuProvider` /
+  `ctx.showDataPointMenu(at, dataPoints)`: "I LIKE!!! GO AND BUILD THIS"):** as VS Code's code actions, a click on a
+  chart's mark, a table's cell or an Explore view's group row no longer names the filters: it shows the widgets
+  host's data point menu. `widgets.registerDataPointMenuProvider({ provideDataPointMenuItems(widget, dataPoints) })`
+  (`DataPoint {field, value, type?}`, was `FilterCandidate {fieldId, value, type?}`; `DataPointMenuItem`, a
+  `QuickPickItem` with `command` and `arguments`, as `CodeAction.command`); `ctx.showDataPointMenu(at, dataPoints)`
+  asks every provider in registration order (one that throws or rejects is logged and skipped), shows the items in the
+  quick pick's menu mode at `at` ("Data point", busy while a provider's are still to come), nothing without items,
+  and runs the chosen item's command with its arguments as the pick's `accept` (the menu stays open and busy, a
+  failure's message in it, D45 (e) / 9ay). The `filters` extension is a provider (`filterMenuProvider` in
+  `filters/offer.ts`): per data point whose field the widget names `filterable` (read from the widget's page.json
+  node), one item per op of its type (`opsOf`, `OP_SIGNS`, `OP_ICONS`), each running
+  `filters.addPill(dataUrl, field, op, value)` (`addPill`: `/pill`, then the chip). Gone: `filter-library/offer.ts`
+  (`OFFER`, `filters.offer`, `PillSource` as an argument, `FilterCandidate`, `OfferFilters`, `offerFiltersOf`),
+  `offerFilters` and its options in `filterOnClick`, the renderers, `drawTable`, `drawTimeBars` and the Explore view,
+  `chart-library/offer-testing.ts` (the testbed records `dataPointMenus`); `chart-library/candidate.ts` is
+  `data-point.ts` (`dataPointOf`); `PillSource` lives on in the `filters` extension for "Add filter" and a chip's
+  edits; `fetchPill` takes `field`. *(proposed)* The provider gets the widget as its menus do (`WidgetMenuContext`:
+  widget, `url`, `lastResult`), not a `RenderedWidget`, since the Explore view's chart is not rendered there:
+  the Explore extension calls `widgets.showDataPointMenu(chart, at, dataPoints)` with a `WidgetMenuContext` of its
+  chart (`url` with the tab's query state, no `lastResult`). The menu's name is "Data point" (was "Filter"; the e2e
+  specs follow). A menu whose items still to come turn out none hides (`showQuickPick`, as a context menu without an
+  entry that applies). The charts pass their widget context to `filterOnClick` (`ctx`), the table a closure over
+  `ctx.showDataPointMenu`, as it does for `showMenu`; the table still hands only its `filterable` category columns'
+  cells (its pointer cursor, `d-table__filterable`, and the cell menu's `filtering`), so a table cell's click and
+  its cursor agree; `filterOnClick` keeps its name and CSS class.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2279,6 +2318,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ay ✅ 2026-11-01 | **BUGFIX a failed filter shows in the still-open box** (§3.8, §3.9, §3.10, §3.11, §3.15 D45 (e); docs/conventions.md "Errors show where they happen"): `UiApi.showErrorMessage` and `hosts/ui/notifications` deleted; `QuickPickOptions<T>.accept?(item)` and `InputBoxOptions.accept?(value)`: the choice runs it, the box stays open and busy (its progress line; the input box got one), a rejection's message shows in the box's message line (the input box's validation line as an error; `QuickPick.message`, a new error line below the field) and the viewer can choose again or hide it; resolved, the box hides and resolves with the choice. `offerFilters`, the op menu and value box of a pill's edit (`#remake` rejects), "Add filter"'s value (`askValue` / `pickValue` take `accept`), a filter button's input box use it; `showFailed` gone. Tests: `quick-input.test.ts` (both boxes: busy, error, again, resolved), `offer.test.ts`, `add-filter.test.ts` (`pickValue` busy and its error; the refused `/pill` in the open box), `filters.test.ts` (the fake boxes run `accept`) | *(proposed)* `accept` on the options in place of each caller driving a `createQuickPick`; `QuickPick.message` as the pick's message line; a failure after the box was hidden is logged to the console |
 | 9az ✅ 2026-11-01 | **BUGFIX a `*filter.FilterService` is named as a service** (docs/conventions.md "Names and types"): `pageButtons` / `buttonHandler`'s parameter and `filter_test.go`'s variable `filters` → `filterService`. Tests: `dashboard`, `filter` unchanged and green | |
 | 9ba ✅ 2026-11-01 | **STYLE the comments D40 / D43 changed, rewrapped at 120 columns**: `filter.Apply`, `widget.Node.Table`, `pillHandler`, `openPills` (`TimeRangeHandler`'s went back to its earlier wrap with 9ax). No code change | STYLE, not BUGFIX: docs/conventions.md keeps comment-only changes in `STYLE:` commits |
+| 9bb ✅ 2026-11-01 | **D46 the data point menu** (§3.5, §3.8, §3.11, §3.15; Perspective §4.4; docs/conventions.md "Known smells"): `WidgetsApi.registerDataPointMenuProvider` / `showDataPointMenu`, `WidgetContext.showDataPointMenu`, `DataPoint`, `DataPointMenuItem`, `DataPointMenuProvider` (`hosts/widgets/widgets{,-impl,-testing}.ts`; `WidgetsHost(ui, commands, tabs)`); a menu's items that turn out none hide the quick pick (`quick-input.ts`); the `filters` extension's `filterMenuProvider`, `addPill`, `filters.addPill` (`filters/offer.ts`, `filters.ts`); `filterOnClick`, `drawTable`, `drawTimeBars`, the chart renderers and the Explore view show the menu (`chart-library/data-point.ts`, was `candidate.ts`); `filter-library/offer.ts`, `chart-library/offer-testing.ts`, `filters.offer` deleted. Tests: `widgets.test.ts` (providers in order, a failing one skipped, items shown, busy, the command run, its error kept in the menu, nothing without items), `quick-input.test.ts`, `filters/offer.test.ts`, `filters.test.ts`, each chart's and the table's test (`widgetTestbed().dataPointMenus`), `view.test.ts`; e2e (written, not run) `bar-selection`, `chart-selection`, `record-details` find "Data point". *(proposed)* the provider gets a `WidgetMenuContext`; the menu's name "Data point"; the table's clickable cells stay its `filterable` ones (D46). Commits 7b0e10b, 9de303b, 0247602 and this one. | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

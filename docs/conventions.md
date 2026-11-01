@@ -146,5 +146,5 @@ Deliberately kept for now; do not copy the pattern.
 
 - **Extensions call each other's commands** in two places, against "extensions never depend on each other":
   `details.showRecords` (the table hands its ticked rows to Details) and `filters.addSql` (a table cell adds a SQL
-  chip). The click to filter (`filters.offer`) is being replaced by the data point menu
-  (`registerDataPointMenuProvider`).
+  chip). The click to filter is no longer one: the chart shows the widgets host's data point menu, the `filters`
+  extension is a provider in it (`registerDataPointMenuProvider`).
