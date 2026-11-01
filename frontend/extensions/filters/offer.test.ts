@@ -1,33 +1,27 @@
 // @vitest-environment jsdom
-// Tests for offer.ts: what a click offers (offerFilters, the command filters.offer): "Filter" and "Exclude" per
-// candidate of a field the widget filters by, at the click, and for a time or a number the comparisons of its type;
-// the choice made a pill by the widget's /pill and added at once; none on Escape, none on a failed /pill, whose
-// server's message shows in the still-open quick pick. The request of /pill (fetchPill).
+// Tests for offer.ts: what a click offers (filterMenuProvider): per data point of a field the widget filters by, one
+// item per op of its type with its own sign and icon, for a time or a number the comparisons too, each running
+// `filters.addPill` with the widget's dataUrl; none for other fields or a widget without filterable ones. The pill
+// added (addPill), none on a failed /pill, which rejects with the server's message. The request of /pill (fetchPill).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
+import type { DataPoint, DataPointMenuItem } from '../../hosts/widgets/widgets';
 import { FILTERS } from './chips';
-import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
-import { fetchPill, offerFilters } from './offer';
+import { addPill, fetchPill, filterMenuProvider } from './offer';
 
-let hostContainer: HTMLElement;
-let quickInput: QuickInput;
 let query: QueryHost;
 /** The URLs fetched; each `/pill` answers a key naming its field, op and value, unless `refused` says otherwise. */
 let fetched: URL[];
 let refused: Response | undefined;
 
-const source = { dataUrl: '/p/shop/api/3', filterable: ['status', 'instance'] };
+const chart = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/3', filterable: ['status', 'instance', 'timestamp'] } as unknown as WidgetNode;
 const pill = (field: string, op: string, value: string) => ({ kind: 'pill', key: `key:${field}:${op}:${value}` });
 
-/** The quick pick's options as their icon and label read ("Filter status = 500", "Exclude status ≠ 500"). */
-const choices = () =>
-  [...hostContainer.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')].map((optionElement) =>
-    `${optionElement.querySelector('[role=img]')?.getAttribute('aria-label') ?? ''} ${optionElement.textContent?.trim()}`.trim(),
-  );
-/** Clicks the option `label` reads as ("Exclude status ≠ 500"). */
-const choose = (label: string) => {
-  const optionElements = [...hostContainer.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] [role=option]')];
-  optionElements[choices().indexOf(label)].click();
+/** The items `filterMenuProvider` offers for `dataPoints` of `widget`, as their icon and label read ("Filter status = 500"). */
+const offered = (dataPoints: readonly DataPoint[], widget: WidgetNode = chart) => {
+  const items = filterMenuProvider.provideDataPointMenuItems({ widget, url: (path) => path, lastResult: undefined }, dataPoints) as readonly DataPointMenuItem[];
+  return items.map((item) => `${item.icon?.label} ${item.label}`);
 };
 
 beforeEach(() => {
@@ -36,8 +30,6 @@ beforeEach(() => {
   // declared as by the filters extension
   query.declare(FILTERS);
   query.load();
-  hostContainer = document.body.appendChild(document.createElement('div'));
-  quickInput = new QuickInput(hostContainer);
   fetched = [];
   refused = undefined;
   vi.stubGlobal('fetch', async (input: string) => {
@@ -52,30 +44,27 @@ beforeEach(() => {
 afterEach(() => {
   query.dispose();
   vi.unstubAllGlobals();
-  document.body.replaceChildren();
   history.replaceState(null, '', '/');
 });
 
-describe('offerFilters', () => {
-  it('offers to filter by and to exclude each candidate in order, at the click; choosing one adds its pill at once', async () => {
-    const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'instance', value: 'web-1' }], source);
-    expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500', 'Filter instance = web-1', 'Exclude instance ≠ web-1']);
-    expect(hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick')!.style.left).toBe('10px');
-    // a menu: its field out of sight
-    expect(hostContainer.querySelector('.d-workbench__quick-pick input')!.classList.contains('d-workbench__quick-pick-field--concealed')).toBe(true);
-    choose('Exclude instance ≠ web-1');
-    await done;
-
-    expect(choices()).toEqual([]);
-    expect(query.get(FILTERS)).toEqual([pill('instance', 'ne', 'web-1')]);
-    expect(fetched.at(-1)?.pathname).toBe('/p/shop/api/3/pill');
-    expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
+describe('filterMenuProvider', () => {
+  it('offers to filter by and to exclude each data point in order, each running filters.addPill with the widget’s dataUrl', () => {
+    expect(offered([{ field: 'status', value: '500' }, { field: 'instance', value: 'web-1' }])).toEqual([
+      'Filter status = 500',
+      'Exclude status ≠ 500',
+      'Filter instance = web-1',
+      'Exclude instance ≠ web-1',
+    ]);
+    const items = filterMenuProvider.provideDataPointMenuItems({ widget: chart, url: (path) => path, lastResult: undefined }, [{ field: 'status', value: '500' }]);
+    expect(items).toMatchObject([
+      { command: 'filters.addPill', arguments: ['/p/shop/api/3', 'status', 'eq', '500'] },
+      { command: 'filters.addPill', arguments: ['/p/shop/api/3', 'status', 'ne', '500'] },
+    ]);
   });
 
-  it('offers ≥ and ≤ a time first, then the other ops of its type', async () => {
+  it('offers ≥ and ≤ a time first, then the other ops of its type', () => {
     const at = '2026-10-31T10:00:00.000Z';
-    const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'timestamp', value: at, type: 'DateTime' }], { ...source, filterable: ['timestamp'] });
-    expect(choices()).toEqual([
+    expect(offered([{ field: 'timestamp', value: at, type: 'DateTime' }])).toEqual([
       `At least timestamp ≥ ${at}`,
       `At most timestamp ≤ ${at}`,
       `Above timestamp > ${at}`,
@@ -83,49 +72,36 @@ describe('offerFilters', () => {
       `Filter timestamp = ${at}`,
       `Exclude timestamp ≠ ${at}`,
     ]);
-    choose(`At most timestamp ≤ ${at}`);
-    await done;
-
-    expect(query.get(FILTERS)).toEqual([pill('timestamp', 'le', at)]);
-    expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'timestamp', op: 'le', value: at });
   });
 
-  it('offers only the fields the widget filters by, and nothing without one', async () => {
-    void offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }, { fieldId: 'cnt', value: '3' }], source);
-    expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
-    await offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'cnt', value: '3' }], source);
-    await offerFilters(quickInput, query, { x: 10, y: 20 }, [], source);
-    expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
+  it('offers only the fields the widget filters by, and nothing for a widget without such fields', () => {
+    expect(offered([{ field: 'status', value: '500' }, { field: 'cnt', value: '3' }])).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
+    expect(offered([{ field: 'cnt', value: '3' }])).toEqual([]);
+    expect(offered([{ field: 'status', value: '500' }], { ...chart, filterable: undefined } as WidgetNode)).toEqual([]);
+    expect(offered([{ field: 'status', value: '500' }], { type: 'markdown', props: {} } as unknown as WidgetNode)).toEqual([]);
+  });
+});
+
+describe('addPill', () => {
+  it('adds the pill the widget’s /pill makes to the chips', async () => {
+    await addPill(query, '/p/shop/api/3', 'instance', 'ne', 'web-1');
+
+    expect(query.get(FILTERS)).toEqual([pill('instance', 'ne', 'web-1')]);
+    expect(fetched.at(-1)?.pathname).toBe('/p/shop/api/3/pill');
+    expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
   });
 
-  it('adds no pill when the widget’s /pill fails, and shows the server’s message in the quick pick, still open', async () => {
+  it('adds none when the widget’s /pill fails, rejecting with the server’s message', async () => {
     refused = new Response('"status" cannot filter this chart\'s table', { status: 422 });
-    let settled = false;
-    const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }], source).then(() => (settled = true));
-    choose('Filter status = 500');
-    const messageElement = hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] .d-workbench__quick-pick-message')!;
-    await vi.waitFor(() => expect(messageElement.textContent).toBe('422: "status" cannot filter this chart\'s table'));
-
-    expect([messageElement.hidden, choices(), settled]).toEqual([false, ['Filter status = 500', 'Exclude status ≠ 500'], false]);
+    await expect(addPill(query, '/p/shop/api/3', 'status', 'eq', '500')).rejects.toThrow('422: "status" cannot filter this chart\'s table');
     expect(query.get(FILTERS)).toEqual([]);
-    (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await done;
-    expect(query.get(FILTERS)).toEqual([]);
-  });
-
-  it('adds nothing when the viewer closes the quick pick', async () => {
-    const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }], source);
-    (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await done;
-
-    expect([choices(), query.get(FILTERS), fetched]).toEqual([[], [], []]);
   });
 });
 
 describe('fetchPill', () => {
   it('asks <dataUrl>/pill for the field, op and value, gives the key it answers, and rejects with the server’s answer', async () => {
-    expect(await fetchPill('/p/shop/api/3', { fieldId: 'host', op: 'eq', value: 'a b' })).toEqual({ key: 'key:host:eq:a b' });
+    expect(await fetchPill('/p/shop/api/3', { field: 'host', op: 'eq', value: 'a b' })).toEqual({ key: 'key:host:eq:a b' });
     refused = new Response('no field host', { status: 422 });
-    await expect(fetchPill('/p/shop/api/3', { fieldId: 'host', op: 'eq', value: 'a' })).rejects.toThrow('422: no field host');
+    await expect(fetchPill('/p/shop/api/3', { field: 'host', op: 'eq', value: 'a' })).rejects.toThrow('422: no field host');
   });
 });

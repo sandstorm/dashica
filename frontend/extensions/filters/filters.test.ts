@@ -8,15 +8,16 @@
 // field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
 // input box), each made again by a chart of the page (a column's by the table's first chart), its type from that
 // chart's /fields asked once per time range, one no chart makes only removed; with SQL filters off
-// (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; a chart
-// click's `filters.offer` adding the pill chosen to the tab shown; the charts' answers decorated with the pills they ignore.
+// (filters.sqlEnabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; its
+// data point menu provider registered and `filters.addPill` adding the pill to the tab shown; the charts' answers
+// decorated with the pills they ignore.
 import { Table } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson, Schema, WorkbenchJson } from '../../generated/zz_generated.dashica';
 import type { ExtensionContext } from '../../hosts/extension-host/extension-host';
 import { QueryHost } from '../../hosts/query/query';
-import type { QueryResult, RenderedWidget, WidgetDecorationProvider } from '../../hosts/widgets/widgets';
+import type { DataPointMenuProvider, QueryResult, RenderedWidget, WidgetDecorationProvider } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, replaceChip, type FilterChip } from './chips';
 import type { InputBoxField } from '../../hosts/ui/ui';
 import { buttonCondition, buttonOf, conditionCompletion, filters } from './filters';
@@ -56,6 +57,8 @@ let errors: string[];
 let commands: Map<string, (...args: any[]) => unknown>;
 /** The widget decoration providers the extension registered. */
 let providers: WidgetDecorationProvider[];
+/** The data point menu providers the extension registered. */
+let menuProviders: DataPointMenuProvider[];
 
 /** The ClickHouse operator a key writes for each sign a label shows. */
 const OPERATORS: Record<string, string> = { '=': '=', '≠': '!=', '<': '<', '≤': '<=', '>': '>', '≥': '>=' };
@@ -168,7 +171,11 @@ function activate(sqlEnabled: boolean): void {
   page.workbench.sqlEnabled = sqlEnabled;
   const registry = { registerCommand: (id: string, handler: (...args: any[]) => unknown) => (commands.set(id, handler), { dispose: () => commands.delete(id) }) };
   providers = [];
-  const widgets = { registerDecorationProvider: (provider: WidgetDecorationProvider) => (providers.push(provider), { dispose() {} }) };
+  menuProviders = [];
+  const widgets = {
+    registerDecorationProvider: (provider: WidgetDecorationProvider) => (providers.push(provider), { dispose() {} }),
+    registerDataPointMenuProvider: (provider: DataPointMenuProvider) => (menuProviders.push(provider), { dispose() {} }),
+  };
   filters.activate({ query, page, ui, commands: registry, widgets, subscriptions: [] } as unknown as ExtensionContext);
   show(shop);
 }
@@ -655,15 +662,20 @@ describe('filters.addSql', () => {
   });
 });
 
-describe('filters.offer', () => {
+describe('click to filter', () => {
   beforeEach(() => activate(true));
 
-  it('offers a click’s candidates at the click and adds the pill chosen, made by the widget’s /pill, to the tab shown', async () => {
-    picked = 'host = a';
-    await commands.get('filters.offer')!({ x: 10, y: 20 }, [{ fieldId: 'host', value: 'a' }], { dataUrl: '/p/shop/api/1', filterable: ['host'] });
+  it('offers the data points of the widget’s filterable fields; `filters.addPill` adds the pill the widget’s /pill makes to the tab shown', async () => {
+    const widget = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'] } as unknown as RenderedWidget['widget'];
+    const items = menuProviders[0].provideDataPointMenuItems({ widget, url: (path) => path, lastResult: undefined }, [{ field: 'host', value: 'a' }]);
+    expect(items).toMatchObject([
+      { label: 'host = a', command: 'filters.addPill', arguments: ['/p/shop/api/1', 'host', 'eq', 'a'] },
+      { label: 'host ≠ a', command: 'filters.addPill', arguments: ['/p/shop/api/1', 'host', 'ne', 'a'] },
+    ]);
+    await commands.get('filters.addPill')!('/p/shop/api/1', 'host', 'ne', 'a');
 
-    expect(picks).toEqual([{ labels: ['host = a', 'host ≠ a'], anchor: { x: 10, y: 20 } }]);
-    expect(new URL(fetched.at(-1)!, 'http://x').pathname).toBe('/p/shop/api/1/pill');
+    const asked = new URL(fetched.at(-1)!, 'http://x');
+    expect([asked.pathname, Object.fromEntries(asked.searchParams)]).toEqual(['/p/shop/api/1/pill', { field: 'host', op: 'ne', value: 'a' }]);
     expect(held()).toHaveLength(1);
   });
 });

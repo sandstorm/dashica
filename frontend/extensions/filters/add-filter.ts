@@ -2,10 +2,9 @@
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { QueryApi } from '../../hosts/query/query';
 import { QuickPickItemKind, type MenuAnchor, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
-import type { PillSource } from '../filter-library/offer';
 import { typeKind } from '../widget-library/clickhouse-type';
 import { FILTERS, addChip, type FilterOp } from './chips';
-import { fetchPill, fieldParam, type FieldRef } from './offer';
+import { fetchPill, fieldParam, type FieldRef, type PillSource } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import type { PillField } from './pill-key';
 
@@ -118,7 +117,7 @@ export async function addFilter(
     known,
     (search, signal) => fetchValues(widget.dataUrl, ref, search, query.requestParams(), signal),
     async (value) => {
-      const { key } = await fetchPill(widget.dataUrl, { fieldId: ref.field, column: ref.column, op: op.op, value });
+      const { key } = await fetchPill(widget.dataUrl, { field: ref.field, column: ref.column, op: op.op, value });
       query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
     },
   );

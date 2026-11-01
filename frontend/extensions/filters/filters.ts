@@ -4,14 +4,13 @@ import type { Disposable } from '../../core/disposable/disposable';
 import type { FilterButton } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryApi } from '../../hosts/query/query';
-import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../hosts/ui/ui';
-import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
+import { InputBoxValidationSeverity, type UiApi } from '../../hosts/ui/ui';
+import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type FilterOp, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { FieldsCache, SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchValues, fieldSource, filterableTables, typeIn, type AskSql, type FieldType, type FilterableTable } from './add-filter';
 import { filterDecorationProvider } from './decorations';
-import { fetchPill, offerFilters } from './offer';
+import { ADD_PILL, addPill, fetchPill, filterMenuProvider, type PillSource } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
-import { OFFER, type FilterCandidate, type PillSource } from '../filter-library/offer';
 import { Schemas } from '../sql-library/schemas';
 import { completionOf, loadSqlEditors, showSqlInputBox, type SqlCompletion } from '../sql-library/sql-editor';
 import './filters.css';
@@ -36,8 +35,9 @@ import './filters.css';
  * or a computed field of one of the tables the page's charts read (`addFilter`), shown while there is one or SQL chips
  * are taken. The bar shows while it has a chip, a button or
  * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
- * runs the command `filters.offer` (`(at, candidates, { dataUrl, filterable })`): its quick pick adds the pill chosen to
- * the tab shown (`offerFilters`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
+ * shows the widgets host's data point menu, where this extension offers to filter by the clicked values
+ * (`filterMenuProvider`); the item chosen runs `filters.addPill` (`(dataUrl, field, op, value)`), which adds that
+ * widget's pill to the tab shown (`addPill`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
  * condition as a SQL chip. A chart's answer is decorated with what it did with the pills (`filterDecorations`).
  */
 export const filters: Extension = {
@@ -52,9 +52,9 @@ export const filters: Extension = {
           showSqlInputBox(ui, loadSqlEditors, { ...options, completion: conditionCompletion(schemas, filterableTables(page.current?.widgets ?? [])) })
       : undefined;
     subscriptions.push(
-      commands.registerCommand(OFFER, (at: MenuAnchor, candidates: readonly FilterCandidate[], source: PillSource) =>
-        offerFilters(ui, query, at, candidates, source),
-      ),
+      // what a click on a chart's mark, a table's cell or an Explore view's group row offers to filter by
+      widgets.registerDataPointMenuProvider(filterMenuProvider),
+      commands.registerCommand(ADD_PILL, (dataUrl: string, field: string, op: FilterOp, value: string) => addPill(query, dataUrl, field, op, value)),
       // what a chart did with the pills: "ignores host = a" (muted), "skipped: …"
       widgets.registerDecorationProvider(filterDecorationProvider),
       // a table cell's SQL filters ("Filter: Contains this value")
@@ -322,7 +322,7 @@ class FilterBar {
    * another chip is there meanwhile; rejects with the server's message for a refused one, the chip kept.
    */
   async #remake(chip: PillFilter, index: number, source: PillSource, { field, column, op, value }: PillField): Promise<void> {
-    const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value });
+    const pill = await fetchPill(source.dataUrl, { field, column, op, value });
     if (this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
   }
 

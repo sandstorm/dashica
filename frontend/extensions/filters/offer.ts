@@ -1,59 +1,54 @@
-// See offerFilters.
+// See filterMenuProvider and addPill.
 import type { QueryApi } from '../../hosts/query/query';
-import type { MenuAnchor, QuickPickItem, UiApi } from '../../hosts/ui/ui';
-import type { FilterCandidate, PillSource } from '../filter-library/offer';
+import type { DataPointMenuItem, DataPointMenuProvider } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, type FilterOp, type Pill } from './chips';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 
-/**
- * The command `filters.offer` (docs/2026-10-28-workbench.md §3.8, §3.15 D25): a click on a chart's mark, a table's cell
- * or an Explore view's group row offers, in a quick pick "Filter" at `at` (a menu), to filter by each of `candidates` ("status =
- * 500" with a filter icon) or to exclude it ("status ≠ 500" with a minus icon), and for a number or a time to compare with it
- * ("timestamp ≥ 2026-10-31T10:00:00.000Z", a time's `≥` and `≤` first; the ops of its type, `opsOf`), in order, those
- * of them whose field `source` names `filterable`; choosing one asks `source`'s `/pill` for its pill, the quick pick
- * open and busy meanwhile, and adds it to the chips of `query` (the active tab's: the click happened in the tab
- * shown). A failed answer adds none and shows the server's message in the still-open quick pick. Nothing without such
- * candidates.
- */
-export async function offerFilters(
-  ui: Pick<UiApi, 'showQuickPick'>,
-  query: Pick<QueryApi, 'get' | 'set'>,
-  at: MenuAnchor,
-  candidates: readonly FilterCandidate[],
-  source: PillSource,
-): Promise<void> {
-  const items = filterPicks(candidates.filter(({ fieldId }) => source.filterable?.includes(fieldId)));
-  if (items.length === 0) return;
-  await ui.showQuickPick(items, {
-    anchor: at,
-    title: 'Filter',
-    menu: true,
-    accept: async (picked) => {
-      const { key } = await fetchPill(source.dataUrl, picked);
-      query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
-    },
-  });
-}
-
-/** What `offerFilters` offers for a candidate: to compare it by `op`. */
-interface FilterPick extends QuickPickItem, FilterCandidate {
-  readonly op: FilterOp;
-}
+/** The command a data point menu's filter runs (`(dataUrl, field, op, value)`), which `addPill` does. */
+export const ADD_PILL = 'filters.addPill';
 
 /**
- * For each candidate in order, one pick per op of its type, each with its own sign: "<field> = <value>" to filter by it
- * (a filter icon), "<field> ≠ <value>" to exclude it (a minus icon), "<field> ≥ <value>" and the like to compare with it
- * (a chevron).
+ * What a click on a chart's mark, a table's cell or an Explore view's group row offers to filter by
+ * (docs/2026-10-28-workbench.md §3.8, §3.15 D25, D46): in the widgets host's data point menu, for each data point whose
+ * field the widget names `filterable` (page.json's), in order, one item per op of its type (`opsOf`), each with its own
+ * sign: "status = 500" to filter by it (a filter icon), "status ≠ 500" to exclude it (a minus icon), for a number or a
+ * time "timestamp ≥ 2026-10-31T10:00:00.000Z" and the like to compare with it (a chevron; a time's `≥` and `≤` first).
+ * Each runs `filters.addPill` with the widget's `dataUrl`, whose `/pill` makes the pill. None for a widget without
+ * filterable fields.
  */
-function filterPicks(candidates: readonly FilterCandidate[]): FilterPick[] {
-  return candidates.flatMap((candidate) =>
-    opsOf(candidate.type).map((op) => ({
-      label: `${candidate.fieldId} ${OP_SIGNS[op]} ${candidate.value}`,
-      icon: OP_ICONS[op],
-      ...candidate,
-      op,
-    })),
-  );
+export const filterMenuProvider: DataPointMenuProvider = {
+  provideDataPointMenuItems({ widget }, dataPoints): readonly DataPointMenuItem[] {
+    if (!('dataUrl' in widget) || !('filterable' in widget) || !widget.filterable) return [];
+    const { dataUrl, filterable } = widget;
+    return dataPoints
+      .filter(({ field }) => filterable.includes(field))
+      .flatMap(({ field, value, type }) =>
+        opsOf(type).map((op) => ({
+          label: `${field} ${OP_SIGNS[op]} ${value}`,
+          icon: OP_ICONS[op],
+          command: ADD_PILL,
+          arguments: [dataUrl, field, op, value],
+        })),
+      );
+  },
+};
+
+/**
+ * Adds the pill `<dataUrl>/pill` makes of `field` `op` `value` to the chips of `query` (the active tab's: the click
+ * happened in the tab shown). Rejects with the server's message, adding none: the data point menu, still open, shows it.
+ */
+export async function addPill(query: Pick<QueryApi, 'get' | 'set'>, dataUrl: string, field: string, op: FilterOp, value: string): Promise<void> {
+  const { key } = await fetchPill(dataUrl, { field, op, value });
+  query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
+}
+
+/**
+ * The widget whose `<dataUrl>/pill` makes a pill, and the aliases of its fields that make one (`page.json`'s
+ * `filterable`): what "Add filter" and a chip's edit ask.
+ */
+export interface PillSource {
+  readonly dataUrl: string;
+  readonly filterable?: readonly string[];
 }
 
 /**
@@ -71,16 +66,16 @@ export function fieldParam(ref: FieldRef): [string, string] {
 }
 
 /**
- * The pill `<dataUrl>/pill` makes of `fieldId` `op` `value` (a click's choice, "Add filter", an edited chip), its key
+ * The pill `<dataUrl>/pill` makes of `field` `op` `value` (a click's choice, "Add filter", an edited chip), its key
  * (the chip reads its label from it, `pillLabel`); with `column` the pill on that column of the chart's table
  * (`fieldParam`, §3.15 D27).
  * Rejects with the server's message (a field that cannot filter: 422).
  */
 export async function fetchPill(
   dataUrl: string,
-  { fieldId, column, op, value }: Pick<FilterCandidate, 'fieldId' | 'value'> & { readonly op: FilterOp; readonly column?: boolean },
+  { field, column, op, value }: { readonly field: string; readonly column?: boolean; readonly op: FilterOp; readonly value: string },
 ): Promise<Pill> {
-  const asked = new URLSearchParams([fieldParam({ field: fieldId, column }), ['op', op], ['value', value]]);
+  const asked = new URLSearchParams([fieldParam({ field, column }), ['op', op], ['value', value]]);
   const response = await fetch(`${dataUrl}/pill?${asked}`);
   if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
   const { key } = (await response.json()) as Pill;
