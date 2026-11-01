@@ -1,7 +1,7 @@
 // Package filter is the pills of a page (`?f=<key>`): a condition on a table that the server wrote from a chart's
 // field (New) or for a filter button of the page (NewButton) and signed (FilterService.Sign), opened again on every
 // request (FilterService.Open) and applied by every chart on that table, a button's by every query that takes filters
-// (Apply); and Diagnostics, what a chart tells the outside about one answer. See docs/2026-10-28-workbench.md §3.8.
+// (Apply); and Diagnostics, what a chart tells the outside about one answer. See docs/2026-10-28-workbench.md.
 package filter
 
 import (
@@ -30,31 +30,6 @@ func NewFilterService(cfg *config.Config) *FilterService {
 	return &FilterService{config: cfg}
 }
 
-// database is the database dashica_config names for `connection` ("" for one it does not know).
-func (s *FilterService) database(connection string) string {
-	return s.config.ClickHouse[connection].Database
-}
-
-// secret is app_secret, the key of each pill's HMAC.
-func (s *FilterService) secret() []byte {
-	return []byte(s.config.AppSecret)
-}
-
-// Diagnostics is what a chart tells the outside about one answer, sent with its data (X-Dashica-Diagnostics).
-type Diagnostics struct {
-	// Ignored are the labels of the pills the chart does not apply ("customer = acme"), each once, in URL order.
-	Ignored []string `json:"ignored,omitempty"`
-	// Skipped is non-empty when the chart did not run, and says why.
-	Skipped string `json:"skipped,omitempty"`
-}
-
-// Table is a table as pills name it: its ClickHouse connection and its name with the database ("default",
-// "monitoring.full_logs"), so that `full_logs` and `monitoring.full_logs` on a connection to `monitoring` are one.
-type Table struct {
-	Connection string
-	Name       string
-}
-
 // TableOf is the Table whose pills `q` takes (sql.TableOf: a builder query's From, a SQL file's sql.Table) on its
 // connection ("default" when it names none), a name without database in the connection's database from
 // dashica_config; false for a query without one, and for one that skips filters.
@@ -70,97 +45,15 @@ func (s *FilterService) TableOf(q sql.SqlQueryable) (Table, bool) {
 	return Table{Connection: connection, Name: name}, true
 }
 
-// Pill is a filter on a table: the rows where a field compares by an op with a value (`customer = acme`, `timestamp ≥
-// 2026-10-31T10:00:00.000Z`), as the condition the server wrote for it; or a filter button's condition (Button), on
-// no table. Its key (FilterService.Sign) carries it, signed.
-type Pill struct {
-	Table
-	// Field is the alias of the field it filters by ("customer"), or with Column the column's name; the pills on one
-	// table, field and Column combine (Apply).
-	Field string
-	// Column is set for a pill on a column of the table, whose Condition is the column's own (`(`host`) = 'web-1'`,
-	// sql.ColumnField; "Add filter"'s table columns and a click on a field that is just a column,
-	// docs/2026-10-28-workbench.md §3.15 D27, D29), which any chart on the table makes again; else a chart's field's,
-	// which a chart with that field makes. Its key carries no condition.
-	Column bool
-	// Op is how the field compares with Value (sql.Op: `eq`, `ne`, `lt`, `le`, `gt`, `ge`).
-	Op sql.Op
-	// Condition is what goes into the WHERE of a chart on Table (`customer_project = 'customer-acme'`).
-	Condition string
-	// Label is the chip's text, made from the rest and not in the key: "customer = acme", "customer ≠ acme",
-	// "duration_ms ≥ 500"; a button's its condition (`duration_ms >= '500'`; NewButton: its title, with its value
-	// after a colon, "Duration >= … ms: 500").
-	Label string
-	// Button is the condition of the filter button the pill was made for, as the dashboard declares it
-	// ("duration_ms >= ..."), by which the page finds its button; empty for a field's pill. A button's pill has no
-	// table, field or op.
-	Button string
-	// Value is the value the field shows ("acme"), by which the filter bar edits the pill (a new op or value asks the
-	// field's chart for a new one); for a button, the value written in for its `...` ("500"), as typed, empty for one
-	// without.
-	Value string
-}
-
-// ErrCannotFilter: the field holds no categories (a count, a time bucket), so it makes no pill.
-var ErrCannotFilter = errors.New("cannot filter")
-
-// New is the pill on `table` of the rows where `field` compares by `op` with `value`: its condition as sql.Condition
-// writes it (the field's FilterAs, else its definition compared with the quoted value), a Column when that is the
-// condition of the column the alias names (sql.ColumnField); labelled with the field's alias and the op's sign
-// ("duration_ms ≥ 500"); the alias and `value` in it too, so the filter bar can make it again with another op or
-// value. ErrCannotFilter for a field that cannot filter.
-func New(table Table, field sql.SqlField, op sql.Op, value string) (Pill, error) {
-	if !op.Valid() {
-		return Pill{}, fmt.Errorf("op %q: want eq, ne, lt, le, gt or ge", op)
-	}
-	condition, ok := sql.Condition(field, op, value)
-	if !ok {
-		return Pill{}, ErrCannotFilter
-	}
-	p := Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Value: value}
-	p.Column = condition == columnCondition(p)
-	p.Label = fieldLabel(p)
-	return p, nil
-}
-
-// columnCondition is the condition of a pill on the column `p.Field` (sql.ColumnField): what Open writes for a key
-// without one.
-func columnCondition(p Pill) string {
-	condition, _ := sql.Condition(sql.ColumnField(p.Field), p.Op, p.Value)
-	return condition
-}
-
-func fieldLabel(p Pill) string {
-	return p.Field + " " + p.Op.Sign() + " " + p.Value
-}
-
-// NewButton is the pill of the filter button `title` with the condition `queryPart`: `queryPart` itself, or for a
-// button with `...` in it ("duration_ms >= ...") each `...` replaced by `value` as a string literal (sql.Quote:
-// `duration_ms >= '500'`), so a typed value never becomes SQL. An error for a value on a button without `...`, and
-// for an empty one on a button with.
-func NewButton(title, queryPart, value string) (Pill, error) {
-	if !strings.Contains(queryPart, "...") {
-		if value != "" {
-			return Pill{}, fmt.Errorf("filter button %q takes no value", title)
-		}
-		return Pill{Condition: queryPart, Label: title, Button: queryPart}, nil
-	}
-	if value == "" {
-		return Pill{}, fmt.Errorf("filter button %q needs a value", title)
-	}
-	condition := strings.ReplaceAll(queryPart, "...", sql.Quote(value))
-	return Pill{Condition: condition, Label: title + ": " + value, Button: queryPart, Value: value}, nil
-}
-
-// Sign is the key of `p`, what the URL holds (`?f=<key>`, docs/2026-10-28-workbench.md §3.15 D29), readable and short:
+// Sign is the key of `p`, what the URL holds (`?f=<key>`), readable and short:
 //
 //	<table>.<field><op><value>[~<condition>]~<mac>    mv_oekokiste_shop.host=web-1~Zp8x…
 //	@<button>[~<value>]~<mac>                         @duration_ms >= ...~500~kq3V…
 //
 // The table is `[<connection>:][<database>.]<name>`, the connection left out when it is "default" and the database
-// when it is the connection's (dashica_config); the op its ClickHouse
-// operator (`=`, `!=`, `<`, `<=`, `>`, `>=`); the condition only when it is not the column's own (a Column's). The mac
-// is the HMAC-SHA256 with app_secret of everything before it, its first 128 bits in unpadded base64url.
+// when it is the connection's (dashica_config); the op its ClickHouse operator (`=`, `!=`, `<`, `<=`, `>`, `>=`); the
+// condition only for a pill other than a Column. The mac is the HMAC-SHA256 with app_secret of everything before it,
+// its first 128 bits in unpadded base64url.
 // `%` and each separator a part could hold are percent-encoded in it (`~` everywhere; `:`, `.`, `=`, `!`, `<`, `>`
 // and `@` in a name; a value's leading `=`), so each part reads back as it was.
 func (s *FilterService) Sign(p Pill) (string, error) {
@@ -207,11 +100,222 @@ func (s *FilterService) Open(key string) (Pill, error) {
 	return p, nil
 }
 
+// TableName is the name of `t` as a key and page.json name it: without its database when that is the one
+// dashica_config names for its connection (`http_logs` for `default.http_logs` on a connection to `default`), else
+// with it.
+func (s *FilterService) TableName(t Table) string {
+	if db := s.database(t.Connection); db != "" {
+		if name, ok := strings.CutPrefix(t.Name, db+"."); ok {
+			return name
+		}
+	}
+	return t.Name
+}
+
+// Table is a table as pills name it: its ClickHouse connection and its name with the database ("default",
+// "monitoring.full_logs"), so that `full_logs` and `monitoring.full_logs` on a connection to `monitoring` are one.
+type Table struct {
+	Connection string
+	Name       string
+}
+
+// Pill is a filter on a table: the rows where a field compares by an op with a value (`customer = acme`, `timestamp ≥
+// 2026-10-31T10:00:00.000Z`), as the condition the server wrote for it; or a filter button's condition (Button), on
+// no table. Its key (FilterService.Sign) carries it, signed.
+type Pill struct {
+	Table
+	// Field is the alias of the field it filters by ("customer"), or with Column the column's name; the pills on one
+	// table, field and Column combine (Apply).
+	Field string
+	// Column is set for a pill on a column of the table, whose Condition is the column's own (`(`host`) = 'web-1'`,
+	// sql.ColumnField; "Add filter"'s table columns and a click on a field that is just a column), which any chart on
+	// the table makes again; else a chart's field's, which a chart with that field makes. Its key carries no condition.
+	Column bool
+	// Op is how the field compares with Value (sql.Op: `eq`, `ne`, `lt`, `le`, `gt`, `ge`).
+	Op sql.Op
+	// Condition is what goes into the WHERE of a chart on Table (`customer_project = 'customer-acme'`).
+	Condition string
+	// Label is the chip's text, made from the rest and not in the key: "customer = acme", "customer ≠ acme",
+	// "duration_ms ≥ 500"; a button's its condition (`duration_ms >= '500'`; NewButton: its title, with its value
+	// after a colon, "Duration >= … ms: 500").
+	Label string
+	// Button is the condition of the filter button the pill was made for, as the dashboard declares it
+	// ("duration_ms >= ..."), by which the page finds its button; empty for a field's pill. A button's pill has no
+	// table, field or op.
+	Button string
+	// Value is the value the field shows ("acme"), by which the filter bar edits the pill (a new op or value asks the
+	// field's chart for a new one); for a button, the value written in for its `...` ("500"), as typed, empty for one
+	// without.
+	Value string
+}
+
+// New is the pill on `table` of the rows where `field` compares by `op` with `value`: its condition as sql.Condition
+// writes it (the field's FilterAs, else its definition compared with the quoted value), a Column when that is the
+// condition of the column the alias names (sql.ColumnField); labelled with the field's alias and the op's sign
+// ("duration_ms ≥ 500"); the alias and `value` in it too, so the filter bar can make it again with another op or
+// value. ErrCannotFilter for a field that cannot filter.
+func New(table Table, field sql.SqlField, op sql.Op, value string) (Pill, error) {
+	if !op.Valid() {
+		return Pill{}, fmt.Errorf("op %q: want eq, ne, lt, le, gt or ge", op)
+	}
+	condition, ok := sql.Condition(field, op, value)
+	if !ok {
+		return Pill{}, ErrCannotFilter
+	}
+	p := Pill{Table: table, Field: field.Alias(), Op: op, Condition: condition, Value: value}
+	p.Column = condition == columnCondition(p)
+	p.Label = fieldLabel(p)
+	return p, nil
+}
+
+// NewButton is the pill of the filter button `title` with the condition `queryPart`: `queryPart` itself, or for a
+// button with `...` in it ("duration_ms >= ...") each `...` replaced by `value` as a string literal (sql.Quote:
+// `duration_ms >= '500'`), so a typed value never becomes SQL. An error for a value on a button without `...`, and
+// for an empty one on a button with.
+func NewButton(title, queryPart, value string) (Pill, error) {
+	if !strings.Contains(queryPart, "...") {
+		if value != "" {
+			return Pill{}, fmt.Errorf("filter button %q takes no value", title)
+		}
+		return Pill{Condition: queryPart, Label: title, Button: queryPart}, nil
+	}
+	if value == "" {
+		return Pill{}, fmt.Errorf("filter button %q needs a value", title)
+	}
+	condition := strings.ReplaceAll(queryPart, "...", sql.Quote(value))
+	return Pill{Condition: condition, Label: title + ": " + value, Button: queryPart, Value: value}, nil
+}
+
+// ErrCannotFilter: the field holds no categories (a count, a time bucket), so it makes no pill.
+var ErrCannotFilter = errors.New("cannot filter")
+
+// Diagnostics is what a chart tells the outside about one answer, sent with its data (X-Dashica-Diagnostics).
+type Diagnostics struct {
+	// Ignored are the labels of the pills the chart does not apply ("customer = acme"), each once, in URL order.
+	Ignored []string `json:"ignored,omitempty"`
+	// Skipped is non-empty when the chart did not run, and says why.
+	Skipped string `json:"skipped,omitempty"`
+}
+
+// Apply is `q` with the pills on `table` added to its WHERE (a SQL file's {{DASHICA_FILTERS}}), and the Diagnostics
+// naming the others; without a table (`ok` false, FilterService.TableOf) it applies none. The pills on one field
+// combine (a column and a computed field of the same name being two fields, Pill.Column), in the order of their first
+// one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op AND-ed (`customer ≠ acme`
+// and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one Where, so a `≥` and a `≤` on one
+// field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table too, each
+// one Where after those of the fields.
+func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQueryable, Diagnostics) {
+	var d Diagnostics
+	type group struct {
+		field  string
+		column bool
+		op     sql.Op
+	}
+	var order []group
+	conditions := map[group][]string{}
+	var buttons []sql.SqlBuilderOption
+	for _, p := range pills {
+		if p.Button != "" && !q.ShouldSkipFilters() {
+			buttons = append(buttons, sql.Where(p.Condition))
+			continue
+		}
+		if !ok || p.Button != "" || p.Table != table {
+			if !slices.Contains(d.Ignored, p.Label) {
+				d.Ignored = append(d.Ignored, p.Label)
+			}
+			continue
+		}
+		g := group{p.Field, p.Column, p.Op}
+		if _, seen := conditions[g]; !seen {
+			order = append(order, g)
+		}
+		conditions[g] = append(conditions[g], "("+p.Condition+")")
+	}
+	var wheres []sql.SqlBuilderOption
+	for _, g := range order {
+		join := " AND "
+		if g.op == sql.OpEq {
+			join = " OR "
+		}
+		wheres = append(wheres, sql.Where(strings.Join(conditions[g], join)))
+	}
+	wheres = append(wheres, buttons...)
+	if len(wheres) > 0 {
+		q = q.With(wheres...)
+	}
+	return q, d
+}
+
+// database is the database dashica_config names for `connection` ("" for one it does not know).
+func (s *FilterService) database(connection string) string {
+	return s.config.ClickHouse[connection].Database
+}
+
+// secret is app_secret, the key of each pill's HMAC.
+func (s *FilterService) secret() []byte {
+	return []byte(s.config.AppSecret)
+}
+
+// tableKey is `t` as a key names it (Sign).
+func (s *FilterService) tableKey(t Table) string {
+	key := ""
+	if t.Connection != "default" {
+		key = escape(t.Connection, nameSeparators) + ":"
+	}
+	db, name, ok := strings.Cut(s.TableName(t), ".")
+	if !ok {
+		return key + escape(db, nameSeparators)
+	}
+	return key + escape(db, nameSeparators) + "." + escape(name, nameSeparators)
+}
+
 // nameSeparators are the separators a name in a key escapes.
 const nameSeparators = "~:.=!<>@"
 
-// ops are the ops by their ClickHouse operator, the two-character ones first, as read reads them.
-var ops = []sql.Op{sql.OpNe, sql.OpLe, sql.OpGe, sql.OpEq, sql.OpLt, sql.OpGt}
+// escape is `s` with `%` and each byte of `separators` percent-encoded (`~` as `%7E`).
+func escape(s, separators string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c == '%' || strings.IndexByte(separators, c) >= 0 {
+			fmt.Fprintf(&b, "%%%02X", c)
+		} else {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// escapeValue is a value as a key holds it after its op: `~` and a leading `=` percent-encoded too, so that `<` with
+// `=5` does not read as `<=` with `5`.
+func escapeValue(value string) string {
+	escaped := escape(value, "~")
+	if strings.HasPrefix(escaped, "=") {
+		return "%3D" + escaped[1:]
+	}
+	return escaped
+}
+
+// columnCondition is the condition of a pill on the column `p.Field` (sql.ColumnField): what Open writes for a key
+// without one.
+func columnCondition(p Pill) string {
+	condition, _ := sql.Condition(sql.ColumnField(p.Field), p.Op, p.Value)
+	return condition
+}
+
+// mac is the HMAC-SHA256 of `head` with `secret`, its first 128 bits.
+func mac(secret []byte, head string) []byte {
+	h := hmac.New(sha256.New, secret)
+	h.Write([]byte(head))
+	return h.Sum(nil)[:16]
+}
+
+// shorten is a key as an error names it: its first 24 characters.
+func shorten(key string) string {
+	if len(key) <= 24 {
+		return key
+	}
+	return key[:24] + "…"
+}
 
 // read is the pill of a key's `head` (Sign: all before the mac).
 func (s *FilterService) read(head string) (Pill, error) {
@@ -274,18 +378,8 @@ func (s *FilterService) read(head string) (Pill, error) {
 	return p, nil
 }
 
-// tableKey is `t` as a key names it (Sign).
-func (s *FilterService) tableKey(t Table) string {
-	key := ""
-	if t.Connection != "default" {
-		key = escape(t.Connection, nameSeparators) + ":"
-	}
-	db, name, ok := strings.Cut(s.TableName(t), ".")
-	if !ok {
-		return key + escape(db, nameSeparators)
-	}
-	return key + escape(db, nameSeparators) + "." + escape(name, nameSeparators)
-}
+// ops are the ops by their ClickHouse operator, the two-character ones first, as read reads them.
+var ops = []sql.Op{sql.OpNe, sql.OpLe, sql.OpGe, sql.OpEq, sql.OpLt, sql.OpGt}
 
 // readTable is the table a key names (tableKey).
 func (s *FilterService) readTable(key string) (Table, error) {
@@ -313,101 +407,6 @@ func (s *FilterService) readTable(key string) (Table, error) {
 	return t, nil
 }
 
-// TableName is the name of `t` as a key and page.json name it: without its database when that is the one
-// dashica_config names for its connection (`http_logs` for `default.http_logs` on a connection to `default`), else
-// with it.
-func (s *FilterService) TableName(t Table) string {
-	if db := s.database(t.Connection); db != "" {
-		if name, ok := strings.CutPrefix(t.Name, db+"."); ok {
-			return name
-		}
-	}
-	return t.Name
-}
-
-// escape is `s` with `%` and each byte of `separators` percent-encoded (`~` as `%7E`).
-func escape(s, separators string) string {
-	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; c == '%' || strings.IndexByte(separators, c) >= 0 {
-			fmt.Fprintf(&b, "%%%02X", c)
-		} else {
-			b.WriteByte(c)
-		}
-	}
-	return b.String()
-}
-
-// escapeValue is a value as a key holds it after its op: `~` and a leading `=` percent-encoded too, so that `<` with
-// `=5` does not read as `<=` with `5`.
-func escapeValue(value string) string {
-	escaped := escape(value, "~")
-	if strings.HasPrefix(escaped, "=") {
-		return "%3D" + escaped[1:]
-	}
-	return escaped
-}
-
-// mac is the HMAC-SHA256 of `head` with `secret`, its first 128 bits.
-func mac(secret []byte, head string) []byte {
-	h := hmac.New(sha256.New, secret)
-	h.Write([]byte(head))
-	return h.Sum(nil)[:16]
-}
-
-// shorten is a key as an error names it: its first 24 characters.
-func shorten(key string) string {
-	if len(key) <= 24 {
-		return key
-	}
-	return key[:24] + "…"
-}
-
-// Apply is `q` with the pills on `table` added to its WHERE (a SQL file's {{DASHICA_FILTERS}}), and the Diagnostics
-// naming the others; without a table (`ok` false, FilterService.TableOf) it applies none. The pills on one field
-// combine (a column and a computed field of the same name being two fields, Pill.Column), in the order of their first
-// one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op AND-ed (`customer ≠ acme`
-// and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one Where, so a `≥` and a `≤` on one
-// field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table too, each
-// one Where after those of the fields.
-func Apply(q sql.SqlQueryable, table Table, ok bool, pills []Pill) (sql.SqlQueryable, Diagnostics) {
-	var d Diagnostics
-	type group struct {
-		field  string
-		column bool
-		op     sql.Op
-	}
-	var order []group
-	conditions := map[group][]string{}
-	var buttons []sql.SqlBuilderOption
-	for _, p := range pills {
-		if p.Button != "" && !q.ShouldSkipFilters() {
-			buttons = append(buttons, sql.Where(p.Condition))
-			continue
-		}
-		if !ok || p.Button != "" || p.Table != table {
-			if !slices.Contains(d.Ignored, p.Label) {
-				d.Ignored = append(d.Ignored, p.Label)
-			}
-			continue
-		}
-		g := group{p.Field, p.Column, p.Op}
-		if _, seen := conditions[g]; !seen {
-			order = append(order, g)
-		}
-		conditions[g] = append(conditions[g], "("+p.Condition+")")
-	}
-	var wheres []sql.SqlBuilderOption
-	for _, g := range order {
-		join := " AND "
-		if g.op == sql.OpEq {
-			join = " OR "
-		}
-		wheres = append(wheres, sql.Where(strings.Join(conditions[g], join)))
-	}
-	wheres = append(wheres, buttons...)
-	if len(wheres) > 0 {
-		q = q.With(wheres...)
-	}
-	return q, d
+func fieldLabel(p Pill) string {
+	return p.Field + " " + p.Op.Sign() + " " + p.Value
 }

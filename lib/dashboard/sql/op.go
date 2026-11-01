@@ -1,8 +1,8 @@
 package sql
 
-// Op is how a pill compares a field with its value (docs/2026-10-28-workbench.md §3.15 D25): `eq` (`=`), `ne`
-// (`!=`), `lt` (`<`), `le` (`<=`), `gt` (`>`), `ge` (`>=`). Which ones the filter bar offers depends on the field's
-// ClickHouse type (a string `eq` and `ne`, a number or a time all of them); every one is valid SQL on any field.
+// Op is how a pill compares a field with its value: `eq` (`=`), `ne` (`!=`), `lt` (`<`), `le` (`<=`), `gt` (`>`),
+// `ge` (`>=`). Which ones the filter bar offers depends on the field's ClickHouse type (a string `eq` and `ne`, a
+// number or a time all of them); every one is valid SQL on any field.
 type Op string
 
 const (

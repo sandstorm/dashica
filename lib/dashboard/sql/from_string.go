@@ -52,17 +52,16 @@ func (s *SqlString) Database() string {
 	return s.database
 }
 
-// Build returns the inline SQL with placeholders substituted. Unlike
-// BuildWithFS it does not enforce the {{DASHICA_FILTERS}} placeholder (there is
-// no error channel); production request handling goes through BuildWithFS.
+// Build returns the inline SQL with placeholders substituted. It skips the
+// {{DASHICA_FILTERS}} check of BuildWithFS (it has no error channel); request
+// handling goes through BuildWithFS.
 func (s *SqlString) Build() string {
 	return substitutePlaceholders(s.content, s.where, s.autoBucket, s.bucketRounding)
 }
 
 // BuildWithFS mirrors SqlFile.BuildWithFS: it enforces the {{DASHICA_FILTERS}}
-// placeholder before substitution. The fileSystem argument is unused (the SQL
-// is inline) but kept so SqlString satisfies the same request-time code path as
-// SqlFile via the package BuildWithFS dispatcher.
+// placeholder before substitution. It ignores fileSystem (the SQL is inline);
+// the parameter lets the package BuildWithFS dispatcher treat it as a SqlFile.
 func (s *SqlString) BuildWithFS(_ fs.ReadFileFS) (string, error) {
 	if !s.shouldSkipFilters && !strings.Contains(s.content, DashicaFiltersPlaceholder) {
 		return "", fmt.Errorf(

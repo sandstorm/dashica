@@ -7,21 +7,6 @@ import (
 	"strings"
 )
 
-// DashicaFiltersPlaceholder is replaced inside .sql files with the AND-joined Where()
-// clauses attached to the SqlFile via With(...). When no Where() options were attached,
-// it is replaced with "1=1" so the SQL stays valid. Files that don't use the placeholder
-// are not modified.
-const DashicaFiltersPlaceholder = "{{DASHICA_FILTERS}}"
-
-// DashicaBucketPlaceholder is replaced inside .sql files with the ClickHouse rounding
-// function chosen for the resolved time range (e.g. "toStartOfHour"), but only when
-// the SqlFile is built with AutoBucketPlaceholder() attached via With(...). Without
-// that opt-in any literal placeholder is left untouched and ClickHouse will fail to
-// parse it — failing loud is preferable to a silent skip.
-//
-// Use it in SQL files like: `{{DASHICA_BUCKET}}(timestamp)::DateTime64`.
-const DashicaBucketPlaceholder = "{{DASHICA_BUCKET}}"
-
 // SqlFile represents a SQL query loaded from a file
 type SqlFile struct {
 	path              string
@@ -34,14 +19,6 @@ type SqlFile struct {
 	// auto-bucket placeholder substitution
 	autoBucket     bool   // opt-in via AutoBucketPlaceholder()
 	bucketRounding string // chosen rounding fn after AdjustBuckets; "" means not yet adjusted
-}
-
-func (f *SqlFile) ShouldSkipFilters() bool {
-	return f.shouldSkipFilters
-}
-
-func (f *SqlFile) Database() string {
-	return f.database
 }
 
 // FromFile creates a new SqlFile from the given path. The file MUST contain the
@@ -75,6 +52,14 @@ func FromFileWithoutFilters(path string) *SqlFile {
 	}
 }
 
+func (f *SqlFile) ShouldSkipFilters() bool {
+	return f.shouldSkipFilters
+}
+
+func (f *SqlFile) Database() string {
+	return f.database
+}
+
 // Build returns the SQL content from the file, with DASHICA_FILTERS placeholders
 // substituted by the AND-joined Where() clauses attached via With(...).
 func (f *SqlFile) Build() string {
@@ -103,6 +88,91 @@ func (f *SqlFile) BuildWithFS(fileSystem fs.ReadFileFS) (string, error) {
 	return f.buildFromContent(string(content)), nil
 }
 
+// AdjustBuckets is a no-op when the SqlFile was not built with
+// AutoBucketPlaceholder(). With opt-in, it substitutes DashicaBucketPlaceholder
+// with the rounding function picked for the given time-range width.
+func (f *SqlFile) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
+	if !f.autoBucket {
+		return f, nil
+	}
+	roundingFn, sizeS := bucketSelector(widthS)
+	cloned := *f
+	cloned.where = append([]string(nil), f.where...)
+	cloned.bucketRounding = roundingFn
+	sizeMs := sizeS * 1000
+	return &cloned, &sizeMs
+}
+
+// With applies SqlBuilderOptions. Only Where(), OnDatabase(), Table() and
+// AutoBucketPlaceholder() are meaningful for SqlFile — Where() clauses get
+// substituted into DASHICA_FILTERS placeholders by Build(); OnDatabase() routes
+// the query to a non-default ClickHouse; Table() names the table whose pills it
+// takes. Other options (Select, From, GroupBy, ...) are ignored because the file's
+// SQL is already complete.
+func (b *SqlFile) With(opts ...SqlBuilderOption) SqlQueryable {
+	cloned := *b
+	cloned.where = append([]string(nil), b.where...)
+	// Run the options against a throwaway SqlQuery so the *same* option functions
+	// can target both query types — this captures Where(), OnDatabase() and Table() additions.
+	proxy := &SqlQuery{where: cloned.where, database: cloned.database, autoBucketPlaceholder: cloned.autoBucket, table: cloned.table}
+	for _, opt := range opts {
+		opt(proxy)
+	}
+	cloned.where = proxy.where
+	cloned.database = proxy.database
+	cloned.autoBucket = proxy.autoBucketPlaceholder
+	cloned.table = proxy.table
+	return &cloned
+}
+
+// DashicaFiltersPlaceholder is replaced inside .sql files with the AND-joined Where()
+// clauses attached to the SqlFile via With(...). When no Where() options were attached,
+// it is replaced with "1=1" so the SQL stays valid. Files that don't use the placeholder
+// are not modified.
+const DashicaFiltersPlaceholder = "{{DASHICA_FILTERS}}"
+
+// DashicaBucketPlaceholder is replaced inside .sql files with the ClickHouse rounding
+// function chosen for the resolved time range (e.g. "toStartOfHour"), but only when
+// the SqlFile is built with AutoBucketPlaceholder() attached via With(...). Without
+// that opt-in the placeholder stays in the SQL and ClickHouse fails to parse it,
+// so the misconfiguration shows.
+//
+// Use it in SQL files like: `{{DASHICA_BUCKET}}(timestamp)::DateTime64`.
+const DashicaBucketPlaceholder = "{{DASHICA_BUCKET}}"
+
+func BuildWithFS(query SqlQueryable, fileSystem fs.ReadFileFS) (string, error) {
+	switch q := query.(type) {
+	case *SqlFile:
+		return q.BuildWithFS(fileSystem)
+	case *SqlString:
+		return q.BuildWithFS(fileSystem)
+	case *around:
+		return q.buildWithFS(fileSystem)
+	default:
+		return query.Build(), nil
+	}
+}
+
+// SqlQueryable is an interface for anything that can produce SQL
+// TODO RENAME
+type SqlQueryable interface {
+	Build() string
+	With(opts ...SqlBuilderOption) SqlQueryable
+	// AdjustBuckets returns a clone with auto-granularity bucket fields rebaked
+	// for the given time-range width in seconds, plus the chosen bucket size in
+	// milliseconds. Returns the receiver and nil when the query did not opt in
+	// to auto-granularity.
+	AdjustBuckets(widthS int64) (SqlQueryable, *int64)
+	ShouldSkipFilters() bool
+	// Database returns the ClickHouse server alias this query should run against,
+	// or "" when it should use the "default" server.
+	Database() string
+}
+
+var _ SqlQueryable = (*SqlQuery)(nil)
+
+var _ SqlQueryable = (*SqlFile)(nil)
+
 func (f *SqlFile) buildFromContent(content string) string {
 	return substitutePlaceholders(content, f.where, f.autoBucket, f.bucketRounding)
 }
@@ -125,81 +195,10 @@ func substitutePlaceholders(content string, where []string, autoBucket bool, buc
 	}
 	out := strings.ReplaceAll(content, DashicaFiltersPlaceholder, clause)
 
-	// Substitute the bucket placeholder only when AutoBucketPlaceholder() was attached
-	// AND AdjustBuckets has chosen a rounding function. If the content uses the placeholder
-	// without opt-in (or before adjustment), leave it as-is — ClickHouse will fail to
-	// parse, surfacing the misconfiguration loudly.
+	// substitutes the bucket placeholder only when AutoBucketPlaceholder() was attached AND AdjustBuckets has chosen a rounding
+	// function; else it stays, and ClickHouse fails to parse it (DashicaBucketPlaceholder)
 	if autoBucket && bucketRounding != "" {
 		out = strings.ReplaceAll(out, DashicaBucketPlaceholder, bucketRounding)
 	}
 	return out
 }
-
-func BuildWithFS(query SqlQueryable, fileSystem fs.ReadFileFS) (string, error) {
-	switch q := query.(type) {
-	case *SqlFile:
-		return q.BuildWithFS(fileSystem)
-	case *SqlString:
-		return q.BuildWithFS(fileSystem)
-	case *around:
-		return q.buildWithFS(fileSystem)
-	default:
-		return query.Build(), nil
-	}
-}
-
-// AdjustBuckets is a no-op when the SqlFile was not built with
-// AutoBucketPlaceholder(). With opt-in, it substitutes DashicaBucketPlaceholder
-// with the rounding function picked for the given time-range width.
-func (f *SqlFile) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
-	if !f.autoBucket {
-		return f, nil
-	}
-	roundingFn, sizeS := bucketSelector(widthS)
-	cloned := *f
-	cloned.where = append([]string(nil), f.where...)
-	cloned.bucketRounding = roundingFn
-	sizeMs := sizeS * 1000
-	return &cloned, &sizeMs
-}
-
-// With applies SqlBuilderOptions. Only Where(), OnDatabase(), Table() and
-// AutoBucketPlaceholder() are meaningful for SqlFile — Where() clauses get
-// substituted into DASHICA_FILTERS placeholders by Build(); OnDatabase() routes
-// the query to a non-default ClickHouse; Table() names the table whose pills it
-// takes. Other options
-// (Select, From, GroupBy, ...) are ignored because the file's SQL is already complete.
-func (b *SqlFile) With(opts ...SqlBuilderOption) SqlQueryable {
-	cloned := *b
-	cloned.where = append([]string(nil), b.where...)
-	// Run the options against a throwaway SqlQuery so the *same* option functions
-	// can target both query types — this captures Where(), OnDatabase() and Table() additions.
-	proxy := &SqlQuery{where: cloned.where, database: cloned.database, autoBucketPlaceholder: cloned.autoBucket, table: cloned.table}
-	for _, opt := range opts {
-		opt(proxy)
-	}
-	cloned.where = proxy.where
-	cloned.database = proxy.database
-	cloned.autoBucket = proxy.autoBucketPlaceholder
-	cloned.table = proxy.table
-	return &cloned
-}
-
-// SqlQueryable is an interface for anything that can produce SQL
-// TODO RENAME
-type SqlQueryable interface {
-	Build() string
-	With(opts ...SqlBuilderOption) SqlQueryable
-	// AdjustBuckets returns a clone with auto-granularity bucket fields rebaked
-	// for the given time-range width in seconds, plus the chosen bucket size in
-	// milliseconds. Returns the receiver and nil when the query did not opt in
-	// to auto-granularity.
-	AdjustBuckets(widthS int64) (SqlQueryable, *int64)
-	ShouldSkipFilters() bool
-	// Database returns the ClickHouse server alias this query should run against,
-	// or "" when it should use the "default" server.
-	Database() string
-}
-
-var _ SqlQueryable = (*SqlQuery)(nil)
-var _ SqlQueryable = (*SqlFile)(nil)

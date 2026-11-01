@@ -4,12 +4,11 @@ type SqlField interface {
 	Definition() string
 	Alias() string
 	WithAlias(s string) SqlField
-	// FilterAs is the field whose pill (a filter on the value it shows, docs/2026-10-28-workbench.md §3.8) is the
-	// condition `condition` writes for its op and value, in place of `(<definition>) <op> <quoted value>`: for a
-	// computed field whose column filters faster, `sql.Field("replace(customer_project, 'customer-', '')").
-	// WithAlias("customer").FilterAs(func(op sql.Op, value string) string { return op.Compare("customer_project",
-	// "customer-"+value) })`. The condition quotes the value itself (Op.Compare, Quote). A time bucket stays one that
-	// cannot filter.
+	// FilterAs is the field whose pill (a filter on the value it shows) is the condition `condition` writes for its op
+	// and value, in place of `(<definition>) <op> <quoted value>`: for a computed field whose column filters faster,
+	// `sql.Field("replace(customer_project, 'customer-', '')").WithAlias("customer").FilterAs(func(op sql.Op, value
+	// string) string { return op.Compare("customer_project", "customer-"+value) })`. The condition quotes the value
+	// itself (Op.Compare, Quote). A time bucket stays one that cannot filter.
 	FilterAs(condition func(op Op, value string) string) SqlField
 }
 
@@ -34,7 +33,7 @@ type fieldImpl struct {
 	// treated as "expr".
 	kind fieldKind
 	// filterAs is the condition of its pill for an op and a value (FilterAs); nil: `(<definition>) <op> <quoted
-	// value>`. Go only, so it is not serialized.
+	// value>`. Go only, left out of the serialization.
 	filterAs func(op Op, value string) string
 }
 

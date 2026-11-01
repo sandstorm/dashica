@@ -7,10 +7,7 @@ import (
 	"strings"
 )
 
-// TODO REMOVE ME
-type SqlBuildCtx interface {
-}
-
+// SqlQuery is a builder query (New): a SELECT put together from SqlBuilderOptions, whose fields the charts read.
 type SqlQuery struct {
 	selectF               []SqlField
 	from                  string
@@ -25,6 +22,14 @@ type SqlQuery struct {
 	table                 string // routed to *SqlFile via With() (Table); ignored on *SqlQuery itself, whose table is its From
 }
 
+func New(opts ...SqlBuilderOption) *SqlQuery {
+	b := &SqlQuery{}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
+}
+
 type SqlBuilderOption func(*SqlQuery)
 
 func Select(field SqlField) SqlBuilderOption {
@@ -32,24 +37,10 @@ func Select(field SqlField) SqlBuilderOption {
 		b.selectF = append(b.selectF, field)
 	}
 }
+
 func PrependSelect(field SqlField) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.selectF = append([]SqlField{field}, b.selectF...)
-	}
-}
-
-func SkipFilters() SqlBuilderOption {
-	return func(b *SqlQuery) {
-		b.shouldSkipFilters = true
-	}
-}
-
-// AutoBucketPlaceholder marks an SqlFile as participating in auto-granularity
-// via the {{DASHICA_BUCKET}} placeholder. Has no effect on *SqlQuery (which
-// opts in via the AutoBucket field instead).
-func AutoBucketPlaceholder() SqlBuilderOption {
-	return func(b *SqlQuery) {
-		b.autoBucketPlaceholder = true
 	}
 }
 
@@ -59,21 +50,12 @@ func From(table string) SqlBuilderOption {
 	}
 }
 
-// Table names the table a SQL file reads at its {{DASHICA_FILTERS}} (`default.http_logs`, or `http_logs` in the
-// connection's database), so that it takes the pills on that table (docs/2026-10-28-workbench.md §3.8):
-// `sql.FromFile("src/shop/by_host.sql", sql.Table("http_logs"))`. A SQL file without it takes no pills, only the time
-// range and the SQL chips. Has no effect on *SqlQuery, whose table is its From.
-func Table(table string) SqlBuilderOption {
-	return func(b *SqlQuery) {
-		b.table = table
-	}
-}
-
 func Where(clause string) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.where = append(b.where, clause)
 	}
 }
+
 func GroupBy(field SqlField) SqlBuilderOption {
 	return func(b *SqlQuery) {
 		b.groupBy = append(b.groupBy, field)
@@ -112,13 +94,31 @@ func OnDatabase(name string) SqlBuilderOption {
 	}
 }
 
-func New(opts ...SqlBuilderOption) *SqlQuery {
-	b := &SqlQuery{}
-	for _, opt := range opts {
-		opt(b)
+func SkipFilters() SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.shouldSkipFilters = true
 	}
-	return b
 }
+
+// AutoBucketPlaceholder marks an SqlFile as participating in auto-granularity
+// via the {{DASHICA_BUCKET}} placeholder. A *SqlQuery opts in through its
+// AutoBucket fields.
+func AutoBucketPlaceholder() SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.autoBucketPlaceholder = true
+	}
+}
+
+// Table names the table a SQL file reads at its {{DASHICA_FILTERS}} (`default.http_logs`, or `http_logs` in the
+// connection's database), so that it takes the pills on that table: `sql.FromFile("src/shop/by_host.sql",
+// sql.Table("http_logs"))`. A SQL file without it takes no pills, only the time range and the SQL chips. A *SqlQuery's
+// table is its From.
+func Table(table string) SqlBuilderOption {
+	return func(b *SqlQuery) {
+		b.table = table
+	}
+}
+
 func (b *SqlQuery) With(opts ...SqlBuilderOption) SqlQueryable {
 	cloned := *b
 	// a request's Where appends to a copy, never into the spare capacity of the chart's query
@@ -150,30 +150,6 @@ func (b *SqlQuery) AdjustBuckets(widthS int64) (SqlQueryable, *int64) {
 	return &cloned, &sizeMs
 }
 
-func hasAutoBucket(fields []SqlField) bool {
-	for _, f := range fields {
-		if _, ok := f.(autoBucketField); ok {
-			return true
-		}
-	}
-	return false
-}
-
-func rebakeAutoBuckets(fields []SqlField, roundingFn string, sizeMs int64) []SqlField {
-	if len(fields) == 0 {
-		return fields
-	}
-	out := make([]SqlField, len(fields))
-	for i, f := range fields {
-		if ab, ok := f.(autoBucketField); ok {
-			out[i] = ab.withRounding(roundingFn, sizeMs)
-		} else {
-			out[i] = f
-		}
-	}
-	return out
-}
-
 func (b *SqlQuery) Database() string {
 	return b.database
 }
@@ -181,11 +157,9 @@ func (b *SqlQuery) Database() string {
 func (b *SqlQuery) Build() string {
 	var sb strings.Builder
 
-	// Write query name comment
 	sb.WriteString(fmt.Sprintf("-- WARNING: This is an auto-generated query file, generated from TODO.\n"))
 	sb.WriteString(fmt.Sprintf("-- DO NOT MODIFY MANUALLY; as changes will be overwritten\n"))
 
-	// Write SELECT clause
 	sb.WriteString("SELECT\n")
 
 	if len(b.selectF) == 0 {
@@ -203,7 +177,6 @@ func (b *SqlQuery) Build() string {
 				sb.WriteString(alias)
 			}
 
-			// Add comma if not the last field
 			if i < len(b.selectF)-1 {
 				sb.WriteString(",")
 			}
@@ -211,13 +184,11 @@ func (b *SqlQuery) Build() string {
 		}
 	}
 
-	// Write FROM clause
 	if b.from != "" {
 		sb.WriteString("FROM\n")
 		sb.WriteString(fmt.Sprintf("    %s\n", b.from))
 	}
 
-	// Write WHERE clause
 	if len(b.where) > 0 {
 		sb.WriteString("WHERE\n")
 		for i, clause := range b.where {
@@ -262,11 +233,20 @@ func (b *SqlQuery) Build() string {
 		sb.WriteString(fmt.Sprintf("LIMIT %d\n", b.limit))
 	}
 
-	// Remove trailing newline and add semicolon
 	query := strings.TrimRight(sb.String(), "\n")
 	query += ";"
 
 	return query
+}
+
+// SelectFields are the fields of its SELECT, in order; empty for SELECT *.
+func (b *SqlQuery) SelectFields() []SqlField {
+	return b.selectF
+}
+
+// GroupByFields are the fields of its GROUP BY, in order.
+func (b *SqlQuery) GroupByFields() []SqlField {
+	return b.groupBy
 }
 
 // TableOf is the table whose pills `q` takes, as its author wrote it (`http_logs`, `monitoring.full_logs`): a builder
@@ -294,19 +274,6 @@ func ConnectionOf(q SqlQueryable) string {
 	return "default"
 }
 
-// plainTable is a table by name, its database before it or not.
-var plainTable = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
-
-// SelectFields are the fields of its SELECT, in order; empty for SELECT *.
-func (b *SqlQuery) SelectFields() []SqlField {
-	return b.selectF
-}
-
-// GroupByFields are the fields of its GROUP BY, in order.
-func (b *SqlQuery) GroupByFields() []SqlField {
-	return b.groupBy
-}
-
 // BaseTable is the table `q` reads (its From) and the ClickHouse server it runs on (OnDatabase, "" for "default");
 // ok only for a builder query (New), since a SQL file's tables are only in its text.
 func BaseTable(q SqlQueryable) (table, database string, ok bool) {
@@ -316,3 +283,34 @@ func BaseTable(q SqlQueryable) (table, database string, ok bool) {
 	}
 	return b.from, b.database, true
 }
+
+// TODO REMOVE ME
+type SqlBuildCtx interface {
+}
+
+func hasAutoBucket(fields []SqlField) bool {
+	for _, f := range fields {
+		if _, ok := f.(autoBucketField); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func rebakeAutoBuckets(fields []SqlField, roundingFn string, sizeMs int64) []SqlField {
+	if len(fields) == 0 {
+		return fields
+	}
+	out := make([]SqlField, len(fields))
+	for i, f := range fields {
+		if ab, ok := f.(autoBucketField); ok {
+			out[i] = ab.withRounding(roundingFn, sizeMs)
+		} else {
+			out[i] = f
+		}
+	}
+	return out
+}
+
+// plainTable is a table by name, its database before it or not.
+var plainTable = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)

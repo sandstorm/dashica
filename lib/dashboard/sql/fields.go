@@ -6,13 +6,6 @@ import (
 	"strings"
 )
 
-// defaultAutoBucketRounding is the rounding function applied to AutoBucket
-// fields before AdjustBuckets has run (e.g. in tests, HandleDebug, or any
-// path that calls Build() without first attaching a time range). 15-minute
-// keeps Build() output valid SQL and preserves the previous default.
-const defaultAutoBucketRounding = "toStartOfFifteenMinutes"
-const defaultAutoBucketSizeMs = 15 * 60 * 1000
-
 // AutoBucket declares a time bucket whose granularity follows the user's
 // time-range filter. The chosen ClickHouse rounding function
 // (toStartOfMinute, toStartOfHour, ...) is selected at request time based on
@@ -35,36 +28,6 @@ func AutoBucketAs(column, alias string) TimestampedField {
 		sizeMs:     defaultAutoBucketSizeMs,
 	}
 }
-
-type autoBucketFieldImpl struct {
-	column_    string
-	alias_     string
-	definition string
-	sizeMs     int64
-}
-
-func (f *autoBucketFieldImpl) Definition() string   { return f.definition }
-func (f *autoBucketFieldImpl) Alias() string        { return f.alias_ }
-func (f *autoBucketFieldImpl) XBucketSizeMs() int64 { return f.sizeMs }
-func (f *autoBucketFieldImpl) column() string       { return f.column_ }
-
-func (f *autoBucketFieldImpl) WithAlias(s string) SqlField {
-	cloned := *f
-	cloned.alias_ = s
-	return &cloned
-}
-
-// FilterAs is the bucket itself: a time bucket filters nothing.
-func (f *autoBucketFieldImpl) FilterAs(func(op Op, value string) string) SqlField { return f }
-
-func (f *autoBucketFieldImpl) withRounding(roundingFn string, sizeMs int64) autoBucketField {
-	cloned := *f
-	cloned.definition = fmt.Sprintf("%s(%s)::DateTime64", roundingFn, f.column_)
-	cloned.sizeMs = sizeMs
-	return &cloned
-}
-
-var _ autoBucketField = (*autoBucketFieldImpl)(nil)
 
 func Timestamp15Min() TimestampedField {
 	return &fieldImpl{
@@ -147,12 +110,9 @@ func IsCategory(f SqlField) bool {
 	return true
 }
 
-// literal is a lone SQL string or number literal: `'darkred'`, `'#D73027'`, `42`, `-0.5`.
-var literal = regexp.MustCompile(`^\s*(?:'(?:[^'\\]|\\.)*'|-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\s*$`)
-
-// IsConstantColumn is whether `sqlText` (a SQL file's or string's query) selects a lone literal as the column
-// `column` of its result (`'darkred' AS color`), in one of its SELECTs: a fixed colour or label, which filters
-// nothing (docs/2026-10-28-workbench.md §3.15 D27). It reads the text, it does not parse it.
+// IsConstantColumn is whether `sqlText` (a SQL file's or string's query) selects a lone literal as the column `column`
+// of its result (`'darkred' AS color`), in one of its SELECTs: a fixed colour or label, which filters nothing. It
+// matches the text with a regular expression.
 func IsConstantColumn(sqlText, column string) bool {
 	constant := regexp.MustCompile(`(?i)(?:^|[\s,])(?:'(?:[^'\\]|\\.)*'|-?[0-9]+(?:\.[0-9]+)?)\s+AS\s+` + "`?" + regexp.QuoteMeta(column) + "`?" + `(?:[\s,]|$)`)
 	return constant.MatchString(sqlText)
@@ -160,7 +120,7 @@ func IsConstantColumn(sqlText, column string) bool {
 
 // ColumnOf is the column of its table `f` is (`sql.Field("host_name")`): a plain name, its own alias, without
 // FilterAs; false for an expression, a field renamed with WithAlias, a count, a time bucket, a constant. "Add filter"
-// lists such a field among its table's columns (§3.15 D27).
+// lists such a field among its table's columns.
 func ColumnOf(f SqlField) (string, bool) {
 	own, ok := f.(*fieldImpl)
 	if !ok || own.filterAs != nil || own.alias != own.definition || !IsCategory(f) || !identifier.MatchString(own.definition) {
@@ -169,18 +129,15 @@ func ColumnOf(f SqlField) (string, bool) {
 	return own.definition, true
 }
 
-// identifier is a plain column name.
-var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-
 // ColumnField is the field of the column `name` of a table, its name quoted (QuoteIdentifier) and its alias: the
-// field of a pill on a table's column (§3.15 D27), whose condition is "(`host`) = 'shop-1'".
+// field of a pill on a table's column, whose condition is "(`host`) = 'shop-1'".
 func ColumnField(name string) SqlField {
 	return Field(QuoteIdentifier(name)).WithAlias(name)
 }
 
-// Condition is the WHERE condition of a pill on `f` (docs/2026-10-28-workbench.md §3.8, §3.15 D25): the rows where
-// `f` compares by `op` with `value`. By default `(<definition>) <op> <quoted value>` (Op.Compare); a field with
-// FilterAs its condition. False for a field that cannot filter (IsCategory).
+// Condition is the WHERE condition of a pill on `f`: the rows where `f` compares by `op` with `value`. By default
+// `(<definition>) <op> <quoted value>` (Op.Compare); a field with FilterAs its condition. False for a field that cannot
+// filter (IsCategory).
 func Condition(f SqlField, op Op, value string) (string, bool) {
 	if f == nil || !IsCategory(f) {
 		return "", false
@@ -202,3 +159,46 @@ func Quote(value string) string {
 func QuoteIdentifier(name string) string {
 	return "`" + strings.NewReplacer(`\`, `\\`, "`", "\\`").Replace(name) + "`"
 }
+
+// defaultAutoBucketRounding is the rounding function applied to AutoBucket
+// fields before AdjustBuckets has run (e.g. in tests, HandleDebug, or any
+// path that calls Build() without first attaching a time range). 15-minute
+// keeps Build() output valid SQL.
+const defaultAutoBucketRounding = "toStartOfFifteenMinutes"
+const defaultAutoBucketSizeMs = 15 * 60 * 1000
+
+type autoBucketFieldImpl struct {
+	column_    string
+	alias_     string
+	definition string
+	sizeMs     int64
+}
+
+func (f *autoBucketFieldImpl) Definition() string   { return f.definition }
+func (f *autoBucketFieldImpl) Alias() string        { return f.alias_ }
+func (f *autoBucketFieldImpl) XBucketSizeMs() int64 { return f.sizeMs }
+func (f *autoBucketFieldImpl) column() string       { return f.column_ }
+
+func (f *autoBucketFieldImpl) WithAlias(s string) SqlField {
+	cloned := *f
+	cloned.alias_ = s
+	return &cloned
+}
+
+// FilterAs is the bucket itself: a time bucket filters nothing.
+func (f *autoBucketFieldImpl) FilterAs(func(op Op, value string) string) SqlField { return f }
+
+func (f *autoBucketFieldImpl) withRounding(roundingFn string, sizeMs int64) autoBucketField {
+	cloned := *f
+	cloned.definition = fmt.Sprintf("%s(%s)::DateTime64", roundingFn, f.column_)
+	cloned.sizeMs = sizeMs
+	return &cloned
+}
+
+var _ autoBucketField = (*autoBucketFieldImpl)(nil)
+
+// literal is a lone SQL string or number literal: `'darkred'`, `'#D73027'`, `42`, `-0.5`.
+var literal = regexp.MustCompile(`^\s*(?:'(?:[^'\\]|\\.)*'|-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\s*$`)
+
+// identifier is a plain column name.
+var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
