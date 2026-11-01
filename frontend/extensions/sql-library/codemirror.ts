@@ -146,7 +146,6 @@ export const sqlEditors: SqlEditors = {
         ],
       }),
     });
-    view.dom.classList.add('d-sql-editor');
     return {
       element: view.dom,
       input: view.contentDOM,

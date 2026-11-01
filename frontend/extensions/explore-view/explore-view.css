@@ -66,7 +66,10 @@
   flex: 1;
   min-width: 0;
 }
-.d-explore-view__sql-text .cm-editor { min-height: calc(8 * var(--leading) * var(--text-sm)); max-height: 50vh; }
+/* the height on the editable lines, not the editor's box, so a click anywhere in it reaches the text (as CodeMirror's
+   styling example sets a minimum height) */
+.d-explore-view__sql-text .cm-content { min-height: calc(8 * var(--leading) * var(--text-sm)); }
+.d-explore-view__sql-text .cm-editor { max-height: 50vh; }
 .d-explore-view__sql-text .cm-scroller { overflow: auto; }
 
 /* the placeholders' values, a name and its value per row */
