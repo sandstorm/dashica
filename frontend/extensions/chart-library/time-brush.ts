@@ -4,7 +4,7 @@ import { create } from 'd3-selection';
 
 /**
  * A mark that lets the viewer drag across a time chart to select a time range: `onSelect` gets its start and end when
- * the drag ends. After https://github.com/observablehq/plot/issues/5#issuecomment-2094321721.
+ * the drag ends.
  */
 export function timeBrush(onSelect: (from: Date, to: Date) => void): RenderFunction {
   return (_index, scales, _channels, dimensions) => {

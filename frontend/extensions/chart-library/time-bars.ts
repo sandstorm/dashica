@@ -44,8 +44,7 @@ export function drawTimeBars(
     offset: props.stack?.offset,
     reverse: props.stack?.reverse,
     marginRight: 150,
-    // Observable Plot does not clip marks to the frame by default, so a
-    // bucket wider than the domain paints outside the SVG onto the page.
+    // clipped to the frame: Plot draws a mark past it otherwise, a bucket wider than the domain onto the page
     clip: true,
     fill: props.fill?.alias ?? '#A8C1D1',
     // a bit of padding between the bars, when they are wide enough - HEURISTIC

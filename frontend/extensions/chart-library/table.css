@@ -15,14 +15,13 @@
     margin-bottom: var(--space-2);
 }
 
-/* the day after a timestamp's time */
 .d-table__header-title {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
 }
 
-/* A column header's menu button: the menu `table/header` (see headerTitle in table.ts). */
+/* a column header's menu button: the menu `table/header` (headerTitle in table.ts) */
 .d-table__header-menu {
   border: 0;
   padding: 0 0.25rem;
@@ -31,6 +30,7 @@
   cursor: pointer;
 }
 
+/* the day after a timestamp's time */
 .d-table__date {
     opacity: 0.6;
     font-size: 0.9em;
@@ -41,7 +41,7 @@
     cursor: pointer;
 }
 
-/* Sticky, copyable, draggable cell tooltip; resizable by its bottom right corner while pinned */
+/* a cell's sticky tooltip, its text copyable; while pinned dragged by its header, resized by its bottom right corner */
 .d-sticky-tooltip {
     position: fixed;
     z-index: var(--z-tooltip);

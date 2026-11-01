@@ -1,4 +1,3 @@
-// See ChartFrame in chart-frame.ts.
 import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
@@ -6,26 +5,6 @@ import type { QueryResult, WidgetContext, WidgetDecoration } from '../../hosts/w
 import { formatTime } from '../time-library/format-time';
 import { TIME, customRange } from '../time-library/time-state';
 import './chart-frame.css';
-
-export interface ChartFrameOptions {
-  /** The chart's title, above it; the frame draws it, the chart draws none. */
-  readonly title?: string;
-  /** The chart's height in pixels, kept while it loads. */
-  readonly height?: number;
-  /**
-   * The chart for the queried data (an SVG, a table); asked again when the width or the color scheme change. The
-   * element it drew last, returned again, stays as it is (its scroll position, what is ticked in it).
-   */
-  draw(result: QueryResult, options: DrawOptions): Element | Promise<Element>;
-}
-
-export interface DrawOptions {
-  /** The frame's width in pixels. */
-  readonly width: number;
-  readonly colorSchemeDark: boolean;
-  /** Sets the page's time range to the range the viewer dragged across a time chart. */
-  readonly onTimeSelect: (from: Date, to: Date) => void;
-}
 
 /**
  * A chart in `widgetContainer` inside the frame every chart has: its title while it loads, a spinner while it queries,
@@ -178,4 +157,24 @@ export class ChartFrame {
     this.#bodyContainer.replaceChildren(noticeElement);
     this.#shimmerElement.hidden = true;
   }
+}
+
+export interface ChartFrameOptions {
+  /** The chart's title, above it; the frame draws it, the chart draws none. */
+  readonly title?: string;
+  /** The chart's height in pixels, kept while it loads. */
+  readonly height?: number;
+  /**
+   * The chart for the queried data (an SVG, a table); asked again when the width or the color scheme change. The
+   * element it drew last, returned again, stays as it is (its scroll position, what is ticked in it).
+   */
+  draw(result: QueryResult, options: DrawOptions): Element | Promise<Element>;
+}
+
+export interface DrawOptions {
+  /** The frame's width in pixels. */
+  readonly width: number;
+  readonly colorSchemeDark: boolean;
+  /** Sets the page's time range to the range the viewer dragged across a time chart. */
+  readonly onTimeSelect: (from: Date, to: Date) => void;
 }

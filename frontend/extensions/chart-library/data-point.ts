@@ -1,4 +1,3 @@
-// See dataPointOf.
 import type { DataPoint, QueryResult } from '../../hosts/widgets/widgets';
 import { pillValue } from '../widget-library/clickhouse-type';
 

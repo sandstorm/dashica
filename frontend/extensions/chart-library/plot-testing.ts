@@ -28,20 +28,6 @@ export async function clickAtPoint(targetElement: Element, at: [number, number])
   clickAt(targetElement, at);
 }
 
-/** A `pointermove` on `targetElement` at the client point `[x, y]`, then an animation frame, see pointAt. */
-async function moveTo(targetElement: Element, [x, y]: [number, number]): Promise<void> {
-  targetElement.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-}
-
-/** A mouse's pointerdown (Plot pins its tip on one), then the click, on `targetElement` at `[x, y]`. */
-function clickAt(targetElement: Element, [x, y]: [number, number]): void {
-  const down = new MouseEvent('pointerdown', { bubbles: true, clientX: x, clientY: y });
-  Object.defineProperty(down, 'pointerType', { value: 'mouse' });
-  targetElement.dispatchEvent(down);
-  targetElement.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
-}
-
 /** Where pointAt points at `markElement`, as client coordinates: a rect's centre, a path's first point. */
 export function anchor(markElement: Element): [number, number] {
   const number = (name: string) => Number(markElement.getAttribute(name) ?? 0);
@@ -54,4 +40,18 @@ export function anchor(markElement: Element): [number, number] {
     if (translate) (x += Number(translate[1])), (y += Number(translate[2] ?? 0));
   }
   return [x, y];
+}
+
+/** A `pointermove` on `targetElement` at the client point `[x, y]`, then an animation frame, see pointAt. */
+async function moveTo(targetElement: Element, [x, y]: [number, number]): Promise<void> {
+  targetElement.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: x, clientY: y }));
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+/** A mouse's pointerdown (Plot pins its tip on one), then the click, on `targetElement` at `[x, y]`. */
+function clickAt(targetElement: Element, [x, y]: [number, number]): void {
+  const down = new MouseEvent('pointerdown', { bubbles: true, clientX: x, clientY: y });
+  Object.defineProperty(down, 'pointerType', { value: 'mouse' });
+  targetElement.dispatchEvent(down);
+  targetElement.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
 }
