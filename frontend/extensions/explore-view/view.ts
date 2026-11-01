@@ -38,8 +38,8 @@ import {
  * its editor starts empty, Run shows the rows of its text on the picked connection (`/rows?connection=…`), and the
  * pick is the hash's `connection`.
  */
-export function renderExploreView(widgetContainer: HTMLElement, options: ExploreViewOptions): Disposable {
-  const view = new ExploreView(widgetContainer, options);
+export function renderExploreView(viewContainer: HTMLElement, options: ExploreViewOptions): Disposable {
+  const view = new ExploreView(viewContainer, options);
   return new Disposable(() => view.dispose());
 }
 

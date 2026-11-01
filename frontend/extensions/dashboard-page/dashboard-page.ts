@@ -24,10 +24,10 @@ export const dashboardPage: Extension = {
     ),
 };
 
-function renderDashboard(widgetContainer: HTMLElement, page: PageJson, context: PageContext, widgets: WidgetsApi): Disposable {
+function renderDashboard(pageContainer: HTMLElement, page: PageJson, context: PageContext, widgets: WidgetsApi): Disposable {
   const contentContainer: HTMLElement = html`<div class="d-dashboard-page"></div>`;
-  const rendered = page.widgets.map((widget) => widgets.render(contentContainer.appendChild(widgetContainer.ownerDocument.createElement('div')), widget, context.query));
-  widgetContainer.replaceChildren(contentContainer);
+  const rendered = page.widgets.map((widget) => widgets.render(contentContainer.appendChild(pageContainer.ownerDocument.createElement('div')), widget, context.query));
+  pageContainer.replaceChildren(contentContainer);
   const reveal = () => revealLinked(contentContainer, context.hash);
   reveal();
   return Disposable.from(...rendered, context.onDidChangeHash(reveal));
