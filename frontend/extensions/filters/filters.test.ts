@@ -41,6 +41,8 @@ let asked: { title?: string; prompt?: string; placeholder?: string; value?: stri
 /** The quick picks shown (all cancelled, unless `picked` names the label to choose): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
 let picked: string | undefined;
+/** The error messages shown (`ui.showErrorMessage`), in order. */
+let errors: string[];
 /** The commands the extension registered, by id. */
 let commands: Map<string, (...args: any[]) => unknown>;
 /** The widget decoration providers the extension registered. */
@@ -115,6 +117,7 @@ beforeEach(() => {
       return { dispose: () => el.remove() };
     },
     showInputBox: async (options: (typeof asked)[number]) => (asked.push(options), answer),
+    showErrorMessage: async (message: string) => void errors.push(message),
     showQuickPick: async (given: { label?: string; kind?: number }[] | Promise<{ label?: string; kind?: number }[]>, options: { anchor?: unknown }) => {
       const items = await given;
       picks.push({ labels: items.map((i) => (i.kind === -1 ? `— ${i.label}` : i.label!)), anchor: options.anchor });
@@ -122,6 +125,7 @@ beforeEach(() => {
     },
   };
   asked = [];
+  errors = [];
   picks = [];
   picked = undefined;
   commands = new Map();
@@ -289,13 +293,14 @@ describe('filters', () => {
     expect(validateInput!('')).toEqual({ message: 'Enter a value.', severity: 3 });
   });
 
-  it('adds nothing when the page refuses the value', async () => {
+  it('adds nothing when the page refuses the value, and shows its message', async () => {
     vi.stubGlobal('fetch', async () => new Response('filter button "Path" needs a value', { status: 400 }));
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     answer = 'x';
     button('Path').click();
     await vi.waitFor(() => expect(logged).toHaveBeenCalled());
     expect(held()).toEqual([]);
+    expect(errors).toEqual(['Filter button Path failed: 400: filter button "Path" needs a value']);
     logged.mockRestore();
   });
 
@@ -528,6 +533,7 @@ describe('filters, a field’s pill edited', () => {
     op(chips()[0]).click();
     await vi.waitFor(() => expect(logged).toHaveBeenCalled());
     expect(held()[0]).toEqual(hostChip('eq', 'a'));
+    expect(errors).toEqual(['Filter host ≠ a failed: 422: "host" cannot filter this chart\'s table']);
     logged.mockRestore();
   });
 

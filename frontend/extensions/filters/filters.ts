@@ -8,7 +8,7 @@ import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../h
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { FieldsCache, SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchValues, fieldSource, filterableTables, typeIn, type AskSql, type FieldType, type FilterableTable } from './add-filter';
 import { filterDecorationProvider } from './decorations';
-import { fetchPill, offerFilters } from './offer';
+import { fetchPill, offerFilters, showFailed } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
 import { OFFER, type FilterCandidate, type PillSource } from '../filter-library/offer';
@@ -148,7 +148,7 @@ class FilterBar {
     /** The state the values of "Add filter" and of a pill's edit are asked for in. */
     private readonly query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
     /** Asks for the value of a button's `...`, and "Add filter"'s table, field, operator and value. */
-    private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
+    private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick' | 'showErrorMessage'>,
     /** Asks for a SQL condition, while the server takes SQL chips (filters.sqlEnabled). */
     private readonly askSql: AskSql | undefined,
     /** The charts' `/fields`, by which "Add filter" and a pill's edit know a field's type. */
@@ -311,14 +311,14 @@ class FilterBar {
 
   /**
    * Asks `source` (`<dataUrl>/pill`) for the pill of `field` and puts it in the place of `chip` at `index`, unless
-   * another chip is there meanwhile; a refused one is logged, the chip kept.
+   * another chip is there meanwhile; a refused one shows the server's message (`showFailed`), the chip kept.
    */
   async #remake(chip: PillFilter, index: number, source: PillSource, { field, column, op, value }: PillField): Promise<void> {
     try {
       const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value });
       if (this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
     } catch (error) {
-      console.error(`Filter ${field} ${OP_SIGNS[op]} ${value} failed:`, error);
+      showFailed(this.ui, `Filter ${field} ${OP_SIGNS[op]} ${value}`, error);
     }
   }
 
@@ -337,7 +337,8 @@ class FilterBar {
    * Adds `button`'s pill: the one `page.json` signed, or for a button with `...` (`path ILIKE concat(..., '%')`) the
    * one its page makes of the value the viewer is asked for, in an input box below `el` named after the button, the
    * condition it makes shown below the field as it is typed (`buttonCondition`), an empty one refused; with `index`,
-   * that pill replaces the chip there (a new value for a pressed button), the value shown first and selected.
+   * that pill replaces the chip there (a new value for a pressed button), the value shown first and selected. A
+   * refused value shows the server's message (`showFailed`).
    */
   async #press(button: FilterButton, el: HTMLElement, index?: number): Promise<void> {
     if (!button.url) {
@@ -361,7 +362,7 @@ class FilterBar {
       if (index === undefined) this.query.set(FILTERS, addChip(this.query.get(FILTERS), { kind: 'pill', ...pill }));
       else if (this.query.get(FILTERS)[index] === shown) this.#replace(index, { kind: 'pill', ...pill });
     } catch (error) {
-      console.error(`Filter button ${button.title} failed:`, error);
+      showFailed(this.ui, `Filter button ${button.title}`, error);
     }
   }
 

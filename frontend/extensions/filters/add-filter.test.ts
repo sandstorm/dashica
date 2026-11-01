@@ -11,6 +11,7 @@ import { QueryHost } from '../../hosts/query/query';
 import { FILTERS } from './chips';
 import { TIME, presetRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
+import type { UiApi } from '../../hosts/ui/ui';
 import { EditorView } from '@codemirror/view';
 import { showSqlInputBox } from '../sql-library/sql-editor';
 import { FieldsCache, addFilter, askValue, fetchFields, fetchValues, fieldSource, filterableTables, pickValue, typeIn, type AskSql, type Column } from './add-filter';
@@ -27,7 +28,9 @@ const grid = { type: 'grid', props: {}, children: { a: byPath, b: audit } } as u
 
 let host: HTMLElement;
 let anchor: HTMLButtonElement;
-let quickInput: QuickInput;
+let quickInput: QuickInput & Pick<UiApi, 'showErrorMessage'>;
+/** The error messages shown (`ui.showErrorMessage`), in order. */
+let errors: string[];
 let query: QueryHost;
 /** The URLs fetched, and what `/values` answers (by `search`). */
 let fetched: URL[];
@@ -64,7 +67,8 @@ beforeEach(() => {
   query.load();
   host = document.body.appendChild(document.createElement('div'));
   anchor = host.appendChild(document.createElement('button'));
-  quickInput = new QuickInput(host);
+  quickInput = Object.assign(new QuickInput(host), { showErrorMessage: async (message: string) => void errors.push(message) });
+  errors = [];
   fetched = [];
   values = () => [];
   columns = {
@@ -158,6 +162,26 @@ describe('addFilter', () => {
     ]);
     expect(fetched.at(-1)!.pathname).toBe('/p/shop/api/1/pill');
     expect(fetched.at(-1)!.searchParams.has('type')).toBe(false);
+  });
+
+  it('adds no pill when the chart’s /pill refuses it, and shows the server’s message', async () => {
+    const served = fetch;
+    vi.stubGlobal('fetch', async (input: string) =>
+      input.includes('/pill?') ? new Response('"host" cannot filter this chart\'s table', { status: 422 }) : served(input),
+    );
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    values = () => ['admin'];
+    const done = addFilter(quickInput, query, filterableTables([byHost]), anchor, new FieldsCache());
+    await vi.waitFor(() => expect(options().map((o) => o.textContent?.trim())).toContain('host String'));
+    options().find((o) => o.textContent?.trim() === 'host String')!.click();
+    await pick('host = …', 'host ≠ …');
+    await pick('admin');
+    await done;
+
+    expect(query.get(FILTERS)).toEqual([]);
+    expect(errors).toEqual(['Filter host = admin failed: 422: "host" cannot filter this chart\'s table']);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
   });
 
   it('opens the field step at once, busy until the charts’ /fields answer', async () => {

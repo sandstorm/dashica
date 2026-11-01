@@ -687,7 +687,7 @@ the server made:
   filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
   answers the first one that does not open with 400, also for the charts it does not apply to).
 - **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
-  (`addChip` on the query state `filters` since 9j, before `FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and goes to the console. Since 9f (§3.15 D20) the quick
+  (`addChip` on the query state `filters` since 9j, before `FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and shows the server's message in an error notification (`ui.showErrorMessage`, since 9at, D45 (e); before only the console). Since 9f (§3.15 D20) the quick
   pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
   a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
@@ -1162,7 +1162,8 @@ interface UiApi {
                                           // onDidAccept; 9aa)
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
-  showInformationMessage / showWarningMessage / showErrorMessage(message: string, ...items): Promise<…>;
+  showErrorMessage(message: string): Promise<void>;  // a notification at the bottom right until closed (9at, D45);
+                                          // showInformationMessage / showWarningMessage, items: when needed
 }
 
 interface Panel extends Disposable {
@@ -1863,7 +1864,15 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   points as its tip does). Fix: `FilterOnClickOptions.pointer` (`Plot.TipPointer`: `"x"`, `"y"`, `"xy"`, mapped to
   `Plot.pointerX`, `Plot.pointerY`, `Plot.pointer`), and each chart names its tip's pointer in its `tip` option
   (documented) and passes the same: time bars and vertical bars `"x"`, horizontal bars and the ordinal heatmap `"y"`,
-  the time line `"xy"`.
+  the time line `"xy"`. (e, 9at; the maintainer clicked a pick and nothing happened, the error only in the console)
+  a filter never fails silently: `ui.showErrorMessage(message): Promise<void>` (as VS Code's
+  `window.showErrorMessage`; `hosts/ui/notifications`: a column of notifications at the workbench's bottom right, above
+  the status bar, each with an icon, its text and a close button, `role="alert"`) shows "<what> failed: <the server's
+  message>" (`showFailed` in `filters/offer.ts`, which also keeps the console log) wherever adding a pill fails after a
+  viewer's choice: a click's `/pill` (`offerFilters`), a filter button's `/button`, "Add filter"'s `/pill`, a pill's
+  edit. *(proposed)* Only the error kind, without items (no caller needs them); an error stays until closed, as VS
+  Code's; the text keeps the HTTP status before the server's message (`fetchPill`'s rejection); a SQL chip needs no
+  request, so nothing of it can fail this way.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2012,7 +2021,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 - **The client:** pressing a button without `...` adds `{key, label: title}`; one with asks the value
   (`showInputBox` below the button) and adds the page's answer; a pressed `...` button is a group of its title
   (releases it) and a button per value (`d-filter-button__value`: asks a new value, the old one filled in and selected, and
-  `replace`s that chip at its index, unless the chips changed meanwhile). A refused value is logged, nothing added.
+  `replace`s that chip at its index, unless the chips changed meanwhile). A refused value is logged and shown (an
+  error notification, since 9at, D45 (e)), nothing added.
   The buttons work with `filters.sqlEnabled` off.
 - **Tests:** Go `filter` (`NewButton`, its key back through `Open`, `Apply` to a table, another one, a SQL file
   without table, after the fields, ignored when skipping filters), `dashboard` (`page.json`'s `key` and `url`,
@@ -2046,7 +2056,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 - **Not editable:** a pill no chart of the page makes (no `fieldSource`: another page's table, a field the page does
   not show) is its label and ×, its tooltip "No chart of this page filters <table> by <field>, so it can only be
   removed"; a button's pill outside its page stays as 9b left it.
-- **Refused or late:** a refused `/pill` is logged and the chip kept; an answer that comes back after another chip
+- **Refused or late:** a refused `/pill` is logged and shown (an error notification, since 9at, D45 (e)) and the chip kept; an answer that comes back after another chip
   took the place (`chips[index]` is no longer the chip edited) is dropped *(proposed)*.
 - **Tests:** Go `filter` (`New` carries the value; a changed value in a key is refused), `widget` (`/pill`'s key
   with field and value); vitest: `pillField`, `fieldSource`, the filter bar (the parts of a field's pill, the operator
@@ -2215,6 +2225,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9aq ✅ 2026-11-01 | **D45 (b) the exclude reads ≠** (§3.8, §3.15): `filterPicks` (`frontend/extensions/filters/offer.ts`) labels each op with its own sign (`OP_SIGNS`). Files: `frontend/extensions/filters/offer.{ts,test.ts}`, `filters.test.ts`, `e2e/bar-selection.spec.ts` (written, not run) | |
 | 9ar ✅ 2026-11-01 | **D45 (c) the Explore entries' names in the concepts** (§3.15; Perspective §4.4, §4.7, §4.8, §8.1): "Explore (from scratch)" and "Explore (from chart…)", as c56c7cc renamed them; the decisions' wording kept, with a note. Files: `docs/2026-10-28-workbench.md`, `docs/2026-10-30-perspective.md` (text only) | |
 | 9as ✅ 2026-11-01 | **D45 (d) a click offers the row the tip shows** (§3.8, §3.15): root cause Plot's tip pointer of a stacked mark (`pointerX` for `barY` / `rectY`, `pointerY` for `barX`) against `filterOnClick`'s `Plot.pointer`; `FilterOnClickOptions.pointer` (`Plot.TipPointer`), each chart's `tip` names it (`time-bars.ts`, `bar-vertical.ts` `"x"`; `bar-horizontal.ts`, `heatmap.ts` `"y"`; `time-line.ts` `"xy"`). Reproduced first in vitest (`time-bar.test.ts`: stacked bars where the next bucket's bar is closer, also faceted; `bar-horizontal.test.ts`: the same by y), `plot-testing.ts` `clickAtPoint`, `anchor` exported. Files: `frontend/extensions/chart-library/{filter-on-click,time-bars,plot-testing}.ts`, `frontend/extensions/{bar-vertical,bar-horizontal,heatmap,time-line}/*.ts`, `time-bar.test.ts`, `bar-horizontal.test.ts` | |
+| 9at ✅ 2026-11-01 | **D45 (e) a failed filter is shown** (§3.8, §3.11, §3.15): `UiApi.showErrorMessage(message): Promise<void>` (`hosts/ui/notifications/notifications.{ts,css,test.ts}`, `Notifications`, in `UiHost`); `showFailed` (`filters/offer.ts`) in `offerFilters`, `addFilter`, the filter bar's `#press` and `#remake`, the console log kept. Tests: `notifications.test.ts`, `offer.test.ts`, `add-filter.test.ts` (a refused `/pill`), `filters.test.ts` (a refused button value, a refused edit) | *(proposed)* error kind only, no items; stays until closed; the HTTP status kept in the text |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

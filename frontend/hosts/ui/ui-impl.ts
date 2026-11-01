@@ -6,6 +6,7 @@ import { Bar } from './bar/bar';
 import { WindowLayout } from './layout/window-layout';
 import { ContextMenu } from './menus/context-menu';
 import { Menus } from './menus/menus';
+import { Notifications } from './notifications/notifications';
 import { QuickInput } from './quick-input/quick-input';
 import type {
   BarPlacement,
@@ -34,12 +35,14 @@ export class UiHost implements UiApi {
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
   readonly #quickInput: QuickInput;
+  readonly #notifications: Notifications;
   readonly #searchProviders = new Set<SearchProvider>();
   readonly onDidChangeMenu;
 
   constructor(host: HTMLElement, layoutState: Memento, commands: CommandsHost) {
     this.#menus = new Menus(() => commands.getCommands());
     this.#quickInput = new QuickInput(host);
+    this.#notifications = new Notifications(host);
     this.#contextMenu = new ContextMenu(this.#quickInput, this.#menus, commands);
     this.#layout = new WindowLayout(host, layoutState, commands, this);
     this.#bars = {
@@ -107,6 +110,10 @@ export class UiHost implements UiApi {
     return this.#quickInput.createQuickPick<T>();
   }
 
+  showErrorMessage(message: string): Promise<void> {
+    return this.#notifications.showError(message);
+  }
+
   registerSearchProvider(provider: SearchProvider): Disposable {
     if (this.getSearchProviders().some((other) => other.id === provider.id)) throw new Error(`There is a search provider ${provider.id} already`);
     this.#searchProviders.add(provider);
@@ -120,6 +127,7 @@ export class UiHost implements UiApi {
   dispose(): void {
     this.#searchProviders.clear();
     this.#quickInput.dispose();
+    this.#notifications.dispose();
     this.#menus.dispose();
     this.#layout.dispose();
   }

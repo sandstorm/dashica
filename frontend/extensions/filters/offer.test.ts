@@ -1,16 +1,19 @@
 // @vitest-environment jsdom
 // Tests for offer.ts: what a click offers (offerFilters, the command filters.offer): "Filter" and "Exclude" per
 // candidate of a field the widget filters by, at the click, and for a time or a number the comparisons of its type;
-// the choice made a pill by the widget's /pill and added at once; none on Escape or a failed /pill. The request of
-// /pill (fetchPill).
+// the choice made a pill by the widget's /pill and added at once; none on Escape, none on a failed /pill, which shows
+// the server's message. The request of /pill (fetchPill).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryHost } from '../../hosts/query/query';
 import { FILTERS } from './chips';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
+import type { UiApi } from '../../hosts/ui/ui';
 import { fetchPill, offerFilters } from './offer';
 
 let host: HTMLElement;
-let quickInput: QuickInput;
+let quickInput: QuickInput & Pick<UiApi, 'showErrorMessage'>;
+/** The error messages shown (`ui.showErrorMessage`), in order. */
+let errors: string[];
 let query: QueryHost;
 /** The URLs fetched; each `/pill` answers a key naming its field, op and value, unless `refused` says otherwise. */
 let fetched: URL[];
@@ -37,7 +40,8 @@ beforeEach(() => {
   query.declare(FILTERS);
   query.load();
   host = document.body.appendChild(document.createElement('div'));
-  quickInput = new QuickInput(host);
+  quickInput = Object.assign(new QuickInput(host), { showErrorMessage: async (message: string) => void errors.push(message) });
+  errors = [];
   fetched = [];
   refused = undefined;
   vi.stubGlobal('fetch', async (input: string) => {
@@ -98,7 +102,7 @@ describe('offerFilters', () => {
     expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
   });
 
-  it('adds no pill when the widget’s /pill fails', async () => {
+  it('adds no pill when the widget’s /pill fails, and shows the server’s message', async () => {
     const failing = vi.spyOn(console, 'error').mockImplementation(() => {});
     refused = new Response('"status" cannot filter this chart\'s table', { status: 422 });
     const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }], source);
@@ -106,6 +110,7 @@ describe('offerFilters', () => {
     await done;
 
     expect(query.get(FILTERS)).toEqual([]);
+    expect(errors).toEqual(['Filter status = 500 failed: 422: "status" cannot filter this chart\'s table']);
     expect(failing).toHaveBeenCalled();
     failing.mockRestore();
   });

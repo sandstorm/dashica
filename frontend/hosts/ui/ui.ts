@@ -5,11 +5,11 @@ import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
  * The workbench's regions as extensions fill them (side panels left and right and command buttons in their rails,
- * items in the top bar around the tabs, the filter bar and the status bar), its menus, and what search everywhere
- * finds. Each panel has a command `workbench.view.<id>`: it shows and focuses the panel, or hides it while it is shown
- * and has the focus; its header's "…" shows its menu `panel/<id>` (context and arguments none), which has "Hide". The
- * "…" at the left rail's start shows the menu `workbench/global` (context and arguments none) and is hidden while it is
- * empty. Sizes and the panels picked are remembered for the browser session.
+ * items in the top bar around the tabs, the filter bar and the status bar), its menus, its notifications, and what
+ * search everywhere finds. Each panel has a command `workbench.view.<id>`: it shows and focuses the panel, or hides it
+ * while it is shown and has the focus; its header's "…" shows its menu `panel/<id>` (context and arguments none), which
+ * has "Hide". The "…" at the left rail's start shows the menu `workbench/global` (context and arguments none) and is
+ * hidden while it is empty. Sizes and the panels picked are remembered for the browser session.
  */
 export interface UiApi {
   /** Adds a side panel with its rail button on `options.side`; one panel per side shows at a time. Ids are unique across all panels. */
@@ -56,6 +56,12 @@ export interface UiApi {
    * items the owner sets as the text changes. Hidden until `show`; one box at a time (a new one hides the open one).
    */
   createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
+  /**
+   * Shows `message` as an error notification at the workbench's bottom right until the viewer closes it; resolves
+   * then. For what failed after a viewer's choice, e.g. a filter the server refused. As VS Code's
+   * `window.showErrorMessage`.
+   */
+  showErrorMessage(message: string): Promise<void>;
   /** Adds what `provider` finds to search everywhere, as a group of its own under `provider.label`, until disposed; `provider.id` is unique. */
   registerSearchProvider(provider: SearchProvider): Disposable;
   /** The search providers registered now, in registration order. */

@@ -5,7 +5,7 @@ import { QuickPickItemKind, type MenuAnchor, type QuickPickItem, type QuickPickS
 import type { PillSource } from '../filter-library/offer';
 import { typeKind } from '../widget-library/clickhouse-type';
 import { FILTERS, addChip, type FilterOp } from './chips';
-import { fetchPill, fieldParam, type FieldRef } from './offer';
+import { fetchPill, fieldParam, showFailed, type FieldRef } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import type { PillField } from './pill-key';
 
@@ -71,10 +71,10 @@ export function fieldSource(
  * (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
  * chips of `query`. With `askSql` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
  * under "Advanced" (its only entry while no chart filters a table), which asks the condition in the SQL input box
- * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` goes to the console.
+ * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` shows the server's message (`showFailed`).
  */
 export async function addFilter(
-  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox'>,
+  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox' | 'showErrorMessage'>,
   query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
   tables: readonly FilterableTable[],
   anchor: MenuAnchor,
@@ -117,7 +117,7 @@ export async function addFilter(
     const { key } = await fetchPill(widget.dataUrl, { fieldId: ref.field, column: ref.column, op: op.op, value });
     query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
   } catch (error) {
-    console.error(`Filter ${ref.field} ${sign} ${value} failed:`, error);
+    showFailed(ui, `Filter ${ref.field} ${sign} ${value}`, error);
   }
 }
 
