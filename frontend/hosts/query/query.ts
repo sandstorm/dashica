@@ -4,11 +4,11 @@ import type { PageJson } from '../../generated/zz_generated.dashica';
 
 /**
  * The state every query of a tab's page depends on, kept in the tab's URL: each tab has its own, so a link opens the
- * page as it was shared, and the browser's back button goes to the state before. The host knows no key of its own;
- * each part of the state is a typed key that carries its URL format (`queryKey`), defined once by the extension or
- * library it belongs to and imported by its readers. The extension that owns a key declares it in its `activate`
- * (`declare`), so every key is known before the first page; using a key no extension declared throws. Widgets query
- * again on `onDidRequestRefresh` and send `requestParams()` along; extensions get the active tab's (`activeQuery`).
+ * page as it was shared, and the browser's back button goes to the state before. Each part of the state is a typed
+ * key that carries its URL format (`queryKey`), defined once by the extension or library it belongs to and imported
+ * by its readers. The extension that owns a key declares it in its `activate` (`declare`), so every key is known
+ * before the first page; using a key no extension declared throws. Widgets query again on `onDidRequestRefresh` and
+ * send `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
 export interface QueryApi {
   /**
@@ -65,11 +65,14 @@ export interface QueryKeySpec<T> {
    */
   format(value: T): QueryEntries;
   /**
-   * Whether the data handlers read it: sent, it sends its effective value (`format`). Without it the key is not
-   * sent, and its change queries nothing again (auto refresh).
+   * Whether the data handlers read it: sent, it sends its effective value (`format`). Else the key stays in the
+   * browser, and its change queries nothing again (auto refresh).
    */
   readonly sentToServer?: boolean;
 }
+
+/** Entries of a query string, in order (`[['f', '<key>'], ['sql', 'a > 1']]`). */
+export type QueryEntries = readonly (readonly [string, string])[];
 
 /**
  * The key kept in the URL's keys `urlKeys` (`'refresh'`, `['time', 'range']`) as `spec` says
@@ -83,9 +86,6 @@ export function queryKey<T>(urlKeys: string | readonly string[], spec: QueryKeyS
     sentToServer: spec.sentToServer ?? false,
   };
 }
-
-/** Entries of a query string, in order (`[['f', '<key>'], ['sql', 'a > 1']]`). */
-export type QueryEntries = readonly (readonly [string, string])[];
 
 export { QueryHost, QueryKeys } from './query-impl';
 export { activeQuery, type ActiveQuerySource } from './active-query';

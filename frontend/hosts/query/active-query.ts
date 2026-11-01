@@ -3,13 +3,6 @@ import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter, type Event } from '../../core/event-emitter/event-emitter';
 import type { QueryApi, QueryKey } from './query';
 
-/** Where `activeQuery` finds the active tab's query state: the `page` host. */
-export interface ActiveQuerySource {
-  readonly activeQuery: QueryApi;
-  /** Fires among others when another tab becomes active. */
-  readonly onDidChangeTabs: Event<void>;
-}
-
 /**
  * The `QueryApi` extensions get (`ExtensionContext.query`): every read and call goes to the active tab's query state.
  * A key's `onDidChange` fires when the active tab's fires, and once when another tab becomes active;
@@ -64,4 +57,11 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
     requestParams: () => active().requestParams(),
     dispose: () => dispose.dispose(),
   };
+}
+
+/** Where `activeQuery` finds the active tab's query state: the `page` host. */
+export interface ActiveQuerySource {
+  readonly activeQuery: QueryApi;
+  /** Fires among others when another tab becomes active. */
+  readonly onDidChangeTabs: Event<void>;
 }

@@ -5,38 +5,9 @@ import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { QueryApi, QueryEntries, QueryKey } from './query';
 
 /**
- * The keys declared (`QueryApi.declare`), in the order declared: the tabs' query hosts share one, so each tab writes
- * and sends every key, also one it never read itself.
- */
-export class QueryKeys {
-  readonly #keys: QueryKey<unknown>[] = [];
-
-  /** Knows `key` until disposed; throws for a URL key a declared key holds (`key` itself declared before, too). */
-  declare(key: QueryKey<unknown>): Disposable {
-    const taken = key.urlKeys.find((urlKey) => this.#keys.some((other) => other.urlKeys.includes(urlKey)));
-    if (taken !== undefined) throw new Error(`The URL key ${taken} belongs to a query key declared before`);
-    this.#keys.push(key);
-    return new Disposable(() => {
-      const index = this.#keys.indexOf(key);
-      if (index >= 0) this.#keys.splice(index, 1);
-    });
-  }
-
-  /** Throws unless `key` is declared: a key is used only after its owner declared it. */
-  check(key: QueryKey<unknown>): void {
-    if (!this.#keys.includes(key)) throw new Error(`The query key ${key.urlKeys.join(', ')} is not declared: no extension declared it (query.declare)`);
-  }
-
-  /** The keys declared, in the order declared. */
-  all(): readonly QueryKey<unknown>[] {
-    return this.#keys;
-  }
-}
-
-/**
  * The `QueryApi` of one tab, holding the keys' values of a query string (the tab's URL's): `load` takes them from one,
- * `onDidChangeSearch` gives the query string after a change, which the tab puts into its URL. It knows no key of its
- * own: a URL key no query key holds stays in the query string as it is.
+ * `onDidChangeSearch` gives the query string after a change, which the tab puts into its URL. A URL key that no
+ * query key holds stays in the query string as it is.
  */
 export class QueryHost implements QueryApi {
   readonly #onDidRequestRefresh = new EventEmitter<void>();
@@ -159,6 +130,35 @@ export class QueryHost implements QueryApi {
       this.#search = search;
       this.#onDidChangeSearch.fire(search);
     }, SEARCH_WRITE_DELAY_MS);
+  }
+}
+
+/**
+ * The keys declared (`QueryApi.declare`), in the order declared: the tabs' query hosts share one, so each tab writes
+ * and sends every key, also one it never read itself.
+ */
+export class QueryKeys {
+  readonly #keys: QueryKey<unknown>[] = [];
+
+  /** Knows `key` until disposed; throws for a URL key a declared key holds (`key` itself declared before, too). */
+  declare(key: QueryKey<unknown>): Disposable {
+    const taken = key.urlKeys.find((urlKey) => this.#keys.some((other) => other.urlKeys.includes(urlKey)));
+    if (taken !== undefined) throw new Error(`The URL key ${taken} belongs to a query key declared before`);
+    this.#keys.push(key);
+    return new Disposable(() => {
+      const index = this.#keys.indexOf(key);
+      if (index >= 0) this.#keys.splice(index, 1);
+    });
+  }
+
+  /** Throws unless `key` is declared: a key is used only after its owner declared it. */
+  check(key: QueryKey<unknown>): void {
+    if (!this.#keys.includes(key)) throw new Error(`The query key ${key.urlKeys.join(', ')} is not declared: no extension declared it (query.declare)`);
+  }
+
+  /** The keys declared, in the order declared. */
+  all(): readonly QueryKey<unknown>[] {
+    return this.#keys;
   }
 }
 
