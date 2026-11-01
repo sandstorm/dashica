@@ -22,7 +22,7 @@ import './explore-view.css';
  * first (`confirmReset`). A click on a group row's value of the chart's result offers to filter the tab by it or
  * exclude it (the command `filters.offer`). The global menu's "Explore" opens a blank Explore in a new tab
  * (`#explore=&connection=<name>`): a connection picker and an empty editor, run on that connection
- * (`/rows?connection=…`); its "Start from chart…" opens one with the SQL and parameters of a chart of the shown page,
+ * (`/rows?connection=…`); its "Explore (from chart…)" opens one with the SQL and parameters of a chart of the shown page,
  * run at once. Perspective loads on first use (`loadPerspective`), and so does the SQL editor (sql-library's
  * `loadSqlEditors`, CodeMirror 6 with ClickHouse's dialect), which completes the names of the connection's schema.
  */
@@ -83,7 +83,7 @@ export const exploreView: Extension = {
         async () => {
           const picked = await ui.showQuickPick(
             charts().map((chart) => ({ label: chartTitle(chart), description: chart.connection, chart })),
-            { title: 'Start from chart', placeholder: 'The chart whose SQL the editor starts with' },
+            { title: 'Explore (from chart…)', placeholder: 'The chart whose SQL the editor starts with' },
           );
           if (!picked) return;
           const { sql, parameters } = await fetchSql(sqlRequest(picked.chart.dataUrl, query.requestParams()));
@@ -93,7 +93,7 @@ export const exploreView: Extension = {
         { enablement: () => charts().length > 0, disabledReason: 'The shown page has no chart' },
       ),
       ui.registerMenuItem('workbench/global', EXPLORE_ENTRY),
-      ui.registerMenuItem('workbench/global', { command: 'exploreView.startFromChart', title: 'Start from chart…', group: 'explore', order: 1 }),
+      ui.registerMenuItem('workbench/global', { command: 'exploreView.startFromChart', title: 'Explore (from chart…)', group: 'explore', order: 1 }),
     );
     subscriptions.push(
       ui.registerMenuItem<WidgetMenuContext>('widget/context', {
@@ -106,8 +106,8 @@ export const exploreView: Extension = {
   },
 };
 
-/** The global menu's "Explore": a blank Explore in a new tab (`exploreView.open`). */
-const EXPLORE_ENTRY: MenuItem = { command: 'exploreView.open', title: 'Explore', group: 'explore' };
+/** The global menu's "Explore (from scratch)": a blank Explore in a new tab (`exploreView.open`). */
+const EXPLORE_ENTRY: MenuItem = { command: 'exploreView.open', title: 'Explore (from scratch)', group: 'explore' };
 
 /**
  * The global menu's only trace of the Explore view while it is not enabled: its command `exploreView.open` never

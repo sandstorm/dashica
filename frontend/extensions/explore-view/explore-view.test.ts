@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Tests for exploreView in explore-view.ts: only "Explore" greyed in the global menu while Explore is not enabled, the
 // chart menu's entry opening a tab, the view as the page kind `explore` named in the tab's hash, its title, Close, the
-// widget found in the page's tree; the global menu's "Explore" and "Start from chart…" opening a blank Explore; Reset's
+// widget found in the page's tree; the global menu's "Explore (from scratch)" and "Explore (from chart…)" opening a blank Explore; Reset's
 // confirmation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
@@ -111,7 +111,7 @@ describe('exploreView', () => {
     menuItems = [];
     renderers.clear();
     activate(false);
-    expect(menuItems).toEqual([{ menuId: 'workbench/global', command: 'exploreView.open', title: 'Explore', group: 'explore' }]);
+    expect(menuItems).toEqual([{ menuId: 'workbench/global', command: 'exploreView.open', title: 'Explore (from scratch)', group: 'explore' }]);
     // greyed: its command is never enabled, its hover says why
     expect([...commands.keys()]).toEqual(['exploreView.open']);
     expect(options.get('exploreView.open')).toBe(EXPLORE_NOT_ENABLED);
@@ -141,11 +141,11 @@ describe('exploreView', () => {
     expect(el.children).toHaveLength(0);
   });
 
-  it('puts "Explore" and "Start from chart…" into the global menu, the second’s command enabled only with a chart on the shown page', () => {
+  it('puts "Explore (from scratch)" and "Explore (from chart…)" into the global menu, the second’s command enabled only with a chart on the shown page', () => {
     const global = menuItems.filter(({ menuId }) => menuId === 'workbench/global');
     expect(global.map(({ title, command }) => [title, command])).toEqual([
-      ['Explore', 'exploreView.open'],
-      ['Start from chart…', 'exploreView.startFromChart'],
+      ['Explore (from scratch)', 'exploreView.open'],
+      ['Explore (from chart…)', 'exploreView.startFromChart'],
     ]);
     expect(options.get('exploreView.open')).toBeUndefined();
     const startFromChart = options.get('exploreView.startFromChart')!;

@@ -171,7 +171,7 @@ test('keeps the config the viewer changed for the chart, until Reset', async ({p
 test('the global "…" menu’s "Explore" opens a blank Explore: a connection, an empty editor, its query run there', async ({page}) => {
     await page.goto('/');
     await page.getByTestId('wb-global-menu').click();
-    await page.getByRole('option', {name: 'Explore', exact: true}).click();
+    await page.getByRole('option', {name: 'Explore (from scratch)', exact: true}).click();
     const view = page.getByTestId('explore-view');
     await expect(view.locator('.d-explore-view__title')).toHaveText('Explore');
     await expect(page).toHaveURL(/#explore=&connection=[^&]+$/);
@@ -188,10 +188,10 @@ test('the global "…" menu’s "Explore" opens a blank Explore: a connection, a
     await expect(page.getByTestId('explore-view').getByTestId('explore-view-sql-text')).toHaveText('SELECT number FROM system.numbers LIMIT 5');
 });
 
-test('"Start from chart…" opens a blank Explore with the picked chart’s SQL, run with its parameters', async ({page}) => {
+test('"Explore (from chart…)" opens a blank Explore with the picked chart’s SQL, run with its parameters', async ({page}) => {
     await page.goto(`${PAGE}?time=168h`);
     await page.getByTestId('wb-global-menu').click();
-    await page.getByRole('option', {name: 'Start from chart…'}).click();
+    await page.getByRole('option', {name: 'Explore (from chart…)'}).click();
     const ran = page.waitForRequest((request) => /\/rows\?connection=[^&]+&exploreSql=.*&param___from=/.test(request.url()));
     await page.getByRole('option', {name: CHART}).first().click();
     await ran;
