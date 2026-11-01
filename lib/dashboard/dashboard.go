@@ -96,11 +96,11 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 	if err != nil {
 		return PageJson{}, fmt.Errorf("mounting widgets: %w", err)
 	}
-	buttons, err := pageButtons([]byte(ctx.Deps.Config.Filters.Secret), handlerCollector.Path(), d.searchBar.FilterButtons)
+	buttons, err := pageButtons(ctx.Deps.FilterService, handlerCollector.Path(), d.searchBar.FilterButtons)
 	if err != nil {
 		return PageJson{}, err
 	}
-	if err := handlerCollector.Handle("button", buttonHandler([]byte(ctx.Deps.Config.Filters.Secret), d.searchBar.FilterButtons)); err != nil {
+	if err := handlerCollector.Handle("button", buttonHandler(ctx.Deps.FilterService, d.searchBar.FilterButtons)); err != nil {
 		return PageJson{}, fmt.Errorf("registering the filter buttons' handler: %w", err)
 	}
 	page := PageJson{

@@ -34,7 +34,7 @@ var testFiles = fstest.MapFS{"colors.sql": {Data: []byte("SELECT host, 'darkred'
 func testDeps() rendering.Dependencies {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	cfg := &config.Config{ClickHouse: unreachable, Filters: config.FiltersConfig{Secret: string(testSecret)}}
-	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FileSystem: testFiles}
+	return rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
 }
 
 // askPath is the answer of `chart`'s handler to `path` (with its query string).
@@ -88,7 +88,7 @@ func TestPill_IsTheFieldsConditionSignedAndLabelledWithItsFieldAndValue(t *testi
 	rec := askPath(bar, "/pill?field=host&op=ne&value=it's")
 	var body struct{ Key, Label string }
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	pill, err := filter.Open(testSecret, body.Key, testDeps().ClickhouseClientManager.Database)
+	pill, err := testDeps().FilterService.Open(body.Key)
 	if rec.Code != http.StatusOK || err != nil || body.Label != "host ≠ it's" {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}
@@ -104,7 +104,7 @@ func TestPill_AFieldThatIsJustAColumnMakesTheColumnsPill(t *testing.T) {
 	rec := askPath(table, "/pill?"+url.Values{"field": {"timestamp"}, "op": {"ge"}, "value": {"2026-10-31T10:00:00.000Z"}}.Encode())
 	var body struct{ Key, Label string }
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	pill, err := filter.Open(testSecret, body.Key, testDeps().ClickhouseClientManager.Database)
+	pill, err := testDeps().FilterService.Open(body.Key)
 	if rec.Code != http.StatusOK || err != nil || body.Label != "timestamp ≥ 2026-10-31T10:00:00.000Z" {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}
@@ -218,7 +218,7 @@ func TestQueryHandler_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
 
 func TestQueryHandler_AButtonsPillAppliesWithoutATable(t *testing.T) {
 	button, _ := filter.NewButton("Duration", "duration_ms >= ...", "500")
-	key, _ := filter.Sign(testSecret, button, nil)
+	key, _ := testDeps().FilterService.Sign(button)
 	noTable := NewBarVertical(sql.FromString("SELECT host, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY host")).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt"))
 	other := NewBarVertical(sql.New(sql.From("caddy_logs"))).X(sql.Field("upstream")).Y(sql.Count())
 	for name, chart := range map[string]withQuery{"a SQL file without a table": noTable, "a chart on another table": other} {

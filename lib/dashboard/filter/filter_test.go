@@ -1,4 +1,4 @@
-// Tests for TableOf, New, NewButton, Sign, Open, ShortName and Apply.
+// Tests for FilterService (TableOf, Sign, Open, TableName), New, NewButton and Apply.
 package filter
 
 import (
@@ -9,15 +9,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
 
 var secret = []byte("a test secret of at least thirty-two bytes")
 
-// databases is dashica_config's database per connection: "default" on default, "monitoring" on logs.
-func databases(connection string) string {
-	return map[string]string{"default": "default", "logs": "monitoring"}[connection]
+// service is the FilterService of a dashica_config with the filters.secret `filterSecret` and the database "default"
+// on the connection default, "monitoring" on logs, none on any other.
+func service(filterSecret string) *FilterService {
+	return NewFilterService(&config.Config{
+		ClickHouse: map[string]config.ClickHouseConfig{"default": {Database: "default"}, "logs": {Database: "monitoring"}},
+		Filters:    config.FiltersConfig{Secret: filterSecret},
+	})
 }
+
+var filters = service(string(secret))
 
 var httpLogs = Table{Connection: "default", Name: "default.http_logs"}
 
@@ -45,7 +52,7 @@ func TestTableOf_NamesTheTableWithItsDatabaseOnItsConnection(t *testing.T) {
 		"a query that skips filters":        {sql.New(sql.From("http_logs"), sql.SkipFilters()), Table{}, false},
 	}
 	for name, tt := range tests {
-		got, ok := TableOf(tt.q, databases)
+		got, ok := filters.TableOf(tt.q)
 		if got != tt.want || ok != tt.ok {
 			t.Errorf("%s: %+v %v, want %+v %v", name, got, ok, tt.want, tt.ok)
 		}
@@ -83,7 +90,7 @@ func TestNew_AColumnsPillIsAColumn(t *testing.T) {
 // signed is the key of `p` and its part before the mac, checking the mac is 22 characters of base64url.
 func signed(t *testing.T, p Pill) (key, head string) {
 	t.Helper()
-	key, err := Sign(secret, p, databases)
+	key, err := filters.Sign(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +133,7 @@ func TestSignAndOpen_GiveThePillBack(t *testing.T) {
 		"a connection with separators":  pill(t, Table{"a:b.c", "x.y"}, sql.ColumnField("host"), "eq", "a"),
 	} {
 		key, _ := signed(t, p)
-		if got, err := Open(secret, key, databases); err != nil || got != p {
+		if got, err := filters.Open(key); err != nil || got != p {
 			t.Errorf("%s: Open(%q): %+v, %v, want %+v", name, key, got, err, p)
 		}
 	}
@@ -136,7 +143,7 @@ func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
 	p := pill(t, httpLogs, sql.ColumnField("status"), "eq", "500")
 	key, head := signed(t, p)
 	mac := key[len(head)+1:]
-	otherSecret, _ := Sign([]byte("another secret of at least thirty-two bytes"), p, databases)
+	otherSecret, _ := service("another secret of at least thirty-two bytes").Sign(p)
 	for name, k := range map[string]string{
 		"the value changed":       "http_logs.status=200~" + mac,
 		"a condition added":       head + "~1 = 1~" + mac,
@@ -148,14 +155,14 @@ func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
 		"the old filter f":        "status:eq:500",
 		"a key before 2026-10-31": "eyJjb25uZWN0aW9uIjoiZGVmYXVsdCJ9.eyJ4IjoxfQ",
 	} {
-		if _, err := Open(secret, k, databases); err == nil {
+		if _, err := filters.Open(k); err == nil {
 			t.Errorf("%s: opened", name)
 		}
 	}
-	if _, err := Open(nil, key, databases); err == nil {
+	if _, err := service("").Open(key); err == nil {
 		t.Errorf("opened without a secret")
 	}
-	if _, err := Sign(nil, p, databases); err == nil {
+	if _, err := service("").Sign(p); err == nil {
 		t.Errorf("signed without a secret")
 	}
 }
@@ -163,7 +170,7 @@ func TestOpen_RefusesAKeyNotSignedByThisSecret(t *testing.T) {
 func TestOpen_RefusesASignedKeyItCannotRead(t *testing.T) {
 	for _, head := range []string{"http_logs.host", "host=a", "http_logs.=a", "a~b~c", "@status >= ...", "@status >= 500~1", "http_logs.host=%zz", "a.b.c.host=1"} {
 		key := head + "~" + base64.RawURLEncoding.EncodeToString(mac(secret, head))
-		if p, err := Open(secret, key, databases); err == nil {
+		if p, err := filters.Open(key); err == nil {
 			t.Errorf("%q: opened as %+v", head, p)
 		}
 	}
@@ -171,7 +178,7 @@ func TestOpen_RefusesASignedKeyItCannotRead(t *testing.T) {
 
 func TestApply_AddsThePillsOnItsTableAndNamesTheOthers(t *testing.T) {
 	q := sql.New(sql.From("http_logs"))
-	table, ok := TableOf(q, databases)
+	table, ok := filters.TableOf(q)
 	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
 	other := pill(t, Table{"logs", "monitoring.full_logs"}, sql.Field("status"), "eq", "500")
 	other.Label = "full_logs status = 500"
@@ -235,7 +242,7 @@ func TestApply_TwoBasesOnOneTableShareThePills(t *testing.T) {
 		sql.New(sql.From("default.http_logs")),
 		sql.FromString("SELECT count() FROM http_logs WHERE {{DASHICA_FILTERS}}").With(sql.Table("http_logs")),
 	} {
-		table, ok := TableOf(q, databases)
+		table, ok := filters.TableOf(q)
 		if got, _ := Apply(q, table, ok, []Pill{status}); !strings.Contains(got.Build(), "(status) = '500'") {
 			t.Errorf("%T lacks the pill:\n%s", q, got.Build())
 		}
@@ -245,7 +252,7 @@ func TestApply_TwoBasesOnOneTableShareThePills(t *testing.T) {
 func TestApply_WithoutATableNone(t *testing.T) {
 	q := sql.FromString("SELECT 1 WHERE {{DASHICA_FILTERS}}")
 	status := pill(t, httpLogs, sql.Field("status"), "eq", "500")
-	table, ok := TableOf(q, databases)
+	table, ok := filters.TableOf(q)
 	got, d := Apply(q, table, ok, []Pill{status})
 	if strings.Contains(got.Build(), "500") || !reflect.DeepEqual(d.Ignored, []string{"status = 500"}) {
 		t.Errorf("ignored %v, query %s", d.Ignored, got.Build())
@@ -276,11 +283,11 @@ func TestSignAndOpen_GiveAButtonsPillBackLabelledWithItsCondition(t *testing.T) 
 		"@status >= 500":             must(NewButton("Errors", "status >= 500", "")),
 		"@path = ... %7E 1~a%7Eb%25": must(NewButton("Path", "path = ... ~ 1", "a~b%")),
 	} {
-		key, err := Sign(secret, p, nil)
+		key, err := filters.Sign(p)
 		if head := key[:strings.LastIndex(key, "~")]; err != nil || head != want {
 			t.Errorf("key %q, %v, want %q", key, err, want)
 		}
-		got, err := Open(secret, key, databases)
+		got, err := filters.Open(key)
 		p.Label = p.Condition
 		if err != nil || got != p {
 			t.Errorf("Open(%q): %+v, %v, want %+v", key, got, err, p)
@@ -303,7 +310,7 @@ func TestApply_AButtonsPillToEveryQueryThatTakesFilters(t *testing.T) {
 		sql.New(sql.From("full_logs"), sql.OnDatabase("logs")),
 		sql.FromString("SELECT 1 WHERE {{DASHICA_FILTERS}}"),
 	} {
-		table, ok := TableOf(q, databases)
+		table, ok := filters.TableOf(q)
 		got, d := Apply(q, table, ok, []Pill{errorsOnly, status})
 		if !strings.Contains(got.Build(), "(level = 'error' OR level = 'fatal')") || slices.Contains(d.Ignored, "Errors") {
 			t.Errorf("%T lacks the button, ignored %v:\n%s", q, d.Ignored, got.Build())
@@ -317,14 +324,14 @@ func TestApply_AButtonsPillToEveryQueryThatTakesFilters(t *testing.T) {
 	}
 
 	skipping := sql.New(sql.From("http_logs"), sql.SkipFilters())
-	table, ok := TableOf(skipping, databases)
+	table, ok := filters.TableOf(skipping)
 	got, d := Apply(skipping, table, ok, []Pill{errorsOnly})
 	if strings.Contains(got.Build(), "level") || !reflect.DeepEqual(d.Ignored, []string{"Errors"}) {
 		t.Errorf("skips filters: ignored %v, query %s", d.Ignored, got.Build())
 	}
 }
 
-func TestShortName_DropsTheConnectionsDatabase(t *testing.T) {
+func TestTableName_DropsTheConnectionsDatabase(t *testing.T) {
 	for want, table := range map[string]Table{
 		"http_logs":            httpLogs,
 		"system.one":           {"default", "system.one"},
@@ -332,7 +339,7 @@ func TestShortName_DropsTheConnectionsDatabase(t *testing.T) {
 		"default.full_logs":    {"logs", "default.full_logs"},
 		"default.http_logs_v2": {"other", "default.http_logs_v2"},
 	} {
-		if got := ShortName(table, databases); got != want {
+		if got := filters.TableName(table); got != want {
 			t.Errorf("%+v: %q, want %q", table, got, want)
 		}
 	}

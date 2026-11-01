@@ -1,7 +1,7 @@
 // Package filter is the pills of a page (`?f=<key>`): a condition on a table that the server wrote from a chart's
-// field (New) or for a filter button of the page (NewButton) and signed (Sign), opened again on every request (Open)
-// and applied by every chart on that table, a button's by every query that takes filters (Apply); and Diagnostics,
-// what a chart tells the outside about one answer. See docs/2026-10-28-workbench.md §3.8.
+// field (New) or for a filter button of the page (NewButton) and signed (FilterService.Sign), opened again on every
+// request (FilterService.Open) and applied by every chart on that table, a button's by every query that takes filters
+// (Apply); and Diagnostics, what a chart tells the outside about one answer. See docs/2026-10-28-workbench.md §3.8.
 package filter
 
 import (
@@ -14,8 +14,31 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 )
+
+// FilterService signs and opens the server's pills and names their tables, with what dashica_config says for them:
+// filters.secret, the key of each pill's HMAC, and each connection's database (`clickhouse.<name>.database`), where a
+// table named without its database is. One for the server, in rendering.Dependencies.
+type FilterService struct {
+	config *config.Config
+}
+
+// NewFilterService is the FilterService of `cfg`, the loaded dashica_config.
+func NewFilterService(cfg *config.Config) *FilterService {
+	return &FilterService{config: cfg}
+}
+
+// database is the database dashica_config names for `connection` ("" for one it does not know).
+func (s *FilterService) database(connection string) string {
+	return s.config.ClickHouse[connection].Database
+}
+
+// secret is filters.secret, the key of each pill's HMAC.
+func (s *FilterService) secret() []byte {
+	return []byte(s.config.Filters.Secret)
+}
 
 // Diagnostics is what a chart tells the outside about one answer, sent with its data (X-Dashica-Diagnostics).
 type Diagnostics struct {
@@ -33,15 +56,15 @@ type Table struct {
 }
 
 // TableOf is the Table whose pills `q` takes (sql.TableOf: a builder query's From, a SQL file's sql.Table) on its
-// connection ("default" when it names none), a name without database in `database(connection)`, the connection's
-// database from dashica_config; false for a query without one, and for one that skips filters.
-func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table, bool) {
+// connection ("default" when it names none), a name without database in the connection's database from
+// dashica_config; false for a query without one, and for one that skips filters.
+func (s *FilterService) TableOf(q sql.SqlQueryable) (Table, bool) {
 	name, ok := sql.TableOf(q)
 	if !ok || q.ShouldSkipFilters() {
 		return Table{}, false
 	}
 	connection := sql.ConnectionOf(q)
-	if db := database(connection); !strings.Contains(name, ".") && db != "" {
+	if db := s.database(connection); !strings.Contains(name, ".") && db != "" {
 		name = db + "." + name
 	}
 	return Table{Connection: connection, Name: name}, true
@@ -49,7 +72,7 @@ func TableOf(q sql.SqlQueryable, database func(connection string) string) (Table
 
 // Pill is a filter on a table: the rows where a field compares by an op with a value (`customer = acme`, `timestamp ≥
 // 2026-10-31T10:00:00.000Z`), as the condition the server wrote for it; or a filter button's condition (Button), on
-// no table. Its key (Sign) carries it, signed.
+// no table. Its key (FilterService.Sign) carries it, signed.
 type Pill struct {
 	Table
 	// Field is the alias of the field it filters by ("customer"), or with Column the column's name; the pills on one
@@ -135,12 +158,13 @@ func NewButton(title, queryPart, value string) (Pill, error) {
 //	@<button>[~<value>]~<mac>                         @duration_ms >= ...~500~kq3V…
 //
 // The table is `[<connection>:][<database>.]<name>`, the connection left out when it is "default" and the database
-// when it is the connection's (`database`, dashica_config; nil only for a button's pill); the op its ClickHouse
+// when it is the connection's (dashica_config); the op its ClickHouse
 // operator (`=`, `!=`, `<`, `<=`, `>`, `>=`); the condition only when it is not the column's own (a Column's). The mac
-// is the HMAC-SHA256 with `secret` (filters.secret) of everything before it, its first 128 bits in unpadded base64url.
+// is the HMAC-SHA256 with filters.secret of everything before it, its first 128 bits in unpadded base64url.
 // `%` and each separator a part could hold are percent-encoded in it (`~` everywhere; `:`, `.`, `=`, `!`, `<`, `>`
 // and `@` in a name; a value's leading `=`), so each part reads back as it was.
-func Sign(secret []byte, p Pill, database func(connection string) string) (string, error) {
+func (s *FilterService) Sign(p Pill) (string, error) {
+	secret := s.secret()
 	if len(secret) == 0 {
 		return "", errors.New("filters.secret is not set")
 	}
@@ -151,7 +175,7 @@ func Sign(secret []byte, p Pill, database func(connection string) string) (strin
 			head += "~" + escape(p.Value, "~")
 		}
 	} else {
-		head = tableKey(p.Table, database) + "." + escape(p.Field, nameSeparators) + p.Op.Operator() + escapeValue(p.Value)
+		head = s.tableKey(p.Table) + "." + escape(p.Field, nameSeparators) + p.Op.Operator() + escapeValue(p.Value)
 		if p.Condition != columnCondition(p) {
 			head += "~" + escape(p.Condition, "~")
 		}
@@ -159,10 +183,11 @@ func Sign(secret []byte, p Pill, database func(connection string) string) (strin
 	return head + "~" + base64.RawURLEncoding.EncodeToString(mac(secret, head)), nil
 }
 
-// Open is the pill of `key` (Sign), when its mac is the one `secret` gives, its table's name with the database
-// `database` names for its connection when the key has none; else an error: a key changed on its way, one written by
-// hand, one signed with another secret.
-func Open(secret []byte, key string, database func(connection string) string) (Pill, error) {
+// Open is the pill of `key` (Sign), when its mac is the one filters.secret gives, its table's name with the database
+// dashica_config names for its connection when the key has none; else an error: a key changed on its way, one written
+// by hand, one signed with another secret.
+func (s *FilterService) Open(key string) (Pill, error) {
+	secret := s.secret()
 	if len(secret) == 0 {
 		return Pill{}, errors.New("filters.secret is not set")
 	}
@@ -175,7 +200,7 @@ func Open(secret []byte, key string, database func(connection string) string) (P
 	if err != nil || !hmac.Equal(got, mac(secret, head)) {
 		return Pill{}, fmt.Errorf("pill %q: not signed by this server", shorten(key))
 	}
-	p, err := read(head, database)
+	p, err := s.read(head)
 	if err != nil {
 		return Pill{}, fmt.Errorf("pill %q: unreadable", shorten(key))
 	}
@@ -189,7 +214,7 @@ const nameSeparators = "~:.=!<>@"
 var ops = []sql.Op{sql.OpNe, sql.OpLe, sql.OpGe, sql.OpEq, sql.OpLt, sql.OpGt}
 
 // read is the pill of a key's `head` (Sign: all before the mac).
-func read(head string, database func(connection string) string) (Pill, error) {
+func (s *FilterService) read(head string) (Pill, error) {
 	parts := strings.Split(head, "~")
 	if len(parts) > 2 {
 		return Pill{}, errors.New("too many parts")
@@ -227,7 +252,7 @@ func read(head string, database func(connection string) string) (Pill, error) {
 	if dot < 0 {
 		return Pill{}, errors.New("no field")
 	}
-	table, err := readTable(names[:dot], database)
+	table, err := s.readTable(names[:dot])
 	if err != nil {
 		return Pill{}, err
 	}
@@ -250,12 +275,12 @@ func read(head string, database func(connection string) string) (Pill, error) {
 }
 
 // tableKey is `t` as a key names it (Sign).
-func tableKey(t Table, database func(connection string) string) string {
+func (s *FilterService) tableKey(t Table) string {
 	key := ""
 	if t.Connection != "default" {
 		key = escape(t.Connection, nameSeparators) + ":"
 	}
-	db, name, ok := strings.Cut(ShortName(t, database), ".")
+	db, name, ok := strings.Cut(s.TableName(t), ".")
 	if !ok {
 		return key + escape(db, nameSeparators)
 	}
@@ -263,7 +288,7 @@ func tableKey(t Table, database func(connection string) string) string {
 }
 
 // readTable is the table a key names (tableKey).
-func readTable(key string, database func(connection string) string) (Table, error) {
+func (s *FilterService) readTable(key string) (Table, error) {
 	t := Table{Connection: "default"}
 	if connection, rest, ok := strings.Cut(key, ":"); ok {
 		t.Connection, key = connection, rest
@@ -282,16 +307,17 @@ func readTable(key string, database func(connection string) string) (Table, erro
 		}
 	}
 	t.Name = strings.Join(parts, ".")
-	if db := database(t.Connection); len(parts) == 1 && db != "" {
+	if db := s.database(t.Connection); len(parts) == 1 && db != "" {
 		t.Name = db + "." + t.Name
 	}
 	return t, nil
 }
 
-// ShortName is the name of `t` as a key and page.json name it: without its database when that is the one `database`
-// names for its connection (`http_logs` for `default.http_logs` on a connection to `default`), else with it.
-func ShortName(t Table, database func(connection string) string) string {
-	if db := database(t.Connection); db != "" {
+// TableName is the name of `t` as a key and page.json name it: without its database when that is the one
+// dashica_config names for its connection (`http_logs` for `default.http_logs` on a connection to `default`), else
+// with it.
+func (s *FilterService) TableName(t Table) string {
+	if db := s.database(t.Connection); db != "" {
 		if name, ok := strings.CutPrefix(t.Name, db+"."); ok {
 			return name
 		}
@@ -338,7 +364,7 @@ func shorten(key string) string {
 }
 
 // Apply is `q` with the pills on `table` added to its WHERE (a SQL file's {{DASHICA_FILTERS}}), and the Diagnostics
-// naming the others; without a table (`ok` false, TableOf) it applies none. The pills on one field combine (a column
+// naming the others; without a table (`ok` false, FilterService.TableOf) it applies none. The pills on one field combine (a column
 // and a computed field of the same name being two fields, Pill.Column), in the order of their first one: the `eq` ones OR-ed (`customer = acme` or `customer = globex`), those of each other op
 // AND-ed (`customer ≠ acme` and `customer ≠ globex`; `timestamp ≥ a` and `timestamp ≥ b`); each combination one
 // Where, so a `≥` and a `≤` on one field make a range. A button's pill applies to every query that takes filters, a SQL file without sql.Table

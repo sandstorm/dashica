@@ -8,6 +8,7 @@ import (
 	alerting2 "github.com/sandstorm/dashica/lib/alerting"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
@@ -78,8 +79,11 @@ type Dependencies struct {
 	AlertManager            *alerting2.AlertManager
 	// Config is the loaded dashica_config, read only. The handlers check its settings where they apply: explore.enabled
 	// in the Explore handlers (httpserver.ErrExploreNotEnabled), filters.sqlEnabled where SQL chips enter a query
-	// (httpserver.QueryState.SqlClause), filters.secret where pills are signed and opened (filter.Sign, filter.Open).
+	// (httpserver.QueryState.SqlClause).
 	Config *config.Config
+	// FilterService signs and opens the pills and names their tables, with filters.secret and the connections'
+	// databases from Config.
+	FilterService *filter.FilterService
 }
 
 // MenuGroup is a group of the dashboards menu ("Shop"), as RegisterDashboardGroup starts it.
@@ -112,8 +116,8 @@ type FilterButton struct {
 	// QueryPart is the SQL condition the button adds to the filter ("status >= 500"); a `...` in it is the value the
 	// viewer is asked for ("duration_ms >= ..."), written in as a string literal.
 	QueryPart string `json:"queryPart"`
-	// Key is, in page.json, the signed pill of a button without `...` (filter.Sign), which pressing it puts into the
-	// URL; empty for one with.
+	// Key is, in page.json, the signed pill of a button without `...` (filter.FilterService.Sign), which pressing it
+	// puts into the URL; empty for one with.
 	Key string `json:"key,omitempty"`
 	// Url is, in page.json, where a button with `...` gets its pill for a value: `<page>/button?i=<index>`, the value
 	// appended as `&value=<value>`, answered as `{key, label}`; empty for one without.

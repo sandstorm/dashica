@@ -60,12 +60,6 @@ func (cm *Manager) GetClient(serverId string) (*Client, error) {
 	return client, nil
 }
 
-// Database is the database dashica_config names for the connection `connection` ("" for one it does not know): where
-// a table named without its database is.
-func (cm *Manager) Database(connection string) string {
-	return cm.config.ClickHouse[connection].Database
-}
-
 // Connections are the names of the ClickHouse connections dashica_config names (`clickhouse.<name>`), sorted.
 func (cm *Manager) Connections() []string {
 	return slices.Sorted(maps.Keys(cm.config.ClickHouse))

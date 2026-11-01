@@ -94,7 +94,7 @@ type Node struct {
 	// column, any field of a SQL file: sql.ColumnOf): "add filter" lists them as computed fields, the others among
 	// the table's columns (docs/2026-10-28-workbench.md §3.15 D27).
 	Computed []string `json:"computed,omitempty"`
-	// Table is the table its pills are on as their keys name it (filter.ShortName: "http_logs" on a connection to
+	// Table is the table its pills are on as their keys name it (filter.FilterService.TableName: "http_logs" on a connection to
 	// `default`, "monitoring.full_logs" else), when its query has one and takes filters: the filter bar's "add
 	// filter" offers the page's columns and fields by table (`<dataUrl>/fields`, their values `<dataUrl>/values`), and finds the
 	// chart that edits a pill by it.
@@ -148,8 +148,8 @@ func Mount(ctx *rendering.DashboardContext, api handler_collector.HandlerCollect
 			for _, field := range computedFields(ctx.Deps, chart) {
 				node.Computed = append(node.Computed, field.Alias())
 			}
-			if table, ok := tableOf(ctx.Deps, chart.Query()); ok {
-				node.Table = filter.ShortName(table, ctx.Deps.ClickhouseClientManager.Database)
+			if table, ok := ctx.Deps.FilterService.TableOf(chart.Query()); ok {
+				node.Table = ctx.Deps.FilterService.TableName(table)
 			}
 		}
 	}
@@ -279,7 +279,7 @@ func queryHandler(deps rendering.Dependencies, defaultTime string, chart withQue
 				httpError(w, err)
 				return
 			}
-			table, ok := tableOf(deps, query)
+			table, ok := deps.FilterService.TableOf(query)
 			filtered, diagnostics := filter.Apply(query, table, ok, pills)
 			httpError(w, handle(filtered, state, diagnostics, w, r))
 		}
@@ -347,7 +347,7 @@ func othersThan(pills []filter.Pill, table filter.Table, field string, column bo
 // and fields. 422 for a chart without a table, 400 for a query state that cannot be read.
 func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, defaultTime string, chart withQuery) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		table, ok := tableOf(deps, chart.Query())
+		table, ok := deps.FilterService.TableOf(chart.Query())
 		if !ok {
 			httpError(w, fmt.Errorf("this chart has no table: %w", filter.ErrCannotFilter))
 			return
@@ -372,7 +372,7 @@ func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, defa
 
 // pillHandler answers `GET /pill?field=<alias>&value=<shown value>&op=eq|ne|lt|le|gt|ge` with the pill (filter.New)
 // of the chart's filterable field `field` on its table, as JSON `{key, label}`: its key signed with filters.secret
-// (filter.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that column of its
+// (filter.FilterService.Sign), its label the chip's text. With `column=<name>` in place of `field` the pill on that column of its
 // table (filterBy: checked against the schema); a field that is just a column (columnOf) makes that column's pill too,
 // so its key is as short as one from "Add filter" (docs/2026-10-28-workbench.md §3.15 D29). 422 for a field that
 // cannot filter (none of filterableFields: a count, a time bucket, a constant, any field of a chart without a table)
@@ -399,7 +399,7 @@ func pillHandler(deps rendering.Dependencies, chart withQuery) http.HandlerFunc 
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
-		key, err := filter.Sign([]byte(deps.Config.Filters.Secret), pill, deps.ClickhouseClientManager.Database)
+		key, err := deps.FilterService.Sign(pill)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -474,7 +474,7 @@ type filterTarget struct {
 // column it cannot filter by.
 func filterBy(r *http.Request, deps rendering.Dependencies, chart withQuery) (filter.Table, filterTarget, error) {
 	args := r.URL.Query()
-	table, ok := tableOf(deps, chart.Query())
+	table, ok := deps.FilterService.TableOf(chart.Query())
 	if !args.Has("column") {
 		alias := args.Get("field")
 		fields := filterableFields(deps, chart)
@@ -526,18 +526,12 @@ func tableColumns(ctx context.Context, deps rendering.Dependencies, table filter
 	return columns, nil
 }
 
-// tableOf is the table whose pills `query` takes (filter.TableOf), a name without database in its connection's
-// database from dashica_config.
-func tableOf(deps rendering.Dependencies, query sql.SqlQueryable) (filter.Table, bool) {
-	return filter.TableOf(query, deps.ClickhouseClientManager.Database)
-}
-
-// openPills are the pills of `keys` (filter.Open, a table without database in its connection's from dashica_config);
+// openPills are the pills of `keys` (filter.FilterService.Open, a table without database in its connection's from dashica_config);
 // a QueryStateError (400) for the first one not signed with filters.secret.
 func openPills(deps rendering.Dependencies, keys []string) ([]filter.Pill, error) {
 	pills := make([]filter.Pill, 0, len(keys))
 	for _, key := range keys {
-		pill, err := filter.Open([]byte(deps.Config.Filters.Secret), key, deps.ClickhouseClientManager.Database)
+		pill, err := deps.FilterService.Open(key)
 		if err != nil {
 			return nil, &httpserver.QueryStateError{Reason: err.Error()}
 		}

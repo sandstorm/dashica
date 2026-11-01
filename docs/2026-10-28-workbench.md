@@ -640,7 +640,7 @@ the server made:
   (`/pill?column=<name>`, checked against the schema), and `computed` names the filterable fields that are more than
   a column.
 - **The key** (since 9q, §3.15 D29; before, `<payload>.<mac>` with the pill as base64url JSON, ~330 characters) is
-  readable and short (`filter.Sign`): `<table>.<field><op><value>[~<condition>]~<mac>`, e.g.
+  readable and short (`filter.FilterService.Sign`, since 9ao; §3.15 D43): `<table>.<field><op><value>[~<condition>]~<mac>`, e.g.
   `mv_oekokiste_shop.shopAction=driver-locate~(action) = 'driver-locate'~kq3V…` or, for a column,
   `mv_oekokiste_shop.host=web-1~Zp8x…`; a button's `@<queryPart>[~<value>]~<mac>`. The mac is an HMAC
   (`crypto/hmac`, SHA-256) over everything before it, made with `filters.secret` from `dashica_config`, truncated to
@@ -674,11 +674,12 @@ the server made:
   key (`pillLabel`, since 9g in the `filters` extension's `pill-key.ts`, §3.15 D21); nothing reads the label as SQL.
 - **`filters.secret`** (`config.FiltersConfig`) is checked by `dashica.New`, not by `LoadConfig`, so the db tools in
   `cmd/` and the test server load configs without it; *(proposed)* it must have at least 32 characters
-  (`openssl rand -hex 32`). The handlers read it from the config injected as `rendering.Dependencies.Config` (since
-  step 9v; before, a copied `FilterSecret`).
+  (`openssl rand -hex 32`). The handlers sign and open pills through `rendering.Dependencies.FilterService`, which reads
+  it from the loaded config (since 9ao, §3.15 D43; from 9v the injected `rendering.Dependencies.Config`; before, a
+  copied `FilterSecret`).
 - **A table** is `filter.Table{Connection, Name}`: the query's connection (`OnDatabase`, else `default`) and its
   `sql.From` / `sql.Table`, a name without database in that connection's database from `dashica_config`
-  (`clickhouse.Manager.Database`), so `full_logs` and `monitoring.full_logs` on Solarwatt are one table. A From that
+  (`filter.FilterService`, since 9ao; before `clickhouse.Manager.Database`), so `full_logs` and `monitoring.full_logs` on Solarwatt are one table. A From that
   is no plain `[database.]table` (a subquery) is none; `sql.Table` on a builder query has no effect.
   `sql.FromFile(path, opts...)` takes options as `With` does.
 - **Applying** (`filter.Apply`): the pills on the chart's table, grouped by field and op in the order of their first
@@ -1397,10 +1398,10 @@ func Respond(w http.ResponseWriter, r Result)    // the one helper: writes Resul
 | `dashica.go` | `GET /workbench.json` (§3.2): the groups as `RegisterDashboardGroup` starts them, each page's menu entry with `widget.Outline(page.Widgets)` of the `PageJson` its `CollectHandlers` returns |
 | `lib/dashboard` | `Builder.CollectHandlers` as above; `.DefaultTimeRange(...)`, `.Action(...)` |
 | `lib/dashboard/widget` | `BuildComponents` + `CollectHandlers` → `withHandler` / `withChildren` and the framework's `Mount` (§3.13), `RegisterQueryHandlers` → `queryHandler`; ids assigned by the framework; markdown computes its HTML when mounted (`computeProps`), the schema table serves its DDL from its handler; charts implement `Query()`; `DataHandler(deps, w)`, a chart's `/pill` and its node's `filterable` (8e) |
-| `lib/dashboard/filter` | new, pure: `Diagnostics`; since 8e the pills: `TableOf`, `New`, `Sign`, `Open`, `Apply` (§3.8) |
+| `lib/dashboard/filter` | new: `Diagnostics`; since 8e the pills: `New`, `Apply` (pure), since 9ao `FilterService` (`TableOf`, `Sign`, `Open`, `TableName`, with the config's secret and databases) (§3.8) |
 | `lib/dashboard/rendering` | `DashboardContext` loses `MainMenu` / layout concerns; `SearchBarOption` becomes `page.json` fields |
 | `lib/httpserver` | `QueryState` (time, `f`, `tw`, `sql`, `wp`) parsed once (`f`: the pills' keys, checked by the chart's handler); the query handler takes the chart's query with its pills and Diagnostics and writes `X-Dashica-Diagnostics`; a skipped chart runs no query; `ConnectionRowsHandler` at `/rows?connection=` runs a blank Explore's query (8i) |
-| `lib/clickhouse` | `Manager.Database` (a connection's database, for a pill's table); the `DESCRIBE TABLE` columns and their cache went with 8e |
+| `lib/clickhouse` | the `DESCRIBE TABLE` columns and their cache went with 8e; `Manager.Database` (a connection's database, for a pill's table) went with 9ao, `filter.FilterService` reads it from the config |
 | (tabs, §3.4.1) | no Go change: an Explore tab is its source page's URL with `#explore=<id>`, served by the same shell and `page.json` |
 | `cmd/dashica-gen` | additionally emits `zz_generated.dashica.ts` (widget union, DTOs) and golden JSON fixtures |
 | deleted | `lib/components/**` (templ), Alpine, dockview, `lib/explore` + `frontend/explore` (rebuilt later, §6) |
@@ -1671,9 +1672,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   and `ChartFrame` mutes while any decoration does.
 - **D29 A readable, short pill key (9q, decided 2026-10-31; maintainer: the signed key in `f` is "far too long",
   ~330 characters):** still signed, still in `f` (repeatable), now `<table>.<field><op><value>[~<condition>]~<mac>`
-  (`filter.Sign`, `filter.Open`):
+  (`filter.Sign`, `filter.Open`; since 9ao `FilterService.Sign`, `.Open`, D43):
   - **The table** is `[<connection>:][<database>.]<name>`: the connection left out when it is `default`, the database
-    when it is the connection's from `dashica_config` (`filter.ShortName`), e.g. `logs:full_logs` on Solarwatt's
+    when it is the connection's from `dashica_config` (`filter.ShortName`, since 9ao `FilterService.TableName`), e.g. `logs:full_logs` on Solarwatt's
     `monitoring` connection, `system.one` on `default` *(proposed: `:` after the connection)*. `page.json`'s `table`
     names a chart's table the same way, so the client matches a key's table to the page's charts as it is.
   - **The op** is its ClickHouse operator: `=`, `!=`, `<`, `<=`, `>`, `>=` (`sql.Op.Operator`).
@@ -1702,7 +1703,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   (`page.json`'s `table` and `connection` of each chart), still as connection › database › table, and follows the page
   shown; (3) "On this page" and "All connections" (was "Other connections"; now every connection) are views
   (`createView`, as Debug's), whether one is closed kept in `globalState`. *(proposed)* `/schema.json` answers the
-  connection's own `database` (dashica_config's, required), so a `table` without database (`filter.ShortName`) is
+  connection's own `database` (dashica_config's, required), so a `table` without database (`filter.ShortName`, since 9ao `FilterService.TableName`) is
   found in it; "On this page" asks the page's connections while the panel shows and draws them open down to the
   tables (a table closed); a table the schema lacks shows as "<name>: not in the schema."; the comments are hidden by
   CSS (`d-schema--no-comments`), so nothing opened closes; the schema is asked once per connection and shared by both
@@ -1828,6 +1829,20 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   (from chart…)"'s `/sql`) only sign or build SQL on the server and run no query (a column's `/pill` checks the connection's cached schema,
   which the field step's `/fields` loaded), so they answer at once; the table
   step, the click's candidates, menus and "Reset" have their items at hand and need nothing.
+- **D43 The filters' secret and databases on one object (9ao, decided 2026-11-01; maintainer, on `filter.Sign(secret,
+  p, database)` with `nil` as the database lookup for a button's pill: "Rather this should be on an object, which has
+  access to config and can thus ITSELF figure out whether it's the default db or not"):** `filter.FilterService`
+  (`filter.NewFilterService(cfg)`, built once by `dashica.New`), in `rendering.Dependencies` as `FilterService` (not
+  `Filters`, which reads as the current filters; a type gets its full name, never a bare `Service`). It reads
+  `filters.secret` and each connection's `clickhouse.<name>.database` from the config itself; its methods are what
+  needs them: `Sign(p)`, `Open(key)`, `TableName(t)` (was `ShortName`), `TableOf(q)`, and as unexported methods the
+  key's table (`tableKey`, `readTable`, `read`). `New`, `NewButton`, `Apply` and the escaping stay plain functions.
+  Gone: every `database func(connection string) string` parameter, the `nil` for a button's pill, the repeated
+  `[]byte(deps.Config.Filters.Secret)` and `deps.ClickhouseClientManager.Database` (`widget_common.go`'s `tableOf`,
+  `openPills`, `/pill`, the node's `table`), `pageButtons` / `buttonHandler`'s `secret` parameter (they take the
+  service), and `clickhouse.Manager.Database`, which only the filters used. Explore's config checks and the alerting
+  fields of `Dependencies` stay as they are. *(proposed)* The service keeps the `*config.Config` and reads it per
+  call (nothing copied at start); `Manager.Database` is deleted, not kept beside it.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -1936,7 +1951,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `*config.Config`, read only, nothing request-specific; the handlers outside `Dependencies` have it as a field
   (`QueryHandler`, `SchemaHandler`, `ConnectionRowsHandler`; `TimeRangeHandler` needs none). Each checks the setting
   where it applies: `explore.enabled` in the Explore handlers, `filters.sqlEnabled` in `SqlClause`, `filters.secret`
-  where pills are signed and opened.
+  where pills are signed and opened (since 9ao in `rendering.Dependencies.FilterService`, D43).
 - **The client:** without `sqlEnabled` the filter bar has no funnel (since 9o no "SQL condition…" in "Add filter", D26), a SQL chip of a link is not edited (only ×; its
   tooltip says "SQL filters are not enabled (filters.sqlEnabled)"), and the table's cell menu has no SQL entries
   ("Filter: Contains this value", the time windows). The filter buttons still added SQL chips until D17, so
@@ -1955,7 +1970,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `: <value>` for a `...` button; `Button` (the `queryPart`) and `Value` (as typed) in the signed key, by which the
   page finds the button again (`pillButton`, `buttonOf`) *(proposed: one key format and one URL key `f` for pills
   and buttons; the button found by its `queryPart`, so the same button on two pages is one, and a key from another
-  page never presses a button that only shares its index)*. `filter.Open` takes a key without op when it has `Button`.
+  page never presses a button that only shares its index)*. `filter.Open` (since 9ao `FilterService.Open`) takes a key without op when it has `Button`.
 - **`page.json`** (`dashboard.pageButtons`): a button without `...` carries `key`, its pill signed at registration
   (a page with buttons needs `filters.secret` to register); one with `...` carries `url`
   (`<page>/button?i=<index>`), which the client asks with `&value=`. `queryPart` stays, as the button's tooltip and
@@ -2174,6 +2189,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9al ✅ 2026-11-01 | **D40 the handlers know their page's default time range; `sentToServer` a boolean** (§3.7, §3.15): Go `rendering.DashboardContext.DefaultTime` (set by `Builder.CollectHandlers`, `24h` when unset), `httpserver.DefaultTimeRange`, `httpserver.ParseQueryState(r, defaultTime)` (no `time` is the default; the missing-time error gone), `widget.DataHandler(deps, defaultTime, w)`, `queryHandler`, `fieldsHandler`, `valuesHandler`, Speedscope and the alert widgets with it, `withHandler.Handler(deps, defaultTime)`; `/time-range` and the old Explore's preview pass `24h`. Client: `QueryKeySpec.sentToServer?: boolean`, `QueryKey.sentToServer` in place of `request`, `requestParams()` appends `format(value, page)` of each sent key; `TIME`, `TEST_TIME` `sentToServer: true`. Tests: Go `dashboard` (a chart's `/sql` without `time` covers the dashboard's 168h, with `time=1h` 1h, 24h on a page declaring none), `httpserver` (`ParseQueryState` takes the default), `widget` (an unreadable time range is a 400); vitest: `QueryHost.requestParams` leaves out a key's default, `TIME` sent without the page's default, refresh not sent (kept), the widget's URLs, Speedscope, the filter bar's `/fields` with another range. Playwright (adjusted, not run): `e2e/explore-view.spec.ts`'s link test uses `time=1h`, as the default is no longer in the request. Deviation: the default reaches the handlers as a parameter, not the context *(proposed)* | the page's default once, in Go |
 | 9am ✅ 2026-11-01 | **D41 query keys declared in `activate`** (§3.7, §3.15): `QueryApi.declare(key): Disposable` in `QueryHost` (on the shared `QueryKeys.declare`, a URL key in one declared key only) and `activeQuery`; `QueryKeys.check` makes `get` / `set` / `onDidChange` of an undeclared key throw (its URL keys named, "no extension declared it"); `QueryKeys.use` and first-use order gone, the order is the declaration order. `time-range` declares `TIME`, `refresh` `REFRESH`, `filters` `FILTERS`, `dashboardPage` `PARAMS`. Tests: `page.test.ts` declares `TEST_TIME` in place of the unused `get`; `widgetTestbed({ keys })`; every test declares the keys it uses as its extension would; vitest: declaring, a second key of a URL key refused, an undeclared key refused in `get` / `set` / `onDidChange`, declaration order in URL and request, a disposed key no longer sent, a sent key sent unread (`?wp` on a page without form widgets, `dashboard-page.test.ts`). No Go change; Playwright not run, no spec changed. Deviation: `declare` on `QueryApi`, the same key twice refused *(proposed)* | every key known before the first page |
 | 9an ✅ 2026-11-01 | **D42 a quick pick that waits shows it** (§3.11, §3.15): `ui.showQuickPick(items \| Promise<items>, options)` (`QuickPickItems<T>`, `QuickInput.showQuickPick` / `pickOne` with a `failed` callback): opens at once, busy until the items are there, narrowed by what was typed meanwhile; failed items hide the box and reject the Promise; items after the box was hidden are ignored. "Add filter"'s field step and a pill's operator edit hand in their `/fields` Promise; `askValue` takes the type or a Promise of it, `pickValue(…, instead)` waits busy for it and lets a time's input box take its place (a pill's value edit). Tests: vitest for busy while pending, items after, rejection, hidden before the items; the field step busy until `/fields` answers; the value pick busy until the type, a time's input box in its place. No Go change; Playwright not run, no spec changed (none checks a pick's timing). Deviations: a rejection is the caller's (VS Code's behaviour), no message in the box; no busy after an accept (`/pill`, `/button`, `/sql` run no query; a column's `/pill` reads the cached schema) *(proposed)* | one knows things are happening |
+| 9ao ✅ 2026-11-01 | **D43 `filter.FilterService`** (§3.8, §3.15): Go `filter.NewFilterService(cfg)` built once in `dashica.New`, `rendering.Dependencies.FilterService`; methods `Sign(p)`, `Open(key)`, `TableName(t)` (was `ShortName`), `TableOf(q)`, unexported `database`, `secret`, `tableKey`, `readTable`, `read`; every `database func(connection string) string` parameter and the `nil` for a button's pill gone; `widget_common.go` (`tableOf` wrapper gone, `openPills`, `/pill`, the node's `table`), `speedscope_link.go`, `dashboard.pageButtons` / `buttonHandler` use the service; `clickhouse.Manager.Database` deleted (no other user). Tests: `filter` builds its service from a small config (a second secret, an empty one); `widget`, `dashboard`, root and `httpserver` tests put a `FilterService` into their `Dependencies`. `go vet` green (outer repo with and without `-tags solarwatt`, no outer change), Go tests green but the ClickHouse-bound ones (sandbox); `go generate` rerun (only the generated TS's comments change), golden contract unchanged. No TS change. Deviations: the service reads the config per call; `Manager.Database` deleted *(proposed)* | one object knows the secret and the databases |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

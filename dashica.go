@@ -15,6 +15,7 @@ import (
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -134,6 +135,7 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		AlertEvaluator:          alertEvaluator,
 		AlertManager:            alertManager,
 		Config:                  cfg,
+		FilterService:           filter.NewFilterService(cfg),
 	}
 
 	return newDashicaImpl(logger, mux, deps)

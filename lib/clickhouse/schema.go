@@ -10,7 +10,7 @@ import (
 // with their tables, each with its columns, keys, TTL and skip indices, as ClickHouse's system tables say.
 type Schema struct {
 	// Database is the connection's own database (dashica_config's `database`): the one a table named without database
-	// is in, as page.json's `table` names it (filter.ShortName).
+	// is in, as page.json's `table` names it (filter.FilterService.TableName).
 	Database string `json:"database"`
 	// Databases by name, each with its tables by name.
 	Databases []SchemaDatabase `json:"databases"`

@@ -14,14 +14,14 @@ import (
 // QueryState is the page's query state as every data handler reads it, from the keys the page keeps in its own URL
 // (`?time=1h&f=<key>&sql=status >= 500&wp={"path":"^/api"}`; see docs/2026-10-28-workbench.md §3.7). ParseQueryState
 // reads it once per request; the handler resolves its window with ResolveTimeRange and adds SqlClause to the query's
-// WHERE, the chart the pills on its table (filter.Open, filter.Apply).
+// WHERE, the chart the pills on its table (filter.FilterService.Open, filter.Apply).
 type QueryState struct {
 	// Time is the time range: a preset as a Go duration (`1h`, `168h`), or `custom` for Range.
 	Time string
 	// Range is the custom range, `<from> to <to>`, each end a time expression (`2026-10-29 10:00`, `now-6h`).
 	Range string
-	// Pills are the keys of the pills (`f`, filter.Sign), in the order of the URL, not yet checked: filter.Open checks
-	// each.
+	// Pills are the keys of the pills (`f`, filter.FilterService.Sign), in the order of the URL, not yet checked:
+	// filter.FilterService.Open checks each.
 	Pills []string
 	// Sql are the SQL chips, in the order of the URL (one `sql` each); every query adds each to its WHERE.
 	Sql []string

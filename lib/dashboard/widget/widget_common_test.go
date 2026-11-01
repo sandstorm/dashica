@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
@@ -92,6 +93,7 @@ func TestMount_ServesTheQueryAChartRunsWithItsOwnAdjustments(t *testing.T) {
 	ctx := &rendering.DashboardContext{CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
 		ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()),
 		Config:                  cfg,
+		FilterService:           filter.NewFilterService(cfg),
 	}}
 	mux := http.NewServeMux()
 	nodes, err := Widgets{table, stats}.Mount(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop/api"))

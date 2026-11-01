@@ -14,6 +14,7 @@ import (
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
 	"github.com/sandstorm/dashica/lib/dashboard"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
@@ -69,6 +70,7 @@ func TestWorkbenchJson_ListsEveryPagesOutline(t *testing.T) {
 	d := newDashicaImpl(logger, mux, rendering.Dependencies{
 		Config:                  &config.Config{},
 		ClickhouseClientManager: clickhouse.NewManager(&config.Config{}, logger),
+		FilterService:           filter.NewFilterService(&config.Config{}),
 		Logger:                  logger,
 	})
 	logs := sql.New(sql.From("http_logs"))

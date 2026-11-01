@@ -25,7 +25,7 @@ func askClickHouse(t *testing.T, chart withQuery, path string) *httptest.Respons
 	t.Helper()
 	cfg, _ := testServer.LoadTestingConfig(t)
 	cfg.Filters.Secret = string(testSecret)
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FileSystem: testFiles}
+	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg), FileSystem: testFiles}
 	rec := httptest.NewRecorder()
 	queryHandler(deps, httpserver.DefaultTimeRange, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 	return rec
@@ -58,7 +58,7 @@ func TestPill_AColumnOfTheTableIsSigned(t *testing.T) {
 	rec := askClickHouse(t, one, "/pill?column=dummy&op=ne&value=1")
 	var body struct{ Key string }
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	pill, err := filter.Open(testSecret, body.Key, testDeps().ClickhouseClientManager.Database)
+	pill, err := testDeps().FilterService.Open(body.Key)
 	if rec.Code != http.StatusOK || err != nil {
 		t.Fatalf("%d %s, %v", rec.Code, rec.Body, err)
 	}

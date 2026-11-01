@@ -81,7 +81,7 @@ func serveSpeedscope(query sql.SqlQueryable, deps rendering.Dependencies, defaul
 	if err != nil {
 		return err
 	}
-	table, ok := tableOf(deps, query)
+	table, ok := deps.FilterService.TableOf(query)
 	query, _ = filter.Apply(query, table, ok, pills)
 
 	q := query

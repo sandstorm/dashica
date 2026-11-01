@@ -35,7 +35,8 @@ func (op Op) Sign() string {
 	return opSigns[op].shown
 }
 
-// Operator is the ClickHouse operator of `op` (`=`, `!=`, `<=`), as a pill's key writes it too (filter.Sign).
+// Operator is the ClickHouse operator of `op` (`=`, `!=`, `<=`), as a pill's key writes it too
+// (filter.FilterService.Sign).
 func (op Op) Operator() string {
 	return opSigns[op].sql
 }

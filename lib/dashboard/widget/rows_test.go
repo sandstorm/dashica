@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/httpserver"
@@ -26,7 +27,7 @@ import (
 func ask(chart withQuery, explore bool, target string) *httptest.ResponseRecorder {
 	unreachable := map[string]config.ClickHouseConfig{"default": {URL: "http://127.0.0.1:1", Database: "default"}}
 	cfg := &config.Config{ClickHouse: unreachable, Explore: config.ExploreConfig{Enabled: explore}, Filters: config.FiltersConfig{Secret: string(testSecret), SqlEnabled: true}}
-	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg,
+	deps := rendering.Dependencies{ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()), Config: cfg, FilterService: filter.NewFilterService(cfg),
 		FileSystem: fstest.MapFS{"by_status.sql": {Data: []byte("SELECT status, count() AS cnt FROM http_logs WHERE {{DASHICA_FILTERS}} GROUP BY status")}}}
 	rec := httptest.NewRecorder()
 	queryHandler(deps, httpserver.DefaultTimeRange, chart).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))

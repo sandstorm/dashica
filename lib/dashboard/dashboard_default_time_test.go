@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sandstorm/dashica/lib/clickhouse"
 	"github.com/sandstorm/dashica/lib/config"
+	"github.com/sandstorm/dashica/lib/dashboard/filter"
 	"github.com/sandstorm/dashica/lib/dashboard/rendering"
 	"github.com/sandstorm/dashica/lib/dashboard/sql"
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
@@ -32,6 +33,7 @@ func windowHours(t *testing.T, d Dashboard, query string) int64 {
 	ctx := &rendering.DashboardContext{MainMenu: &[]rendering.MenuGroup{}, CurrentHandlerUrl: "/p/shop", Deps: rendering.Dependencies{
 		ClickhouseClientManager: clickhouse.NewManager(cfg, zerolog.Nop()),
 		Config:                  cfg,
+		FilterService:           filter.NewFilterService(cfg),
 	}}
 	if _, err := d.CollectHandlers(ctx, handler_collector.NewValidatingCollector(mux, zerolog.Nop()).Nested("/p/shop")); err != nil {
 		t.Fatalf("CollectHandlers: %v", err)
