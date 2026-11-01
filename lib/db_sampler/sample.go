@@ -60,31 +60,6 @@ type SampleConfig struct {
 	BucketLimit      int // max buckets per table (default 200)
 }
 
-func (c SampleConfig) withDefaults() SampleConfig {
-	if len(c.SkipProfiling) == 0 {
-		c.SkipProfiling = []string{"event_original"}
-	}
-	if len(c.NonBucketDims) == 0 {
-		c.NonBucketDims = []string{"customer_tenant", "customer_project", "host_group", "host_name"}
-	}
-	if len(c.BucketDimsPref) == 0 {
-		c.BucketDimsPref = []string{"event_dataset", "event_module", "level", "severity", "logfile", "operation"}
-	}
-	if c.MaxBucketDims == 0 {
-		c.MaxBucketDims = 3
-	}
-	if c.ListThreshold == 0 {
-		c.ListThreshold = 50
-	}
-	if c.SamplesPerBucket == 0 {
-		c.SamplesPerBucket = 3
-	}
-	if c.BucketLimit == 0 {
-		c.BucketLimit = 200
-	}
-	return c
-}
-
 // TableProfile is the JSON shape written per table.
 type TableProfile struct {
 	Metadata    ProfileMetadata       `json:"metadata"`
@@ -312,65 +287,6 @@ func SampleTable(ctx context.Context, c *clickhouse.Client, table string, cfg Sa
 	}, nil
 }
 
-// fetchSortingKey returns the table's MergeTree ORDER BY columns (in order),
-// or nil if the table has no sorting_key recorded.
-func fetchSortingKey(ctx context.Context, c *clickhouse.Client, database, table string) ([]string, error) {
-	type row struct {
-		SortingKey string `json:"sorting_key"`
-	}
-	opts := clickhouse.DefaultQueryOptions()
-	opts.Format = "JSON"
-	opts.Parameters["table"] = table
-	dbExpr := "currentDatabase()"
-	if database != "" {
-		opts.Parameters["db"] = database
-		dbExpr = "{db:String}"
-	}
-	q := fmt.Sprintf(
-		`SELECT sorting_key FROM system.tables WHERE database = %s AND name = {table:String}`,
-		dbExpr,
-	)
-	res, err := clickhouse.QueryJSON[row](ctx, c, q, opts)
-	if err != nil {
-		return nil, err
-	}
-	if len(res.Data) == 0 || strings.TrimSpace(res.Data[0].SortingKey) == "" {
-		return nil, nil
-	}
-	parts := strings.Split(res.Data[0].SortingKey, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		// Sort key entries can be expressions, e.g. "toStartOfHour(timestamp)";
-		// take simple bare identifiers, drop wrappers.
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out, nil
-}
-
-// firstDateTimeSortKey returns the first sort-key entry that is a bare
-// identifier of a Date/DateTime/DateTime64 column. Returns "" if none.
-func firstDateTimeSortKey(sortKey []string, colTypes map[string]string) string {
-	for _, entry := range sortKey {
-		// only handle bare identifiers, not expressions
-		if !validIdent(entry) {
-			continue
-		}
-		t, ok := colTypes[entry]
-		if !ok {
-			continue
-		}
-		base := leadingWrapperRe.ReplaceAllString(t, "")
-		if strings.HasPrefix(base, "Date") {
-			return entry
-		}
-	}
-	return ""
-}
-
 // AnonymizeProfile returns a copy of profile with all sample-row values and
 // column-stat values run through p. Metadata is preserved as-is.
 func AnonymizeProfile(profile TableProfile, p Processor) TableProfile {
@@ -483,6 +399,90 @@ func ReadSplit(dir string) (TableProfile, error) {
 		out.Buckets = append(out.Buckets, b)
 	}
 	return out, nil
+}
+
+func (c SampleConfig) withDefaults() SampleConfig {
+	if len(c.SkipProfiling) == 0 {
+		c.SkipProfiling = []string{"event_original"}
+	}
+	if len(c.NonBucketDims) == 0 {
+		c.NonBucketDims = []string{"customer_tenant", "customer_project", "host_group", "host_name"}
+	}
+	if len(c.BucketDimsPref) == 0 {
+		c.BucketDimsPref = []string{"event_dataset", "event_module", "level", "severity", "logfile", "operation"}
+	}
+	if c.MaxBucketDims == 0 {
+		c.MaxBucketDims = 3
+	}
+	if c.ListThreshold == 0 {
+		c.ListThreshold = 50
+	}
+	if c.SamplesPerBucket == 0 {
+		c.SamplesPerBucket = 3
+	}
+	if c.BucketLimit == 0 {
+		c.BucketLimit = 200
+	}
+	return c
+}
+
+// fetchSortingKey returns the table's MergeTree ORDER BY columns (in order),
+// or nil if the table has no sorting_key recorded.
+func fetchSortingKey(ctx context.Context, c *clickhouse.Client, database, table string) ([]string, error) {
+	type row struct {
+		SortingKey string `json:"sorting_key"`
+	}
+	opts := clickhouse.DefaultQueryOptions()
+	opts.Format = "JSON"
+	opts.Parameters["table"] = table
+	dbExpr := "currentDatabase()"
+	if database != "" {
+		opts.Parameters["db"] = database
+		dbExpr = "{db:String}"
+	}
+	q := fmt.Sprintf(
+		`SELECT sorting_key FROM system.tables WHERE database = %s AND name = {table:String}`,
+		dbExpr,
+	)
+	res, err := clickhouse.QueryJSON[row](ctx, c, q, opts)
+	if err != nil {
+		return nil, err
+	}
+	if len(res.Data) == 0 || strings.TrimSpace(res.Data[0].SortingKey) == "" {
+		return nil, nil
+	}
+	parts := strings.Split(res.Data[0].SortingKey, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		// Sort key entries can be expressions, e.g. "toStartOfHour(timestamp)";
+		// take simple bare identifiers, drop wrappers.
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+// firstDateTimeSortKey returns the first sort-key entry that is a bare
+// identifier of a Date/DateTime/DateTime64 column. Returns "" if none.
+func firstDateTimeSortKey(sortKey []string, colTypes map[string]string) string {
+	for _, entry := range sortKey {
+		// only handle bare identifiers, not expressions
+		if !validIdent(entry) {
+			continue
+		}
+		t, ok := colTypes[entry]
+		if !ok {
+			continue
+		}
+		base := leadingWrapperRe.ReplaceAllString(t, "")
+		if strings.HasPrefix(base, "Date") {
+			return entry
+		}
+	}
+	return ""
 }
 
 func writeJSONPretty(path string, v any) error {

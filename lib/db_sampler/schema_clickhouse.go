@@ -27,13 +27,6 @@ type SchemaOptions struct {
 	ViewNamePatterns []string
 }
 
-func (o SchemaOptions) viewPatterns() []string {
-	if len(o.ViewNamePatterns) == 0 {
-		return []string{"_mv", "_view", "materialized"}
-	}
-	return o.ViewNamePatterns
-}
-
 // DumpSchema pulls SHOW CREATE TABLE for every table in the database.
 func DumpSchema(ctx context.Context, c *clickhouse.Client, opts SchemaOptions) (Schema, error) {
 	tables, err := listAllTables(ctx, c)
@@ -84,6 +77,13 @@ func (s Schema) WriteToDir(dir string) error {
 		}
 	}
 	return nil
+}
+
+func (o SchemaOptions) viewPatterns() []string {
+	if len(o.ViewNamePatterns) == 0 {
+		return []string{"_mv", "_view", "materialized"}
+	}
+	return o.ViewNamePatterns
 }
 
 func listAllTables(ctx context.Context, c *clickhouse.Client) ([]string, error) {

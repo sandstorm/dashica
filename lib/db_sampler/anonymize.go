@@ -57,25 +57,6 @@ func AnonymizeRow(row map[string]any, p Processor) map[string]any {
 	return out
 }
 
-func walkNested(field string, v any, p Processor) any {
-	switch x := v.(type) {
-	case map[string]any:
-		return AnonymizeRow(x, p)
-	case []any:
-		out := make([]any, 0, len(x))
-		for _, item := range x {
-			nv, skip := p(field, item)
-			if skip {
-				continue
-			}
-			out = append(out, walkNested(field, nv, p))
-		}
-		return out
-	default:
-		return v
-	}
-}
-
 // AnonymizeJSONLStream reads JSONL rows from in, anonymizes each, writes JSONL
 // to out. Blank lines and undecodable lines are skipped.
 func AnonymizeJSONLStream(in io.Reader, out io.Writer, p Processor) error {
@@ -288,6 +269,25 @@ func ShannonEntropy(s string) float64 {
 		h -= p * math.Log2(p)
 	}
 	return h
+}
+
+func walkNested(field string, v any, p Processor) any {
+	switch x := v.(type) {
+	case map[string]any:
+		return AnonymizeRow(x, p)
+	case []any:
+		out := make([]any, 0, len(x))
+		for _, item := range x {
+			nv, skip := p(field, item)
+			if skip {
+				continue
+			}
+			out = append(out, walkNested(field, nv, p))
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func coerceString(v any) (string, bool) {
