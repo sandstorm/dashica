@@ -29,18 +29,18 @@ function renderTextInput(widgetContainer: HTMLElement, widget: WidgetOf<'textInp
     const text = inputElement.value;
     set(widget.props.prependCaret && text !== '' ? `^${text}` : text);
   });
-  const showText = () => {
+  const drawText = () => {
     const stored = query.get(PARAMS)[name] ?? '';
     const text = widget.props.prependCaret && stored.startsWith('^') ? stored.substring(1) : stored;
     // while typing, the field has it already; setting it would move the cursor to the end
     if (inputElement.value !== text) inputElement.value = text;
   };
-  showText();
+  drawText();
 
   widgetContainer.replaceChildren(html`<label class="d-form-field">
     <span class="d-form-field__label">${widget.props.label ?? ''}</span>
     ${inputElement}
   </label>`);
   // the browser's back button, a shared link
-  return query.onDidChange(PARAMS, showText);
+  return query.onDidChange(PARAMS, drawText);
 }

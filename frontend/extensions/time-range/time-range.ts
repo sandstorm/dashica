@@ -21,15 +21,15 @@ export const timeRange: Extension = {
   activate({ ui, query, globalState, subscriptions }) {
     subscriptions.push(query.declare(TIME));
     const picker = new TimeRangePicker(query, globalState);
-    picker.show();
-    subscriptions.push(query.onDidChange(TIME, () => picker.show()));
+    picker.draw();
+    subscriptions.push(query.onDidChange(TIME, () => picker.draw()));
     subscriptions.push(ui.registerBarItem('top', picker.pickerContainer, { alignment: 'right', priority: 30 }));
     subscriptions.push({ dispose: () => picker.close() });
   },
 };
 
 /**
- * The range button with its panel, shift and zoom out; `show` shows `time`. The panel closes on Escape, on a
+ * The range button with its panel, shift and zoom out; `draw` draws `time`. The panel closes on Escape, on a
  * click outside, and once a range is picked or applied.
  */
 class TimeRangePicker {
@@ -103,7 +103,7 @@ class TimeRangePicker {
       event.preventDefault();
       void this.#applyCustom();
     });
-    this.#searchElement.addEventListener('input', () => this.#showQuickRanges());
+    this.#searchElement.addEventListener('input', () => this.#drawQuickRanges());
     this.#panelContainer.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       this.close();
@@ -123,9 +123,9 @@ class TimeRangePicker {
     </div>`;
   }
 
-  show(): void {
+  draw(): void {
     this.#buttonElement.replaceChildren(createElement(Clock, { width: 16, height: 16 }), this.#label(), createElement(ChevronDown, { width: 14, height: 14, class: 'd-time-picker__chevron' }));
-    this.#showQuickRanges();
+    this.#drawQuickRanges();
   }
 
   open(): void {
@@ -136,8 +136,8 @@ class TimeRangePicker {
     this.#toElement.value = range === 'custom' ? to : 'now';
     this.#searchElement.value = '';
     this.#errorElement.textContent = '';
-    this.#showQuickRanges();
-    this.#showRecent();
+    this.#drawQuickRanges();
+    this.#drawRecent();
     this.#panelContainer.hidden = false;
     this.#buttonElement.setAttribute('aria-expanded', 'true');
     this.pickerContainer.ownerDocument.addEventListener('pointerdown', this.#onPointerDown);
@@ -165,7 +165,7 @@ class TimeRangePicker {
     return custom;
   }
 
-  #showQuickRanges(): void {
+  #drawQuickRanges(): void {
     const search = this.#searchElement.value.trim().toLowerCase();
     this.#quickRangesContainer.replaceChildren(
       ...PRESETS.filter((preset) => preset.label.toLowerCase().includes(search)).map((preset) => {
@@ -208,7 +208,7 @@ class TimeRangePicker {
   }
 
   /** Lists the recent ranges; picking one applies it as typed into From / To. */
-  #showRecent(): void {
+  #drawRecent(): void {
     const ranges = this.#recentRanges();
     this.#recentSectionContainer.hidden = ranges.length === 0;
     this.#recentContainer.replaceChildren(

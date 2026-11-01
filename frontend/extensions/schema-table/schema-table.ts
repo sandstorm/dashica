@@ -19,12 +19,12 @@ function renderSchemaTable(widgetContainer: HTMLElement, widget: WidgetOf<'schem
   if (widget.props.title) statementElement.before(html`<h2 class="d-schema-table__title">${widget.props.title}</h2>`);
   widgetContainer.replaceChildren(schemaTableElement);
   const controller = new AbortController();
-  void showStatement(statementElement, `${widget.dataUrl}/schema`, controller.signal);
+  void drawStatement(statementElement, `${widget.dataUrl}/schema`, controller.signal);
   return new Disposable(() => controller.abort());
 }
 
 /** Puts what the server answers at `url` into `statementElement`, marked as an error when it is one. */
-async function showStatement(statementElement: HTMLElement, url: string, signal: AbortSignal): Promise<void> {
+async function drawStatement(statementElement: HTMLElement, url: string, signal: AbortSignal): Promise<void> {
   try {
     const response = await fetch(url, { signal });
     statementElement.textContent = await response.text();

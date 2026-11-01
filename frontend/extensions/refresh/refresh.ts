@@ -30,7 +30,7 @@ export const refresh: Extension = {
     buttonElement.addEventListener('click', () => query.refresh());
     const timer = autoRefresh(query, page, buttonElement.ownerDocument);
     intervalElement.addEventListener('change', () => timer.set(intervalElement.value === '' ? undefined : Number(intervalElement.value)));
-    const show = () => {
+    const draw = () => {
       const shown = query.get(REFRESH);
       const options = INTERVALS.map((option) => ({ label: option.label, value: String(option.seconds ?? '') }));
       // an interval the URL has (`?refresh=45`), though none offered
@@ -38,8 +38,8 @@ export const refresh: Extension = {
       intervalElement.replaceChildren(...options.map((option) => html`<option value=${option.value}>${option.label}</option>`));
       intervalElement.value = String(shown ?? '');
     };
-    show();
-    subscriptions.push(timer, query.onDidChange(REFRESH, show));
+    draw();
+    subscriptions.push(timer, query.onDidChange(REFRESH, draw));
     subscriptions.push(commands.registerCommand('refresh.now', () => query.refresh()));
     const itemElement = html`<div class="d-segmented">${buttonElement}${intervalElement}</div>`;
     subscriptions.push(ui.registerBarItem('top', itemElement, { alignment: 'right', priority: 20 }));
