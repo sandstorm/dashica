@@ -14,7 +14,6 @@ export const PARAMS = queryKey<Params>('wp', {
   sentToServer: true,
 });
 
-/** `params` with the param `name` set to `value`. */
 export function withParam(params: Params, name: string, value: string): Params {
   return { ...params, [name]: value };
 }

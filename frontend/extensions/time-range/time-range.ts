@@ -57,7 +57,7 @@ class TimeRangePicker {
   readonly pickerContainer: HTMLElement;
 
   constructor(
-    /** Where the time range is, and the auto refresh, which a fixed range turns off. */
+    /** Where the time range is, and the auto refresh. */
     private readonly query: Pick<QueryApi, 'get' | 'set'>,
     private readonly globalState: Memento,
   ) {
@@ -225,7 +225,6 @@ class TimeRangePicker {
     );
   }
 
-  /** Turns auto refresh off, for a fixed range. */
   #stopAutoRefresh(): void {
     this.query.set(REFRESH, undefined);
   }

@@ -15,7 +15,6 @@ export const TIME = queryKey<TimeRange>(['time', 'range'], {
   sentToServer: true,
 });
 
-/** The time range of a tab's queries. */
 export interface TimeRange {
   /** A preset as a Go duration (`1h`, `168h`), or `custom`. */
   readonly range: string;
