@@ -52,6 +52,7 @@
 
 .d-dashboards-menu__entry:hover > .d-dashboards-menu__more,
 .d-dashboards-menu__more:focus-visible,
+.d-dashboards-menu__more[aria-expanded='true'],
 .d-dashboards-menu__entry:hover > .d-dashboards-menu__star,
 .d-dashboards-menu__star:focus-visible,
 .d-dashboards-menu__star--active {

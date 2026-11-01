@@ -48,7 +48,7 @@
     display: none;
 }
 
-/* the menu button, left of the spinner, while the pointer is on the chart */
+/* the menu button, left of the spinner, while the pointer is on the chart or its menu is open */
 .d-chart-frame__menu {
     position: absolute;
     top: var(--space-1);
@@ -59,7 +59,8 @@
 }
 
 .d-chart-frame:hover .d-chart-frame__menu,
-.d-chart-frame__menu:focus-within {
+.d-chart-frame__menu:focus-within ,
+.d-chart-frame__menu:has([aria-expanded='true']) {
     opacity: 1;
 }
 
