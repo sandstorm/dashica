@@ -1,4 +1,4 @@
-// See PageApi in ../../page/page.ts.
+// See PageApi in ../hosts/page/page.ts.
 
 /**
  * The tab bar in the top bar: a tab per open page (a dashboard, a chart's Explore view), the shown one selected, each

@@ -7,9 +7,9 @@ import { ExtensionHost, StorageMemento, type Extension } from '../hosts/extensio
 import { PageHost } from '../hosts/page/page';
 import { adjacentTab } from '../hosts/page/tabs';
 import { activeQuery } from '../hosts/query/query';
-import { TabBar } from '../hosts/ui/layout/tab-bar';
 import { UiHost } from '../hosts/ui/ui';
 import { WidgetsHost } from '../hosts/widgets/widgets';
+import { TabBar } from './tab-bar';
 
 /**
  * The workbench in `hostContainer`: its hosts (commands, ui, page, query, widgets, extensions) and the extensions
