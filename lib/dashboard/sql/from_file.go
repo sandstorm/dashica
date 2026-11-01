@@ -152,7 +152,6 @@ func BuildWithFS(query SqlQueryable, fileSystem fs.ReadFileFS) (string, error) {
 }
 
 // SqlQueryable is an interface for anything that can produce SQL
-// TODO RENAME
 type SqlQueryable interface {
 	Build() string
 	With(opts ...SqlBuilderOption) SqlQueryable
