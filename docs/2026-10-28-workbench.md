@@ -1153,8 +1153,8 @@ interface UiApi {
                                           // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s);
                                           // items still to come: open at once, busy until there; failed: hides, rejects (9an, D42)
   showInputBox(o?: { title?; prompt?; placeholder?; value?; valueSelection?; validateInput?; anchor?; field? }): Promise<string | undefined>;
-                                          // a button's `...`; validateInput(value): string (an error, Enter blocked) or
-                                          // { message, severity: Info | Error } below the field, live (9z, D37);
+                                          // a button's `...`; validateInput(value): { message, severity: Info | Error }
+                                          // (an Error blocks Enter) or undefined, below the field, live (9z, D37; 9ap, D45);
                                           // field: an InputBoxField of the caller's in place of the text field, e.g.
                                           // the SQL editor (element, input, value, select, focus, onDidChangeValue,
                                           // onDidAccept; 9aa)
@@ -1736,8 +1736,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   always there; `dashboardPage` no longer touches `wp`.
 - **D37 The input box validates as typst-experiment's (9z, decided 2026-10-31):** `InputBoxOptions` gets
   `valueSelection` (the part of `value` selected at first, else all of it) and `validateInput(value)`, as VS Code's:
-  run when the box shows, on each keystroke and on Enter, its answer shown below the field; a text or an `Error`
-  message (`InputBoxValidationSeverity`) blocks Enter, an `Info` message only tells. That `Info` message is the prompt
+  run when the box shows, on each keystroke and on Enter, its answer shown below the field; an `Error` message
+  (`InputBoxValidationSeverity`) blocks Enter, an `Info` message only tells, `undefined` says all is fine (since 9ap,
+  D45, only these: no text, no `null`). That `Info` message is the prompt
   that follows the typed value (no second option). A filter button with `...` uses it: the box is named after the
   button, its placeholder the button's `queryPart`, and below the field shows the raw condition the value makes
   (`buttonCondition`: each `...` replaced by the value as `sql.Quote` writes it, e.g.
@@ -1843,6 +1844,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   service), and `clickhouse.Manager.Database`, which only the filters used. Explore's config checks and the alerting
   fields of `Dependencies` stay as they are. *(proposed)* The service keeps the `*config.Config` and reads it per
   call (nothing copied at start); `Manager.Database` is deleted, not kept beside it.
+- **D45 Small fixes (9ap–, decided 2026-11-01):** (a, 9ap; maintainer: "yes simplify") `validateInput` answers an
+  `InputBoxValidationMessage` or `undefined` only; a filter button writes its "Enter a value." as an `Error` message
+  itself, and the quick input's `validation()` helper is gone.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2190,6 +2194,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9am ✅ 2026-11-01 | **D41 query keys declared in `activate`** (§3.7, §3.15): `QueryApi.declare(key): Disposable` in `QueryHost` (on the shared `QueryKeys.declare`, a URL key in one declared key only) and `activeQuery`; `QueryKeys.check` makes `get` / `set` / `onDidChange` of an undeclared key throw (its URL keys named, "no extension declared it"); `QueryKeys.use` and first-use order gone, the order is the declaration order. `time-range` declares `TIME`, `refresh` `REFRESH`, `filters` `FILTERS`, `dashboardPage` `PARAMS`. Tests: `page.test.ts` declares `TEST_TIME` in place of the unused `get`; `widgetTestbed({ keys })`; every test declares the keys it uses as its extension would; vitest: declaring, a second key of a URL key refused, an undeclared key refused in `get` / `set` / `onDidChange`, declaration order in URL and request, a disposed key no longer sent, a sent key sent unread (`?wp` on a page without form widgets, `dashboard-page.test.ts`). No Go change; Playwright not run, no spec changed. Deviation: `declare` on `QueryApi`, the same key twice refused *(proposed)* | every key known before the first page |
 | 9an ✅ 2026-11-01 | **D42 a quick pick that waits shows it** (§3.11, §3.15): `ui.showQuickPick(items \| Promise<items>, options)` (`QuickPickItems<T>`, `QuickInput.showQuickPick` / `pickOne` with a `failed` callback): opens at once, busy until the items are there, narrowed by what was typed meanwhile; failed items hide the box and reject the Promise; items after the box was hidden are ignored. "Add filter"'s field step and a pill's operator edit hand in their `/fields` Promise; `askValue` takes the type or a Promise of it, `pickValue(…, instead)` waits busy for it and lets a time's input box take its place (a pill's value edit). Tests: vitest for busy while pending, items after, rejection, hidden before the items; the field step busy until `/fields` answers; the value pick busy until the type, a time's input box in its place. No Go change; Playwright not run, no spec changed (none checks a pick's timing). Deviations: a rejection is the caller's (VS Code's behaviour), no message in the box; no busy after an accept (`/pill`, `/button`, `/sql` run no query; a column's `/pill` reads the cached schema) *(proposed)* | one knows things are happening |
 | 9ao ✅ 2026-11-01 | **D43 `filter.FilterService`** (§3.8, §3.15): Go `filter.NewFilterService(cfg)` built once in `dashica.New`, `rendering.Dependencies.FilterService`; methods `Sign(p)`, `Open(key)`, `TableName(t)` (was `ShortName`), `TableOf(q)`, unexported `database`, `secret`, `tableKey`, `readTable`, `read`; every `database func(connection string) string` parameter and the `nil` for a button's pill gone; `widget_common.go` (`tableOf` wrapper gone, `openPills`, `/pill`, the node's `table`), `speedscope_link.go`, `dashboard.pageButtons` / `buttonHandler` use the service; `clickhouse.Manager.Database` deleted (no other user). Tests: `filter` builds its service from a small config (a second secret, an empty one); `widget`, `dashboard`, root and `httpserver` tests put a `FilterService` into their `Dependencies`. `go vet` green (outer repo with and without `-tags solarwatt`, no outer change), Go tests green but the ClickHouse-bound ones (sandbox); `go generate` rerun (only the generated TS's comments change), golden contract unchanged. No TS change. Deviations: the service reads the config per call; `Manager.Database` deleted *(proposed)* | one object knows the secret and the databases |
+| 9ap ✅ 2026-11-01 | **D45 (a) `validateInput` simplified** (§3.11, §3.15): `InputBoxOptions.validateInput?: (value) => InputBoxValidationMessage \| undefined`; `filters.ts` `#press` writes "Enter a value." as an `Error` message; `validation()` in `quick-input.ts` gone. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,test.ts}`, `frontend/extensions/filters/filters.{ts,test.ts}` | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

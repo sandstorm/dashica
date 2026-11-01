@@ -136,11 +136,11 @@ export interface InputBoxOptions {
   /** The part of `value` selected at first, as [start, end) offsets; else all of it. As VS Code's. */
   readonly valueSelection?: readonly [number, number];
   /**
-   * Checks the text when the box shows, as it is typed and on Enter; what it says shows below the field. A text (or an
-   * `Error` message) says what is wrong, and Enter does nothing; an `Info` message only tells (the condition a filter
-   * button's value makes); `undefined`, `null` or '' that all is fine. As VS Code's.
+   * Checks the text when the box shows, as it is typed and on Enter; what it says shows below the field. An `Error`
+   * message says what is wrong, and Enter does nothing; an `Info` message only tells (the condition a filter button's
+   * value makes); `undefined` that all is fine.
    */
-  readonly validateInput?: (value: string) => string | InputBoxValidationMessage | undefined | null;
+  readonly validateInput?: (value: string) => InputBoxValidationMessage | undefined;
   /** Where the box opens, as `QuickPickOptions.anchor`. */
   readonly anchor?: MenuAnchor;
   /**

@@ -350,7 +350,9 @@ class FilterBar {
       placeholder: button.queryPart,
       value: shown && buttonOf(shown, [button])?.value,
       validateInput: (typed) =>
-        typed === '' ? 'Enter a value.' : { message: buttonCondition(button.queryPart, typed), severity: InputBoxValidationSeverity.Info },
+        typed === ''
+          ? { message: 'Enter a value.', severity: InputBoxValidationSeverity.Error }
+          : { message: buttonCondition(button.queryPart, typed), severity: InputBoxValidationSeverity.Info },
       anchor: el,
     });
     if (!value) return;

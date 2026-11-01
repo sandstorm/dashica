@@ -286,7 +286,7 @@ describe('filters', () => {
     button('Path').click();
     const { validateInput } = asked[0]!;
     expect(validateInput!("O'Brien")).toEqual({ message: "path ILIKE concat('O\\'Brien', '%')", severity: 1 });
-    expect(validateInput!('')).toBe('Enter a value.');
+    expect(validateInput!('')).toEqual({ message: 'Enter a value.', severity: 3 });
   });
 
   it('adds nothing when the page refuses the value', async () => {

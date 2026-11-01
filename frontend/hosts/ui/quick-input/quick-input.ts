@@ -4,7 +4,6 @@ import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
 import {
   type InputBoxOptions,
-  type InputBoxValidationMessage,
   InputBoxValidationSeverity,
   type MenuAnchor,
   type QuickPick,
@@ -113,7 +112,7 @@ export class QuickInput {
     const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field?.element ?? own}${message}${prompt}</div>`;
     // shows what `validateInput` says of the text in the field; whether Enter takes it
     const validate = (): boolean => {
-      const said = validation(options.validateInput?.(text()));
+      const said = options.validateInput?.(text());
       message.textContent = said?.message ?? '';
       message.hidden = !said;
       const error = said?.severity === InputBoxValidationSeverity.Error;
@@ -222,13 +221,6 @@ function narrow<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator
     shown.push({ ...item, highlights, item });
   }
   return shown;
-}
-
-/** What `validateInput` answered as a message: a text is an error; none for `undefined`, `null` or ''. */
-function validation(said: string | InputBoxValidationMessage | undefined | null): InputBoxValidationMessage | undefined {
-  if (!said) return undefined;
-  if (typeof said === 'string') return { message: said, severity: InputBoxValidationSeverity.Error };
-  return said.message ? said : undefined;
 }
 
 /** Puts `box` at `anchor` (below an element's left edge, or at a point), inside the viewport; else where its CSS says. */

@@ -284,7 +284,8 @@ describe('showInputBox', () => {
     const { host, quickInput, key, type, field, box } = setup();
     const asked = quickInput.showInputBox({
       prompt: 'Path',
-      validateInput: (value) => (value === '' ? 'Enter a value.' : { message: `path = '${value}'`, severity: InputBoxValidationSeverity.Info }),
+      validateInput: (value) =>
+        value === '' ? { message: 'Enter a value.', severity: InputBoxValidationSeverity.Error } : { message: `path = '${value}'`, severity: InputBoxValidationSeverity.Info },
     });
     const message = () => host.querySelector<HTMLElement>('.d-workbench__quick-pick-message')!;
     const shown = () => [message().hidden ? null : message().textContent, message().classList.contains('d-workbench__quick-pick-message--error'), field().getAttribute('aria-invalid')];
@@ -300,10 +301,12 @@ describe('showInputBox', () => {
 
   it('shows no message while validateInput says nothing', () => {
     const { host, quickInput, type, field } = setup();
-    void quickInput.showInputBox({ validateInput: (value) => (value === 'x' ? { message: '', severity: InputBoxValidationSeverity.Error } : null) });
+    void quickInput.showInputBox({ validateInput: (value) => (value === 'x' ? { message: 'Not x.', severity: InputBoxValidationSeverity.Error } : undefined) });
     const message = host.querySelector<HTMLElement>('.d-workbench__quick-pick-message')!;
     expect(message.hidden).toBe(true);
     type(field(), 'x');
+    expect(message.hidden).toBe(false);
+    type(field(), 'xy');
     expect([message.hidden, field().hasAttribute('aria-invalid')]).toEqual([true, false]);
   });
 
@@ -340,7 +343,7 @@ describe('showInputBox', () => {
     const { host, button, quickInput, box } = setup();
     button.focus();
     const { field, input, changed, accepted, selected } = callerField('a = 1');
-    const asked = quickInput.showInputBox({ title: 'SQL condition', prompt: 'Added to the WHERE', field, validateInput: (value) => (value === '' ? 'Enter a condition.' : null) });
+    const asked = quickInput.showInputBox({ title: 'SQL condition', prompt: 'Added to the WHERE', field, validateInput: (value) => (value === '' ? { message: 'Enter a condition.', severity: InputBoxValidationSeverity.Error } : undefined) });
     expect(box()!.querySelector('.caller-field')).toBe(field.element);
     expect(box()!.querySelector('input')).toBeNull();
     expect([document.activeElement, input.getAttribute('aria-label'), described(host, input)]).toEqual([input, 'SQL condition', 'Added to the WHERE']);
