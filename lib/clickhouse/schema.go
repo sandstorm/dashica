@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// Schema is what a connection holds, as the Schema view shows it (docs/2026-10-30-perspective.md §4.8): its databases
-// with their tables, each with its columns, keys, TTL and skip indices, as ClickHouse's system tables say.
+// Schema is what a connection holds, as the Schema view shows it: its databases with their tables, each with its
+// columns, keys, TTL and skip indices, as ClickHouse's system tables say.
 type Schema struct {
 	// Database is the connection's own database (dashica_config's `database`): the one a table named without database
 	// is in, as page.json's `table` names it (filter.FilterService.TableName).
@@ -30,6 +30,32 @@ func (s Schema) Columns(database, table string) ([]SchemaColumn, bool) {
 		}
 	}
 	return nil, false
+}
+
+// Schema is the connection's Schema, asked from its system tables the first time and then kept; `refresh` asks them
+// again and keeps the new answer. A failed query keeps what was kept before.
+func (c *Client) Schema(ctx context.Context, refresh bool) (Schema, error) {
+	c.schemaMutex.Lock()
+	defer c.schemaMutex.Unlock()
+	if c.schemaCached != nil && !refresh {
+		return *c.schemaCached, nil
+	}
+	opts := DefaultQueryOptions()
+	tables, err := QueryJSON[schemaTableRow](ctx, c, schemaTablesQuery, opts)
+	if err != nil {
+		return Schema{}, fmt.Errorf("query system.tables: %w", err)
+	}
+	columns, err := QueryJSON[schemaColumnRow](ctx, c, schemaColumnsQuery, opts)
+	if err != nil {
+		return Schema{}, fmt.Errorf("query system.columns: %w", err)
+	}
+	indices, err := QueryJSON[schemaSkipIndexRow](ctx, c, schemaSkipIndicesQuery, opts)
+	if err != nil {
+		return Schema{}, fmt.Errorf("query system.data_skipping_indices: %w", err)
+	}
+	schema := assembleSchema(c.serverConfig.Database, tables.Data, columns.Data, indices.Data)
+	c.schemaCached = &schema
+	return schema, nil
 }
 
 // SchemaDatabase is a database of a connection ("default", "system") with its tables.
@@ -117,35 +143,10 @@ type schemaSkipIndexRow struct {
 	Granularity int64  `json:"granularity"`
 }
 
-// Schema is the connection's Schema, asked from its system tables the first time and then kept; `refresh` asks them
-// again and keeps the new answer. A failed query keeps what was kept before.
-func (c *Client) Schema(ctx context.Context, refresh bool) (Schema, error) {
-	c.schemaMutex.Lock()
-	defer c.schemaMutex.Unlock()
-	if c.schemaCached != nil && !refresh {
-		return *c.schemaCached, nil
-	}
-	opts := DefaultQueryOptions()
-	tables, err := QueryJSON[schemaTableRow](ctx, c, schemaTablesQuery, opts)
-	if err != nil {
-		return Schema{}, fmt.Errorf("query system.tables: %w", err)
-	}
-	columns, err := QueryJSON[schemaColumnRow](ctx, c, schemaColumnsQuery, opts)
-	if err != nil {
-		return Schema{}, fmt.Errorf("query system.columns: %w", err)
-	}
-	indices, err := QueryJSON[schemaSkipIndexRow](ctx, c, schemaSkipIndicesQuery, opts)
-	if err != nil {
-		return Schema{}, fmt.Errorf("query system.data_skipping_indices: %w", err)
-	}
-	schema := assembleSchema(c.serverConfig.Database, tables.Data, columns.Data, indices.Data)
-	c.schemaCached = &schema
-	return schema, nil
-}
-
-// assembleSchema is the Schema of the connection whose own database is `database` from the rows of the query set,
-// each sorted by database and table as the queries sort them: a database per database of `tables`, its tables in their order, each with its columns and skip indices. A
-// column or index of a table not among `tables` (a temporary one) is left out.
+// assembleSchema is the Schema of the connection whose own database is `database` from the rows of the query set, each
+// sorted by database and table as the queries sort them: a database per database of `tables`, its tables in their
+// order, each with its columns and skip indices. A column or index of a table not among `tables` (a temporary one) is
+// left out.
 func assembleSchema(database string, tables []schemaTableRow, columns []schemaColumnRow, indices []schemaSkipIndexRow) Schema {
 	type key struct{ database, table string }
 	columnsOf := map[key][]SchemaColumn{}

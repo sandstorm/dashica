@@ -20,10 +20,8 @@ import (
 //	supported for conversion into Arrow
 //
 // full_logs.event_original is exactly such a column, so a plain SELECT * over
-// the main log table breaks. This concern belongs to the transport layer, not
-// to widgets or the frontend: fixing it here fixes every caller (compiled
-// dashboards, dynamic Explore previews, the Data-tab sample, raw .sql queries)
-// with zero widget/UI knowledge.
+// the main log table breaks. The transport layer handles it, so every caller
+// (dashboards, the Explore view, raw .sql queries) gets it without knowing of it.
 //
 // The fix: DESCRIBE the query's result columns (no data read), and if any are
 // Arrow-incompatible, wrap the query casting exactly those columns to String
@@ -43,12 +41,11 @@ func arrowUnsafeType(chType string) bool {
 	return arrowUnsafeTypeRe.MatchString(chType)
 }
 
-// ensureArrowCompatible rewrites a query whose result contains Arrow-incompatible
-// columns so it can be serialized to Arrow, and is a no-op otherwise. It only
-// acts when Format is "Arrow" — the JSON/debug/alerting paths are untouched —
-// and only when a DESCRIBE of the (already filter/placeholder-substituted)
-// query reports at least one such column (or one opts.Cast casts). Detection is on the query RESULT, so
-// it works uniformly for SqlQuery, SqlFile and SqlString with no SQL parsing.
+// ensureArrowCompatible rewrites a query whose result contains Arrow-incompatible columns so it can be serialized to
+// Arrow, and is a no-op otherwise. It only acts when Format is "Arrow" — the JSON/debug/alerting paths are untouched —
+// and only when a DESCRIBE of the (already filter/placeholder-substituted) query reports at least one such column (or
+// one opts.Cast casts). Detection is on the query RESULT, so it works uniformly for SqlQuery, SqlFile and SqlString
+// with no SQL parsing.
 //
 // Cost is one DESCRIBE round-trip per Arrow query (~ms, reads no data);
 // negligible next to the actual query and not cached (simpler, never stale).
@@ -81,8 +78,7 @@ func (c *Client) ensureArrowCompatible(ctx context.Context, query string, opts Q
 // columnTypesHeader is X-Dashica-Column-Types for `columns`: each column's ClickHouse type by its name, as JSON,
 // percent-encoded (`{"timestamp":"DateTime","host":"LowCardinality(String)"}`, as the browser's decodeURIComponent
 // reads it; a column's name may be any text), the types the query's expressions have before the Arrow casts (a
-// DateTime travels as UInt32 seconds), by which a click on a chart offers the ops its type allows
-// (docs/2026-10-28-workbench.md §3.15 D25); "" without columns.
+// DateTime travels as UInt32 seconds), by which a click on a chart offers the ops its type allows; "" without columns.
 func columnTypesHeader(columns []ResultColumn) string {
 	if len(columns) == 0 {
 		return ""

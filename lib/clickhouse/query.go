@@ -43,9 +43,6 @@ func NewClient(serverConfig *config.ClickHouseConfig, id string, logger zerolog.
 	}
 }
 
-// cancelOnClientCloseSetting is sent with every query; a caller's own value in QueryOptions.Settings wins.
-const cancelOnClientCloseSetting = "cancel_http_readonly_queries_on_client_close"
-
 // QueryOptions represents options that can be set when making a query
 type QueryOptions struct {
 	Format      string            // Output format (default: JSONEachRow)
@@ -79,85 +76,9 @@ func (c *Client) Query(ctx context.Context, query string, options QueryOptions) 
 	return c.queryInternal(ctx, "GET", query, options)
 }
 
-// Execute a read/write SQL query and returns the response body
+// Execute executes a read/write SQL query and returns the response body
 func (c *Client) Execute(ctx context.Context, query string, options QueryOptions) (*http.Response, error) {
 	return c.queryInternal(ctx, "POST", query, options)
-}
-
-// Query executes a SQL query and returns the response body
-func (c *Client) queryInternal(ctx context.Context, method string, query string, options QueryOptions) (*http.Response, error) {
-	c.logger.Debug().
-		Str("query", query).
-		Str("clientId", c.Id).
-		Dict("queryParams", zerolog.Dict().
-			Fields(options.Parameters)).
-		Msg("executing SQL query")
-
-	// Build URL query parameters
-	params := url.Values{}
-
-	// Add database if specified
-	if c.serverConfig.Database != "" {
-		params.Add("database", c.serverConfig.Database)
-	}
-
-	// Add output format
-	if options.Format == "" {
-		options.Format = "JSONEachRow"
-	}
-	params.Add("default_format", options.Format)
-
-	// Add settings
-	for setting, value := range options.Settings {
-		params.Add(setting, value)
-	}
-	// ClickHouse stops a SELECT when its HTTP client goes away, so a chart that is refreshed or left stops its query
-	if _, ok := options.Settings[cancelOnClientCloseSetting]; !ok {
-		params.Add(cancelOnClientCloseSetting, "1")
-	}
-
-	// Add query parameters
-	for param, value := range options.Parameters {
-		params.Add(fmt.Sprintf("param_%s", param), value)
-	}
-
-	params.Add("query", query)
-	// Build URL
-	reqURL := fmt.Sprintf("%s?%s", c.serverConfig.URL, params.Encode())
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-
-	// Set authentication
-	if c.serverConfig.User != "" {
-		req.SetBasicAuth(c.serverConfig.User, c.serverConfig.Password)
-	}
-
-	// Set headers
-	req.Header.Set("Content-Type", "text/plain")
-
-	// Enable compression if requested
-	if options.Compression {
-		req.Header.Set("Accept-Encoding", "gzip")
-	}
-
-	// Execute request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
-	}
-
-	// Check for errors in response
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("unsuccessful clickhouse response (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	return resp, nil
 }
 
 // QueryToHandler executes a SQL query and pipes the results directly to an HTTP response writer
@@ -169,7 +90,6 @@ func (c *Client) QueryToHandler(ctx context.Context, query string, options Query
 		return err
 	}
 
-	// Execute query
 	resp, err := c.Query(ctx, query, options)
 	if err != nil {
 		return err
@@ -183,13 +103,11 @@ func (c *Client) QueryToHandler(ctx context.Context, query string, options Query
 		}
 	}
 
-	// Set content type based on format
 	w.Header().Set("Content-Type", getContentType(options.Format))
 	if types := columnTypesHeader(columns); types != "" {
 		w.Header().Set("X-Dashica-Column-Types", types)
 	}
 
-	// Stream the response body to the output
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
 		return fmt.Errorf("streaming response: %w", err)
@@ -198,6 +116,7 @@ func (c *Client) QueryToHandler(ctx context.Context, query string, options Query
 	return nil
 }
 
+// ClickhouseJsonResult is a query's answer in ClickHouse's JSON format, its rows parsed as T (QueryJSON).
 type ClickhouseJsonResult[T any] struct {
 	Meta []struct {
 		Name string `json:"name"`
@@ -214,23 +133,19 @@ type ClickhouseJsonResult[T any] struct {
 
 // QueryJSON executes a query and returns the result parsed into the specified type
 func QueryJSON[T any](ctx context.Context, client *Client, query string, opts QueryOptions) (*ClickhouseJsonResult[T], error) {
-	// Ensure JSON format is set
 	opts.Format = "JSON"
 
-	// Execute the query
 	response, err := client.Query(ctx, query, opts)
 	if err != nil {
 		return nil, fmt.Errorf("executed query: %w", err)
 	}
 	defer response.Body.Close()
 
-	// Read the response body
 	queryResult, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response body: %w", err)
 	}
 
-	// Parse the JSON result
 	var result ClickhouseJsonResult[T]
 	if err := json.Unmarshal(queryResult, &result); err != nil {
 		return nil, fmt.Errorf("parse JSON response: %w", err)
@@ -239,13 +154,80 @@ func QueryJSON[T any](ctx context.Context, client *Client, query string, opts Qu
 	return &result, nil
 }
 
-// QueryJSON executes a query and returns the result parsed into the specified type
+// QueryJSONFirst executes a query and returns the first row of its result parsed into the specified type
 func QueryJSONFirst[T any](ctx context.Context, client *Client, query string, opts QueryOptions) (*T, error) {
 	result, err := QueryJSON[T](ctx, client, query, opts)
 	if err != nil {
 		return nil, err
 	}
 	return &result.Data[0], nil
+}
+
+// cancelOnClientCloseSetting is sent with every query; a caller's own value in QueryOptions.Settings wins.
+const cancelOnClientCloseSetting = "cancel_http_readonly_queries_on_client_close"
+
+// queryInternal executes a SQL query with the HTTP `method` and returns the response body
+func (c *Client) queryInternal(ctx context.Context, method string, query string, options QueryOptions) (*http.Response, error) {
+	c.logger.Debug().
+		Str("query", query).
+		Str("clientId", c.Id).
+		Dict("queryParams", zerolog.Dict().
+			Fields(options.Parameters)).
+		Msg("executing SQL query")
+
+	params := url.Values{}
+
+	if c.serverConfig.Database != "" {
+		params.Add("database", c.serverConfig.Database)
+	}
+
+	if options.Format == "" {
+		options.Format = "JSONEachRow"
+	}
+	params.Add("default_format", options.Format)
+
+	for setting, value := range options.Settings {
+		params.Add(setting, value)
+	}
+	// ClickHouse stops a SELECT when its HTTP client goes away, so a chart that is refreshed or left stops its query
+	if _, ok := options.Settings[cancelOnClientCloseSetting]; !ok {
+		params.Add(cancelOnClientCloseSetting, "1")
+	}
+
+	for param, value := range options.Parameters {
+		params.Add(fmt.Sprintf("param_%s", param), value)
+	}
+
+	params.Add("query", query)
+	reqURL := fmt.Sprintf("%s?%s", c.serverConfig.URL, params.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	if c.serverConfig.User != "" {
+		req.SetBasicAuth(c.serverConfig.User, c.serverConfig.Password)
+	}
+
+	req.Header.Set("Content-Type", "text/plain")
+
+	if options.Compression {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unsuccessful clickhouse response (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return resp, nil
 }
 
 // getContentType returns the appropriate Content-Type header value for the given format

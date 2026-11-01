@@ -7,21 +7,8 @@ import (
 	"strings"
 )
 
-const tableListQuery = `
-SELECT name
-FROM system.tables
-WHERE database = {db:String}
-  AND engine IN ('MergeTree')
-  AND (name ILIKE 'full_%' OR name ILIKE 'mv_%' OR name ILIKE 'proapp_%' OR name ILIKE 'temp_%')
-  AND name != 'full_metrics'
-  AND name NOT LIKE 'dashica_%'
-ORDER BY name
-`
-
-type TableListRow struct {
-	Name string `json:"name"`
-}
-
+// IntrospectSchema is the tables of the connection's database, their columns and the columns all of them share,
+// asked once and then kept.
 func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, error) {
 	c.introspectedSchemaMutex.Lock()
 	defer c.introspectedSchemaMutex.Unlock()
@@ -81,12 +68,10 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 	// Full column detail (name/type/comment) per table, for the field pickers.
 	columnDetail := make(map[string][]Column, len(tables))
 
-	// Populate the maps
 	for _, row := range columnResult.Data {
 		table := row.Table
 		column := row.Name
 
-		// Add column to columnsPerTable
 		if _, exists := columnsPerTable[table]; !exists {
 			columnsPerTable[table] = []string{}
 		}
@@ -99,7 +84,6 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 			Class:   ClassifyColumnType(row.Type),
 		})
 
-		// Add table to tablesPerColumn
 		if _, exists := tablesPerColumn[column]; !exists {
 			tablesPerColumn[column] = []string{}
 		}
@@ -121,6 +105,17 @@ func (c *Client) IntrospectSchema(ctx context.Context) (*IntrospectedSchema, err
 	return schema, nil
 }
 
+type IntrospectedSchema struct {
+	CommonColumns []string `json:"commonColumns"`
+	Tables        []string `json:"tables"`
+	// Columns maps each table to its columns (with types), in schema order.
+	Columns map[string][]Column `json:"columns"`
+}
+
+type TableListRow struct {
+	Name string `json:"name"`
+}
+
 // Column describes one table column: its name, ClickHouse type, comment, and
 // its semantic class (see ClassifyColumnType).
 type Column struct {
@@ -130,13 +125,12 @@ type Column struct {
 	// Class is the semantic column class the Explore editor speaks in:
 	// "temporal", "categorical", "continuous", or "" when unknown. This is the
 	// single home for the ClickHouse-type → class mapping; the editor derives
-	// slot-aware pickers, badges, and value affordances from it (docs UX plan (3)).
+	// slot-aware pickers, badges, and value affordances from it.
 	Class string `json:"class,omitempty"`
 }
 
-// Column class constants — the vocabulary the Explore editor speaks (docs UX
-// plan (3)): temporal (time axes), categorical/ordinal (fills, facets, WHERE
-// values), continuous/numeric (aggregations). Kept as plain strings on the wire.
+// Column class constants — the vocabulary the Explore editor speaks: temporal (time axes), categorical/ordinal (fills,
+// facets, WHERE values), continuous/numeric (aggregations). Kept as plain strings on the wire.
 const (
 	ColumnClassTemporal    = "temporal"
 	ColumnClassCategorical = "categorical"
@@ -166,6 +160,17 @@ func ClassifyColumnType(chType string) string {
 	}
 }
 
+const tableListQuery = `
+SELECT name
+FROM system.tables
+WHERE database = {db:String}
+  AND engine IN ('MergeTree')
+  AND (name ILIKE 'full_%' OR name ILIKE 'mv_%' OR name ILIKE 'proapp_%' OR name ILIKE 'temp_%')
+  AND name != 'full_metrics'
+  AND name NOT LIKE 'dashica_%'
+ORDER BY name
+`
+
 // unwrapColumnType peels the type modifiers that do not change the semantic
 // class — Nullable(T) and LowCardinality(T) — down to the inner type.
 func unwrapColumnType(t string) string {
@@ -180,11 +185,4 @@ func unwrapColumnType(t string) string {
 		}
 		t = strings.TrimSpace(strings.TrimSuffix(inner, ")"))
 	}
-}
-
-type IntrospectedSchema struct {
-	CommonColumns []string `json:"commonColumns"`
-	Tables        []string `json:"tables"`
-	// Columns maps each table to its columns (with types), in schema order.
-	Columns map[string][]Column `json:"columns"`
 }

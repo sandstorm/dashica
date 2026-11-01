@@ -10,7 +10,7 @@ import (
 	"github.com/sandstorm/dashica/lib/config"
 )
 
-// Manager manages multiple Clickhouse clients
+// Manager holds a Client per ClickHouse connection of dashica_config, each made on first use (GetClient).
 type Manager struct {
 	config  *config.Config
 	clients map[string]*Client
@@ -38,7 +38,6 @@ func (cm *Manager) GetClient(serverId string) (*Client, error) {
 		return client, nil
 	}
 
-	// If client doesn't exist, create it
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -48,13 +47,11 @@ func (cm *Manager) GetClient(serverId string) (*Client, error) {
 		return client, nil
 	}
 
-	// Get server config
 	serverConfig, found := cm.config.ClickHouse[serverId]
 	if !found {
 		return nil, fmt.Errorf("server '%s' not found in config", serverId)
 	}
 
-	// Create new client
 	client = NewClient(&serverConfig, serverId, cm.logger)
 	cm.clients[serverId] = client
 	return client, nil
