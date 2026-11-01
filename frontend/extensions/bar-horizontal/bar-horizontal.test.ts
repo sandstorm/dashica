@@ -1,21 +1,20 @@
 // @vitest-environment jsdom
-// Tests for bar-horizontal.ts: bars drawn from the widget’s data, a click on a bar running filters.offer with its category
+// Tests for bar-horizontal.ts: bars drawn from the widget’s data, a click on a bar showing the data point menu of its category
 // and fill.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
+import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';
 import { anchor, clickAtPoint, clickMark } from '../chart-library/plot-testing';
 import { barHorizontal } from './bar-horizontal';
 
 let testbed: ReturnType<typeof widgetTestbed>;
-/** The runs of `filters.offer`, in order: what each click offered. */
-let offers: RecordedOffer[];
+/** The data point menus shown, in order: what each click showed. */
+let offers: readonly RecordedDataPointMenu[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['path', 'host'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  offers = recordOffers(testbed.commands);
+  offers = testbed.dataPointMenus;
   testbed.activate(barHorizontal);
 });
 
@@ -37,16 +36,16 @@ describe('barHorizontal', () => {
     expect(widgetContainer.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
-  it('runs filters.offer with the category and the fill of a clicked bar and the chart’s pills', async () => {
+  it('shows the data point menu of the category and the fill of a clicked bar for the chart', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], host: ['a', 'b'], cnt: [30, 2] });
     const props = { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } } as const;
     const { widgetContainer } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     await clickMark(widgetContainer.querySelectorAll('g[aria-label="bar"] rect')[1]);
-    expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
+    expect(offers.map(({ dataPoints, widget }) => ({ dataPoints, dataUrl: dataUrlOf(widget) }))).toEqual([
       {
-        candidates: [{ fieldId: 'path', value: '/login' }, { fieldId: 'host', value: 'b' }],
-        source: { dataUrl: '/p/shop/api/1', filterable },
+        dataPoints: [{ field: 'path', value: '/login' }, { field: 'host', value: 'b' }],
+        dataUrl: '/p/shop/api/1',
       },
     ]);
   });
@@ -64,6 +63,6 @@ describe('barHorizontal', () => {
     // below /0's middle, still on its band, as far right as /1's "b" is in its middle
     await clickAtPoint((shortElement as SVGElement).ownerSVGElement!, [anchor(longElement!)[0], y + 0.4 * Number(shortElement!.getAttribute('height'))]);
     const shown = /path (\S+)/.exec(widgetContainer.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
-    expect([shown, offers.at(-1)?.candidates.map(({ value }) => value)]).toEqual(['/0', ['/0', 'a']]);
+    expect([shown, offers.at(-1)?.dataPoints.map(({ value }) => value)]).toEqual(['/0', ['/0', 'a']]);
   });
 });

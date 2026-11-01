@@ -1,23 +1,22 @@
 // @vitest-environment jsdom
 // Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell of a
-// category column running filters.offer with its value and the table's pills, a cell's menu (`table/cell`) adding a
+// category column showing the data point menu of its value for the table, a cell's menu (`table/cell`) adding a
 // condition to the page's SQL filter by `filters.addSql` (none while SQL filters are off), a column header's (`table/header`) sizing the
 // columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
+import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';
 import { table } from './table';
 
 let testbed: ReturnType<typeof widgetTestbed>;
-/** The runs of `filters.offer`, in order: what each click offered. */
-let offers: RecordedOffer[];
+/** The data point menus shown, in order: what each click showed. */
+let offers: readonly RecordedDataPointMenu[];
 /** The conditions a cell's SQL filter added through `filters.addSql`, the filters extension's, in order. */
 let addedSql: string[];
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  offers = recordOffers(testbed.commands);
+  offers = testbed.dataPointMenus;
   addedSql = [];
   testbed.commands.registerCommand('filters.addSql', (condition: string) => void addedSql.push(condition));
   testbed.activate(table);
@@ -100,7 +99,7 @@ describe('table', () => {
     expect(given.slice(3)).toEqual([{ widget, records: [{ path: '/api', status: 200 }] }, { widget, records: [] }]);
   });
 
-  it('offers the value of a clicked cell by its column’s name, below the cell, with the table’s pills', async () => {
+  it('offers the value of a clicked cell by its column’s name, below the cell, for the table', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] });
     await inView();
@@ -108,7 +107,7 @@ describe('table', () => {
     const cellElement = cellAt(widgetContainer, 'status', 1);
     expect(cellElement.classList.contains('d-table__filterable')).toBe(true);
     cellElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(offers).toEqual([{ at: cellElement, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
+    expect(offers.map(({ at, dataPoints, widget }) => ({ at, dataPoints, dataUrl: dataUrlOf(widget) }))).toEqual([{ at: cellElement, dataPoints: [{ field: 'status', value: '500' }], dataUrl: '/p/shop/api/1' }]);
   });
 
   it('offers a timestamp cell as ISO 8601 with its column’s ClickHouse type', async () => {
@@ -118,7 +117,7 @@ describe('table', () => {
     await inView();
 
     cellAt(widgetContainer, 'timestamp', 0).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(offers.at(-1)?.candidates).toEqual([{ fieldId: 'timestamp', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' }]);
+    expect(offers.at(-1)?.dataPoints).toEqual([{ field: 'timestamp', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' }]);
   });
 
   it('offers nothing from a NULL cell', async () => {
@@ -212,7 +211,7 @@ describe('table', () => {
   it('has no SQL entries in a cell’s menu while SQL filters are off', async () => {
     testbed.dispose();
     testbed = widgetTestbed({ sqlEnabled: false });
-    offers = recordOffers(testbed.commands);
+    offers = testbed.dataPointMenus;
     testbed.activate(table);
     vi.stubGlobal('CSS', {});
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });

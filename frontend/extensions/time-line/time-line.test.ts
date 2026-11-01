@@ -1,22 +1,21 @@
 // @vitest-environment jsdom
 // Tests for time-line.ts: a line drawn from the widget’s data, in its stroke color or one per strokeField value; a
-// click on a line running filters.offer with its zField and strokeField and the chart's pills, also through the
+// click on a line showing the data point menu of its zField and strokeField for the chart, also through the
 // drag area above it.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
+import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';
 import { clickMark } from '../chart-library/plot-testing';
 import { timeLine } from './time-line';
 
 let testbed: ReturnType<typeof widgetTestbed>;
-/** The runs of `filters.offer`, in order: what each click offered. */
-let offers: RecordedOffer[];
+/** The data point menus shown, in order: what each click showed. */
+let offers: readonly RecordedDataPointMenu[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['host', 'session'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  offers = recordOffers(testbed.commands);
+  offers = testbed.dataPointMenus;
   testbed.activate(timeLine);
 });
 
@@ -58,7 +57,7 @@ describe('timeLine', () => {
     const rows = { time: [T0, T0 + QUARTER, T0, T0 + QUARTER], cnt: [3, 5, 1, 2], host: ['a', 'a', 'b', 'b'], session: ['s1', 's1', 's2', 's2'] };
     const lines = (widgetContainer: HTMLElement) => [...widgetContainer.querySelectorAll<SVGPathElement>('[aria-label="line"] path')];
 
-    it('on a line offers its zField, then its strokeField, with the chart’s pills', async () => {
+    it('on a line offers its zField, then its strokeField, for the chart', async () => {
       testbed.serve('/p/shop/api/1/query', rows);
       testbed.serve('/p/shop/api/2/query', rows);
       const strokeField = { kind: 'expr' as const, alias: 'host' };
@@ -68,9 +67,9 @@ describe('timeLine', () => {
       await inView();
       await clickMark(lines(bothElement)[1]);
       await clickMark(lines(strokeOnlyElement)[1]);
-      expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
-        { candidates: [{ fieldId: 'session', value: 's2' }, { fieldId: 'host', value: 'b' }], source: { dataUrl: '/p/shop/api/1', filterable } },
-        { candidates: [{ fieldId: 'host', value: 'b' }], source: { dataUrl: '/p/shop/api/2', filterable } },
+      expect(offers.map(({ dataPoints, widget }) => ({ dataPoints, dataUrl: dataUrlOf(widget) }))).toEqual([
+        { dataPoints: [{ field: 'session', value: 's2' }, { field: 'host', value: 'b' }], dataUrl: '/p/shop/api/1' },
+        { dataPoints: [{ field: 'host', value: 'b' }], dataUrl: '/p/shop/api/2' },
       ]);
     });
 
@@ -80,7 +79,7 @@ describe('timeLine', () => {
       await inView();
       const overlayContainer = widgetContainer.querySelector('svg .overlay')!;
       await clickMark(lines(widgetContainer)[0], overlayContainer);
-      expect(offers.map(({ candidates }) => candidates)).toEqual([[{ fieldId: 'host', value: 'a' }]]);
+      expect(offers.map(({ dataPoints }) => dataPoints)).toEqual([[{ field: 'host', value: 'a' }]]);
     });
   });
 });

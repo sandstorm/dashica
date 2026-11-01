@@ -145,6 +145,11 @@ export interface RecordedDataPointMenu {
   readonly dataPoints: readonly DataPoint[];
 }
 
+/** The `dataUrl` of the widget a data point menu was shown for; `undefined` for one without data. */
+export function dataUrlOf({ widget }: WidgetMenuContext): string | undefined {
+  return 'dataUrl' in widget ? widget.dataUrl : undefined;
+}
+
 /** Lets the pending fetches, Arrow decoding and draws finish. */
 export async function settle(): Promise<void> {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));

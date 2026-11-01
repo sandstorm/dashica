@@ -1,21 +1,20 @@
 // @vitest-environment jsdom
 // Tests for bar-vertical.ts: bars drawn from the widget’s data, sorted by their measure when asked, a click on a bar
-// running filters.offer with its categories and the chart's pills.
+// showing the data point menu of its categories for the chart.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
+import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';
 import { clickMark, pointAt } from '../chart-library/plot-testing';
 import { barVertical } from './bar-vertical';
 
 let testbed: ReturnType<typeof widgetTestbed>;
-/** The runs of `filters.offer`, in order: what each click offered. */
-let offers: RecordedOffer[];
+/** The data point menus shown, in order: what each click showed. */
+let offers: readonly RecordedDataPointMenu[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['status', 'host', 'region'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  offers = recordOffers(testbed.commands);
+  offers = testbed.dataPointMenus;
   testbed.activate(barVertical);
 });
 
@@ -27,8 +26,8 @@ const inView = async () => {
   await settle();
 };
 const error = (widgetContainer: HTMLElement) => widgetContainer.querySelector('.d-widget-error')?.textContent;
-/** The candidates the last click offered, as "status = 500". */
-const offered = () => offers.at(-1)?.candidates.map(({ fieldId, value }) => `${fieldId} = ${value}`);
+/** The data points the last click showed, as "status = 500". */
+const offered = () => offers.at(-1)?.dataPoints.map(({ field, value }) => `${field} = ${value}`);
 
 describe('barVertical', () => {
   it('draws the widget’s data once it is in view', async () => {
@@ -52,13 +51,13 @@ describe('barVertical', () => {
     const byStatus = (more: object = {}) =>
       ({ type: 'barVertical', props: { x: { kind: 'expr', alias: 'status' }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable, ...more }) as const;
 
-    it('runs filters.offer at the click with its category, also as the only candidate, and the chart’s pills', async () => {
+    it('shows the data point menu at the click of its category, also as the only data point, for the chart', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
       const { widgetContainer } = testbed.render(byStatus());
       await inView();
       await clickMark(bars(widgetContainer)[1]);
-      expect(offers).toEqual([
-        { at: { x: expect.any(Number), y: expect.any(Number) }, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable } },
+      expect(offers.map(({ at, dataPoints, widget }) => ({ at, dataPoints, dataUrl: dataUrlOf(widget) }))).toEqual([
+        { at: { x: expect.any(Number), y: expect.any(Number) }, dataPoints: [{ field: 'status', value: '500' }], dataUrl: '/p/shop/api/1' },
       ]);
     });
 

@@ -1,17 +1,16 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeBarProps } from '../../generated/zz_generated.dashica';
-import type { QueryResult } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import type { DrawOptions } from './chart-frame';
 import { SchemaAnalyzer } from './schema';
 import { filterOnClick } from './filter-on-click';
-import type { OfferFilters } from '../filter-library/offer';
 import { bucketSizeOf, resolvedTimeRangeOf } from './time-axis';
 import { timeBrush } from './time-brush';
 
 /**
  * A bar per time bucket (`x`) as high as its measure (`y`), stacked by `fill`, over the time range the server queried;
  * `thresholds` (an alert's, read by the alert chart) as red lines. The widget types `timeBar` and `alertDetail` draw
- * it. With `offerFilters`, a click on a bar offers its fill and facets to filter by or exclude.
+ * it. With `ctx`, a click on a bar shows the data point menu of its fill and facets (`filterOnClick`).
  *
  * The bucket size is the x field's, or the server's for an `AutoBucket` axis: the y axis then shows per second, since
  * a bucket size the server picks says nothing about the bars' height ("logs per 15 minutes or per 5?").
@@ -20,7 +19,7 @@ export function drawTimeBars(
   data: QueryResult,
   props: TimeBarProps,
   options: DrawOptions,
-  { offerFilters, thresholds = [] }: { readonly offerFilters?: OfferFilters; readonly thresholds?: readonly number[] } = {},
+  { ctx, thresholds = [] }: { readonly ctx?: Pick<WidgetContext, 'showDataPointMenu'>; readonly thresholds?: readonly number[] } = {},
 ) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
@@ -78,7 +77,7 @@ export function drawTimeBars(
     },
     marks: [
       Plot.rectY(data, { ...bars, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
-      offerFilters ? filterOnClick(Plot.rectY, data, { ...bars, pointer, fields: [props.fill, props.fx, props.fy], offerFilters }) : null,
+      ctx ? filterOnClick(Plot.rectY, data, { ...bars, pointer, fields: [props.fill, props.fx, props.fy], ctx }) : null,
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
       thresholds.length > 0 ? Plot.ruleY(thresholds, { stroke: 'red', strokeWidth: 2 }) : null,

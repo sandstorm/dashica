@@ -3,7 +3,6 @@ import type { CommandOptions, MenuItem } from '../../hosts/commands/commands';
 import { QuickPickItemKind, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { WidgetMenuContext } from '../../hosts/widgets/widgets';
-import { offerFiltersOf } from '../filter-library/offer';
 import { Schemas } from '../sql-library/schemas';
 import { loadSqlEditors } from '../sql-library/sql-editor';
 import { editedQueryKeys, fetchSql, sqlRequest, type EditedQuery } from './rows';
@@ -19,8 +18,8 @@ import './explore-view.css';
  * "Reset to the chart's query". The tab is the page kind `explore`, named in its hash: its URL is
  * the source tab's with `#explore=3` (the id in the chart's `dataUrl`), so it starts with a copy of that tab's query
  * state and a link or a reload opens it again; Back shows the state before, "Close" closes the tab, "Reset" asks
- * first (`confirmReset`). A click on a group row's value of the chart's result offers to filter the tab by it or
- * exclude it (the command `filters.offer`). The global menu's "Explore" opens a blank Explore in a new tab
+ * first (`confirmReset`). A click on a group row's value of the chart's result shows the chart's data point menu
+ * (`widgets.showDataPointMenu`), where the `filters` extension offers to filter the tab by it or exclude it. The global menu's "Explore" opens a blank Explore in a new tab
  * (`#explore=&connection=<name>`): a connection picker and an empty editor, run on that connection
  * (`/rows?connection=…`); its "Explore (from chart…)" opens one with the SQL and parameters of a chart of the shown page,
  * run at once. Perspective loads on first use (`loadPerspective`), and so does the SQL editor (sql-library's
@@ -28,7 +27,7 @@ import './explore-view.css';
  */
 export const exploreView: Extension = {
   id: 'exploreView',
-  activate({ ui, page, query, commands, globalState, subscriptions }) {
+  activate({ ui, page, query, commands, widgets, globalState, subscriptions }) {
     if (!page.workbench.explore) {
       subscriptions.push(commands.registerCommand(EXPLORE_ENTRY.command, () => {}, EXPLORE_NOT_ENABLED), ui.registerMenuItem('workbench/global', EXPLORE_ENTRY));
       return;
@@ -55,7 +54,10 @@ export const exploreView: Extension = {
           onDidChangeHash: context.onDidChangeHash,
           navigate: (hash) => void page.navigate(hash),
           close: () => context.close(),
-          offerFilters: (at, candidates) => widget && offerFiltersOf(commands, widget as ChartWithRows)(at, candidates),
+          // the chart is not rendered here: its data point menu is shown for it as its menus are (`WidgetMenuContext`)
+          showDataPointMenu: (at, dataPoints) =>
+            widget &&
+            widgets.showDataPointMenu({ widget, url: (path) => `${(widget as ChartWithRows).dataUrl}${path}?${context.query.requestParams()}`, lastResult: undefined }, at, dataPoints),
           confirmReset: (anchorElement) => confirmReset(ui, anchorElement),
         });
         return {

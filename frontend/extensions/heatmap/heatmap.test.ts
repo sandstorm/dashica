@@ -1,21 +1,20 @@
 // @vitest-environment jsdom
 // Tests for heatmap.ts: both heatmaps’ cells drawn from the widget’s data; a time heatmap needs its y bucket size; a
-// click on an ordinal heatmap's cell running filters.offer with its row and the chart's pills.
+// click on an ordinal heatmap's cell showing the data point menu of its row for the chart.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { recordOffers, type RecordedOffer } from '../chart-library/offer-testing';
+import { settle, widgetTestbed, dataUrlOf, type RecordedDataPointMenu } from '../../hosts/widgets/widgets-testing';
 import { clickMark } from '../chart-library/plot-testing';
 import { heatmap } from './heatmap';
 
 let testbed: ReturnType<typeof widgetTestbed>;
-/** The runs of `filters.offer`, in order: what each click offered. */
-let offers: RecordedOffer[];
+/** The data point menus shown, in order: what each click showed. */
+let offers: readonly RecordedDataPointMenu[];
 /** The fields the server lets each chart here filter by (page.json's `filterable`). */
 const filterable = ['status', 'duration_ms'];
 
 beforeEach(() => {
   testbed = widgetTestbed();
-  offers = recordOffers(testbed.commands);
+  offers = testbed.dataPointMenus;
   testbed.activate(heatmap);
   // Plot paints a color legend's ramp on a canvas, which jsdom cannot draw on
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ fillRect() {} } as unknown as CanvasRenderingContext2D);
@@ -60,14 +59,14 @@ describe('heatmap', () => {
     expect(widgetContainer.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
-  it('offers the row of a clicked cell of an ordinal heatmap, never its measure, with the chart’s pills', async () => {
+  it('offers the row of a clicked cell of an ordinal heatmap, never its measure, for the chart', async () => {
     testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], status: ['200', '500'], cnt: [3, 5] });
     const props = { x, y: { kind: 'enum', alias: 'status' }, fill: { kind: 'count', alias: 'cnt' } } as const;
     const { widgetContainer } = testbed.render({ type: 'timeHeatmapOrdinal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
     await clickMark(widgetContainer.querySelectorAll('g[aria-label="bar"] rect')[1]);
-    expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
-      { candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable } },
+    expect(offers.map(({ dataPoints, widget }) => ({ dataPoints, dataUrl: dataUrlOf(widget) }))).toEqual([
+      { dataPoints: [{ field: 'status', value: '500' }], dataUrl: '/p/shop/api/1' },
     ]);
   });
 

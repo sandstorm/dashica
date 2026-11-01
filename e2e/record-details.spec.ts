@@ -69,7 +69,7 @@ test('Details keeps the ticked rows when another chart becomes active; a click o
     const table = await chart(page, TABLE);
     await table.locator(`.tabulator-cell.d-table__filterable[tabulator-field="${COLUMN}"]`).first().click();
     await expect(details.locator('.d-view__title')).toHaveText(['Record 1']);
-    await expect(page.getByRole('dialog', {name: 'Filter'}).getByRole('option')).toHaveCount(2);
+    await expect(page.getByRole('dialog', {name: 'Data point'}).getByRole('option')).toHaveCount(2);
 
     // unticked: Details has none
     await page.keyboard.press('Escape');

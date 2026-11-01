@@ -1,6 +1,6 @@
 // Tests for click to filter on the other charts and in tables (docs/2026-10-28-workbench.md §3.8, step 8c): a click on
-// a time bar offers its series in the quick pick "Filter", a click on a table cell its value, as on a bar chart;
-// choosing one adds the chip at once; the cell's menu keeps only its SQL entries.
+// a time bar offers its series in the data point menu (the quick pick "Data point"), a click on a table cell its
+// value, as on a bar chart; choosing one adds the chip at once; the cell's menu keeps only its SQL entries.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its time bar
 // "HTTP non-2xx status by type" (fill `status_group`: 3xx / 4xx / 5xx) and its table "20 slowest requests"
@@ -28,7 +28,7 @@ test('a click on a time bar offers its series; "Filter" adds it as a chip', asyn
     // the drag area lies above the bars and takes the click: `force` clicks there all the same; Playwright moves the
     // mouse onto the bar first, so Plot points at it
     await bar.click({force: true});
-    const options = page.getByRole('dialog', {name: 'Filter'}).getByRole('option');
+    const options = page.getByRole('dialog', {name: 'Data point'}).getByRole('option');
     // the fill comes first, before any facet
     await expect(options.first()).toHaveAccessibleName(/^Filter status_group = /);
     const value = (await options.first().textContent())!.trim().replace(/^status_group = /, '');
@@ -52,7 +52,7 @@ test('a click on a table cell offers its value; "Exclude" adds it as ≠; its me
     await expect(menu).toHaveCount(0);
 
     await cell.click();
-    const options = page.getByRole('dialog', {name: 'Filter'}).getByRole('option');
+    const options = page.getByRole('dialog', {name: 'Data point'}).getByRole('option');
     await expect(options).toHaveCount(2);
     await options.nth(1).click();
     const chips = page.getByTestId('wb-filter-bar').getByTestId('filter-chip');

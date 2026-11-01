@@ -116,8 +116,8 @@ let viewContainer: HTMLElement;
 let view: Disposable;
 let requests: string[];
 let closed: number;
-/** What the view offered to filter by, and where. */
-let offered: { at: unknown; candidates: readonly unknown[] }[];
+/** The data point menus the view showed, and where. */
+let offered: { at: unknown; dataPoints: readonly unknown[] }[];
 /** Where Reset asked to confirm, and the answer. */
 let confirmations: unknown[];
 let confirmed: boolean;
@@ -193,7 +193,7 @@ function open(shown: { widget: ChartWithRows | undefined } = { widget }): void {
       hashChanged.fire();
     },
     close: () => closed++,
-    offerFilters: (at, candidates) => offered.push({ at, candidates }),
+    showDataPointMenu: (at, dataPoints) => offered.push({ at, dataPoints }),
     confirmReset: async (anchorElement) => (confirmations.push(anchorElement), confirmed),
   });
 }
@@ -478,7 +478,7 @@ describe('renderExploreView', () => {
       sqlEditors: () => Promise.reject(new Error('404 sql-editor.js')),
       schema: async () => schemaOf('default'),
       hash: () => hash, onDidChangeHash: hashChanged.event, navigate: () => undefined, close: () => undefined,
-      offerFilters: () => undefined, confirmReset: async () => false,
+      showDataPointMenu: () => undefined, confirmReset: async () => false,
     });
     await settle();
     expect(viewContainer.querySelector('.d-explore-view__sql-text')!.textContent).toBe('The SQL editor did not load: 404 sql-editor.js');
@@ -559,7 +559,7 @@ describe('renderExploreView', () => {
     expect(viewContainer.querySelector('.d-explore-view__body .d-notice--error')!.textContent).toBe('500 Code: 47. Unknown identifier host');
   });
 
-  it('offers the deepest group value of a clicked row on a column of the rows, no time, at the pointer', async () => {
+  it('shows the data point menu of the deepest group value of a clicked row on a column of the rows, no time, at the pointer', async () => {
     open();
     await settle();
     viewerElement.dispatchEvent(new MouseEvent('pointerdown', { clientX: 30, clientY: 40 }));
@@ -567,10 +567,10 @@ describe('renderExploreView', () => {
     click([['time', '==', 1], ['status', '==', 500], ['host', '==', 'a']]);
     click([['time', '==', 1]]);
     click([]);
-    expect(offered).toEqual([{ at: { x: 30, y: 40 }, candidates: [{ fieldId: 'host', value: 'a' }] }]);
+    expect(offered).toEqual([{ at: { x: 30, y: 40 }, dataPoints: [{ field: 'host', value: 'a' }] }]);
   });
 
-  it('offers nothing from an edited query’s rows, whose columns the page’s filters do not reach', async () => {
+  it('shows nothing for an edited query’s rows, whose columns the page’s filters do not reach', async () => {
     hash = withEditedQuery(hash, { sql: 'SELECT customer_project FROM http_logs', parameters: {} });
     schema = { customer_project: 'string' };
     open();

@@ -1,34 +1,32 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeLineProps } from '../../generated/zz_generated.dashica';
-import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import { filterOnClick } from '../chart-library/filter-on-click';
-import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
 import { bucketSizeOf, resolvedTimeRangeOf } from '../chart-library/time-axis';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
  * The widget type `timeLine`: a line over time (`x`) through its measure (`y`), over the time range the server queried;
  * a line per value of `strokeField` (or of `zField`, in one color), else one in the color `stroke`. A click on a line
- * offers its `zField`, `strokeField` and facets to filter by or exclude.
+ * shows the data point menu of its `zField`, `strokeField` and facets (`filterOnClick`).
  */
 export const timeLine: Extension = {
   id: 'timeLine',
-  activate: ({ widgets, commands, subscriptions }) => subscriptions.push(widgets.registerWidget('timeLine', (widgetContainer, widget, ctx) => renderTimeLine(widgetContainer, widget, ctx, commands))),
+  activate: ({ widgets, subscriptions }) => subscriptions.push(widgets.registerWidget('timeLine', renderTimeLine)),
 };
 
-function renderTimeLine(widgetContainer: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+function renderTimeLine(widgetContainer: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: WidgetContext): ChartFrame {
   return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeLine(result, widget.props, options, offerFiltersOf(commands, widget)),
+    draw: (result, options) => drawTimeLine(result, widget.props, options, ctx),
   });
 }
 
-function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, offerFilters: OfferFilters) {
+function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
   const schema = new SchemaAnalyzer(data);
   if (!(bucketSizeOf(data) ?? props.x.xBucketSizeMs)) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
@@ -77,7 +75,7 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
     },
     marks: [
       Plot.line(data, { ...lines, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
-      filterOnClick(Plot.line, data, { ...lines, pointer, fields: [props.zField, props.strokeField, props.fx, props.fy], offerFilters }),
+      filterOnClick(Plot.line, data, { ...lines, pointer, fields: [props.zField, props.strokeField, props.fx, props.fy], ctx }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

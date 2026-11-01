@@ -5,9 +5,8 @@ import type { CellComponent, ColumnComponent, ColumnDefinition, RowComponent } f
 import { Braces, Copy, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
 import type { MenuAnchor } from '../../hosts/ui/ui';
-import type { QueryResult, WidgetRecord } from '../../hosts/widgets/widgets';
-import { candidateOf, columnTypesOf } from './candidate';
-import type { OfferFilters } from '../filter-library/offer';
+import type { QueryResult, WidgetContext, WidgetRecord } from '../../hosts/widgets/widgets';
+import { columnTypesOf, dataPointOf } from './data-point';
 import './table.css';
 
 const canvasElement = document.createElement('canvas');
@@ -426,7 +425,7 @@ export interface TableCellMenuContext {
   readonly value: unknown;
   /** Whether the column holds timestamps (a time type, or named `timestamp`). */
   readonly timestamp: boolean;
-  /** Whether a click on a cell offers to filter by its value or exclude it (the quick pick "Filter"). */
+  /** Whether a click on a cell shows its data point menu (where the `filters` extension offers to filter by it). */
   readonly filtering: boolean;
 }
 
@@ -458,9 +457,10 @@ function headerTitle(title: string, column: ColumnComponent, showMenu: ShowTable
 /**
  * The rows of `queryResult` as a table (Tabulator) below `props.title`: a search box, filters per column, sticky
  * tooltips that can be pinned. With `selectRecords`, a checkbox in front of each row (and one for all) ticks it, each
- * change calling `selectRecords` with the ticked rows. With `offerFilters`, a click on a cell of a column in
- * `filterable` (the widget's, page.json) offers its value (`candidateOf`, with the column's type), its column's name the field id; a NULL offers nothing, and a Map, Array or
- * Tuple column (Arrow's map, list, struct) holds no category. With `showMenu`, a right click on a cell shows the menu
+ * change calling `selectRecords` with the ticked rows. With `showDataPointMenu`, a click on a cell of a column in
+ * `filterable` (the widget's, page.json) shows the data point menu of its value (`dataPointOf`, with the column's
+ * type), its column's name the field; a NULL shows nothing, and a Map, Array or Tuple column (Arrow's map, list,
+ * struct) holds no category. With `showMenu`, a right click on a cell shows the menu
  * `table/cell` (a `TableCellMenuContext`), a column header's menu button the menu `table/header` (a
  * `TableHeaderMenuContext`); extensions add their entries there (the `table` extension: SQL filters, auto-size).
  */
@@ -468,11 +468,16 @@ export function drawTable(
   queryResult: QueryResult,
   props: TableProps,
   {
-    offerFilters,
+    showDataPointMenu,
     filterable = [],
     selectRecords,
     showMenu,
-  }: { offerFilters?: OfferFilters; filterable?: readonly string[]; selectRecords?: (records: readonly WidgetRecord[]) => void; showMenu?: ShowTableMenu } = {},
+  }: {
+    showDataPointMenu?: WidgetContext['showDataPointMenu'];
+    filterable?: readonly string[];
+    selectRecords?: (records: readonly WidgetRecord[]) => void;
+    showMenu?: ShowTableMenu;
+  } = {},
 ) {
 
   // Convert Apache Arrow Table to plain JavaScript objects for Tabulator
@@ -481,8 +486,8 @@ export function drawTable(
   // The search: each change calls applySearch
   let searchTerm = '';
 
-  // With `offerFilters`, a click on a cell of a category column offers its value (see the cellClick handler below)
-  const filtering = offerFilters !== undefined;
+  // With `showDataPointMenu`, a click on a cell of a category column shows its value's menu (the cellClick handler below)
+  const filtering = showDataPointMenu !== undefined;
   const categoryColumns = new Set(
     (queryResult?.schema?.fields ?? [])
       .filter((field: any) => filterable.includes(field.name))
@@ -655,8 +660,8 @@ export function drawTable(
   tabulatorTable.on("cellClick", (e: UIEvent, cell: CellComponent) => {
     const fieldName = cell.getField();
     const value = cell.getValue();
-    if (!offerFilters || !filters(fieldName) || value === null || value === undefined) return;
-    offerFilters(cell.getElement(), [candidateOf(fieldName, value, columnTypesOf(queryResult))]);
+    if (!showDataPointMenu || !filters(fieldName) || value === null || value === undefined) return;
+    showDataPointMenu(cell.getElement(), [dataPointOf(fieldName, value, columnTypesOf(queryResult))]);
   });
 
   // Re-paint search highlights after every (re)render — covers filter changes,

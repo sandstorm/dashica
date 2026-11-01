@@ -2,7 +2,6 @@ import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf, WidgetRecord } from '../../hosts/widgets/widgets';
 import { ChartFrame } from '../chart-library/chart-frame';
-import { offerFiltersOf } from '../filter-library/offer';
 import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } from '../chart-library/table';
 
 /**
@@ -10,7 +9,8 @@ import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } fro
  * be pinned. Its ticked rows are its own: each change of them runs the command `details.showRecords` with the table
  * and its ticked rows (`{ widget, records }`, Details shows them), as does each answer and the table's removal when
  * they clear rows that were ticked. The press on a checkbox makes the table active, as any press in a widget does.
- * A click on a cell offers to filter by its value or exclude it (by its column's name; the command `filters.offer`).
+ * A click on a cell shows the data point menu of its value (by its column's name), where the `filters` extension offers
+ * to filter by it or exclude it.
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter (the command `filters.addSql`), only while the server takes SQL chips (`workbench.json`'s
  * `sqlEnabled`); a column header's (`table/header`) size the columns.
@@ -56,7 +56,7 @@ function renderTable(widgetContainer: HTMLElement, widget: WidgetOf<'table'>, ct
       // the table of a new answer has no row ticked
       tick([]);
       const tableElement = drawTable(result, widget.props, {
-        offerFilters: offerFiltersOf(commands, widget),
+        showDataPointMenu: (at, dataPoints) => ctx.showDataPointMenu(at, dataPoints),
         filterable: widget.filterable,
         selectRecords: tick,
         showMenu: (menuId, anchor, context) => ctx.showMenu(menuId, anchor, context),
@@ -80,8 +80,8 @@ const around = (ms: number) => (cell: TableCellMenuContext) => {
 };
 
 /**
- * A cell's SQL filters, in menu order. A table whose cells filter on a click leaves "Equals" / "Not equals" to that
- * click's quick pick, and keeps the entries no filter op says.
+ * A cell's SQL filters, in menu order. A table whose cells show their data point menu on a click leaves "Equals" /
+ * "Not equals" to that menu's filters, and keeps the entries no filter op says.
  */
 const CELL_FILTERS: readonly {
   command: string;

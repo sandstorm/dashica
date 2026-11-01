@@ -1,24 +1,22 @@
 import * as Plot from '@observablehq/plot';
 import type { TimeHeatmapOrdinalProps, TimeHeatmapProps } from '../../generated/zz_generated.dashica';
-import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import { filterOnClick } from '../chart-library/filter-on-click';
-import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
  * The widget types `timeHeatmap` and `timeHeatmapOrdinal`: a cell per time bucket (`x`) and `y` bucket, or per distinct
  * `y` value, colored by its measure (`fill`) in blues, inferno in dark mode. A click on a cell of an ordinal heatmap
- * offers its row (`y`) to filter by or exclude.
+ * shows the data point menu of its row (`y`, `filterOnClick`).
  */
 export const heatmap: Extension = {
   id: 'heatmap',
-  activate({ widgets, commands, subscriptions }) {
+  activate({ widgets, subscriptions }) {
     subscriptions.push(widgets.registerWidget('timeHeatmap', renderTimeHeatmap));
-    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', (widgetContainer, widget, ctx) => renderTimeHeatmapOrdinal(widgetContainer, widget, ctx, commands)));
+    subscriptions.push(widgets.registerWidget('timeHeatmapOrdinal', renderTimeHeatmapOrdinal));
   },
 };
 
@@ -32,11 +30,11 @@ function renderTimeHeatmap(widgetContainer: HTMLElement, widget: WidgetOf<'timeH
   });
 }
 
-function renderTimeHeatmapOrdinal(widgetContainer: HTMLElement, widget: WidgetOf<'timeHeatmapOrdinal'>, ctx: WidgetContext, commands: Commands): ChartFrame {
+function renderTimeHeatmapOrdinal(widgetContainer: HTMLElement, widget: WidgetOf<'timeHeatmapOrdinal'>, ctx: WidgetContext): ChartFrame {
   return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, offerFiltersOf(commands, widget)),
+    draw: (result, options) => drawTimeHeatmapOrdinal(result, widget.props, options, ctx),
   });
 }
 
@@ -88,7 +86,7 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
 }
 
 /** `color` and `colorScheme` are not used: a bug the port keeps (docs/2026-10-28-workbench.md §5). */
-function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, offerFilters: OfferFilters) {
+function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
   const xBucketSize = props.x.xBucketSizeMs;
@@ -128,7 +126,7 @@ function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProp
     },
     marks: [
       Plot.barX(data, { ...cells, tip: pointer }),
-      filterOnClick(Plot.barX, data, { ...cells, pointer, fields: [props.y], offerFilters }),
+      filterOnClick(Plot.barX, data, { ...cells, pointer, fields: [props.y], ctx }),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
     ],

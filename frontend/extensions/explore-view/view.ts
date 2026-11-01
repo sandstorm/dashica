@@ -7,7 +7,7 @@ import type { Memento } from '../../hosts/extension-host/extension-host';
 import type { PageContext } from '../../hosts/page/page';
 import type { QueryApi } from '../../hosts/query/query';
 import type { MenuAnchor } from '../../hosts/ui/ui';
-import type { FilterCandidate } from '../filter-library/offer';
+import type { DataPoint } from '../../hosts/widgets/widgets';
 import { completionOf, type SqlEditor, type SqlEditors } from '../sql-library/sql-editor';
 import { widgetTitle } from '../widget-library/widget-title';
 import { initialView, type InitialView, type ViewerConfig } from './mapping';
@@ -88,8 +88,8 @@ export interface ExploreViewOptions {
   navigate(hash: string): void;
   /** The view's "Close". */
   close(): void;
-  /** A click on a group row's value (`perspective-click`): offers to filter by it, at the click. */
-  offerFilters(at: MenuAnchor, candidates: readonly FilterCandidate[]): void;
+  /** A click on a group row's value (`perspective-click`): shows the chart's data point menu for it, at the click. */
+  showDataPointMenu(at: MenuAnchor, dataPoints: readonly DataPoint[]): void;
   /** Asks below `anchorElement` (the "Reset" button) whether to reset the viewer's config; `true`: reset. */
   confirmReset(anchorElement: Element): Promise<boolean>;
 }
@@ -607,17 +607,17 @@ class ExploreView {
       void this.options.state.update(stateKey(this.options.widget, this.#edited !== undefined), persistable(getConfig()));
     });
     viewerElement.addEventListener('perspective-click', (event: Event) => {
-      const candidate = this.#clicked((event as CustomEvent<{ config?: ViewerConfig }>).detail);
-      if (candidate) this.options.offerFilters(this.#pointer, [candidate]);
+      const dataPoint = this.#clicked((event as CustomEvent<{ config?: ViewerConfig }>).detail);
+      if (dataPoint) this.options.showDataPointMenu(this.#pointer, [dataPoint]);
     });
   }
 
   /**
-   * The value a click on a group row offers: the deepest of its group filters (`[column, '==', value]`) on a column
+   * The data point of a click on a group row: the deepest of its group filters (`[column, '==', value]`) on a column
    * of the rows that is no date or time; `undefined` for any other click, and for every click on the rows of an edited
    * query: their columns are whatever its text selects, and a page filter does not change the edited query.
    */
-  #clicked(detail: { config?: ViewerConfig } | undefined): FilterCandidate | undefined {
+  #clicked(detail: { config?: ViewerConfig } | undefined): DataPoint | undefined {
     if (this.#edited !== undefined) return undefined;
     const schema = this.#shown?.schema ?? {};
     const filters = (detail?.config?.filter ?? []).filter(
@@ -625,7 +625,7 @@ class ExploreView {
     );
     const last = filters.at(-1);
     if (!last) return undefined;
-    return { fieldId: last[0], value: String(last[2]) };
+    return { field: last[0], value: String(last[2]) };
   }
 
   #showNotes(notes: readonly string[]): void {

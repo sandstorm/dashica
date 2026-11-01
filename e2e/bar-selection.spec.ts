@@ -1,6 +1,7 @@
 // Tests for click to filter on bar charts (docs/2026-10-28-workbench.md §3.8, step 8c): a click on a bar offers, in the
-// quick pick "Filter", "<field> = <value>" to filter by (a filter icon) and "<field> ≠ <value>" to exclude (a minus
-// icon); choosing one adds the chip at once; Escape and a click elsewhere close the quick pick without a chip.
+// data point menu (the quick pick "Data point"), "<field> = <value>" to filter by (a filter icon) and
+// "<field> ≠ <value>" to exclude (a minus icon); choosing one adds the chip at once; Escape and a click elsewhere
+// close the quick pick without a chip.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress", its bar chart "Absolute HTTP 500
 // Errors per Instance" (category `instance`), over the last 7 days: it needs HTTP 500s in that range. Another page and
@@ -23,7 +24,7 @@ async function firstBar(page: Page) {
 }
 
 /** The quick pick a click on a chart opens. */
-const quickPick = (page: Page) => page.getByRole('dialog', {name: 'Filter'});
+const quickPick = (page: Page) => page.getByRole('dialog', {name: 'Data point'});
 
 test('a click on a bar offers to filter by its category or exclude it; "Filter" adds it as a chip at once', async ({page}) => {
     const bar = await firstBar(page);
