@@ -1,11 +1,11 @@
-// See filterDecorations.
+// See filters in filters.ts.
 import type { WidgetDecoration, WidgetDecorationProvider } from '../../hosts/widgets/widgets';
 import { diagnosticsOf, type Diagnostics } from '../filter-library/diagnostics';
 
 /**
- * What a chart's Diagnostics show on it (docs/2026-10-28-workbench.md §3.8, §3.15 D38): a chart that did not run says
- * why ("skipped: pick a host"), else each pill it ignores is a badge "ignores <label>" with the chart drawn muted
- * (D28): what it draws holds only part of what the page filters.
+ * What a chart's Diagnostics show on it: a chart that did not run says why ("skipped: pick a host"), else each pill it
+ * ignores is a badge "ignores <label>" with the chart drawn muted, as what it draws holds only part of what the page
+ * filters.
  */
 export function filterDecorations({ ignored = [], skipped }: Diagnostics): WidgetDecoration[] {
   if (skipped) return [{ badge: `skipped: ${skipped}`, tooltip: 'The chart did not run', source: SOURCE }];

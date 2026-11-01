@@ -1,13 +1,13 @@
-// See opsOf, OP_SIGNS and OP_ICONS.
+// See filters in filters.ts.
 import { ChevronLeft, ChevronRight, Filter, Minus, createElement } from 'lucide';
 import type { QuickPickIcon } from '../../hosts/ui/ui';
 import { typeKind } from '../widget-library/clickhouse-type';
 import { FILTER_OPS, type FilterOp } from './chips';
 
 /**
- * The ops a field of ClickHouse type `type` offers, in the order the quick picks show them (docs/2026-10-28-workbench.md
- * §3.15 D25): text (a String, an Enum, a Bool, an unknown type) `=` and `≠`; a number also `<`, `≤`, `>`, `≥`; a time or
- * a day `≥` and `≤` first, then `>`, `<`, `=`, `≠`.
+ * The ops a field of ClickHouse type `type` offers, in the order the quick picks show them: text (a String, an Enum, a
+ * Bool, an unknown type) `=` and `≠`; a number also `<`, `≤`, `>`, `≥`; a time or a day `≥` and `≤` first, then `>`,
+ * `<`, `=`, `≠`.
  */
 export function opsOf(type: string | undefined): readonly FilterOp[] {
   const kind = typeKind(type);

@@ -1,4 +1,4 @@
-// See addFilter.
+// See filters in filters.ts.
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import type { QueryApi } from '../../hosts/query/query';
 import { QuickPickItemKind, type MenuAnchor, type QuickPickItem, type QuickPickSeparator, type UiApi } from '../../hosts/ui/ui';
@@ -7,6 +7,66 @@ import { FILTERS, addChip, type FilterOp } from './chips';
 import { fetchPill, fieldParam, type FieldRef, type PillSource } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import type { PillField } from './pill-key';
+
+/**
+ * The filter bar's "Add filter": asks in quick picks at `anchor` for one of `tables` (none asked when there is only
+ * one), one of its columns or computed fields (`fieldItems`, with their types from the charts' `/fields` in `query`'s
+ * state, kept in `fields`; its quick pick opens at once, busy until they answer), an op of its type (`opsOf`, in a
+ * menu, asking nothing more; a time's values are never asked), and a value (`askValue`); the value becomes that
+ * chart's pill (`fetchPill`), added to the chips of `query`. With `askSql` (sql_filter_enabled) the first quick pick
+ * ends with "SQL condition…" under "Advanced" (its only entry while no chart filters a table), which asks the
+ * condition in the SQL input box (`addSqlCondition`). Escape at any step adds nothing; a failed `/pill` shows the
+ * server's message in the value's still-open box.
+ */
+export async function addFilter(
+  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox'>,
+  query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
+  tables: readonly FilterableTable[],
+  anchor: MenuAnchor,
+  fields: FieldsCache,
+  askSql?: AskSql,
+): Promise<void> {
+  const advanced: readonly (SqlItem | QuickPickSeparator)[] = askSql
+    ? [{ kind: QuickPickItemKind.Separator, label: 'Advanced' }, { label: 'SQL condition…', description: 'every query’s WHERE', sql: true }]
+    : [];
+  let table = tables.length === 1 ? tables[0] : undefined;
+  if (!table) {
+    const first = await ui.showQuickPick<(QuickPickItem & { table: FilterableTable }) | SqlItem>(
+      [...tables.map((t) => ({ label: t.table, description: t.connection, table: t })), ...advanced],
+      { anchor, title: 'Add filter', placeholder: tables.length > 0 ? 'The table to filter' : undefined },
+    );
+    if (first && 'sql' in first) return addSqlCondition(askSql!, query, anchor);
+    table = first?.table;
+    if (!table) return;
+  }
+  // opens at once, busy while the charts' `/fields` answer
+  const field = await ui.showQuickPick<FieldItem | SqlItem>(
+    fieldItems(table, fields, query.requestParams()).then((items) => [...items, ...(tables.length === 1 ? advanced : [])]),
+    { anchor, title: 'Add filter', placeholder: `A column or field of ${table.table}` },
+  );
+  if (field && 'sql' in field) return addSqlCondition(askSql!, query, anchor);
+  if (!field) return;
+  const { ref, widget, known } = field;
+  // the type decides the ops; without one (a failed `/fields`) they are = and ≠
+  const op = await ui.showQuickPick(
+    opsOf(known?.type).map((op) => ({ label: `${ref.field} ${OP_SIGNS[op]} …`, icon: OP_ICONS[op], op })),
+    { anchor, title: 'Add filter', menu: true },
+  );
+  if (!op) return;
+  const sign = OP_SIGNS[op.op];
+  await askValue(
+    ui,
+    anchor,
+    `${ref.field} ${sign}`,
+    op.op,
+    known,
+    (search, signal) => fetchValues(widget.dataUrl, ref, search, query.requestParams(), signal),
+    async (value) => {
+      const { key } = await fetchPill(widget.dataUrl, { field: ref.field, column: ref.column, op: op.op, value });
+      query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
+    },
+  );
+}
 
 /** A table the shown page's charts filter (`page.json`'s `table` of a widget), and the fields they filter it by. */
 export interface FilterableTable {
@@ -62,117 +122,6 @@ export function fieldSource(
 }
 
 /**
- * The filter bar's "add filter" (as Grafana's ad hoc filters; docs/2026-10-28-workbench.md §3.14 D15, §3.15 D25, D27):
- * asks in quick picks at `anchor` for one of `tables` (none asked when there is only one), one of its columns or
- * computed fields (`fieldItems`, with their types from the charts' `/fields` in `query`'s state, kept in `fields`; its
- * quick pick opens at once, busy until they answer), an
- * op of its type (`opsOf`, in a menu, asking nothing more; a time's values are never asked), and a value
- * (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
- * chips of `query`. With `askSql` (sql_filter_enabled, §3.15 D26) the first quick pick ends with "SQL condition…"
- * under "Advanced" (its only entry while no chart filters a table), which asks the condition in the SQL input box
- * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` shows the server's message in the value's
- * still-open box.
- */
-export async function addFilter(
-  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox'>,
-  query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
-  tables: readonly FilterableTable[],
-  anchor: MenuAnchor,
-  fields: FieldsCache,
-  askSql?: AskSql,
-): Promise<void> {
-  const advanced: readonly (SqlItem | QuickPickSeparator)[] = askSql
-    ? [{ kind: QuickPickItemKind.Separator, label: 'Advanced' }, { label: 'SQL condition…', description: 'every query’s WHERE', sql: true }]
-    : [];
-  let table = tables.length === 1 ? tables[0] : undefined;
-  if (!table) {
-    const first = await ui.showQuickPick<(QuickPickItem & { table: FilterableTable }) | SqlItem>(
-      [...tables.map((t) => ({ label: t.table, description: t.connection, table: t })), ...advanced],
-      { anchor, title: 'Add filter', placeholder: tables.length > 0 ? 'The table to filter' : undefined },
-    );
-    if (first && 'sql' in first) return addSqlCondition(askSql!, query, anchor);
-    table = first?.table;
-    if (!table) return;
-  }
-  // opens at once, busy while the charts' `/fields` answer
-  const field = await ui.showQuickPick<FieldItem | SqlItem>(
-    fieldItems(table, fields, query.requestParams()).then((items) => [...items, ...(tables.length === 1 ? advanced : [])]),
-    { anchor, title: 'Add filter', placeholder: `A column or field of ${table.table}` },
-  );
-  if (field && 'sql' in field) return addSqlCondition(askSql!, query, anchor);
-  if (!field) return;
-  const { ref, widget, known } = field;
-  // the type decides the ops; without one (a failed `/fields`) they are = and ≠
-  const op = await ui.showQuickPick(
-    opsOf(known?.type).map((op) => ({ label: `${ref.field} ${OP_SIGNS[op]} …`, icon: OP_ICONS[op], op })),
-    { anchor, title: 'Add filter', menu: true },
-  );
-  if (!op) return;
-  const sign = OP_SIGNS[op.op];
-  await askValue(
-    ui,
-    anchor,
-    `${ref.field} ${sign}`,
-    op.op,
-    known,
-    (search, signal) => fetchValues(widget.dataUrl, ref, search, query.requestParams(), signal),
-    async (value) => {
-      const { key } = await fetchPill(widget.dataUrl, { field: ref.field, column: ref.column, op: op.op, value });
-      query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
-    },
-  );
-}
-
-/** A column or a computed field "Add filter" offers, the chart that serves it, its type and the time range. */
-interface FieldItem extends QuickPickItem {
-  readonly ref: FieldRef;
-  readonly widget: PillSource;
-  readonly known?: FieldType;
-}
-
-/**
- * The entries of "Add filter"'s field step for `table` (§3.15 D27, D39): under "Table columns" each column of the
- * table, with its type, as its first chart's `/fields` answers them in the query state `params` (the schema, so also
- * the columns no chart shows); under "Computed fields" the charts' fields that are more than a column (`computed`),
- * each once, with its type as its chart's `/fields` answers it. Each chart's `/fields` is asked once, all at once,
- * through `fields`. Without the schema (a failed `/fields`, its message beside the heading) the columns are the
- * charts' fields that are one, each made by its chart.
- */
-async function fieldItems(table: FilterableTable, fields: FieldsCache, params: URLSearchParams): Promise<(FieldItem | QuickPickSeparator)[]> {
-  const answerOf = (widget: PillSource) => fields.get(widget.dataUrl, params);
-  const ofField = (f: FilterableField, answer?: Fields): FieldItem => {
-    const known = answer && typeIn(answer, { field: f.field });
-    return { label: f.field, ref: { field: f.field }, widget: f.widget, ...(known ? { description: known.type, known } : {}) };
-  };
-  const [schema, ...computed] = await Promise.all([
-    answerOf(table.widget).then(
-      (answer) => ({ answer }),
-      (error: unknown) => ({ error }),
-    ),
-    ...table.fields.filter((f) => f.computed).map((f) => answerOf(f.widget).then((answer) => ofField(f, answer), () => ofField(f))),
-  ]);
-  const columns: (FieldItem | QuickPickSeparator)[] =
-    'answer' in schema
-      ? [
-          { kind: QuickPickItemKind.Separator, label: 'Table columns' },
-          ...schema.answer.columns.map(({ name }) => {
-            const known = typeIn(schema.answer, { field: name, column: true })!;
-            return { label: name, description: known.type, ref: { field: name, column: true }, widget: table.widget, known };
-          }),
-        ]
-      : [
-          { kind: QuickPickItemKind.Separator, label: 'Table columns', description: schema.error instanceof Error ? schema.error.message : String(schema.error) },
-          ...table.fields.filter((f) => !f.computed).map((f) => ofField(f)),
-        ];
-  return [...columns, ...(computed.length > 0 ? [{ kind: QuickPickItemKind.Separator, label: 'Computed fields' } as const, ...computed] : [])];
-}
-
-/** "Add filter"'s advanced entry, "SQL condition…". */
-interface SqlItem extends QuickPickItem {
-  readonly sql: true;
-}
-
-/**
  * Asks for SQL (a condition) in an input box at `options.anchor`, while the server takes SQL chips (sql_filter_enabled):
  * the filters extension's SQL editor in it (`showSqlInputBox`). Resolves with the text, or `undefined` without.
  */
@@ -183,15 +132,6 @@ export const SQL_PROMPT = 'Added to the WHERE of every query of the page; Shift+
 
 /** A SQL condition's field while it is empty. */
 export const SQL_PLACEHOLDER = "e.g., status = 'active' AND region IN ('us-east', 'eu-west')";
-
-/**
- * Asks for a SQL condition (`duration > 2000`) by `askSql` at `anchor` and adds it to the chips of `query` as a SQL
- * chip; nothing on Escape or a text of only spaces.
- */
-async function addSqlCondition(askSql: AskSql, query: Pick<QueryApi, 'get' | 'set'>, anchor: MenuAnchor): Promise<void> {
-  const sql = await askSql({ title: 'SQL condition', prompt: SQL_PROMPT, placeholder: SQL_PLACEHOLDER, anchor });
-  if (sql !== undefined) query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'sql', sql }));
-}
 
 /**
  * Asks for a value to compare by `op` at `anchor`, titled `title`, for a field of the type `known` names (as its
@@ -229,17 +169,6 @@ export function askValue(
   if (!(known instanceof Promise)) return inputBox(known)?.() ?? pickValue(ui, anchor, title, load, accept);
   return pickValue(ui, anchor, title, load, accept, known.then(inputBox, () => undefined));
 }
-
-/** Asks for the value in a box of its own (a time's input box) in place of `pickValue`'s. */
-type AskInstead = () => Promise<string | undefined>;
-
-/** A value `pickValue` offers. */
-interface ValueItem extends QuickPickItem {
-  readonly value: string;
-}
-
-/** How long the typing rests before the values are asked again, in ms. */
-const SEARCH_DELAY = 200;
 
 /**
  * Asks for a value in a quick pick at `anchor` titled `title`: the values `load` finds for the typed text (asked at
@@ -372,7 +301,7 @@ export interface Column {
   readonly type: string;
 }
 
-/** What `<dataUrl>/fields` answers for a chart (docs/2026-10-28-workbench.md §3.15 D39). */
+/** What `<dataUrl>/fields` answers for a chart. */
 export interface Fields {
   /** The columns of its table, from the server's schema. */
   readonly columns: readonly Column[];
@@ -431,3 +360,72 @@ export class FieldsCache {
     return answer;
   }
 }
+
+/** "Add filter"'s advanced entry, "SQL condition…". */
+interface SqlItem extends QuickPickItem {
+  readonly sql: true;
+}
+
+/**
+ * Asks for a SQL condition (`duration > 2000`) by `askSql` at `anchor` and adds it to the chips of `query` as a SQL
+ * chip; nothing on Escape or a text of only spaces.
+ */
+async function addSqlCondition(askSql: AskSql, query: Pick<QueryApi, 'get' | 'set'>, anchor: MenuAnchor): Promise<void> {
+  const sql = await askSql({ title: 'SQL condition', prompt: SQL_PROMPT, placeholder: SQL_PLACEHOLDER, anchor });
+  if (sql !== undefined) query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'sql', sql }));
+}
+
+/** A column or a computed field "Add filter" offers, the chart that serves it, its type and the time range. */
+interface FieldItem extends QuickPickItem {
+  readonly ref: FieldRef;
+  readonly widget: PillSource;
+  readonly known?: FieldType;
+}
+
+/**
+ * The entries of "Add filter"'s field step for `table`: under "Table columns" each column of the
+ * table, with its type, as its first chart's `/fields` answers them in the query state `params` (the schema, so also
+ * the columns no chart shows); under "Computed fields" the charts' fields that are more than a column (`computed`),
+ * each once, with its type as its chart's `/fields` answers it. Each chart's `/fields` is asked once, all at once,
+ * through `fields`. Without the schema (a failed `/fields`, its message beside the heading) the columns are the
+ * charts' fields that are one, each made by its chart.
+ */
+async function fieldItems(table: FilterableTable, fields: FieldsCache, params: URLSearchParams): Promise<(FieldItem | QuickPickSeparator)[]> {
+  const answerOf = (widget: PillSource) => fields.get(widget.dataUrl, params);
+  const ofField = (f: FilterableField, answer?: Fields): FieldItem => {
+    const known = answer && typeIn(answer, { field: f.field });
+    return { label: f.field, ref: { field: f.field }, widget: f.widget, ...(known ? { description: known.type, known } : {}) };
+  };
+  const [schema, ...computed] = await Promise.all([
+    answerOf(table.widget).then(
+      (answer) => ({ answer }),
+      (error: unknown) => ({ error }),
+    ),
+    ...table.fields.filter((f) => f.computed).map((f) => answerOf(f.widget).then((answer) => ofField(f, answer), () => ofField(f))),
+  ]);
+  const columns: (FieldItem | QuickPickSeparator)[] =
+    'answer' in schema
+      ? [
+          { kind: QuickPickItemKind.Separator, label: 'Table columns' },
+          ...schema.answer.columns.map(({ name }) => {
+            const known = typeIn(schema.answer, { field: name, column: true })!;
+            return { label: name, description: known.type, ref: { field: name, column: true }, widget: table.widget, known };
+          }),
+        ]
+      : [
+          { kind: QuickPickItemKind.Separator, label: 'Table columns', description: schema.error instanceof Error ? schema.error.message : String(schema.error) },
+          ...table.fields.filter((f) => !f.computed).map((f) => ofField(f)),
+        ];
+  return [...columns, ...(computed.length > 0 ? [{ kind: QuickPickItemKind.Separator, label: 'Computed fields' } as const, ...computed] : [])];
+}
+
+/** Asks for the value in a box of its own (a time's input box) in place of `pickValue`'s. */
+type AskInstead = () => Promise<string | undefined>;
+
+/** A value `pickValue` offers. */
+interface ValueItem extends QuickPickItem {
+  readonly value: string;
+}
+
+/** How long the typing rests before the values are asked again, in ms. */
+const SEARCH_DELAY = 200;

@@ -17,28 +17,15 @@ import './filters.css';
 
 /**
  * The filters of a page, kept in its tab's query state (`FILTERS`, declared here: `?f=<key>&sql=…`), and the filter
- * bar of a page that has one (`page.json`'s `filterBar`): it shows one chip per filter, a pill
- * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
- * SQL chip's text asks a new one below the chip. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
- * offers the ops of its type (`opsOf`: `=` / `≠`, for a number or a time also `<` `≤` `>` `≥`), one on its value asks
- * a new one (as "Add filter" does); each edit asks a chart of the page on the pill's table with that field, for a
- * column's pill any chart on it (`fieldSource`), for the pill again and puts it in the chip's place; the field's type
- * is that chart's `/fields` answer, which "Add filter" and the edits share (`FieldsCache`). A pill no chart
- * of the page makes, and a
- * button's pill outside its page, can only be removed. "Add filter"'s advanced entry "SQL condition…" adds a SQL chip
- * (§3.15 D26). Both ask in the input box with sql-library's SQL editor (D12: ClickHouse's words, and with Explore on
- * the names of the page's first table's connection, `conditionCompletion`). Both only while the server takes SQL
- * chips (`workbench.json`'s `sqlEnabled`, sql_filter_enabled); else a SQL chip of a link can only be removed (the server answers it with 400). The page's filter buttons are toggles in
- * their place, each a signed pill, so they work without SQL chips: pressed while there is a pill of their condition
- * (`status >= 500`; a `...` in it is asked for and written in by the server, its value shown beside the button, a
- * click on it asks a new one), which then has no chip of its own. "Add filter" after the chips adds a pill on a column
- * or a computed field of one of the tables the page's charts read (`addFilter`), shown while there is one or SQL chips
- * are taken. The bar shows while it has a chip, a button or
- * "Add filter", else the page has no bar for nothing. A click on a chart, a table's cell or an Explore view's group row
- * shows the widgets host's data point menu, where this extension offers to filter by the clicked values
- * (`filterMenuProvider`); the item chosen runs `filters.addPill` (`(dataUrl, field, op, value)`), which adds that
- * widget's pill to the tab shown (`addPill`). A table cell's SQL filters run `filters.addSql` (`(condition)`), which adds the
- * condition as a SQL chip. A chart's answer is decorated with what it did with the pills (`filterDecorations`).
+ * bar of a page that has one (`page.json`'s `filterBar`): a chip per filter, a pill ("host = a", made and signed by the
+ * server) or SQL ("SQL: duration > 2000"), each removed with its ×. A click on a field pill's operator or value changes
+ * it, made again by a chart of the page on its table (`fieldSource`), a pill no chart makes is only removed; a click
+ * on a SQL chip asks a new text. "Add filter" adds a pill on a column or computed field of the tables the page's charts
+ * read (`addFilter`), or a SQL condition while the server takes SQL chips (`sqlEnabled`, sql_filter_enabled). The
+ * page's filter buttons are toggles in their place, pressed while their signed pill is there, without a chip of their
+ * own. A click on a chart, a table's cell or an Explore view's group row offers to filter by its values in the data
+ * point menu (`filterMenuProvider`, `filters.addPill`); a table cell's SQL filters run `filters.addSql`. A chart's
+ * answer is decorated with what it did with the pills (`filterDecorations`).
  */
 export const filters: Extension = {
   id: 'filters',
@@ -116,17 +103,6 @@ export function conditionCompletion(schemas: Pick<Schemas, 'get'> | undefined, t
     (schema) => completionOf(schema, first.table),
     () => undefined,
   );
-}
-
-/**
- * The pill of the filter button with `...` whose page answers at `url` (`page.json`'s `url`, `<page>/button?i=<index>`)
- * for `value`: the server writes the value in as a string literal and signs it.
- */
-async function fetchButtonPill(url: string, value: string): Promise<Pill> {
-  const response = await fetch(`${url}&${new URLSearchParams({ value })}`);
-  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
-  const { key } = (await response.json()) as Pill;
-  return { key };
 }
 
 /**
@@ -380,4 +356,15 @@ class FilterBar {
   #remove(which: number | ((chip: FilterChip) => boolean)): void {
     this.query.set(FILTERS, removeChips(this.query.get(FILTERS), which));
   }
+}
+
+/**
+ * The pill of the filter button with `...` whose page answers at `url` (`page.json`'s `url`, `<page>/button?i=<index>`)
+ * for `value`: the server writes the value in as a string literal and signs it.
+ */
+async function fetchButtonPill(url: string, value: string): Promise<Pill> {
+  const response = await fetch(`${url}&${new URLSearchParams({ value })}`);
+  if (!response.ok) throw new Error(`${response.status}: ${await response.text()}`);
+  const { key } = (await response.json()) as Pill;
+  return { key };
 }

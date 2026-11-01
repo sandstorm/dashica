@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
-// Tests for filters.ts: the filter bar per page, the chips (pills and SQL, added, SQL ones edited in the SQL editor's input box,
-// removed), what a SQL condition completes (conditionCompletion), no
-// funnel in the top bar, the buttons as toggles in place (buttonOf), their signed pills without a chip of their own, a
-// button's value asked for in an input box (the condition it makes below the field, buttonCondition; an empty one
-// refused), made a pill by its page and shown beside it, a new value in its chip's
-// place, "Add filter" while a chart filters a table or SQL chips are taken, its "SQL condition…" adding a SQL chip; a
-// field's pill edited in place, its operator picked among the ops of its type and its value asked anew (a time's in an
-// input box), each made again by a chart of the page (a column's by the table's first chart), its type from that
-// chart's /fields asked once per time range, one no chart makes only removed; with SQL filters off
-// (sql_filter_enabled), no "SQL condition…" and a SQL chip only removed, the buttons and the pills as before; its
-// data point menu provider registered and `filters.addPill` adding the pill to the tab shown; the charts' answers
-// decorated with the pills they ignore.
+// Tests for filters.ts: the filter bar per page, the chips (pills and SQL, added, SQL ones edited in the SQL editor's
+// input box, removed), what a SQL condition completes (conditionCompletion), the top bar without a funnel, the buttons
+// as toggles in place (buttonOf), their signed pills without a chip of their own, a button's value asked for in an
+// input box (the condition it makes below the field, buttonCondition; an empty one refused), made a pill by its page
+// and shown beside it, a new value in its chip's place, "Add filter" while a chart filters a table or SQL chips are
+// taken, its "SQL condition…" adding a SQL chip; a field's pill edited in place, its operator picked among the ops of
+// its type and its value asked anew (a time's in an input box), each made again by a chart of the page (a column's by
+// the table's first chart), its type from that chart's /fields asked once per time range, one no chart makes only
+// removed; with SQL filters off (sql_filter_enabled), no "SQL condition…" and a SQL chip only removed, the buttons and
+// the pills working the same; its data point menu provider registered and `filters.addPill` adding the pill to the tab
+// shown; the charts' answers decorated with the pills they ignore.
 import { Table } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';

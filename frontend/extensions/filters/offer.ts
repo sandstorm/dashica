@@ -1,17 +1,13 @@
-// See filterMenuProvider and addPill.
+// See filters in filters.ts.
 import type { QueryApi } from '../../hosts/query/query';
 import type { DataPointMenuItem, DataPointMenuProvider } from '../../hosts/widgets/widgets';
 import { FILTERS, addChip, type FilterOp, type Pill } from './chips';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 
-/** The command a data point menu's filter runs (`(dataUrl, field, op, value)`), which `addPill` does. */
-export const ADD_PILL = 'filters.addPill';
-
 /**
- * What a click on a chart's mark, a table's cell or an Explore view's group row offers to filter by
- * (docs/2026-10-28-workbench.md §3.8, §3.15 D25, D46): in the widgets host's data point menu, for each data point whose
- * field the widget names `filterable` (page.json's), in order, one item per op of its type (`opsOf`), each with its own
- * sign: "status = 500" to filter by it (a filter icon), "status ≠ 500" to exclude it (a minus icon), for a number or a
+ * What a click on a chart's mark, a table's cell or an Explore view's group row offers to filter by: in the widgets
+ * host's data point menu, for each data point whose field the widget names `filterable` (page.json's), in order, one
+ * item per op of its type (`opsOf`), each with its own sign: "status = 500" to filter by it (a filter icon), "status ≠ 500" to exclude it (a minus icon), for a number or a
  * time "timestamp ≥ 2026-10-31T10:00:00.000Z" and the like to compare with it (a chevron; a time's `≥` and `≤` first).
  * Each runs `filters.addPill` with the widget's `dataUrl`, whose `/pill` makes the pill. None for a widget without
  * filterable fields.
@@ -33,6 +29,9 @@ export const filterMenuProvider: DataPointMenuProvider = {
   },
 };
 
+/** The command a data point menu's filter runs (`(dataUrl, field, op, value)`), which `addPill` does. */
+export const ADD_PILL = 'filters.addPill';
+
 /**
  * Adds the pill `<dataUrl>/pill` makes of `field` `op` `value` to the chips of `query` (the active tab's: the click
  * happened in the tab shown). Rejects with the server's message, adding none: the data point menu, still open, shows it.
@@ -52,8 +51,7 @@ export interface PillSource {
 }
 
 /**
- * What a pill filters by (docs/2026-10-28-workbench.md §3.15 D27): a chart's field by its alias, or with `column` a
- * column of the chart's table by its name.
+ * What a pill filters by: a chart's field by its alias, or with `column` a column of the chart's table by its name.
  */
 export interface FieldRef {
   readonly field: string;
@@ -68,8 +66,7 @@ export function fieldParam(ref: FieldRef): [string, string] {
 /**
  * The pill `<dataUrl>/pill` makes of `field` `op` `value` (a click's choice, "Add filter", an edited chip), its key
  * (the chip reads its label from it, `pillLabel`); with `column` the pill on that column of the chart's table
- * (`fieldParam`, §3.15 D27).
- * Rejects with the server's message (a field that cannot filter: 422).
+ * (`fieldParam`). Rejects with the server's message (a field that cannot filter: 422).
  */
 export async function fetchPill(
   dataUrl: string,

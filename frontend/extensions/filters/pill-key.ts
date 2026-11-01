@@ -1,4 +1,4 @@
-// See pillLabel, pillButton and pillField.
+// See filters in filters.ts.
 import type { FilterOp } from './chips';
 import { OP_SIGNS } from './ops';
 
@@ -10,10 +10,7 @@ export interface PillField {
   readonly table: string;
   /** The alias of the field (`host`), or with `column` the column's name. */
   readonly field: string;
-  /**
-   * Set for a pill on a column of `table` (docs/2026-10-28-workbench.md §3.15 D27, D29), whose key carries no
-   * condition, which any chart on it makes.
-   */
+  /** Set for a pill on a column of `table`, whose key carries no condition, which any chart on it makes. */
   readonly column?: true;
   readonly op: FilterOp;
   /** As the field shows it (`acme`, a time as ISO 8601); '' for an empty one. */

@@ -1,7 +1,6 @@
 /**
- * What a chart's server side tells about one answer (X-Dashica-Diagnostics, docs/2026-10-28-workbench.md §3.8): the
- * pills it does not apply, or that it did not run. Read by the `filters` extension, which shows it, and the Explore
- * view.
+ * What a chart's server side tells about one answer (X-Dashica-Diagnostics): the pills it ignores, or that it did not
+ * run. Read by the `filters` extension, which shows it, and the Explore view.
  */
 export interface Diagnostics {
   /** The labels of the page's pills the chart ignores (`['customer = acme']`: on another table), in the order of the URL. */
@@ -11,7 +10,7 @@ export interface Diagnostics {
 }
 
 /**
- * The Diagnostics of an answer (a chart's `QueryResult`, a `Response`): the header's JSON, percent-encoded since it
+ * The Diagnostics of an answer (a chart's `QueryResult`, a `Response`): the header's JSON, percent-encoded as it
  * carries any text (a label's "≠", umlauts); `{}` without the header.
  */
 export function diagnosticsOf({ headers }: { readonly headers: Headers }): Diagnostics {

@@ -2,9 +2,10 @@
 // Tests for add-filter.ts: the page's filterable tables (filterableTables), the chart that makes a pill again
 // (fieldSource), "add filter" through table, column or computed field, operator (of its type) and value to the pill of
 // its chart (addFilter), the field step's table columns from the schema and computed fields, its advanced "SQL
-// condition…" while SQL chips are taken (asked in the SQL editor's input box), a time's value in an input box at the edge of the time range (askValue, busy while a
-// type is still to come), the value's quick pick asking the server as the text changes (pickValue), the requests of /values and /fields
-// (fetchValues, fetchFields) and the /fields kept per chart and query state (FieldsCache).
+// condition…" while SQL chips are taken (asked in the SQL editor's input box), a time's value in an input box at the
+// edge of the time range (askValue, busy while a type is still to come), the value's quick pick asking the server as
+// the text changes (pickValue), the requests of /values and /fields (fetchValues, fetchFields) and the /fields kept per
+// chart and query state (FieldsCache).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';

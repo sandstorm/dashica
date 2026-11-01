@@ -1,14 +1,18 @@
-// See FILTERS.
+// See filters in filters.ts.
 import { queryKey, type QueryEntries } from '../../hosts/query/query';
 
 /**
- * How a pill compares its field with its value (`sql.Op`): `eq` equals (Filter by …), `ne` differs (Exclude …), `lt`
- * / `le` / `gt` / `ge` less than, at most, greater than, at least. Which a field offers depends on its type (`opsOf`).
+ * The filter chips of a tab's query state (`query.get(FILTERS)`), the `filters` extension's. In the URL, in the order
+ * they were added: one `f` per pill, one `sql` per SQL chip (`?f=<key>&sql=status >= 500`), none by default; the data
+ * handlers read them as they are. Each `f` and `sql` is one chip, in their order; an empty `f` and an `sql` of only
+ * spaces are left out. An `f` is kept as it is, whatever it holds: the server checks its signature. A `?sql=`
+ * holding several conditions is one chip.
  */
-export type FilterOp = 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge';
-
-/** Every op, as a number offers them and `pill-key.ts` reads one from a key. */
-export const FILTER_OPS: readonly FilterOp[] = ['eq', 'ne', 'lt', 'le', 'gt', 'ge'];
+export const FILTERS = queryKey<readonly FilterChip[]>(['f', 'sql'], {
+  parse: (url) => [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),
+  format: entriesOf,
+  sentToServer: true,
+});
 
 /** A chip of the filter bar: a pill (`?f=`), or a SQL condition every query of the page adds to its WHERE (`?sql=`). */
 export type FilterChip = PillFilter | SqlFilter;
@@ -35,22 +39,13 @@ export interface SqlFilter {
 }
 
 /**
- * The filter chips of a tab's query state (`query.get(FILTERS)`), the `filters` extension's. In the URL, in the order
- * they were added: one `f` per pill, one `sql` per SQL chip (`?f=<key>&sql=status >= 500`), none by default; the data
- * handlers read them as they are. Each `f` and `sql` is one chip, in their order; an empty `f` and an `sql` of only
- * spaces are left out. An `f` is kept as it is, whatever it holds: the server checks its signature. A single old
- * `?sql=` written by appending conditions is one chip.
+ * How a pill compares its field with its value (`sql.Op`): `eq` equals (Filter by …), `ne` differs (Exclude …), `lt`
+ * / `le` / `gt` / `ge` less than, at most, greater than, at least. Which a field offers depends on its type (`opsOf`).
  */
-export const FILTERS = queryKey<readonly FilterChip[]>(['f', 'sql'], {
-  parse: (url) => [...url].map(([key, value]) => parseChip(key, value)).filter((chip) => chip !== undefined),
-  format: entriesOf,
-  sentToServer: true,
-});
+export type FilterOp = 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge';
 
-/** Each of `chips` in order, an `f` or an `sql`. */
-function entriesOf(chips: readonly FilterChip[]): QueryEntries {
-  return chips.map((chip) => (chip.kind === 'sql' ? ['sql', chip.sql] : ['f', chip.key]));
-}
+/** Every op, as a number offers them and `pill-key.ts` reads one from a key. */
+export const FILTER_OPS: readonly FilterOp[] = ['eq', 'ne', 'lt', 'le', 'gt', 'ge'];
 
 /** `chips` with `chip` added at the end; `chips` itself when it is there already or a SQL chip of only spaces. */
 export function addChip(chips: readonly FilterChip[], chip: FilterChip): readonly FilterChip[] {
@@ -78,9 +73,16 @@ export function removeChips(chips: readonly FilterChip[], which: number | ((chip
   return kept.length < chips.length ? kept : chips;
 }
 
-function sameChip(a: FilterChip, b: FilterChip): boolean {
-  if (a.kind === 'sql') return b.kind === 'sql' && a.sql === b.sql;
-  return b.kind === 'pill' && a.key === b.key;
+/** The chip of the URL's entry `key`=`value`; `undefined` for another key, an empty `f`, an `sql` of only spaces. */
+function parseChip(key: string, value: string): FilterChip | undefined {
+  if (key === 'f' && value !== '') return { kind: 'pill', key: value };
+  if (key === 'sql' && value.trim() !== '') return { kind: 'sql', sql: value };
+  return undefined;
+}
+
+/** Each of `chips` in order, an `f` or an `sql`. */
+function entriesOf(chips: readonly FilterChip[]): QueryEntries {
+  return chips.map((chip) => (chip.kind === 'sql' ? ['sql', chip.sql] : ['f', chip.key]));
 }
 
 /** A SQL chip of only spaces: it filters nothing, the server leaves it out. */
@@ -88,9 +90,7 @@ function isEmpty(chip: FilterChip): boolean {
   return chip.kind === 'sql' && chip.sql.trim() === '';
 }
 
-/** The chip of the URL's entry `key`=`value`; `undefined` for another key, an empty `f`, an `sql` of only spaces. */
-function parseChip(key: string, value: string): FilterChip | undefined {
-  if (key === 'f' && value !== '') return { kind: 'pill', key: value };
-  if (key === 'sql' && value.trim() !== '') return { kind: 'sql', sql: value };
-  return undefined;
+function sameChip(a: FilterChip, b: FilterChip): boolean {
+  if (a.kind === 'sql') return b.kind === 'sql' && a.sql === b.sql;
+  return b.kind === 'pill' && a.key === b.key;
 }

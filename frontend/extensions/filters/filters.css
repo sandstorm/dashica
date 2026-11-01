@@ -45,7 +45,7 @@
   cursor: text;
 }
 
-/* a pill no chart of the page makes again: its label is not edited */
+/* a pill no chart of the page makes again: its label only shown */
 .d-filter-chip--pill span.d-filter-chip__value {
   cursor: default;
 }
