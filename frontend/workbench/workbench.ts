@@ -26,7 +26,7 @@ export function createWorkbench(hostContainer: HTMLElement, options: { extension
   const ui = new UiHost(hostContainer, session, commands);
   const page = new PageHost(doc.defaultView!, options.workbench, ui.contentContainer, session);
   const query = activeQuery(page);
-  const widgets = new WidgetsHost(ui, page);
+  const widgets = new WidgetsHost(ui, commands, page);
   const extensions = new ExtensionHost({ commands, ui, page, query, widgets, ownerDocument: doc });
   extensions.activate(options.extensions);
   const tabs = showTabs(page, ui.tabBarContainer, commands);

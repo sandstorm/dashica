@@ -42,7 +42,7 @@ export interface UiApi {
    * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
    * elsewhere, another box). Items still to come (a Promise, as a server's answer) open the box at once, busy (its
    * progress line, no "No results") until they are there; when they fail the box hides and the returned Promise
-   * rejects with their error. With `options.accept` the box stays open while it runs (`QuickPickOptions.accept`). As VS
+   * rejects with their error; a menu's that turn out none hide it, resolving with `undefined`. With `options.accept` the box stays open while it runs (`QuickPickOptions.accept`). As VS
    * Code's `window.showQuickPick`.
    */
   showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions<T>): Promise<T | undefined>;

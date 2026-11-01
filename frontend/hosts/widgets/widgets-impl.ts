@@ -3,9 +3,13 @@ import * as Arrow from 'apache-arrow';
 import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
+import type { Commands } from '../commands/commands';
 import type { ActiveQuerySource, QueryApi } from '../query/query';
 import type { MenuAnchor, UiApi } from '../ui/ui';
 import type {
+  DataPoint,
+  DataPointMenuItem,
+  DataPointMenuProvider,
   QueryResult,
   RenderedWidget,
   WidgetContext,
@@ -22,7 +26,8 @@ import './widgets.css';
  * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). The active widget of each tab is kept
  * under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a `WidgetInstance`:
  * its renderer's context and, as `active`, the widget itself. The decoration providers are asked by each instance when
- * its query answered (`decorationsOf`), and for every rendered instance when one fires.
+ * its query answered (`decorationsOf`), and for every rendered instance when one fires; the data point menu providers
+ * each time a data point menu is shown, whose chosen item runs through `commands`.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
@@ -37,9 +42,11 @@ export class WidgetsHost implements WidgetsApi {
   readonly #providers: WidgetDecorationProvider[] = [];
   /** The widgets rendered now, asked again when a provider fires. */
   readonly #rendered = new Set<WidgetInstance>();
+  readonly #dataPointMenuProviders: DataPointMenuProvider[] = [];
 
   constructor(
-    private readonly ui: Pick<UiApi, 'showContextMenu'>,
+    private readonly ui: Pick<UiApi, 'showContextMenu' | 'showQuickPick'>,
+    private readonly commands: Pick<Commands, 'executeCommand'>,
     private readonly tabs: ActiveQuerySource,
   ) {
     this.#onDidChangeTabs = tabs.onDidChangeTabs(() => this.#tell());
@@ -105,6 +112,50 @@ export class WidgetsHost implements WidgetsApi {
   /** Asks the providers again for each rendered widget. */
   #askProvidersAgain(): void {
     for (const widget of this.#rendered) widget.redecorate();
+  }
+
+  registerDataPointMenuProvider(provider: DataPointMenuProvider): Disposable {
+    this.#dataPointMenuProviders.push(provider);
+    return new Disposable(() => this.#dataPointMenuProviders.splice(this.#dataPointMenuProviders.indexOf(provider), 1));
+  }
+
+  showDataPointMenu(widget: WidgetMenuContext, at: MenuAnchor, dataPoints: readonly DataPoint[]): void {
+    if (dataPoints.length === 0) return;
+    const answers = this.#dataPointMenuProviders.map((provider) => {
+      try {
+        return provider.provideDataPointMenuItems(widget, dataPoints);
+      } catch (error) {
+        console.error('A data point menu provider failed:', error);
+        return undefined;
+      }
+    });
+    // the items at once when every provider answered so; else the menu waits for them, busy, and hides should none come
+    if (!answers.some((answer) => answer instanceof Promise)) {
+      const items = answers.flatMap((answer) => (answer as readonly DataPointMenuItem[] | undefined) ?? []);
+      if (items.length > 0) this.#showDataPointMenuItems(items, at);
+      return;
+    }
+    const items = Promise.all(
+      answers.map((answer) =>
+        Promise.resolve(answer).then(
+          (given) => given ?? [],
+          (error: unknown) => (console.error('A data point menu provider failed:', error), []),
+        ),
+      ),
+    );
+    this.#showDataPointMenuItems(items.then((lists) => lists.flat()), at);
+  }
+
+  /** `items` in the quick pick as a menu at `at`; the chosen one's command runs while the menu stays, busy. */
+  #showDataPointMenuItems(items: readonly DataPointMenuItem[] | Promise<readonly DataPointMenuItem[]>, at: MenuAnchor): void {
+    this.ui
+      .showQuickPick(items, {
+        anchor: at,
+        title: 'Data point',
+        menu: true,
+        accept: (item) => this.commands.executeCommand(item.command, ...(item.arguments ?? [])),
+      })
+      .catch((error: unknown) => console.error('The data point menu failed:', error));
   }
 
   dispose(): void {
@@ -257,6 +308,10 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void {
     const shown = context ? { widget: this.widget, url: (path: string) => this.url(path), lastResult: this.lastResult, ...context } : this;
     this.ui.showContextMenu(menuId, { anchor, title: this.widget.type, context: shown, args: [shown] });
+  }
+
+  showDataPointMenu(at: MenuAnchor, dataPoints: readonly DataPoint[]): void {
+    this.host.showDataPointMenu(this, at, dataPoints);
   }
 
   /** It is removed: its events end. */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for WidgetsHost: rendering by type, the widget context (query, children, menu), the active widget, the
-// widget decorations of the registered providers.
+// widget decorations of the registered providers, the data point menu of the registered providers.
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Disposable } from '../../core/disposable/disposable';
@@ -8,7 +8,7 @@ import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../query/query';
 import { TEST_TIME } from '../query/query-testing';
-import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetContext, type WidgetDecoration, type WidgetMenuContext } from './widgets';
+import { WidgetsHost, type DataPoint, type DataPointMenuItem, type QueryResult, type RenderedWidget, type WidgetContext, type WidgetDecoration, type WidgetMenuContext } from './widgets';
 import { settle, widgetTestbed } from './widgets-testing';
 
 let testbed: ReturnType<typeof widgetTestbed>;
@@ -275,8 +275,8 @@ describe('WidgetsHost', () => {
       const tabs = new EventEmitter<void>();
       const source = { activeQuery: new QueryHost(), onDidChangeTabs: tabs.event };
       const other = new QueryHost();
-      const ui = { showContextMenu() {} };
-      const widgets = new WidgetsHost(ui, source);
+      const ui = { showContextMenu() {}, showQuickPick: async () => undefined };
+      const widgets = new WidgetsHost(ui, testbed.commands, source);
       widgets.registerWidget('timeBar', () => new Disposable(() => {}));
       let told = 0;
       widgets.onDidChangeActive(() => told++);
@@ -366,6 +366,72 @@ describe('WidgetsHost', () => {
       expect(ctx.decorations).toEqual([slow]);
       expect(logged).toHaveBeenCalled();
       logged.mockRestore();
+    });
+  });
+
+  describe('the data point menu', () => {
+    let ctx: WidgetContext;
+    const points: readonly DataPoint[] = [{ field: 'host', value: 'a' }, { field: 'status', value: '500', type: 'UInt16' }];
+    const box = () => document.querySelector<HTMLElement>('.d-workbench__quick-pick[aria-label="Data point"]');
+    const options = () => [...document.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Data point"] [role=option]')];
+    const item = (label: string, ...args: unknown[]): DataPointMenuItem => ({ label, command: 'test.run', arguments: args });
+
+    beforeEach(() => {
+      testbed.widgets.registerWidget('timeBar', (_widgetContainer, _widget, given) => {
+        ctx = given;
+        return new Disposable(() => {});
+      });
+      testbed.render(requests);
+    });
+
+    it('asks every provider in order with the widget and the data points; shows their items at the point; the chosen one runs its command', async () => {
+      const asked: unknown[] = [];
+      const runs: unknown[][] = [];
+      testbed.commands.registerCommand('test.run', (...args: unknown[]) => void runs.push(args));
+      testbed.widgets.registerDataPointMenuProvider({ provideDataPointMenuItems: (widget, dataPoints) => (asked.push([widget, dataPoints]), [item('first', 1)]) });
+      testbed.widgets.registerDataPointMenuProvider({ provideDataPointMenuItems: () => [item('second', 'x', 2)] });
+      ctx.showDataPointMenu({ x: 10, y: 20 }, points);
+
+      expect(asked).toEqual([[ctx, points]]);
+      expect(options().map((optionElement) => optionElement.textContent)).toEqual(['first', 'second']);
+      expect(box()!.style.left).toBe('10px');
+      options()[1].click();
+      await vi.waitFor(() => expect(box()).toBeNull());
+      expect(runs).toEqual([['x', 2]]);
+    });
+
+    it('skips a provider that throws or rejects; shows nothing without items', async () => {
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+      testbed.widgets.registerDataPointMenuProvider({
+        provideDataPointMenuItems: () => {
+          throw new Error('broken');
+        },
+      });
+      const empty = testbed.widgets.registerDataPointMenuProvider({ provideDataPointMenuItems: () => undefined });
+      ctx.showDataPointMenu({ x: 0, y: 0 }, points);
+      expect(box()).toBeNull();
+
+      testbed.widgets.registerDataPointMenuProvider({ provideDataPointMenuItems: () => Promise.reject(new Error('down')) });
+      ctx.showDataPointMenu({ x: 0, y: 0 }, points);
+      await vi.waitFor(() => expect(box()).toBeNull());
+
+      empty.dispose();
+      testbed.widgets.registerDataPointMenuProvider({ provideDataPointMenuItems: async () => [item('later')] });
+      ctx.showDataPointMenu({ x: 0, y: 0 }, points);
+      // busy while the items are still to come
+      expect(box()!.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!.hidden).toBe(false);
+      await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent)).toEqual(['later']));
+      // the broken provider on each of the three menus, the rejecting one on the last two
+      expect(logged).toHaveBeenCalledTimes(5);
+      logged.mockRestore();
+    });
+
+    it('keeps the menu open with the command’s error when it fails', async () => {
+      testbed.commands.registerCommand('test.run', () => Promise.reject(new Error('422: host cannot filter')));
+      testbed.widgets.registerDataPointMenuProvider({ provideDataPointMenuItems: () => [item('host = a')] });
+      ctx.showDataPointMenu({ x: 0, y: 0 }, points);
+      options()[0].click();
+      await vi.waitFor(() => expect(box()!.querySelector('.d-workbench__quick-pick-message')!.textContent).toBe('422: host cannot filter'));
     });
   });
 });

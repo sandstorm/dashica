@@ -202,6 +202,16 @@ describe('showQuickPick', () => {
     expect(box()).toBeNull();
   });
 
+  it('hides a menu whose items still to come turn out none, resolving with nothing', async () => {
+    const { quickInput, box } = setup();
+    let answer!: (items: { label: string }[]) => void;
+    const picked = quickInput.showQuickPick(new Promise<{ label: string }[]>((resolve) => (answer = resolve)), { title: 'Data point', menu: true });
+    expect(box()).not.toBeNull();
+    answer([]);
+    expect(await picked).toBeUndefined();
+    expect(box()).toBeNull();
+  });
+
   it('stays open and busy while `accept` runs; shows its error and lets the viewer choose again; resolves once it succeeded', async () => {
     const { hostContainer, quickInput, key, field, options, box } = setup();
     const tries: { label: string; settle: (ok: boolean) => void }[] = [];

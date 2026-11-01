@@ -46,7 +46,8 @@ export class QuickInput {
   /**
    * As `showQuickPick`, but calls `done` right as the box is gone and the focus back, so what it does still counts as
    * the viewer's gesture (a command opening a tab, copying to the clipboard). Items still to come show the box busy (its
-   * progress line) until they are there; when they fail instead, the box hides and `failed` gets the error.
+   * progress line) until they are there; when they fail instead, the box hides and `failed` gets the error; a menu's
+   * that turn out none hide it too, with `done(undefined)`.
    */
   pickOne<T extends QuickPickItem>(
     items: QuickPickItems<T>,
@@ -106,6 +107,11 @@ export class QuickInput {
     items.then(
       (list) => {
         if (hidden) return;
+        // a menu whose items turn out none has nothing to show, as a context menu without an entry that applies
+        if (pick.menu && list.length === 0) {
+          pick.hide();
+          return;
+        }
         show(list);
         pick.busy = false;
       },

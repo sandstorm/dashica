@@ -3,7 +3,7 @@ import type { Disposable } from '../../core/disposable/disposable';
 import type { Event } from '../../core/event-emitter/event-emitter';
 import type { WidgetNode, WidgetType } from '../../generated/zz_generated.dashica';
 import type { QueryApi } from '../query/query';
-import type { MenuAnchor } from '../ui/ui';
+import type { MenuAnchor, QuickPickItem } from '../ui/ui';
 
 /**
  * How each widget type of `page.json` is rendered: the extension of a widget type (`timeBar`, `grid`, …) registers its
@@ -14,9 +14,11 @@ import type { MenuAnchor } from '../ui/ui';
  * a table cell or checkbox), outlined. As VS Code's `window.activeTextEditor`, `active` refers to the active tab's one,
  * and the widget itself tells its status with its own event: Debug follows it. As VS Code's file decorations, an
  * extension may decorate a widget's answer (`registerDecorationProvider`): a badge with its tooltip, the drawing muted;
- * the chart frame and Debug show a widget's decorations without knowing what they mean. What only one widget type has (a
- * table's ticked rows, what a click on a mark offers) is that type's own; it tells other extensions by command (the
- * table: `details.showRecords`).
+ * the chart frame and Debug show a widget's decorations without knowing what they mean. As VS Code's code actions, an
+ * extension may offer what to do with a widget's data points (`registerDataPointMenuProvider`): a click on a chart's
+ * mark, a table's cell shows the items of all providers (`WidgetContext.showDataPointMenu`), the `filters` extension's
+ * "status = 500" among them, without the chart knowing what they do. What only one widget type has (a table's ticked
+ * rows) is that type's own; it tells other extensions by command (the table: `details.showRecords`).
  */
 export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
@@ -40,6 +42,45 @@ export interface WidgetsApi {
    * `onDidChangeDecorations`. A widget's decorations are those of all providers, in the order registered.
    */
   registerDecorationProvider(provider: WidgetDecorationProvider): Disposable;
+  /**
+   * Offers what to do with the widgets' data points until disposed, as VS Code's `languages.registerCodeActionsProvider`:
+   * the host asks `provider` each time a data point menu is shown (`showDataPointMenu`); the menu has the items of all
+   * providers, in the order registered.
+   */
+  registerDataPointMenuProvider(provider: DataPointMenuProvider): Disposable;
+  /**
+   * Shows the data point menu of `widget` for `dataPoints` at `at` (`WidgetContext.showDataPointMenu`), for a view
+   * that shows a widget's data outside of its renderer (an Explore view's chart): every provider is asked in the order
+   * registered, one that throws or rejects adds nothing (its error goes to the console); the items show in the quick
+   * pick as a menu ("Data point"), busy while a provider's are still to come, and choosing one runs its command with
+   * its arguments while the menu stays, busy, its error shown in it. Nothing without items.
+   */
+  showDataPointMenu(widget: WidgetMenuContext, at: MenuAnchor, dataPoints: readonly DataPoint[]): void;
+}
+
+/** What offers to do something with a widget's data points (`WidgetsApi.registerDataPointMenuProvider`). */
+export interface DataPointMenuProvider {
+  /** The items for `dataPoints` of `widget` (a click's, in order); `undefined` or `[]`: none. */
+  provideDataPointMenuItems(widget: WidgetMenuContext, dataPoints: readonly DataPoint[]): readonly DataPointMenuItem[] | Promise<readonly DataPointMenuItem[] | undefined> | undefined;
+}
+
+/** A value of a widget's data a click points at: a bar's category, its fill, a table's cell. */
+export interface DataPoint {
+  /** The alias of its field's column (`host`). */
+  readonly field: string;
+  /** As a filter compares it: a time as ISO 8601 in UTC (`2026-10-31T10:00:00.000Z`), anything else as it shows. */
+  readonly value: string;
+  /** The field's ClickHouse type (`DateTime`, `LowCardinality(String)`); unknown without. */
+  readonly type?: string;
+}
+
+/**
+ * An entry of the data point menu: how it shows, as a quick pick item, and the command it runs with `arguments`, as VS
+ * Code's `CodeAction.command` (the `filters` extension's "status = 500": `filters.addPill`).
+ */
+export interface DataPointMenuItem extends QuickPickItem {
+  readonly command: string;
+  readonly arguments?: readonly unknown[];
 }
 
 /** What decorates the widgets' answers (`WidgetsApi.registerDecorationProvider`). */
@@ -121,6 +162,8 @@ export interface WidgetContext extends Decorated {
    * cell's column and value). The chart frame's "More" shows `widget/context`, a table's cell `table/cell`.
    */
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void;
+  /** Shows this widget's data point menu for `dataPoints` (a click's) at `at`, as `WidgetsApi.showDataPointMenu`. */
+  showDataPointMenu(at: MenuAnchor, dataPoints: readonly DataPoint[]): void;
 }
 
 /** What the menu `widget/context` is shown for, also its commands' argument: the widget and what it queried last. */

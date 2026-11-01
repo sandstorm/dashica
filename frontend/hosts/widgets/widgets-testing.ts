@@ -8,15 +8,15 @@ import { CommandsHost } from '../commands/commands';
 import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
 import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost, type QueryKey } from '../query/query';
-import { UiHost, type ContextMenuOptions } from '../ui/ui';
-import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetDecoration, type WidgetStatus } from './widgets';
+import { UiHost, type ContextMenuOptions, type MenuAnchor } from '../ui/ui';
+import { WidgetsHost, type DataPoint, type QueryResult, type RenderedWidget, type WidgetDecoration, type WidgetMenuContext, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
  * tab's), with the browser parts jsdom lacks stubbed. `activate` activates extensions on it (they get `widgets`,
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
- * shown. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
+ * shown, `dataPointMenus` the data point menus. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
  * `RenderedWidget` whose status and decorations the test sets. `sqlEnabled` is `page.workbench`'s (default on); `keys`
  * are the query keys declared, as their extensions would (`[TIME, FILTERS]`).
  */
@@ -37,7 +37,17 @@ export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: b
   const workbenchContainer = document.body.appendChild(document.createElement('div'));
   const commands = new CommandsHost(workbenchContainer);
   const ui = new UiHost(workbenchContainer, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
-  const widgets = new WidgetsHost({ showContextMenu: (menuId, options) => menus.push({ menuId, options }) }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
+  const widgets = new WidgetsHost(
+    { showContextMenu: (menuId, options) => menus.push({ menuId, options }), showQuickPick: (items, options) => ui.showQuickPick(items, options) },
+    commands,
+    { activeQuery: query, onDidChangeTabs: () => Disposable.from() },
+  );
+  const dataPointMenus: RecordedDataPointMenu[] = [];
+  const showDataPointMenu = widgets.showDataPointMenu.bind(widgets);
+  widgets.showDataPointMenu = (widget, at, dataPoints) => {
+    dataPointMenus.push({ widget, at, dataPoints });
+    showDataPointMenu(widget, at, dataPoints);
+  };
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
   const intersections: ((entries: { isIntersecting: boolean }[]) => void)[] = [];
@@ -78,6 +88,8 @@ export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: b
     ui,
     commands,
     menus,
+    /** The data point menus shown (`showDataPointMenu`, a click on a mark or a cell), in order; each shows as it would. */
+    dataPointMenus,
     /** The page shown, for the extensions that read it. */
     page,
     /** The views popped out into a tab (`page.popOut`). */
@@ -124,6 +136,13 @@ export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: b
       history.replaceState(null, '', '/');
     },
   };
+}
+
+/** One data point menu shown: for which widget, where, for which data points. */
+export interface RecordedDataPointMenu {
+  readonly widget: WidgetMenuContext;
+  readonly at: MenuAnchor;
+  readonly dataPoints: readonly DataPoint[];
 }
 
 /** Lets the pending fetches, Arrow decoding and draws finish. */
