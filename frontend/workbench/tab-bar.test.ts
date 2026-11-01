@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Tests for tab-bar.ts (TabBar): a tab per open page, the shown one selected, choosing and closing (×, middle click),
-// no × on the last tab, "+" asking for a new one.
+// no × on the last tab, "+" asking for a new one; the next and previous tab (adjacentTab).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TabBar } from './tab-bar';
+import { TabBar, adjacentTab } from './tab-bar';
 
 let tabBarContainer: HTMLElement;
 let bar: TabBar;
@@ -72,5 +72,14 @@ describe('TabBar', () => {
   it('takes its tab list and "+" out of the container when disposed', () => {
     bar.dispose();
     expect(tabBarContainer.children).toHaveLength(0);
+  });
+});
+
+describe('adjacentTab', () => {
+  it('names the next and the previous tab, round the end', () => {
+    const tabs = ['shop', 'billing', 'checkout'].map((id) => ({ id, url: `/p/${id}`, title: id }));
+    expect(adjacentTab(tabs, 'checkout', 1)).toBe('shop');
+    expect(adjacentTab(tabs, 'shop', -1)).toBe('checkout');
+    expect(adjacentTab(tabs, 'shop', 1)).toBe('billing');
   });
 });

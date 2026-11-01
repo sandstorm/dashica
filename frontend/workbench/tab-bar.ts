@@ -1,4 +1,5 @@
 // See PageApi in ../hosts/page/page.ts.
+import type { Tab } from '../hosts/page/page';
 
 /**
  * The tab bar in the top bar: a tab per open page (a dashboard, a chart's Explore view), the shown one selected, each
@@ -101,4 +102,10 @@ export interface TabBarOptions {
 export interface TabBarTab {
   readonly id: string;
   readonly title: string;
+}
+
+/** The id of the tab `step` places after the tab `id` in `tabs` (`-1`: before), round the end. */
+export function adjacentTab(tabs: readonly Tab[], id: string, step: 1 | -1): string {
+  const at = tabs.findIndex((tab) => tab.id === id);
+  return tabs[(at + step + tabs.length) % tabs.length].id;
 }

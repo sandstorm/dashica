@@ -1,7 +1,7 @@
 // Tests for tabs.ts: opening after the active tab, the same URL shown instead, the limit, closing and who becomes
-// active, the next and previous tab, what is stored for a reload (a popped-out view's tab left out), restoring after it.
+// active, what is stored for a reload (a popped-out view's tab left out), restoring after it.
 import { describe, expect, it } from 'vitest';
-import { TAB_LIMIT, adjacentTab, closeTab, openTab, restoreTabs, showTab, singleTab, storedTabs, titleOf, updateTab, type Tab, type TabList } from './tabs';
+import { TAB_LIMIT, closeTab, openTab, restoreTabs, showTab, singleTab, storedTabs, titleOf, updateTab, type Tab, type TabList } from './tabs';
 
 const tab = (id: string, url = `/p/${id}`): Tab => ({ id, url, title: id });
 const ids = (list: TabList) => list.tabs.map((t) => t.id);
@@ -53,13 +53,6 @@ describe('tabs', () => {
     const list = updateTab(three(), 'billing', { url: '/p/billing?time=1h', title: 'Billing' });
     expect(list.tabs[1]).toEqual({ id: 'billing', url: '/p/billing?time=1h', title: 'Billing' });
     expect(list.tabs[0]).toEqual(tab('shop'));
-  });
-
-  it('names the next and the previous tab, round the end', () => {
-    const { tabs } = three();
-    expect(adjacentTab(tabs, 'checkout', 1)).toBe('shop');
-    expect(adjacentTab(tabs, 'shop', -1)).toBe('checkout');
-    expect(adjacentTab(tabs, 'shop', 1)).toBe('billing');
   });
 
   it('stores the tabs kept, the active one, else the one of them shown last', () => {

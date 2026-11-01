@@ -5,11 +5,10 @@ import type { WorkbenchJson } from '../generated/zz_generated.dashica';
 import { CommandsHost } from '../hosts/commands/commands';
 import { ExtensionHost, StorageMemento, type Extension } from '../hosts/extension-host/extension-host';
 import { PageHost } from '../hosts/page/page';
-import { adjacentTab } from '../hosts/page/tabs';
 import { activeQuery } from '../hosts/query/query';
 import { UiHost } from '../hosts/ui/ui';
 import { WidgetsHost } from '../hosts/widgets/widgets';
-import { TabBar } from './tab-bar';
+import { TabBar, adjacentTab } from './tab-bar';
 
 /**
  * The workbench in `hostContainer`: its hosts (commands, ui, page, query, widgets, extensions) and the extensions

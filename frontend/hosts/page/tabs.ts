@@ -59,12 +59,6 @@ export function updateTab(list: TabList, id: string, change: Partial<Pick<Tab, '
   return { ...list, tabs: list.tabs.map((tab) => (tab.id === id ? { ...tab, ...change } : tab)) };
 }
 
-/** The id of the tab `step` places after the tab `id` in `tabs` (`-1`: before), round the end. */
-export function adjacentTab(tabs: readonly Tab[], id: string, step: 1 | -1): string {
-  const at = tabs.findIndex((tab) => tab.id === id);
-  return tabs[(at + step + tabs.length) % tabs.length].id;
-}
-
 /**
  * What survives a reload of the browser tab (sessionStorage): the tabs `kept` (default all; the page host leaves out a
  * popped-out view's tab) in their order, and the active one, else the one of them shown last.
