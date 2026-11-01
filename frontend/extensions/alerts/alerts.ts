@@ -93,7 +93,6 @@ function hoursMinutes(time: Date) {
 }
 
 function renderAlertDetail(widgetContainer: HTMLElement, widget: WidgetOf<'alertDetail'>, ctx: WidgetContext): ChartFrame {
-  // the alert's history: its columns `time` and `value`, as 15 minute bars
   const history: TimeBarProps = {
     title: widget.props.title,
     height: 200,

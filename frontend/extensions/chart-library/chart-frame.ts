@@ -96,7 +96,6 @@ export class ChartFrame {
 
   readonly #onSchemeChange = () => void this.#draw();
 
-  /** A range dragged across a time chart becomes its tab's time range. */
   readonly #onTimeSelect = (from: Date, to: Date) => this.#ctx.query.set(TIME, customRange(formatTime(from), formatTime(to)));
 
   async #query(): Promise<void> {
@@ -136,7 +135,6 @@ export class ChartFrame {
     }
   }
 
-  /** A badge per decoration in the title row, its tooltip its hover; muted while one of them says so. */
   #drawDecorations(decorations: readonly WidgetDecoration[]): void {
     this.#badgeContainer.replaceChildren(
       ...decorations.map(({ badge, tooltip }) => html`<span class="d-badge d-chart-frame__decoration" data-testid="chart-decoration" title=${tooltip ?? null}>${badge}</span>`),

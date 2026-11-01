@@ -39,7 +39,6 @@ export function drawTable(
 
   let searchTerm = '';
 
-  // With `showDataPointMenu`, a click on a cell of a category column shows its value's menu (the cellClick handler below)
   const filtering = showDataPointMenu !== undefined;
   const categoryColumns = new Set(
     (queryResult?.schema?.fields ?? [])
@@ -49,7 +48,6 @@ export function drawTable(
   );
   const filters = (fieldName: string) => filtering && categoryColumns.has(fieldName);
 
-  // the columns, a timestamp's as its time and day
   const columns: ColumnDefinition[] = [];
   const timestampColumns = new Set<string>();
   queryResult?.schema?.fields?.forEach((field: any) => {
@@ -181,7 +179,6 @@ export function drawTable(
       headerFilter: "input", // a filter field in every column header
       headerFilterPlaceholder: "Filter...",
       tooltip: false, // the sticky tooltips instead (cellMouseEnter below)
-      // the column's menu button: the menu `table/header`
       titleFormatter: showMenu ? (cell) => headerTitle(cell.getValue(), cell.getColumn(), showMenu) : undefined,
     }
   });
@@ -585,7 +582,6 @@ function createTooltip(): Tooltip {
   }
 
   headerContainer.addEventListener('pointerdown', (e) => {
-    // only a pinned tooltip moves
     if (!rootContainer.classList.contains('d-sticky-tooltip--pinned')) {
       return;
     }
@@ -624,12 +620,10 @@ function positionTooltip(rootContainer: HTMLElement, pointerX: number, pointerY:
   const ttRect = rootContainer.getBoundingClientRect();
   let left = pointerX + 12 + offset;
   let top = pointerY + 16 + offset;
-  // left of the pointer where the right edge would cut it
   if (left + ttRect.width > window.innerWidth - 8) {
     left = Math.max(8, pointerX - ttRect.width - 12);
   }
   left = Math.max(8, left);
-  // above the pointer where the bottom edge would cut it
   if (top + ttRect.height > window.innerHeight - 8) {
     top = Math.max(8, pointerY - ttRect.height - 12);
   }

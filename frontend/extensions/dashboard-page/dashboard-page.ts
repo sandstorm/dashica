@@ -33,7 +33,6 @@ function renderDashboard(pageContainer: HTMLElement, page: PageJson, context: Pa
   return Disposable.from(...rendered, context.onDidChangeHash(reveal));
 }
 
-/** Opens the groups around the widget `hash` names (`#w=3`), scrolls it into view and highlights it. */
 function revealLinked(contentContainer: HTMLElement, hash: string): void {
   const id = new URLSearchParams(hash.slice(1)).get('w');
   if (!id) return;

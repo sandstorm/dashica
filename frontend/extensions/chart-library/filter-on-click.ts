@@ -87,7 +87,6 @@ export interface FilterOnClickOptions {
   readonly pointer: Plot.TipPointer;
 }
 
-/** Plot's pointer transform for each tip pointer. */
 const POINTERS = { x: Plot.pointerX, y: Plot.pointerY, xy: Plot.pointer } as const;
 
 /** Whether `field` holds categories: not a measure (`count`), not a time bucket (`autoBucket`, a bucket size). */

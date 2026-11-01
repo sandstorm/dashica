@@ -26,7 +26,6 @@
     filter: none;
 }
 
-/* while it queries: a spinner in the top right corner */
 .d-chart-frame__spinner {
     position: absolute;
     top: var(--space-2);

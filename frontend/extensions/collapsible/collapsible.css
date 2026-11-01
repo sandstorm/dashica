@@ -25,7 +25,6 @@
   transform: rotate(90deg);
 }
 
-/* how many widgets a closed group holds */
 .d-collapsible__count {
   color: var(--color-text-muted);
   font-weight: var(--weight-normal);
