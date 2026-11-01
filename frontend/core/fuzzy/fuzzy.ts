@@ -1,6 +1,6 @@
 // Fuzzy matching for the quick pick and search everywhere: whether a query matches a label, how well, and which
 // characters to highlight. See QuickInput in ../../hosts/ui/quick-input/quick-input.ts and SearchPick in
-// ../../extensions/search-everywhere/ui/search-pick.ts.
+// ../../extensions/search-everywhere/search-pick.ts.
 
 /**
  * Whether `query` matches `target` (case-insensitive): as one piece (best, earlier is better), else its characters

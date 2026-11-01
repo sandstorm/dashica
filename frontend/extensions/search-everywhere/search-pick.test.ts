@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Tests for search-pick.ts (SearchPick) over a UiHost: groups, matching, prefixes, async providers and picking.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CancellationToken } from '../../../core/cancellation/cancellation';
-import { CommandsHost } from '../../../hosts/commands/commands';
-import { type SearchItem, type SearchProvider, UiHost } from '../../../hosts/ui/ui';
+import type { CancellationToken } from '../../core/cancellation/cancellation';
+import { CommandsHost } from '../../hosts/commands/commands';
+import { type SearchItem, type SearchProvider, UiHost } from '../../hosts/ui/ui';
 import { SearchPick } from './search-pick';
 
 afterEach(() => document.body.replaceChildren());

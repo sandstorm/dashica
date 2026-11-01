@@ -1,9 +1,9 @@
 import { Search, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import { chartSearch } from './ui/chart-search';
-import { commandSearch } from './ui/command-search';
-import { SearchPick } from './ui/search-pick';
+import { chartSearch } from './providers/chart-search';
+import { commandSearch } from './providers/command-search';
+import { SearchPick } from './search-pick';
 
 const SEARCH_EVERYWHERE = 'workbench.action.searchEverywhere';
 

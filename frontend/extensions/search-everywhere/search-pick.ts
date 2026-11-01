@@ -1,7 +1,7 @@
-// See searchEverywhere in ../search-everywhere.ts.
-import { CancellationTokenSource } from '../../../core/cancellation/cancellation';
-import { type QuickPick, type QuickPickHighlights, QuickPickItemKind, type QuickPickSeparator, type SearchItem, type SearchProvider, type UiApi } from '../../../hosts/ui/ui';
-import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
+// See searchEverywhere in ./search-everywhere.ts.
+import { CancellationTokenSource } from '../../core/cancellation/cancellation';
+import { type QuickPick, type QuickPickHighlights, QuickPickItemKind, type QuickPickSeparator, type SearchItem, type SearchProvider, type UiApi } from '../../hosts/ui/ui';
+import { fuzzyMatch } from '../../core/fuzzy/fuzzy';
 
 /**
  * Search everywhere: one quick pick over everything the search providers find (dashboards, commands, …), a group per
