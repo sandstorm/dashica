@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -20,42 +21,75 @@ type Fields struct {
 	Computed []clickhouse.ResultColumn `json:"computed"`
 }
 
-// HandleFields answers `columns` (the chart's table's) and the types of the fields `computed` names, their query
-// `typesQuery` (sql.FieldTypes of the chart's query, one column per field in that order) described by ClickHouse
-// (`DESCRIBE (…)`, which reads no rows) in the time range of `state` as HandleQuery fills in a chart's, without its
-// SQL chips (they change no type), as the JSON of Fields, with the resolved time range in
-// X-Dashica-Resolved-Time-Range as a chart's answer has it (the filter bar's default for a time). Without computed
-// fields it asks ClickHouse nothing.
-func (qh QueryHandler) HandleFields(columns []clickhouse.SchemaColumn, typesQuery sql.SqlQueryable, computed []string, state QueryState, w http.ResponseWriter, r *http.Request) error {
-	answer := Fields{Columns: make([]clickhouse.ResultColumn, 0, len(columns)), Computed: make([]clickhouse.ResultColumn, 0, len(computed))}
+// HandleFields answers `columns` (the chart's table's) and the types of its `computed` fields, from `DESCRIBE (…)`
+// (which reads no rows) of sql.FieldTypes of the chart's `query` (fieldTypes) in the time range of `state` as
+// HandleQuery fills in a chart's, without its SQL chips (they change no type), as the JSON of Fields, with the resolved
+// time range in X-Dashica-Resolved-Time-Range as a chart's answer has it (the filter bar's default for a time). A
+// computed field ClickHouse cannot describe has no type in the answer (logged), the columns and the other fields keep
+// theirs. Without computed fields it asks ClickHouse nothing.
+func (qh QueryHandler) HandleFields(columns []clickhouse.SchemaColumn, query sql.SqlQueryable, computed []sql.SqlField, state QueryState, w http.ResponseWriter, r *http.Request) error {
+	timeRange, err := state.ResolveTimeRange(time.Now())
+	if err != nil {
+		return err
+	}
+	answer := Fields{Columns: make([]clickhouse.ResultColumn, 0, len(columns)), Computed: []clickhouse.ResultColumn{}}
 	for _, column := range columns {
 		answer.Columns = append(answer.Columns, clickhouse.ResultColumn{Name: column.Name, Type: column.Type})
 	}
-	if len(computed) == 0 {
-		timeRange, err := state.ResolveTimeRange(time.Now())
-		if err != nil {
-			return err
-		}
-		WriteResolvedTimeRange(w, timeRange)
-	} else {
+	if len(computed) > 0 {
 		state.Sql = nil
-		p, err := qh.prepare(typesQuery, state)
+		described, err := fieldTypes(computed, func(fields []sql.SqlField) ([]clickhouse.ResultColumn, error) {
+			p, err := qh.prepare(sql.FieldTypes(query, fields), state)
+			if err != nil {
+				return nil, err
+			}
+			return p.client.Describe(r.Context(), p.query, p.opts)
+		})
 		if err != nil {
-			return err
+			qh.Logger.Warn().Err(err).Msg("describing a chart's computed fields")
 		}
-		described, err := p.client.Describe(r.Context(), p.query, p.opts)
-		if err != nil {
-			return fmt.Errorf("clickhouse describe: %w", err)
-		}
-		if len(described) != len(computed) {
-			return fmt.Errorf("clickhouse described %d columns for %d fields", len(described), len(computed))
-		}
-		// by position: a field without alias is named as ClickHouse formats its expression
-		for i, name := range computed {
-			answer.Computed = append(answer.Computed, clickhouse.ResultColumn{Name: name, Type: described[i].Type})
-		}
-		p.writeHeaders(w)
+		answer.Computed = described
 	}
+	WriteResolvedTimeRange(w, timeRange)
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(answer)
+}
+
+// fieldTypes are the types of `fields` by alias, in their order, as `describe` (a DESCRIBE of the fields selected
+// together) answers them, matched by position (a field without alias is named as ClickHouse formats its
+// expression): one DESCRIBE of all, else, as one field can make the query of all fail (an aggregate beside a
+// plain expression without the chart's GROUP BY), one of each, a field whose own fails left out and its error
+// returned.
+func fieldTypes(fields []sql.SqlField, describe func([]sql.SqlField) ([]clickhouse.ResultColumn, error)) ([]clickhouse.ResultColumn, error) {
+	typed := func(fields []sql.SqlField) ([]clickhouse.ResultColumn, error) {
+		described, err := describe(fields)
+		if err != nil {
+			return nil, fmt.Errorf("clickhouse describe: %w", err)
+		}
+		if len(described) != len(fields) {
+			return nil, fmt.Errorf("clickhouse described %d columns for %d fields", len(described), len(fields))
+		}
+		answer := make([]clickhouse.ResultColumn, len(fields))
+		for i, field := range fields {
+			answer[i] = clickhouse.ResultColumn{Name: field.Alias(), Type: described[i].Type}
+		}
+		return answer, nil
+	}
+	answer, err := typed(fields)
+	if err == nil {
+		return answer, nil
+	}
+	if len(fields) == 1 {
+		return []clickhouse.ResultColumn{}, fmt.Errorf("%s: %w", fields[0].Alias(), err)
+	}
+	answer, errs := []clickhouse.ResultColumn{}, []error(nil)
+	for _, field := range fields {
+		one, err := typed([]sql.SqlField{field})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", field.Alias(), err))
+			continue
+		}
+		answer = append(answer, one...)
+	}
+	return answer, errors.Join(errs...)
 }

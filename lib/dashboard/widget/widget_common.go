@@ -339,8 +339,9 @@ func othersThan(pills []filter.Pill, table filter.Table, field string, column bo
 // fieldsHandler answers `GET /fields` with the fields "add filter" offers of the chart (docs/2026-10-28-workbench.md
 // §3.15 D27, D39), as JSON `{columns: [{name, type}], computed: [{name, type}]}` (HandleFields): the columns of its
 // table as the schema of its connection has them (tableColumns: system.columns, kept once asked), each a pill through
-// /pill's `column`; its computedFields with their types, from one `DESCRIBE` of sql.FieldTypes of its query in the
-// request's time range, which reads no rows (the pills and SQL chips change no type, so none are applied); with the
+// /pill's `column`; its computedFields with their types, from a `DESCRIBE` of sql.FieldTypes of its query in the
+// request's time range, which reads no rows (the pills and SQL chips change no type, so none are applied; a field
+// ClickHouse cannot describe has no type, the others keep theirs, HandleFields); with the
 // resolved time range in X-Dashica-Resolved-Time-Range. Not behind explore.enabled: it is only the chart's own table
 // and fields. 422 for a chart without a table, 400 for a query state that cannot be read.
 func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, chart withQuery) http.HandlerFunc {
@@ -364,12 +365,7 @@ func fieldsHandler(deps rendering.Dependencies, qh httpserver.QueryHandler, char
 			httpError(w, err)
 			return
 		}
-		computed := computedFields(deps, chart)
-		aliases := make([]string, len(computed))
-		for i, field := range computed {
-			aliases[i] = field.Alias()
-		}
-		httpError(w, qh.HandleFields(columns, sql.FieldTypes(chart.Query(), computed), aliases, state, w, r))
+		httpError(w, qh.HandleFields(columns, chart.Query(), computedFields(deps, chart), state, w, r))
 	}
 }
 
