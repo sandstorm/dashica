@@ -122,7 +122,7 @@ the TS types have its values as a union, in the widgets' props and in the DTOs.
 |---|---|
 | Top bar | one row over the content only (between the sides, step 9i), always visible: the tabs (a tab per open page, the active one selected, × to close, §3.4.1) and "+" (the start page in a new tab), then the time range and refresh (the filter funnel went in step 9o, D26) (`ui.registerBarItem('top', …)`; `left` items before the tabs, `center` and `right` ones after them); while a popped-out view's tab is shown only the tabs and "+" (step 9y, §3.4.6) |
 | Filter bar | above the content, between the side panels, only while it has something to show and never for a popped-out view's tab (step 9y, §3.4.6): one list of chips, structured (`status = 500`) and SQL (`SQL: duration > 2000`), each removable; a field's pill editable when a chart of the page makes it again (its operator and value, step 9c), a SQL chip while `filters.sqlEnabled` is on (step 9a), the others (another page's pill, a button's pill outside its page) only removable; the page's filter buttons as toggles in place, pressed while their signed pill is set, without a chip of their own (steps 8f, 9b); "Add filter" after the chips while a chart filters a table (step 8m; since 9p reads one, its columns and computed fields, §3.15 D27) or `filters.sqlEnabled` is on, its last entry "SQL condition…" under "Advanced" adding a SQL chip (step 9o, §3.15 D26; the funnel button in the top bar of step 7b is gone) |
-| Rails | from the window's top to the status bar, as their panels (step 9i): at the left rail's start the global menu's "…" (menu `workbench/global`, `UiHost.railStart`, hidden while empty; with Explore off it holds "Explore" greyed, 8g; with Explore on "Explore" and "Start from chart…", 8i); a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first after the "…"; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
+| Rails | from the window's top to the status bar, as their panels (step 9i): at the left rail's start the global menu's "…" (menu `workbench/global`, `UiHost.railStart`, hidden while empty; with Explore off it holds "Explore (from scratch)" greyed, 8g; with Explore on "Explore (from scratch)" and "Explore (from chart…)", 8i; named so since c56c7cc); a button per side panel, and command buttons (`ui.registerRailButton`): search everywhere first after the "…"; each button's tooltip is its name and its command's key ("Search everywhere (⌘K)") |
 | Left side panel | "Dashboards" (favorites, then the menu groups, each a view, §3.4.2); "Debug" (the active widget's query, stats, EXPLAIN, result, as views, §3.4.4); "Details" (the ticked rows a table gave it by command, a view each, §3.4.5); Debug and Details pop out into a tab (§3.4.6); later Explore's widget tree |
 | Right side panel | later Explore's inspector |
 | Status bar | the active widget's rows, query time, error, ignored filters (§3.4.4); "N records selected" (§3.4.5) |
@@ -1493,13 +1493,14 @@ The Explore parts (D8–D13) are the Perspective concept's (`docs/2026-10-30-per
 - **D8 Explore off (8g):** with `explore.enabled: false` the whole Explore extension is off (no chart menu entry, no
   Explore tabs); `HandleSql`, the edited-rows handler and the free SQL endpoint check it in their handlers and answer
   404 before any query. In the UI only the global "…" menu shows "Explore" greyed, hover "Explore is not enabled
-  (explore.enabled)".
+  (explore.enabled)" (the entry reads "Explore (from scratch)" since c56c7cc).
 - **D9 Explore SQL (8g):** the key `xsql` is renamed `exploreSql` everywhere (Go, TS, tab hash, docs); the editor
   shows the chart's SQL with its ClickHouse placeholders (`{__from:DateTime64}`), the values listed beside it, and Run
   sends them again as parameters; `lib/clickhouse/inline_parameters.go` goes.
 - **D10 Global "…" menu (8i, ✅ 2026-10-31):** left of the Dashica icon (since 9i at the left rail's start). "Explore" opens a blank Explore tab: a ClickHouse
   connection picker and an empty editor, run on a new per-connection endpoint behind `explore.enabled`; "Start from
-  chart…" fills the editor from one of the shown page's charts.
+  chart…" fills the editor from one of the shown page's charts. Since c56c7cc the entries read "Explore (from scratch)"
+  and "Explore (from chart…)", saying that both open an Explore and how they start.
 - **D11 Schema view (8h, ✅ 2026-10-31):** a left side panel "Schema", a tree connection › database › table; a table
   opens structured as DataGrip does; one cached query set per connection, refreshable; the same data feeds the
   editor's autocomplete. Part of Explore: only with `explore.enabled` *(proposed)*; built as Perspective §4.8 says.
@@ -1848,7 +1849,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `InputBoxValidationMessage` or `undefined` only; a filter button writes its "Enter a value." as an `Error` message
   itself, and the quick input's `validation()` helper is gone. (b, 9aq; the maintainer saw two identical
   "shopAction = LogonAction" in a click's quick pick, filter and exclude differing by their icon only) each op is
-  labelled with its own sign (`OP_SIGNS`), the exclude "shopAction ≠ LogonAction".
+  labelled with its own sign (`OP_SIGNS`), the exclude "shopAction ≠ LogonAction". (c, 9ar) the concepts name the
+  global menu's Explore entries as c56c7cc renamed them: "Explore (from scratch)", "Explore (from chart…)".
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -1862,7 +1864,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   with `aria-haspopup`. Menus: every registered one through `showContextMenu` (the global "…", the panel headers'
   "…", the chart's "…", the dashboards entries' "…", a table's cell and header menus, Debug's), a click's ⊕ / ⊖ offer
   (`filters.offer`), Explore's Reset confirmation. Pickers keep the field: "Add filter"'s table, field and value
-  steps, "Start from chart…", search everywhere. *(proposed)* A pill's operator (the filter bar's op button and "Add
+  steps, "Explore (from chart…)", search everywhere. *(proposed)* A pill's operator (the filter bar's op button and "Add
   filter"'s op step) is a menu too, a short fixed choice that the maintainer's picker list leaves out; the Reset
   confirmation's question ("Reset the viewer’s config?", its placeholder until 9s) is the menu's heading; a point
   anchor (a right click, a chart click) has no opener to mark.
@@ -1875,9 +1877,9 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   greyed. `executeCommand` from code ignores enablement, as VS Code's. `MenuItem.enabled` and `MenuItem.tooltip` are
   gone; a menu entry keeps `when` (shown or not) and `toggled`. Migrated: Explore off registers `exploreView.open`
   never enabled (`EXPLORE_NOT_ENABLED`, now the command's options) with the reason "Explore is not enabled
-  (explore.enabled)"; "Start from chart…" (`exploreView.startFromChart`), Details' and Debug's "Pop out"
+  (explore.enabled)"; "Explore (from chart…)" (`exploreView.startFromChart`), Details' and Debug's "Pop out"
   (`details.popOut`, `debug.popOut`). *(proposed)* The hover of an enabled entry is gone with `MenuItem.tooltip`
-  (the descriptions of "Explore", "Start from chart…" and the pop-outs; VS Code's menus have none either); the new
+  (the descriptions of "Explore (from scratch)", "Explore (from chart…)" and the pop-outs; VS Code's menus have none either); the new
   reasons are "The shown page has no chart", "No records selected" and "No active chart" (Debug's status bar text);
   a key of a disabled command is not prevented, so the next binding or the content gets it (VS Code skips such a
   binding); a rail button asks the enablement when it is added and whenever its tooltip may show (pointer enters,
@@ -2198,6 +2200,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ao ✅ 2026-11-01 | **D43 `filter.FilterService`** (§3.8, §3.15): Go `filter.NewFilterService(cfg)` built once in `dashica.New`, `rendering.Dependencies.FilterService`; methods `Sign(p)`, `Open(key)`, `TableName(t)` (was `ShortName`), `TableOf(q)`, unexported `database`, `secret`, `tableKey`, `readTable`, `read`; every `database func(connection string) string` parameter and the `nil` for a button's pill gone; `widget_common.go` (`tableOf` wrapper gone, `openPills`, `/pill`, the node's `table`), `speedscope_link.go`, `dashboard.pageButtons` / `buttonHandler` use the service; `clickhouse.Manager.Database` deleted (no other user). Tests: `filter` builds its service from a small config (a second secret, an empty one); `widget`, `dashboard`, root and `httpserver` tests put a `FilterService` into their `Dependencies`. `go vet` green (outer repo with and without `-tags solarwatt`, no outer change), Go tests green but the ClickHouse-bound ones (sandbox); `go generate` rerun (only the generated TS's comments change), golden contract unchanged. No TS change. Deviations: the service reads the config per call; `Manager.Database` deleted *(proposed)* | one object knows the secret and the databases |
 | 9ap ✅ 2026-11-01 | **D45 (a) `validateInput` simplified** (§3.11, §3.15): `InputBoxOptions.validateInput?: (value) => InputBoxValidationMessage \| undefined`; `filters.ts` `#press` writes "Enter a value." as an `Error` message; `validation()` in `quick-input.ts` gone. Files: `frontend/hosts/ui/ui.ts`, `frontend/hosts/ui/quick-input/quick-input.{ts,test.ts}`, `frontend/extensions/filters/filters.{ts,test.ts}` | |
 | 9aq ✅ 2026-11-01 | **D45 (b) the exclude reads ≠** (§3.8, §3.15): `filterPicks` (`frontend/extensions/filters/offer.ts`) labels each op with its own sign (`OP_SIGNS`). Files: `frontend/extensions/filters/offer.{ts,test.ts}`, `filters.test.ts`, `e2e/bar-selection.spec.ts` (written, not run) | |
+| 9ar ✅ 2026-11-01 | **D45 (c) the Explore entries' names in the concepts** (§3.15; Perspective §4.4, §4.7, §4.8, §8.1): "Explore (from scratch)" and "Explore (from chart…)", as c56c7cc renamed them; the decisions' wording kept, with a note. Files: `docs/2026-10-28-workbench.md`, `docs/2026-10-30-perspective.md` (text only) | |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

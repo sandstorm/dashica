@@ -210,8 +210,8 @@ handler) is not planned.
 
 - **Entry:** `ui.registerMenuItem('widget/context', { command: 'exploreView.openWidget', title: 'Open in Explore
   view', group: 'data' })` for charts (`rowsUrl` in the widget's node), only while `workbench.json` says `explore`
-  (explore.enabled; since step 8g, §4.8 D8); else the extension registers only "Explore" greyed in the global menu.
-  With Explore on, the global menu's "Explore" and "Start from chart…" open a blank Explore, the same view without a
+  (explore.enabled; since step 8g, §4.8 D8); else the extension registers only "Explore (from scratch)" greyed in the
+  global menu. With Explore on, the global menu's "Explore (from scratch)" and "Explore (from chart…)" open a blank Explore, the same view without a
   chart (`#explore=&connection=<name>`, §4.8 D10).
 - **Place** (a tab since 2026-10-31, workbench §3.4.1, step 7a): a new tab of the page kind `explore`, named in its
   hash; its URL is the source tab's with `#explore=<id>` (the id of the chart's `dataUrl`), so it starts with a copy of
@@ -382,7 +382,7 @@ with its parameters, run as an edited query, gives the chart's rows; a value wit
 `exploreSql` refuses an `INSERT` and `readonly = 0` (164) and stops at the limit. vitest: the two states from the
 hash, the parameters listed and carried by Run (`param_<name>`), Reset as a navigation, a draft kept over a refresh,
 the edited note, an error with the editor kept, no selection while edited; with Explore off the extension registers
-only the greyed "Explore". Playwright (`e2e/explore-view.spec.ts`, skipped while Explore is off): open the view, the
+only the greyed "Explore (from scratch)". Playwright (`e2e/explore-view.spec.ts`, skipped while Explore is off): open the view, the
 editor open with `{__from}` listed, delete the `GROUP BY`, Run (more rows, the note, `exploreSql` and `param___from`
 in the URL), reload (still edited), Reset.
 
@@ -394,7 +394,7 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
   off: no "Open in Explore view" in the chart menu, no Explore tabs. The server endpoints check the flag **in their
   handlers** (`HandleSql`, the edited-rows handler, the free SQL endpoint of D10) and answer 404 before any query.
   The only trace in the UI: the global "…" menu (D10) shows "Explore" greyed, hovered "Explore is not enabled
-  (explore.enabled)". Built as §4.4, §4.5 and §4.7 say: the client reads `workbench.json`'s `explore`; the greyed
+  (explore.enabled)" (the entry reads "Explore (from scratch)" since workbench commit c56c7cc). Built as §4.4, §4.5 and §4.7 say: the client reads `workbench.json`'s `explore`; the greyed
   entry is a menu entry that is not `enabled` (workbench §3.11), its command `exploreView.open`, which only Explore on
   registers (step 8i) *(proposed)*; the free SQL endpoint is `/rows?connection=` of D10.
 - **D9 Placeholders, not literals (step 8g, ✅ 2026-10-31):** the key `xsql` is renamed `exploreSql` everywhere (Go,
@@ -407,7 +407,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
 - **D10 Explore without a chart (step 8i, ✅ 2026-10-31):** the global "…" menu (at the left rail's start since workbench step 9i). Its
   "Explore" opens a blank Explore tab: a ClickHouse connection picker (the connections of `dashica_config`) and an
   empty editor, run on a new endpoint per connection behind `explore.enabled` (read-only, the same row limit and casts
-  as the edited rows); "Start from chart…" fills the editor from one of the shown page's charts. Built as:
+  as the edited rows); "Start from chart…" fills the editor from one of the shown page's charts. Since workbench
+  commit c56c7cc the two entries read "Explore (from scratch)" and "Explore (from chart…)". Built as:
   - **Server:** `GET /rows?connection=<name>&exploreSql=<text>&param_<name>=…` (`httpserver.ConnectionRowsHandler`)
     answers the text on that connection as an edited query is answered (`readonly=2`, the LIMIT around it,
     `httpserver.ExploreRowLimit` = 100000, `PlainArrowCast`, the `param_` values bound), its check of the flag first
@@ -420,8 +421,8 @@ The Explore parts of the workbench batch (workbench §3.14, steps 8g–8k); each
     tab says "Explore"; before a Run the body says "Write a query; Run shows its rows."; its rows open as a datagrid of
     all their columns, one viewer config kept for all blank tabs (`view:blank`); no "Reset to the chart's query" and
     no click to filter (edited rows offer none) *(proposed)*.
-  - **Menu:** "Explore" (`exploreView.open`) picks the connection of the shown page's first chart, else the first of
-    `workbench.json`'s `connections` *(proposed)*. "Start from chart…" (`exploreView.startFromChart`, greyed while the
+  - **Menu:** "Explore (from scratch)" (`exploreView.open`) picks the connection of the shown page's first chart, else the first of
+    `workbench.json`'s `connections` *(proposed)*. "Explore (from chart…)" (`exploreView.startFromChart`, greyed while the
     shown page has no chart with rows) asks in the quick pick for one of the page's charts (title, its connection
     beside it), fetches its `/sql` with the active tab's query state and opens a blank tab on its connection with that
     SQL and those parameters in the hash, so it runs at once *(proposed)*; a chart that does not run (204) gives an
@@ -566,7 +567,7 @@ Updated 2026-10-31 to the SQL editor of §4.7, which replaced "Remove grouping" 
 - Every chart serves `<dataUrl>/rows` (`rowsUrl` in `page.json`): its query as at `/query` in plain Arrow types; with
   `explore.enabled`, also `<dataUrl>/sql` (the chart's query and its parameters, since step 8g) and
   `/rows?exploreSql=<text>&param_…` (an edited query, read-only, at most 100,000 rows) (§4.7).
-- With `explore.enabled` (since step 8g; else only "Explore" greyed in the global menu), a chart's menu (⋮) has "Open
+- With `explore.enabled` (since step 8g; else only "Explore (from scratch)" greyed in the global menu), a chart's menu (⋮) has "Open
   in Explore view": the chart's result in `<perspective-viewer>` in a new tab,
   rebuilt as the chart (§4.2), with a toolbar "Explore: <title>", the row count, the filters the chart ignores,
   "SQL" (Explore enabled), "Reset" and "Close".
