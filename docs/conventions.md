@@ -119,8 +119,15 @@ live in the concepts (`docs/YYYY-MM-DD-*.md`); this file holds only the rules th
   file. First line: what it is. Then who uses it and what it guarantees, concretely. Under ~10 lines.
 - **Every other file points to it:** first line `See <Name> in <path>`; a test file starts `Tests for X`. Checked by
   `quality:top-comments`.
-- **API doc comments** say what a parameter or result means; never restate the code or the name. No comment is
-  better than one that says nothing.
+- **A comment must earn its place:** write one only for what a reader cannot see in the code: what a parameter or
+  result means (units, ranges, what empty or `undefined` means), a non-obvious constraint (order, a line that looks
+  redundant, security), library behaviour only its source documents. No comment is better than one that says
+  nothing.
+- **Never write:** a comment that repeats the code or the name, narrates the next line, divides a short file into
+  sections, or says again what the concept's "why" already says; `@param` / `@returns` lines that add nothing; a doc
+  comment on a private helper whose name and signature say it. One sentence where one suffices.
+- **When you touch code, prune its comments:** delete those that no longer earn their place; reviews treat a needless
+  comment like dead code.
 - **Say what it is, not what it is not** ("not part of the HTTP contract"): a reader cannot act on a negation.
 - **No rationale, history or provenance in source comments:** no step ids (`9ad`), decision ids (`D38`), concept
   section numbers (`§3.15`), "since …", "used to …", "as VS Code / Zwiebelfisch does". That belongs in the concept
