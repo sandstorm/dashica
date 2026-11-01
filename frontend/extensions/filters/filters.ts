@@ -8,7 +8,7 @@ import { InputBoxValidationSeverity, type MenuAnchor, type UiApi } from '../../h
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { FieldsCache, SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchValues, fieldSource, filterableTables, typeIn, type AskSql, type FieldType, type FilterableTable } from './add-filter';
 import { filterDecorationProvider } from './decorations';
-import { fetchPill, offerFilters, showFailed } from './offer';
+import { fetchPill, offerFilters } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
 import { OFFER, type FilterCandidate, type PillSource } from '../filter-library/offer';
@@ -149,7 +149,7 @@ class FilterBar {
     /** The state the values of "Add filter" and of a pill's edit are asked for in. */
     private readonly query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
     /** Asks for the value of a button's `...`, and "Add filter"'s table, field, operator and value. */
-    private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick' | 'showErrorMessage'>,
+    private readonly ui: Pick<UiApi, 'showInputBox' | 'showQuickPick' | 'createQuickPick'>,
     /** Asks for a SQL condition, while the server takes SQL chips (filters.sqlEnabled). */
     private readonly askSql: AskSql | undefined,
     /** The charts' `/fields`, by which "Add filter" and a pill's edit know a field's type. */
@@ -271,32 +271,39 @@ class FilterBar {
   /**
    * Asks a new op for the field's pill `chip` in a quick pick below `chipElement` (a menu), the ops of its type
    * (`opsOf`, the type from `source`'s `/fields`, the key carries none; the one it has checked; busy until the type is
-   * there), and makes the pill again with it.
+   * there), and makes the pill again with it (`#remake`), the quick pick open meanwhile.
    */
   async #changeOp(chip: PillFilter, index: number, made: PillField, source: PillSource, chipElement: HTMLElement): Promise<void> {
     const items = this.#typeOf(made, source).then((known) =>
       opsOf(known?.type).map((op) => ({ label: `${made.field} ${OP_SIGNS[op]} ${made.value}`, icon: OP_ICONS[op], checked: op === made.op, op })),
     );
-    const picked = await this.ui.showQuickPick(items, { anchor: chipElement, title: `Operator of ${made.field}`, menu: true });
-    if (picked && picked.op !== made.op) await this.#remake(chip, index, source, { ...made, op: picked.op });
+    await this.ui.showQuickPick(items, {
+      anchor: chipElement,
+      title: `Operator of ${made.field}`,
+      menu: true,
+      accept: async (picked) => {
+        if (picked.op !== made.op) await this.#remake(chip, index, source, { ...made, op: picked.op });
+      },
+    });
   }
 
   /**
    * Asks a new value for the field's pill `chip` below `chipElement` as "Add filter" does (`askValue`: a time in an
    * input box, its value filled in; anything else in the quick pick of the chart's values; the type from `source`'s
-   * `/fields`, the value's quick pick busy until it is there), and makes the pill again.
+   * `/fields`, the value's quick pick busy until it is there), and makes the pill again (`#remake`), the box open
+   * meanwhile.
    */
   async #changeValue(chip: PillFilter, index: number, made: PillField, source: PillSource, chipElement: HTMLElement): Promise<void> {
-    const value = await askValue(
+    await askValue(
       this.ui,
       chipElement,
       `${made.field} ${OP_SIGNS[made.op]}`,
       made.op,
       this.#typeOf(made, source),
       (search, signal) => fetchValues(source.dataUrl, made, search, this.query.requestParams(), signal),
+      (value) => this.#remake(chip, index, source, { ...made, value }),
       made.value,
     );
-    if (value !== undefined) await this.#remake(chip, index, source, { ...made, value });
   }
 
   /**
@@ -312,15 +319,11 @@ class FilterBar {
 
   /**
    * Asks `source` (`<dataUrl>/pill`) for the pill of `field` and puts it in the place of `chip` at `index`, unless
-   * another chip is there meanwhile; a refused one shows the server's message (`showFailed`), the chip kept.
+   * another chip is there meanwhile; rejects with the server's message for a refused one, the chip kept.
    */
   async #remake(chip: PillFilter, index: number, source: PillSource, { field, column, op, value }: PillField): Promise<void> {
-    try {
-      const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value });
-      if (this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
-    } catch (error) {
-      showFailed(this.ui, `Filter ${field} ${OP_SIGNS[op]} ${value}`, error);
-    }
+    const pill = await fetchPill(source.dataUrl, { fieldId: field, column, op, value });
+    if (this.query.get(FILTERS)[index] === chip) this.#replace(index, { kind: 'pill', ...pill });
   }
 
   /**
@@ -339,13 +342,14 @@ class FilterBar {
    * one its page makes of the value the viewer is asked for, in an input box below `buttonElement` named after the
    * button, the condition it makes shown below the field as it is typed (`buttonCondition`), an empty one refused; with
    * `index`, that pill replaces the chip there (a new value for a pressed button), the value shown first and selected.
-   * A refused value shows the server's message (`showFailed`).
+   * A refused value shows the server's message in the still-open input box.
    */
   async #press(button: FilterButton, buttonElement: HTMLElement, index?: number): Promise<void> {
     if (!button.url) {
       if (button.key) this.query.set(FILTERS, addChip(this.query.get(FILTERS), { kind: 'pill', key: button.key }));
       return;
     }
+    const { url } = button;
     const shown = index === undefined ? undefined : this.query.get(FILTERS)[index];
     const value = await this.ui.showInputBox({
       title: button.title,
@@ -356,15 +360,12 @@ class FilterBar {
           ? { message: 'Enter a value.', severity: InputBoxValidationSeverity.Error }
           : { message: buttonCondition(button.queryPart, typed), severity: InputBoxValidationSeverity.Info },
       anchor: buttonElement,
+      accept: async (typed) => {
+        const pill = await fetchButtonPill(url, typed);
+        if (index === undefined) this.query.set(FILTERS, addChip(this.query.get(FILTERS), { kind: 'pill', ...pill }));
+        else if (this.query.get(FILTERS)[index] === shown) this.#replace(index, { kind: 'pill', ...pill });
+      },
     });
-    if (!value) return;
-    try {
-      const pill = await fetchButtonPill(button.url, value);
-      if (index === undefined) this.query.set(FILTERS, addChip(this.query.get(FILTERS), { kind: 'pill', ...pill }));
-      else if (this.query.get(FILTERS)[index] === shown) this.#replace(index, { kind: 'pill', ...pill });
-    } catch (error) {
-      showFailed(this.ui, `Filter button ${button.title}`, error);
-    }
   }
 
   /** Removes every pill of `button`, in one change. */

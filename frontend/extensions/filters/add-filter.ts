@@ -5,7 +5,7 @@ import { QuickPickItemKind, type MenuAnchor, type QuickPickItem, type QuickPickS
 import type { PillSource } from '../filter-library/offer';
 import { typeKind } from '../widget-library/clickhouse-type';
 import { FILTERS, addChip, type FilterOp } from './chips';
-import { fetchPill, fieldParam, showFailed, type FieldRef } from './offer';
+import { fetchPill, fieldParam, type FieldRef } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import type { PillField } from './pill-key';
 
@@ -71,10 +71,11 @@ export function fieldSource(
  * (`askValue`); the value becomes that chart's pill (`fetchPill`), added to the
  * chips of `query`. With `askSql` (filters.sqlEnabled, §3.15 D26) the first quick pick ends with "SQL condition…"
  * under "Advanced" (its only entry while no chart filters a table), which asks the condition in the SQL input box
- * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` shows the server's message (`showFailed`).
+ * (`addSqlCondition`, D12). Escape at any step adds nothing; a failed `/pill` shows the server's message in the value's
+ * still-open box.
  */
 export async function addFilter(
-  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox' | 'showErrorMessage'>,
+  ui: Pick<UiApi, 'showQuickPick' | 'createQuickPick' | 'showInputBox'>,
   query: Pick<QueryApi, 'get' | 'set' | 'requestParams'>,
   tables: readonly FilterableTable[],
   anchor: MenuAnchor,
@@ -109,16 +110,18 @@ export async function addFilter(
   );
   if (!op) return;
   const sign = OP_SIGNS[op.op];
-  const value = await askValue(ui, anchor, `${ref.field} ${sign}`, op.op, known, (search, signal) =>
-    fetchValues(widget.dataUrl, ref, search, query.requestParams(), signal),
+  await askValue(
+    ui,
+    anchor,
+    `${ref.field} ${sign}`,
+    op.op,
+    known,
+    (search, signal) => fetchValues(widget.dataUrl, ref, search, query.requestParams(), signal),
+    async (value) => {
+      const { key } = await fetchPill(widget.dataUrl, { fieldId: ref.field, column: ref.column, op: op.op, value });
+      query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
+    },
   );
-  if (value === undefined) return;
-  try {
-    const { key } = await fetchPill(widget.dataUrl, { fieldId: ref.field, column: ref.column, op: op.op, value });
-    query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
-  } catch (error) {
-    showFailed(ui, `Filter ${ref.field} ${sign} ${value}`, error);
-  }
 }
 
 /** A column or a computed field "Add filter" offers, the chart that serves it, its type and the time range. */
@@ -197,8 +200,9 @@ async function addSqlCondition(askSql: AskSql, query: Pick<QueryApi, 'get' | 'se
  * time range (its start for `≥`, `>`, `=` and `≠`, its end for `≤` and `<`, now without one) as ISO 8601 in UTC, a
  * day as its date, which ClickHouse reads best effort; else the quick pick of `pickValue`, the values from `load`.
  * A type still to come (a Promise: a chip's `/fields` not asked yet) opens the value's quick pick at once, busy
- * until it is there; a time's or a day's input box then takes its place. Resolves with the value, or `undefined`
- * when it was hidden without.
+ * until it is there; a time's or a day's input box then takes its place. Choosing a value runs `accept` with it (the
+ * pill made of it), the box open and busy meanwhile, its error shown in the box (`QuickPickOptions.accept`). Resolves
+ * with the value, or `undefined` when it was hidden without.
  */
 export function askValue(
   ui: Pick<UiApi, 'createQuickPick' | 'showInputBox'>,
@@ -207,6 +211,7 @@ export function askValue(
   op: FilterOp,
   known: FieldType | undefined | Promise<FieldType | undefined>,
   load: (search: string, signal: AbortSignal) => Promise<readonly string[]>,
+  accept: (value: string) => Promise<unknown>,
   current?: string,
 ): Promise<string | undefined> {
   const inputBox = (type: FieldType | undefined): AskInstead | undefined => {
@@ -219,10 +224,11 @@ export function askValue(
         anchor,
         value: current ?? (kind === 'day' ? edge.slice(0, 10) : edge),
         prompt: kind === 'day' ? 'A day, e.g. 2026-10-31' : 'A time, e.g. 2026-10-31T10:00:00Z',
+        accept,
       });
   };
-  if (!(known instanceof Promise)) return inputBox(known)?.() ?? pickValue(ui, anchor, title, load);
-  return pickValue(ui, anchor, title, load, known.then(inputBox, () => undefined));
+  if (!(known instanceof Promise)) return inputBox(known)?.() ?? pickValue(ui, anchor, title, load, accept);
+  return pickValue(ui, anchor, title, load, accept, known.then(inputBox, () => undefined));
 }
 
 /** Asks for the value in a box of its own (a time's input box) in place of `pickValue`'s. */
@@ -240,14 +246,16 @@ const SEARCH_DELAY = 200;
  * Asks for a value in a quick pick at `anchor` titled `title`: the values `load` finds for the typed text (asked at
  * first with '', again once the typing rests, the request before aborted; busy while one is out), and the
  * typed text itself first when it is none of them, so a value beyond the ones found can be chosen. A failed `load`
- * shows its message below the list. With `instead` the box waits busy for it before asking: a box it names takes
- * the box's place. Resolves with the value chosen, or `undefined` when the box was hidden without.
+ * shows its message below the list. Choosing a value runs `accept` with it, the box open and busy until it settles;
+ * a failed one shows its error in the box's message line. With `instead` the box waits busy for it before asking: a
+ * box it names takes the box's place. Resolves with the value chosen, or `undefined` when the box was hidden without.
  */
 export function pickValue(
   ui: Pick<UiApi, 'createQuickPick'>,
   anchor: MenuAnchor,
   title: string,
   load: (search: string, signal: AbortSignal) => Promise<readonly string[]>,
+  accept: (value: string) => Promise<unknown>,
   instead?: Promise<AskInstead | undefined>,
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -262,6 +270,7 @@ export function pickValue(
     let ready = instead === undefined;
     let hidden = false;
     let replaced = false;
+    let accepting = false;
     const draw = () => {
       const typed = box.value;
       box.items = [
@@ -296,8 +305,23 @@ export function pickValue(
       if (ready) timer = setTimeout(() => ask(search), SEARCH_DELAY);
     });
     box.onDidAccept(() => {
-      picked = box.selectedItems[0]?.value;
-      box.hide();
+      const value = box.selectedItems[0]?.value;
+      if (value === undefined || accepting) return;
+      accepting = true;
+      box.busy = true;
+      box.message = undefined;
+      accept(value).then(
+        () => {
+          picked = value;
+          box.hide();
+        },
+        (error: unknown) => {
+          if (hidden) console.error(`${title} failed:`, error);
+          accepting = false;
+          box.busy = false;
+          box.message = error instanceof Error ? error.message : String(error);
+        },
+      );
     });
     box.onDidHide(() => {
       hidden = true;

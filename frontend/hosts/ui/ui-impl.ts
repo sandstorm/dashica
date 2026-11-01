@@ -6,7 +6,6 @@ import { Bar } from './bar/bar';
 import { WindowLayout } from './layout/window-layout';
 import { ContextMenu } from './menus/context-menu';
 import { Menus } from './menus/menus';
-import { Notifications } from './notifications/notifications';
 import { QuickInput } from './quick-input/quick-input';
 import type {
   BarPlacement,
@@ -35,14 +34,12 @@ export class UiHost implements UiApi {
   readonly #menus: Menus;
   readonly #contextMenu: ContextMenu;
   readonly #quickInput: QuickInput;
-  readonly #notifications: Notifications;
   readonly #searchProviders = new Set<SearchProvider>();
   readonly onDidChangeMenu;
 
   constructor(hostContainer: HTMLElement, layoutState: Memento, commands: CommandsHost) {
     this.#menus = new Menus(() => commands.getCommands());
     this.#quickInput = new QuickInput(hostContainer);
-    this.#notifications = new Notifications(hostContainer);
     this.#contextMenu = new ContextMenu(this.#quickInput, this.#menus, commands);
     this.#layout = new WindowLayout(hostContainer, layoutState, commands, this);
     this.#bars = {
@@ -98,7 +95,7 @@ export class UiHost implements UiApi {
     this.#contextMenu.show(menuId, options);
   }
 
-  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions): Promise<T | undefined> {
+  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions<T>): Promise<T | undefined> {
     return this.#quickInput.showQuickPick(items, options);
   }
 
@@ -108,10 +105,6 @@ export class UiHost implements UiApi {
 
   createQuickPick<T extends QuickPickItem>(): QuickPick<T> {
     return this.#quickInput.createQuickPick<T>();
-  }
-
-  showErrorMessage(message: string): Promise<void> {
-    return this.#notifications.showError(message);
   }
 
   registerSearchProvider(provider: SearchProvider): Disposable {
@@ -127,7 +120,6 @@ export class UiHost implements UiApi {
   dispose(): void {
     this.#searchProviders.clear();
     this.#quickInput.dispose();
-    this.#notifications.dispose();
     this.#menus.dispose();
     this.#layout.dispose();
   }

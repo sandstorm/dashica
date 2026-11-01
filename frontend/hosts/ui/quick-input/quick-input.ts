@@ -4,6 +4,7 @@ import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { fuzzyMatch } from '../../../core/fuzzy/fuzzy';
 import {
   type InputBoxOptions,
+  type InputBoxValidationMessage,
   InputBoxValidationSeverity,
   type MenuAnchor,
   type QuickPick,
@@ -20,7 +21,8 @@ import {
  * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `hostContainer`
  * (a new one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the
  * top in the middle; an input box's validation message below its field (its own one-line field, or the caller's,
- * `InputBoxOptions.field`). Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was. A
+ * `InputBoxOptions.field`). With `accept` a choice runs it while the box stays, busy, and a failed one shows its error
+ * in the box's message line. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was. A
  * menu's box (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
  */
 export class QuickInput {
@@ -37,7 +39,7 @@ export class QuickInput {
     });
   }
 
-  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options: QuickPickOptions = {}): Promise<T | undefined> {
+  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options: QuickPickOptions<T> = {}): Promise<T | undefined> {
     return new Promise((resolve, reject) => this.pickOne(items, options, resolve, reject));
   }
 
@@ -48,7 +50,7 @@ export class QuickInput {
    */
   pickOne<T extends QuickPickItem>(
     items: QuickPickItems<T>,
-    options: QuickPickOptions,
+    options: QuickPickOptions<T>,
     done: (item: T | undefined) => void,
     failed: (error: unknown) => void = (error) => console.error(`Quick pick ${options.title ?? ''} failed:`, error),
   ): void {
@@ -63,8 +65,26 @@ export class QuickInput {
     let hidden = false;
     pick.onDidChangeValue((value) => (pick.items = narrow(shown, value)));
     pick.onDidAccept(() => {
-      picked = pick.selectedItems[0]?.item;
-      pick.hide();
+      const item = pick.selectedItems[0]?.item;
+      if (!options.accept || !item) {
+        picked = item;
+        pick.hide();
+        return;
+      }
+      if (pick.busy) return;
+      pick.busy = true;
+      pick.message = undefined;
+      options.accept(item).then(
+        () => {
+          picked = item;
+          pick.hide();
+        },
+        (reason: unknown) => {
+          if (hidden) console.error(`Quick pick ${options.title ?? ''} failed:`, reason);
+          pick.busy = false;
+          pick.message = messageOf(reason);
+        },
+      );
     });
     pick.onDidHide(() => {
       hidden = true;
@@ -106,13 +126,12 @@ export class QuickInput {
     const inputElement = field?.inputElement ?? ownInputElement!;
     const text = () => field?.value ?? ownInputElement!.value;
     const messageElement = html`<div class="d-workbench__quick-pick-message" id=${uniqueId('dashica-input-box-message')} aria-live="polite" hidden></div>`;
+    const progressElement = html`<div class="d-workbench__quick-pick-progress" hidden></div>`;
     const promptElement = options.prompt ? html`<div class="d-workbench__quick-pick-hint" id=${uniqueId('dashica-input-box')}>${options.prompt}</div>` : null;
     inputElement.setAttribute('aria-label', name);
     inputElement.setAttribute('aria-describedby', promptElement ? `${messageElement.id} ${promptElement.id}` : messageElement.id);
-    const boxContainer = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field?.fieldElement ?? ownInputElement}${messageElement}${promptElement}</div>`;
-    // shows what `validateInput` says of the text in the field; whether Enter takes it
-    const validate = (): boolean => {
-      const said = options.validateInput?.(text());
+    const boxContainer = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field?.fieldElement ?? ownInputElement}${progressElement}${messageElement}${promptElement}</div>`;
+    const say = (said: InputBoxValidationMessage | undefined): boolean => {
       messageElement.textContent = said?.message ?? '';
       messageElement.hidden = !said;
       const error = said?.severity === InputBoxValidationSeverity.Error;
@@ -121,12 +140,28 @@ export class QuickInput {
       else inputElement.removeAttribute('aria-invalid');
       return !error;
     };
+    // shows what `validateInput` says of the text in the field; whether Enter takes it
+    const validate = (): boolean => say(options.validateInput?.(text()));
     return new Promise((resolve) => {
       let value: string | undefined;
-      const accept = () => {
-        if (!validate()) return;
-        value = text();
+      let hidden = false;
+      const close = (taken: string) => {
+        value = taken;
         if (this.#open?.boxContainer === boxContainer) this.#open.close();
+      };
+      const accept = () => {
+        if (!progressElement.hidden || !validate()) return;
+        const taken = text();
+        if (!options.accept) return close(taken);
+        progressElement.hidden = false;
+        options.accept(taken).then(
+          () => close(taken),
+          (reason: unknown) => {
+            if (hidden) console.error(`Input box ${name} failed:`, reason);
+            progressElement.hidden = true;
+            say({ message: messageOf(reason), severity: InputBoxValidationSeverity.Error });
+          },
+        );
       };
       const listening = field ? [field.onDidChangeValue(validate), field.onDidAccept(accept)] : [];
       ownInputElement?.addEventListener('input', validate);
@@ -136,11 +171,12 @@ export class QuickInput {
         accept();
       });
       validate();
-      const hidden = () => {
+      const onHide = () => {
+        hidden = true;
         for (const listener of listening) listener.dispose();
         resolve(value);
       };
-      this.#present(boxContainer, field ?? ownInputElement!, hidden, options.anchor);
+      this.#present(boxContainer, field ?? ownInputElement!, onHide, options.anchor);
       const [start, end] = options.valueSelection ?? [0, text().length];
       if (field) field.select(start, end);
       else ownInputElement!.setSelectionRange(start, end);
@@ -236,6 +272,11 @@ function place(boxContainer: HTMLElement, anchor: MenuAnchor | undefined): void 
   const maxY = Math.max(0, (view?.innerHeight ?? 0) - boxContainer.offsetHeight);
   boxContainer.style.left = `${Math.min(Math.max(point.x, 0), maxX)}px`;
   boxContainer.style.top = `${Math.min(Math.max(point.y, 0), maxY)}px`;
+}
+
+/** What a failed `accept` says in the box: its error's message. */
+function messageOf(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 /** `prefix` and a random part: an id no other box on the page has. */
@@ -350,14 +391,15 @@ class OnePicker<T extends QuickPickItem> {
 }
 
 /**
- * The quick pick of `createQuickPick`: a box with a field, a progress line, the owner's items, "No results" and the
- * prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`. As a `menu` its field is concealed
+ * The quick pick of `createQuickPick`: a box with a field, a progress line, an error line (`message`), the owner's
+ * items, "No results" and the prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`. As a `menu` its field is concealed
  * (it keeps the focus, so the keys work at once): a first letter typed makes the first item starting with it active,
  * the next one shows the field and the text from then on goes to the owner as usual.
  */
 class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #boxContainer: HTMLElement;
   readonly #fieldElement: HTMLInputElement;
+  readonly #messageElement: HTMLElement;
   readonly #progressElement: HTMLElement;
   readonly #emptyElement: HTMLElement;
   readonly #promptElement: HTMLElement;
@@ -384,11 +426,12 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   ) {
     this.#fieldElement = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" role="combobox" aria-autocomplete="list" aria-expanded="true"
       oninput=${() => this.#typed()} onkeydown=${(event: KeyboardEvent) => this.#picker.key(event)}>`;
+    this.#messageElement = html`<div class="d-workbench__quick-pick-message d-workbench__quick-pick-message--error" aria-live="polite"></div>`;
     this.#progressElement = html`<div class="d-workbench__quick-pick-progress"></div>`;
     const listboxContainer = html`<div class="d-workbench__quick-pick-list" role="listbox"></div>`;
     this.#emptyElement = html`<div class="d-workbench__quick-pick-empty">No results</div>`;
     this.#promptElement = html`<div class="d-workbench__quick-pick-hint"></div>`;
-    this.#boxContainer = html`<div class="d-workbench__quick-pick" role="dialog">${this.#fieldElement}${this.#progressElement}${listboxContainer}${this.#emptyElement}${this.#promptElement}</div>`;
+    this.#boxContainer = html`<div class="d-workbench__quick-pick" role="dialog">${this.#fieldElement}${this.#progressElement}${this.#messageElement}${listboxContainer}${this.#emptyElement}${this.#promptElement}</div>`;
     this.#picker = new OnePicker<T>({ listboxContainer, inputElement: this.#fieldElement }, (item, modified) => {
       this.#selected = [item];
       this.#accepted.fire({ newTab: modified });
@@ -431,6 +474,15 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 
   set prompt(prompt: string | undefined) {
     this.#promptElement.textContent = prompt ?? '';
+    this.#update();
+  }
+
+  get message(): string | undefined {
+    return this.#messageElement.textContent || undefined;
+  }
+
+  set message(message: string | undefined) {
+    this.#messageElement.textContent = message ?? '';
     this.#update();
   }
 
@@ -498,12 +550,13 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
     this.#fieldElement.classList.toggle(CONCEALED, concealed);
   }
 
-  /** The names, the progress line, "No results" and the prompt as the state says. */
+  /** The names, the progress line, the error line, "No results" and the prompt as the state says. */
   #update(): void {
     const name = this.#title ?? 'Pick';
     this.#boxContainer.setAttribute('aria-label', name);
     this.#fieldElement.setAttribute('aria-label', name);
     this.#progressElement.hidden = !this.#busy;
+    this.#messageElement.hidden = !this.#messageElement.textContent;
     this.#emptyElement.hidden = this.#busy || this.#picker.size > 0 || this.#fieldElement.value.trim() === '';
     this.#promptElement.hidden = !this.#promptElement.textContent;
     if (this.#promptElement.hidden) this.#fieldElement.removeAttribute('aria-describedby');

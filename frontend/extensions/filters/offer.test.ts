@@ -1,19 +1,16 @@
 // @vitest-environment jsdom
 // Tests for offer.ts: what a click offers (offerFilters, the command filters.offer): "Filter" and "Exclude" per
 // candidate of a field the widget filters by, at the click, and for a time or a number the comparisons of its type;
-// the choice made a pill by the widget's /pill and added at once; none on Escape, none on a failed /pill, which shows
-// the server's message. The request of /pill (fetchPill).
+// the choice made a pill by the widget's /pill and added at once; none on Escape, none on a failed /pill, whose
+// server's message shows in the still-open quick pick. The request of /pill (fetchPill).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryHost } from '../../hosts/query/query';
 import { FILTERS } from './chips';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
-import type { UiApi } from '../../hosts/ui/ui';
 import { fetchPill, offerFilters } from './offer';
 
 let hostContainer: HTMLElement;
-let quickInput: QuickInput & Pick<UiApi, 'showErrorMessage'>;
-/** The error messages shown (`ui.showErrorMessage`), in order. */
-let errors: string[];
+let quickInput: QuickInput;
 let query: QueryHost;
 /** The URLs fetched; each `/pill` answers a key naming its field, op and value, unless `refused` says otherwise. */
 let fetched: URL[];
@@ -40,8 +37,7 @@ beforeEach(() => {
   query.declare(FILTERS);
   query.load();
   hostContainer = document.body.appendChild(document.createElement('div'));
-  quickInput = Object.assign(new QuickInput(hostContainer), { showErrorMessage: async (message: string) => void errors.push(message) });
-  errors = [];
+  quickInput = new QuickInput(hostContainer);
   fetched = [];
   refused = undefined;
   vi.stubGlobal('fetch', async (input: string) => {
@@ -102,17 +98,19 @@ describe('offerFilters', () => {
     expect(choices()).toEqual(['Filter status = 500', 'Exclude status ≠ 500']);
   });
 
-  it('adds no pill when the widget’s /pill fails, and shows the server’s message', async () => {
-    const failing = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('adds no pill when the widget’s /pill fails, and shows the server’s message in the quick pick, still open', async () => {
     refused = new Response('"status" cannot filter this chart\'s table', { status: 422 });
-    const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }], source);
+    let settled = false;
+    const done = offerFilters(quickInput, query, { x: 10, y: 20 }, [{ fieldId: 'status', value: '500' }], source).then(() => (settled = true));
     choose('Filter status = 500');
-    await done;
+    const messageElement = hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick[aria-label="Filter"] .d-workbench__quick-pick-message')!;
+    await vi.waitFor(() => expect(messageElement.textContent).toBe('422: "status" cannot filter this chart\'s table'));
 
+    expect([messageElement.hidden, choices(), settled]).toEqual([false, ['Filter status = 500', 'Exclude status ≠ 500'], false]);
     expect(query.get(FILTERS)).toEqual([]);
-    expect(errors).toEqual(['Filter status = 500 failed: 422: "status" cannot filter this chart\'s table']);
-    expect(failing).toHaveBeenCalled();
-    failing.mockRestore();
+    (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await done;
+    expect(query.get(FILTERS)).toEqual([]);
   });
 
   it('adds nothing when the viewer closes the quick pick', async () => {

@@ -699,7 +699,7 @@ the server made:
   filters ignores all. Each request opens every `f` (`QueryState.Pills` holds the keys unchecked; the chart's handler
   answers the first one that does not open with 400, also for the charts it does not apply to).
 - **The client** (8e): a pick in the click's quick pick asks the widget's `/pill` and adds `{key, label}`
-  (`addChip` on the query state `filters` since 9j, before `FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and shows the server's message in an error notification (`ui.showErrorMessage`, since 9at, D45 (e); before only the console). Since 9f (§3.15 D20) the quick
+  (`addChip` on the query state `filters` since 9j, before `FiltersModel.add(pill)`; since 9g only `{key}`, §3.15 D21); a failed answer adds nothing and shows the server's message in the still-open quick pick's message line (`QuickPickOptions.accept`, since 9ay; 9at showed it in an error notification, D45 (e); before only the console). Since 9f (§3.15 D20) the quick
   pick is the `filters` extension's command `filters.offer(at, candidates, { dataUrl, filterable })`, which a chart,
   a table cell and the Explore view's group row run (the Explore view with its chart); it adds to the tab shown. A pill chip shows its label and ×; it is not edited (its condition is
   the server's) and the `=` / `≠` flip goes *(proposed)*; 9c makes it editable again through the server (§3.15 D18). `WidgetContext.addFilter` goes.
@@ -1088,8 +1088,9 @@ handler)`, `where` = page title, chart selection or table row. It is mounted as 
 
 - **Request:** the client POSTs the menu's context as JSON (the selection, the row) with the page's query string
   (time, filters); the handler reads `r` as any handler.
-- **Response:** a 2xx JSON body with optional fields `{message, navigate, refresh}` (notification, navigation,
-  re-query); anything else shows the body as an error notification. One small helper writes that body; a handler may
+- **Response:** a 2xx JSON body with optional fields `{message, navigate, refresh}` (a message, navigation,
+  re-query); anything else shows the body as an error in the message line of the still-open menu that ran it
+  (`QuickPickOptions.accept`) *(proposed, 9ay: there is no notification area)*. One small helper writes that body; a handler may
   also write it itself.
 
 Pure UI behaviour (palette, keys, panels) stays TS.
@@ -1097,7 +1098,8 @@ Pure UI behaviour (palette, keys, panels) stays TS.
 ### 3.10 Errors and tests
 
 - **Errors where they happen:** a query error shows in its chart (short message) and, while the chart is active, in
-  the status bar, whose click opens Debug; an action or navigation error is a notification; an unknown page shows "not found" in
+  the status bar, whose click opens Debug; an error of a request after a choice (a `/pill`, an action) shows in the still-open pick or input
+  box, its message line (`accept`, 9ay; there is no notification area); an unknown page shows "not found" in
   the content area. Nothing modal.
 - **Tests:** vitest (jsdom) for core, hosts and extensions through their public interface; Go golden JSON for the
   contract (§3.3); Go tests for `QueryState` parsing and the default filter helper (a fixed column list, no ClickHouse); Playwright specs for flows (written
@@ -1164,6 +1166,8 @@ interface UiApi {
   showQuickPick<T>(items: (T | QuickPickSeparator)[] | Promise<(T | QuickPickSeparator)[]>, o?: { title?; placeholder?; anchor?; menu? }): Promise<T | undefined>;
                                           // typing narrows (fuzzy); a click's candidates, menus (8c); `menu`: no field in sight (9s);
                                           // items still to come: open at once, busy until there; failed: hides, rejects (9an, D42)
+                                          // accept(item): a request after the choice, the box open and busy meanwhile,
+                                          // its error in the box's message line, resolves once it succeeded (9ay)
   showInputBox(o?: { title?; prompt?; placeholder?; value?; valueSelection?; validateInput?; anchor?; field? }): Promise<string | undefined>;
                                           // a button's `...`; validateInput(value): { message, severity: Info | Error }
                                           // (an Error blocks Enter) or undefined, below the field, live (9z, D37; 9ap, D45);
@@ -1172,8 +1176,6 @@ interface UiApi {
                                           // onDidAccept; 9aa)
   createQuickPick<T>(): QuickPick<T>;     // the owner sets the items as the text changes (search everywhere); `anchor`
   registerSearchProvider(p: SearchProvider): Disposable;               // search everywhere groups
-  showErrorMessage(message: string): Promise<void>;  // a notification at the bottom right until closed (9at, D45);
-                                          // showInformationMessage / showWarningMessage, items: when needed
 }
 
 interface Panel extends Disposable {
@@ -1886,7 +1888,10 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   viewer's choice: a click's `/pill` (`offerFilters`), a filter button's `/button`, "Add filter"'s `/pill`, a pill's
   edit. *(proposed)* Only the error kind, without items (no caller needs them); an error stays until closed, as VS
   Code's; the text keeps the HTTP status before the server's message (`fetchPill`'s rejection); a SQL chip needs no
-  request, so nothing of it can fail this way.
+  request, so nothing of it can fail this way. **Replaced by 9ay** (docs/conventions.md, d23a409: "Errors show where
+  they happen … There is no notification area"): `ui.showErrorMessage`, `hosts/ui/notifications` and `showFailed` are
+  gone; the pick or input box that led to the request runs it (`QuickPickOptions.accept`, `InputBoxOptions.accept`,
+  `askValue` / `pickValue`'s `accept`), stays open and busy, and shows the server's message in its message line.
 - **D47 DOM nodes end in `Element` or `Container` (9au, decided 2026-11-01; maintainer, on chart-frame.ts's
   `#decorations` being the badges' `<span>` while widgets-impl.ts's `#decorations` is the data list: "Element /
   Container -> good... I'd apply it ANYWHERE, exactly."):** as VS Code names them, a field, variable, parameter or
@@ -2061,8 +2066,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 - **The client:** pressing a button without `...` adds `{key, label: title}`; one with asks the value
   (`showInputBox` below the button) and adds the page's answer; a pressed `...` button is a group of its title
   (releases it) and a button per value (`d-filter-button__value`: asks a new value, the old one filled in and selected, and
-  `replace`s that chip at its index, unless the chips changed meanwhile). A refused value is logged and shown (an
-  error notification, since 9at, D45 (e)), nothing added.
+  `replace`s that chip at its index, unless the chips changed meanwhile). A refused value shows the server's message in
+  the still-open input box (`InputBoxOptions.accept`, since 9ay), nothing added.
   The buttons work with `filters.sqlEnabled` off.
 - **Tests:** Go `filter` (`NewButton`, its key back through `Open`, `Apply` to a table, another one, a SQL file
   without table, after the fields, ignored when skipping filters), `dashboard` (`page.json`'s `key` and `url`,
@@ -2096,7 +2101,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 - **Not editable:** a pill no chart of the page makes (no `fieldSource`: another page's table, a field the page does
   not show) is its label and ×, its tooltip "No chart of this page filters <table> by <field>, so it can only be
   removed"; a button's pill outside its page stays as 9b left it.
-- **Refused or late:** a refused `/pill` is logged and shown (an error notification, since 9at, D45 (e)) and the chip kept; an answer that comes back after another chip
+- **Refused or late:** a refused `/pill` is shown in the still-open op menu or value box (`accept`, since 9ay) and the chip kept; an answer that comes back after another chip
   took the place (`chips[index]` is no longer the chip edited) is dropped *(proposed)*.
 - **Tests:** Go `filter` (`New` carries the value; a changed value in a key is refused), `widget` (`/pill`'s key
   with field and value); vitest: `pillField`, `fieldSource`, the filter bar (the parts of a field's pill, the operator
@@ -2271,6 +2276,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9av ✅ 2026-11-01 | **D48 a sash; Explore's SQL panel resizable** (§3.5, §3.15; Perspective §4.7): `Sash` (`frontend/core/sash/sash.{ts,css,test.ts}`: orientation, label, size, min / max, step, `reverse`, `perPixel`, `shownSize`, `onDidChange`, keys and pointer drag); `SideBar` uses it (`#createSash`, `window-layout.css` `.d-workbench__sash` places it); the Explore view's `#createSqlSash` below the SQL panel, height in `globalState` `sqlHeight`, hidden with the panel, the editor filling the panel (`explore-view.css`). Tests: `sash.test.ts` (keys, drag, bounds, kept size, `shownSize`, dispose), the side bars' tests unchanged and green, `view.test.ts` (the split: keys, drag, kept, hidden with the panel), `e2e/explore-view.spec.ts` (written, not run) | *(proposed)* `core/` as the place; the owner keeps the size; `shownSize`; Explore's bounds and CSS minimum for the viewer |
 | 9aw ✅ 2026-11-01 | **BUGFIX the old Explore API runs no query** (§3.8, §5; Perspective §2.5): `lib/explore`'s `preview/query`, `preview/debug`, `schema` and `values` deleted (`preview.go`, `schema.go`, `values.go` and their tests): they ran a widget, its SQL and value samples the browser sent, without `explore.enabled` (D8), and nothing calls them; `exploreImpl` keeps no `deps`. `formmodel` and `gocode` (no query) stay. Tests: `handlers_test.go` (the remaining routes; the deleted ones not registered) | deleted rather than gated: no caller, the rebuilt Explore has its own handlers behind the flag |
 | 9ax ✅ 2026-11-01 | **BUGFIX the request carries the effective time range** (§3.7, §3.15 D40; docs/conventions.md): D40's server half reversed: `rendering.DashboardContext.DefaultTime`, `httpserver.DefaultTimeRange` and the `defaultTime` parameter of `DataHandler`, `queryHandler`, `fieldsHandler`, `valuesHandler`, `serveSpeedscope`, `withHandler.Handler` (and `SchemaTable.Handler`'s unused one) gone; `httpserver.ParseQueryState(r)` refuses a missing `time` again (`QueryStateError`). Client: `requestParams()` sends `format(value, undefined)` of each sent key; `QueryKeySpec.format` without a page leaves no default out (`TIME`, `TEST_TIME`), so `time` is sent also as the page's default; `sentToServer` stays a boolean. Tests: Go `httpserver` (a missing `time` is refused), `widget` (no time range is a 400), `dashboard_default_time_test.go` deleted; vitest `time-state.test.ts` (sent with the default, written without it), `query.test.ts` (the effective value sent), `widgets.test.ts` (URLs with `time=24h`) | *(proposed)* `format` without a page as the request's entries, in place of a separate request function |
+| 9ay ✅ 2026-11-01 | **BUGFIX a failed filter shows in the still-open box** (§3.8, §3.9, §3.10, §3.11, §3.15 D45 (e); docs/conventions.md "Errors show where they happen"): `UiApi.showErrorMessage` and `hosts/ui/notifications` deleted; `QuickPickOptions<T>.accept?(item)` and `InputBoxOptions.accept?(value)`: the choice runs it, the box stays open and busy (its progress line; the input box got one), a rejection's message shows in the box's message line (the input box's validation line as an error; `QuickPick.message`, a new error line below the field) and the viewer can choose again or hide it; resolved, the box hides and resolves with the choice. `offerFilters`, the op menu and value box of a pill's edit (`#remake` rejects), "Add filter"'s value (`askValue` / `pickValue` take `accept`), a filter button's input box use it; `showFailed` gone. Tests: `quick-input.test.ts` (both boxes: busy, error, again, resolved), `offer.test.ts`, `add-filter.test.ts` (`pickValue` busy and its error; the refused `/pill` in the open box), `filters.test.ts` (the fake boxes run `accept`) | *(proposed)* `accept` on the options in place of each caller driving a `createQuickPick`; `QuickPick.message` as the pick's message line; a failure after the box was hidden is logged to the console |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

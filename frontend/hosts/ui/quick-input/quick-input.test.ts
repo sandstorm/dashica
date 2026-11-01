@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for quick-input.ts (createQuickPick, showQuickPick also with items still to come, showInputBox with its validation message and selection, and
-// with a field of the caller's).
+// with a field of the caller's; both with `accept`, open and busy while it runs, its error in the message line).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../../core/event-emitter/event-emitter';
 import { InputBoxValidationSeverity, QuickPickItemKind, type InputBoxField } from '../ui';
@@ -202,6 +202,28 @@ describe('showQuickPick', () => {
     expect(box()).toBeNull();
   });
 
+  it('stays open and busy while `accept` runs; shows its error and lets the viewer choose again; resolves once it succeeded', async () => {
+    const { hostContainer, quickInput, key, field, options, box } = setup();
+    const tries: { label: string; settle: (ok: boolean) => void }[] = [];
+    const picked = quickInput.showQuickPick([{ label: 'status = 500' }, { label: 'status ≠ 500' }], {
+      title: 'Filter',
+      accept: (item) => new Promise((resolve, reject) => tries.push({ label: item.label, settle: (ok) => (ok ? resolve(undefined) : reject(new Error('422: cannot filter'))) })),
+    });
+    const progress = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
+    const message = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-message')!;
+    key(field(), 'Enter');
+    key(field(), 'Enter');
+    expect([tries.map((t) => t.label), progress().hidden, box() !== null]).toEqual([['status = 500'], false, true]);
+    tries[0].settle(false);
+    await vi.waitFor(() => expect(message().textContent).toBe('422: cannot filter'));
+    expect([message().hidden, progress().hidden, box() !== null]).toEqual([false, true, true]);
+    options()[1].click();
+    expect(message().hidden).toBe(true);
+    tries[1].settle(true);
+    expect(await picked).toEqual({ label: 'status ≠ 500' });
+    expect(box()).toBeNull();
+  });
+
   it('calls pickOne\'s `done` while the click is still going on, the box gone and the focus back', () => {
     const { buttonElement, quickInput, options, box } = setup();
     buttonElement.focus();
@@ -315,6 +337,29 @@ describe('showInputBox', () => {
     const asked = quickInput.showInputBox();
     key(field(), 'Escape');
     expect(await asked).toBeUndefined();
+  });
+
+  it('stays open and busy while `accept` runs on Enter, shows its error below the field, resolves once it succeeded', async () => {
+    const { hostContainer, quickInput, key, type, field, box } = setup();
+    let refuse = true;
+    const accepted: string[] = [];
+    const asked = quickInput.showInputBox({
+      accept: async (value) => {
+        accepted.push(value);
+        if (refuse) throw new Error('400: needs a value');
+      },
+    });
+    const message = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-message')!;
+    type(field(), 'x');
+    key(field(), 'Enter');
+    expect(hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!.hidden).toBe(false);
+    await vi.waitFor(() => expect(message().textContent).toBe('400: needs a value'));
+    expect([message().classList.contains('d-workbench__quick-pick-message--error'), field().getAttribute('aria-invalid'), box() !== null]).toEqual([true, 'true', true]);
+    refuse = false;
+    type(field(), 'y');
+    key(field(), 'Enter');
+    expect(await asked).toBe('y');
+    expect(accepted).toEqual(['x', 'y']);
   });
 
   /** A field of the caller's: a text area as its input, its events fired by the test, the selection asked kept. */

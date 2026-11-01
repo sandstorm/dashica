@@ -37,11 +37,20 @@ let ui: object;
 let pageChanged: EventEmitter<PageJson | undefined>;
 /** What `ui.showInputBox` answers next, and the boxes it was asked to show. */
 let answer: string | undefined;
-let asked: { title?: string; prompt?: string; placeholder?: string; value?: string; validateInput?: (value: string) => unknown; anchor?: unknown; field?: InputBoxField }[];
+let asked: {
+  title?: string;
+  prompt?: string;
+  placeholder?: string;
+  value?: string;
+  validateInput?: (value: string) => unknown;
+  anchor?: unknown;
+  field?: InputBoxField;
+  accept?: (value: string) => Promise<unknown>;
+}[];
 /** The quick picks shown (all cancelled, unless `picked` names the label to choose): their labels and anchor. */
 let picks: { labels: string[]; anchor: unknown }[];
 let picked: string | undefined;
-/** The error messages shown (`ui.showErrorMessage`), in order. */
+/** The messages a box showed in its message line for a failed `accept`, in order; the box is then hidden. */
 let errors: string[];
 /** The commands the extension registered, by id. */
 let commands: Map<string, (...args: any[]) => unknown>;
@@ -95,6 +104,17 @@ const held = () => query.get(FILTERS);
 const addPill = ({ key }: { key: string }) => query.set(FILTERS, addChip(held(), { kind: 'pill', key }));
 const addSql = (sql: string) => query.set(FILTERS, addChip(held(), { kind: 'sql', sql }));
 
+/** `choice` once `accept` took it; a rejection's message in `errors` and `undefined`, as the box hidden after it. */
+async function accepted<T>(accept: (choice: T) => Promise<unknown>, choice: T): Promise<T | undefined> {
+  try {
+    await accept(choice);
+    return choice;
+  } catch (error) {
+    errors.push((error as Error).message);
+    return undefined;
+  }
+}
+
 /** Shows `shown` as the page; `undefined`: a tab without one (loading, or it could not be loaded). */
 function show(shown: PageJson | undefined): void {
   page.current = shown;
@@ -116,12 +136,18 @@ beforeEach(() => {
       (name === 'top' ? topBarContainer : barContainer).appendChild(itemElement);
       return { dispose: () => itemElement.remove() };
     },
-    showInputBox: async (options: (typeof asked)[number]) => (asked.push(options), answer),
-    showErrorMessage: async (message: string) => void errors.push(message),
-    showQuickPick: async (given: { label?: string; kind?: number }[] | Promise<{ label?: string; kind?: number }[]>, options: { anchor?: unknown }) => {
+    showInputBox: async (options: (typeof asked)[number]) => {
+      asked.push(options);
+      return answer !== undefined && options.accept ? accepted(options.accept, answer) : answer;
+    },
+    showQuickPick: async (
+      given: { label?: string; kind?: number }[] | Promise<{ label?: string; kind?: number }[]>,
+      options: { anchor?: unknown; accept?: (item: unknown) => Promise<unknown> },
+    ) => {
       const items = await given;
       picks.push({ labels: items.map((i) => (i.kind === -1 ? `— ${i.label}` : i.label!)), anchor: options.anchor });
-      return items.find((i) => i.label === picked);
+      const item = items.find((i) => i.label === picked);
+      return item && options.accept ? accepted(options.accept, item) : item;
     },
   };
   asked = [];
@@ -293,15 +319,12 @@ describe('filters', () => {
     expect(validateInput!('')).toEqual({ message: 'Enter a value.', severity: 3 });
   });
 
-  it('adds nothing when the page refuses the value, and shows its message', async () => {
+  it('adds nothing when the page refuses the value, and shows its message in the input box', async () => {
     vi.stubGlobal('fetch', async () => new Response('filter button "Path" needs a value', { status: 400 }));
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     answer = 'x';
     button('Path').click();
-    await vi.waitFor(() => expect(logged).toHaveBeenCalled());
+    await vi.waitFor(() => expect(errors).toEqual(['400: filter button "Path" needs a value']));
     expect(held()).toEqual([]);
-    expect(errors).toEqual(['Filter button Path failed: 400: filter button "Path" needs a value']);
-    logged.mockRestore();
   });
 
   it('shows a SQL chip that matches no button as `SQL:` and its text on one line', () => {
@@ -529,12 +552,9 @@ describe('filters, a field’s pill edited', () => {
     query.set(FILTERS, replaceChip(held(), 0, hostChip('eq', 'a') as FilterChip));
 
     vi.stubGlobal('fetch', async () => new Response('"host" cannot filter this chart\'s table', { status: 422 }));
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     op(chips()[0]).click();
-    await vi.waitFor(() => expect(logged).toHaveBeenCalled());
+    await vi.waitFor(() => expect(errors).toEqual(['422: "host" cannot filter this chart\'s table']));
     expect(held()[0]).toEqual(hostChip('eq', 'a'));
-    expect(errors).toEqual(['Filter host ≠ a failed: 422: "host" cannot filter this chart\'s table']);
-    logged.mockRestore();
   });
 
   it('asks the chart’s /fields once for its edits, without the filter chips, again for another time range', async () => {

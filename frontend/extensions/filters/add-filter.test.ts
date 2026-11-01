@@ -11,7 +11,6 @@ import { QueryHost } from '../../hosts/query/query';
 import { FILTERS } from './chips';
 import { TIME, presetRange } from '../time-library/time-state';
 import { QuickInput } from '../../hosts/ui/quick-input/quick-input';
-import type { UiApi } from '../../hosts/ui/ui';
 import { EditorView } from '@codemirror/view';
 import { showSqlInputBox } from '../sql-library/sql-editor';
 import { FieldsCache, addFilter, askValue, fetchFields, fetchValues, fieldSource, filterableTables, pickValue, typeIn, type AskSql, type Column } from './add-filter';
@@ -28,9 +27,7 @@ const grid = { type: 'grid', props: {}, children: { a: byPath, b: audit } } as u
 
 let hostContainer: HTMLElement;
 let anchorElement: HTMLButtonElement;
-let quickInput: QuickInput & Pick<UiApi, 'showErrorMessage'>;
-/** The error messages shown (`ui.showErrorMessage`), in order. */
-let errors: string[];
+let quickInput: QuickInput;
 let query: QueryHost;
 /** The URLs fetched, and what `/values` answers (by `search`). */
 let fetched: URL[];
@@ -67,8 +64,7 @@ beforeEach(() => {
   query.load();
   hostContainer = document.body.appendChild(document.createElement('div'));
   anchorElement = hostContainer.appendChild(document.createElement('button'));
-  quickInput = Object.assign(new QuickInput(hostContainer), { showErrorMessage: async (message: string) => void errors.push(message) });
-  errors = [];
+  quickInput = new QuickInput(hostContainer);
   fetched = [];
   values = () => [];
   columns = {
@@ -164,24 +160,23 @@ describe('addFilter', () => {
     expect(fetched.at(-1)!.searchParams.has('type')).toBe(false);
   });
 
-  it('adds no pill when the chart’s /pill refuses it, and shows the server’s message', async () => {
+  it('adds no pill when the chart’s /pill refuses it, and shows the server’s message in the value’s box, still open', async () => {
     const served = fetch;
     vi.stubGlobal('fetch', async (input: string) =>
       input.includes('/pill?') ? new Response('"host" cannot filter this chart\'s table', { status: 422 }) : served(input),
     );
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     values = () => ['admin'];
     const done = addFilter(quickInput, query, filterableTables([byHost]), anchorElement, new FieldsCache());
     await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toContain('host String'));
     options().find((optionElement) => optionElement.textContent?.trim() === 'host String')!.click();
     await pick('host = …', 'host ≠ …');
     await pick('admin');
-    await done;
+    await vi.waitFor(() => expect(hostContainer.querySelector('.d-workbench__quick-pick-message')?.textContent).toBe('422: "host" cannot filter this chart\'s table'));
 
+    expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['admin']);
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await done;
     expect(query.get(FILTERS)).toEqual([]);
-    expect(errors).toEqual(['Filter host = admin failed: 422: "host" cannot filter this chart\'s table']);
-    expect(logged).toHaveBeenCalled();
-    logged.mockRestore();
   });
 
   it('opens the field step at once, busy until the charts’ /fields answer', async () => {
@@ -335,24 +330,25 @@ describe('addFilter with SQL chips taken', () => {
 describe('askValue', () => {
   const known = (type: string) => ({ type, timeRange: { from, to } });
   const load = async () => [];
+  const accept = async () => {};
 
   it('fills in the time range’s start for ≥ and its end for ≤, a day as its date', async () => {
-    void askValue(quickInput, anchorElement, 'timestamp ≥', 'ge', known('Nullable(DateTime64(3))'), load);
+    void askValue(quickInput, anchorElement, 'timestamp ≥', 'ge', known('Nullable(DateTime64(3))'), load, accept);
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31T09:00:00.000Z'));
-    void askValue(quickInput, anchorElement, 'day ≤', 'le', known('Date'), load);
+    void askValue(quickInput, anchorElement, 'day ≤', 'le', known('Date'), load, accept);
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31'));
   });
 
   it('offers the values `load` finds for anything else', async () => {
     const asked: string[] = [];
-    void askValue(quickInput, anchorElement, 'host =', 'eq', known('String'), async (search) => (asked.push(search), ['x']));
+    void askValue(quickInput, anchorElement, 'host =', 'eq', known('String'), async (search) => (asked.push(search), ['x']), accept);
     await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['x']));
     expect(asked).toEqual(['']);
   });
   it('opens the value’s quick pick at once for a type still to come, busy, and asks the values once it is there', async () => {
     let answer!: (type: { type: string }) => void;
     const asked: string[] = [];
-    void askValue(quickInput, anchorElement, 'host =', 'eq', new Promise((resolve) => (answer = resolve)), async (search) => (asked.push(search), ['x']));
+    void askValue(quickInput, anchorElement, 'host =', 'eq', new Promise((resolve) => (answer = resolve)), async (search) => (asked.push(search), ['x']), accept);
 
     const progress = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
     expect([progress().hidden, asked]).toEqual([false, []]);
@@ -362,7 +358,7 @@ describe('askValue', () => {
   });
 
   it('puts a time’s input box in the place of the busy value pick once its type is there', async () => {
-    const done = askValue(quickInput, anchorElement, 'timestamp ≥', 'ge', Promise.resolve(known('DateTime')), load, '2026-10-31T08:00:00Z');
+    const done = askValue(quickInput, anchorElement, 'timestamp ≥', 'ge', Promise.resolve(known('DateTime')), load, accept, '2026-10-31T08:00:00Z');
 
     await vi.waitFor(() => expect(field().value).toBe('2026-10-31T08:00:00Z'));
     expect(hostContainer.querySelector('[role=listbox]')).toBeNull();
@@ -374,7 +370,14 @@ describe('askValue', () => {
 describe('pickValue', () => {
   it('asks again as the text rests, offers the typed text first, and resolves with the value chosen', async () => {
     const searches: string[] = [];
-    const done = pickValue(quickInput, anchorElement, 'host =', async (search) => (searches.push(search), ['shop-1', 'shop-2', ''].filter((v) => v.includes(search))));
+    const accepted: string[] = [];
+    const done = pickValue(
+      quickInput,
+      anchorElement,
+      'host =',
+      async (search) => (searches.push(search), ['shop-1', 'shop-2', ''].filter((v) => v.includes(search))),
+      async (value) => void accepted.push(value),
+    );
 
     await vi.waitFor(() => expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['shop-1', 'shop-2', '(empty)']));
     type('shop-');
@@ -382,12 +385,32 @@ describe('pickValue', () => {
     await pick('shop- as typed', 'shop-1', 'shop-2');
 
     expect(await done).toBe('shop-');
+    expect(accepted).toEqual(['shop-']);
+  });
+
+  it('stays open, busy, while `accept` runs, and shows its error there', async () => {
+    let refuse!: (error: Error) => void;
+    const done = pickValue(quickInput, anchorElement, 'host =', async () => ['shop-1'], () => new Promise((_, reject) => (refuse = reject)));
+    await pick('shop-1');
+    const progress = () => hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick-progress')!;
+    expect(progress().hidden).toBe(false);
+    refuse(new Error('422: "host" cannot filter'));
+    await vi.waitFor(() => expect(hostContainer.querySelector('.d-workbench__quick-pick-message')?.textContent).toBe('422: "host" cannot filter'));
+    expect(progress().hidden).toBe(true);
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(await done).toBeUndefined();
   });
 
   it('shows the message of a failed answer', async () => {
-    void pickValue(quickInput, anchorElement, 'host =', async () => {
-      throw new Error('500: clickhouse query');
-    });
+    void pickValue(
+      quickInput,
+      anchorElement,
+      'host =',
+      async () => {
+        throw new Error('500: clickhouse query');
+      },
+      async () => {},
+    );
 
     await vi.waitFor(() => expect(hostContainer.textContent).toContain('500: clickhouse query'));
   });

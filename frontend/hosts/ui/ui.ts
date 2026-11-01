@@ -5,7 +5,7 @@ import type { MenuContext, MenuItem } from '../commands/commands';
 
 /**
  * The workbench's regions as extensions fill them (side panels left and right and command buttons in their rails,
- * items in the top bar around the tabs, the filter bar and the status bar), its menus, its notifications, and what
+ * items in the top bar around the tabs, the filter bar and the status bar), its menus, its quick inputs, and what
  * search everywhere finds. Each panel has a command `workbench.view.<id>`: it shows and focuses the panel, or hides it
  * while it is shown and has the focus; its header's "…" shows its menu `panel/<id>` (context and arguments none), which
  * has "Hide". The "…" at the left rail's start shows the menu `workbench/global` (context and arguments none) and is
@@ -42,13 +42,15 @@ export interface UiApi {
    * item picked, once the box is gone and the focus back, or `undefined` when it was hidden without (Escape, a press
    * elsewhere, another box). Items still to come (a Promise, as a server's answer) open the box at once, busy (its
    * progress line, no "No results") until they are there; when they fail the box hides and the returned Promise
-   * rejects with their error. As VS Code's `window.showQuickPick`.
+   * rejects with their error. With `options.accept` the box stays open while it runs (`QuickPickOptions.accept`). As VS
+   * Code's `window.showQuickPick`.
    */
-  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions): Promise<T | undefined>;
+  showQuickPick<T extends QuickPickItem>(items: QuickPickItems<T>, options?: QuickPickOptions<T>): Promise<T | undefined>;
   /**
    * Asks for a text in a box at `options.anchor` (else at the top in the middle), `options.validateInput`'s message
-   * below the field: resolves with it on Enter (unless that message is an error), once the box is gone and the focus
-   * back, or `undefined` when it was hidden without. As VS Code's `window.showInputBox`.
+   * below the field: resolves with it on Enter (unless that message is an error; with `options.accept` once that
+   * succeeded), once the box is gone and the focus back, or `undefined` when it was hidden without. As VS Code's
+   * `window.showInputBox`.
    */
   showInputBox(options?: InputBoxOptions): Promise<string | undefined>;
   /**
@@ -56,12 +58,6 @@ export interface UiApi {
    * items the owner sets as the text changes. Hidden until `show`; one box at a time (a new one hides the open one).
    */
   createQuickPick<T extends QuickPickItem>(): QuickPick<T>;
-  /**
-   * Shows `message` as an error notification at the workbench's bottom right until the viewer closes it; resolves
-   * then. For what failed after a viewer's choice, e.g. a filter the server refused. As VS Code's
-   * `window.showErrorMessage`.
-   */
-  showErrorMessage(message: string): Promise<void>;
   /** Adds what `provider` finds to search everywhere, as a group of its own under `provider.label`, until disposed; `provider.id` is unique. */
   registerSearchProvider(provider: SearchProvider): Disposable;
   /** The search providers registered now, in registration order. */
@@ -112,8 +108,8 @@ export type MenuAnchor = Element | { readonly x: number; readonly y: number };
 /** What `showQuickPick` shows: the items (and headings), or a Promise of them. */
 export type QuickPickItems<T extends QuickPickItem> = readonly (T | QuickPickSeparator)[] | Promise<readonly (T | QuickPickSeparator)[]>;
 
-/** Where and how `showQuickPick` shows its box. */
-export interface QuickPickOptions {
+/** Where and how `showQuickPick` shows its box, and what choosing an item does before it closes. */
+export interface QuickPickOptions<T extends QuickPickItem = QuickPickItem> {
   /** The box's accessible name ("Filter"). */
   readonly title?: string;
   /** Shown in the empty field. */
@@ -127,6 +123,12 @@ export interface QuickPickOptions {
    * picker: "Add filter", search everywhere) the field shows from the start.
    */
   readonly menu?: boolean;
+  /**
+   * What choosing `item` does, a request to the server (a chart's `/pill`): the box stays open and busy until it
+   * settles; resolved, the box hides and `showQuickPick` resolves with the item; rejected, the box stays, its message
+   * line shows the error's message, and the viewer can choose again or hide the box.
+   */
+  readonly accept?: (item: T) => Promise<unknown>;
 }
 
 /** Where and how `showInputBox` shows its box. */
@@ -149,6 +151,8 @@ export interface InputBoxOptions {
   readonly validateInput?: (value: string) => InputBoxValidationMessage | undefined;
   /** Where the box opens, as `QuickPickOptions.anchor`. */
   readonly anchor?: MenuAnchor;
+  /** What Enter does with the text, as `QuickPickOptions.accept`: busy until it settles, its error below the field. */
+  readonly accept?: (value: string) => Promise<unknown>;
   /**
    * A field of its own in place of the one-line text field (a SQL editor, `showSqlInputBox` in sql-library); its maker
    * gives it its text and placeholder, so `value` and `placeholder` are not used, and disposes it once the box resolved.
@@ -261,6 +265,8 @@ export interface QuickPick<T extends QuickPickItem> {
   value: string;
   /** A line below the list, e.g. how to narrow the search. */
   prompt: string | undefined;
+  /** An error line below the field, e.g. what the server said to a choice (`QuickPickOptions.accept`); none: hidden. */
+  message: string | undefined;
   /** The rows, the first item active; without any item (and text typed) "No results", unless `busy`. */
   items: readonly (T | QuickPickSeparator)[];
   /** Items are still coming: a progress line. */

@@ -10,12 +10,13 @@ import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
  * or an Explore view's group row offers, in a quick pick "Filter" at `at` (a menu), to filter by each of `candidates` ("status =
  * 500" with a filter icon) or to exclude it ("status ≠ 500" with a minus icon), and for a number or a time to compare with it
  * ("timestamp ≥ 2026-10-31T10:00:00.000Z", a time's `≥` and `≤` first; the ops of its type, `opsOf`), in order, those
- * of them whose field `source` names `filterable`; choosing one asks `source`'s `/pill` for its pill and adds it to
- * the chips of `query` (the active tab's: the click happened in the tab shown). A failed answer adds none and shows
- * the server's message (`showFailed`). Nothing without such candidates.
+ * of them whose field `source` names `filterable`; choosing one asks `source`'s `/pill` for its pill, the quick pick
+ * open and busy meanwhile, and adds it to the chips of `query` (the active tab's: the click happened in the tab
+ * shown). A failed answer adds none and shows the server's message in the still-open quick pick. Nothing without such
+ * candidates.
  */
 export async function offerFilters(
-  ui: Pick<UiApi, 'showQuickPick' | 'showErrorMessage'>,
+  ui: Pick<UiApi, 'showQuickPick'>,
   query: Pick<QueryApi, 'get' | 'set'>,
   at: MenuAnchor,
   candidates: readonly FilterCandidate[],
@@ -23,24 +24,15 @@ export async function offerFilters(
 ): Promise<void> {
   const items = filterPicks(candidates.filter(({ fieldId }) => source.filterable?.includes(fieldId)));
   if (items.length === 0) return;
-  const picked = await ui.showQuickPick(items, { anchor: at, title: 'Filter', menu: true });
-  if (!picked) return;
-  try {
-    const { key } = await fetchPill(source.dataUrl, picked);
-    query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
-  } catch (error) {
-    showFailed(ui, `Filter ${picked.label}`, error);
-  }
-}
-
-/**
- * Tells the viewer that `what` ("Filter status = 500") failed after their choice, with the error's message (the
- * server's, as `fetchPill` rejects with it) in an error notification, and logs `error` to the console: a filter never
- * fails silently.
- */
-export function showFailed(ui: Pick<UiApi, 'showErrorMessage'>, what: string, error: unknown): void {
-  console.error(`${what} failed:`, error);
-  void ui.showErrorMessage(`${what} failed: ${error instanceof Error ? error.message : String(error)}`);
+  await ui.showQuickPick(items, {
+    anchor: at,
+    title: 'Filter',
+    menu: true,
+    accept: async (picked) => {
+      const { key } = await fetchPill(source.dataUrl, picked);
+      query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
+    },
+  });
 }
 
 /** What `offerFilters` offers for a candidate: to compare it by `op`. */
