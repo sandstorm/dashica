@@ -8,9 +8,9 @@ import { REFRESH, type AutoRefresh } from '../time-library/refresh-state';
 
 /**
  * Refresh in the top bar, as one split button: ⟳ queries the page again now (also the command `refresh.now`), the
- * interval beside it queries again every so often (the query key `REFRESH`, declared here, `?refresh=30`; "Off" by default). On
- * every page, the start page too. Auto refresh pauses while its tab is in the background or the browser tab is hidden
- * (`autoRefresh`).
+ * interval beside it queries again every so often (the query key `REFRESH`, declared here, `?refresh=30`; "Off" by
+ * default). On every page, the start page too. Auto refresh pauses while its tab is in the background or the browser
+ * tab is hidden (`autoRefresh`).
  */
 export const refresh: Extension = {
   id: 'refresh',
@@ -46,22 +46,11 @@ export const refresh: Extension = {
   },
 };
 
-/** The auto refresh intervals offered; `undefined`: off. */
-const INTERVALS = [
-  { label: 'Off', seconds: undefined },
-  { label: '10s', seconds: 10 },
-  { label: '30s', seconds: 30 },
-  { label: '1m', seconds: 60 },
-  { label: '5m', seconds: 300 },
-  { label: '15m', seconds: 900 },
-  { label: '1h', seconds: 3600 },
-];
-
 /**
- * Refreshes the active tab every `seconds`, one interval after its last refresh (of any cause): paused while the
- * browser tab is hidden; a tab in the background is not refreshed. A tab shown again, or the browser tab, refreshes at
- * once when its interval passed meanwhile, else when it passes. `set` takes a new interval for the active tab, its next
- * refresh a whole interval later.
+ * Refreshes the active tab, and only it, every `seconds`, one interval after its last refresh (of any cause), paused
+ * while the browser tab is hidden. A tab shown again, or the browser tab, refreshes at once when its interval passed
+ * meanwhile, else when it passes. `set` takes a new interval for the active tab, its next refresh a whole interval
+ * later.
  */
 function autoRefresh(
   query: QueryApi,
@@ -110,3 +99,14 @@ function autoRefresh(
     },
   );
 }
+
+/** The auto refresh intervals offered; `undefined`: off. */
+const INTERVALS = [
+  { label: 'Off', seconds: undefined },
+  { label: '10s', seconds: 10 },
+  { label: '30s', seconds: 30 },
+  { label: '1m', seconds: 60 },
+  { label: '5m', seconds: 300 },
+  { label: '15m', seconds: 900 },
+  { label: '1h', seconds: 3600 },
+];

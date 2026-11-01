@@ -8,13 +8,13 @@ import { TIME, customRange, presetRange } from '../time-library/time-state';
 import './time-range.css';
 
 /**
- * The time range of the page's queries (the query key `TIME`, declared here: `?time=1h`, `?time=custom&range=…`), in the top bar:
- * a button showing the range ("Last 1 hour", "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the
- * window by its length, ⊖ zooming out to twice the window. On every page, the start page too.
- * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
- * filtered by typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply
- * asks it (`/time-range`) and shows its reason when it cannot. A range ending at a fixed time does not move, so
- * applying one turns auto refresh off (the query key `REFRESH`). A selection on a time chart shows here as a custom range.
+ * The time range of the page's queries (the query key `TIME`, declared here: `?time=1h`, `?time=custom&range=…`), in
+ * the top bar: a button showing the range ("Last 1 hour", "2026-10-29 10:00 to 12:00") that opens the picker, ‹ ›
+ * shifting the window by its length, ⊖ zooming out to twice the window. On every page, the start page too. The picker
+ * has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets), filtered by
+ * typing, and the last three custom ranges applied (per viewer). Only the server reads the times: Apply asks it
+ * (`/time-range`) and shows its reason when it cannot. A range ending at a fixed time stays fixed, so applying one
+ * turns auto refresh off (the query key `REFRESH`). A selection on a time chart shows here as a custom range.
  */
 export const timeRange: Extension = {
   id: 'timeRange',
@@ -27,23 +27,6 @@ export const timeRange: Extension = {
     subscriptions.push({ dispose: () => picker.close() });
   },
 };
-
-/**
- * The quick ranges: `value` a Go duration as the server parses it (time.ParseDuration), `from` the same as the start
- * of a custom range, in the unit people read it in (`now-30d`, not `now-720h`).
- */
-const PRESETS = [
-  { label: 'Last 5 minutes', value: '5m', from: 'now-5m' },
-  { label: 'Last 15 minutes', value: '15m', from: 'now-15m' },
-  { label: 'Last 1 hour', value: '1h', from: 'now-1h' },
-  { label: 'Last 3 hours', value: '3h', from: 'now-3h' },
-  { label: 'Last 6 hours', value: '6h', from: 'now-6h' },
-  { label: 'Last 12 hours', value: '12h', from: 'now-12h' },
-  { label: 'Last 24 hours', value: '24h', from: 'now-24h' },
-  { label: 'Last 2 days', value: '48h', from: 'now-2d' },
-  { label: 'Last 7 days', value: '168h', from: 'now-7d' },
-  { label: 'Last 30 days', value: '720h', from: 'now-30d' },
-];
 
 /**
  * The range button with its panel, shift and zoom out; `show` shows `time`. The panel closes on Escape, on a
@@ -74,7 +57,7 @@ class TimeRangePicker {
   readonly pickerContainer: HTMLElement;
 
   constructor(
-    /** Where the time range is, and the auto refresh, turned off for a range that does not move. */
+    /** Where the time range is, and the auto refresh, which a fixed range turns off. */
     private readonly query: Pick<QueryApi, 'get' | 'set'>,
     private readonly globalState: Memento,
   ) {
@@ -242,7 +225,7 @@ class TimeRangePicker {
     );
   }
 
-  /** Turns auto refresh off: the range does not move. */
+  /** Turns auto refresh off, for a fixed range. */
   #stopAutoRefresh(): void {
     this.query.set(REFRESH, undefined);
   }
@@ -272,12 +255,22 @@ class TimeRangePicker {
   }
 }
 
-/** `ms` as a Go duration in its largest whole unit, as a preset: `2h`, `90m`, `45s`. */
-function formatGoDuration(ms: number): string {
-  if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
-  if (ms % 60_000 === 0) return `${ms / 60_000}m`;
-  return `${Math.round(ms / 1000)}s`;
-}
+/**
+ * The quick ranges: `value` a Go duration as the server parses it (time.ParseDuration), `from` the same as the start
+ * of a custom range, in the unit people read it in (`now-30d`, not `now-720h`).
+ */
+const PRESETS = [
+  { label: 'Last 5 minutes', value: '5m', from: 'now-5m' },
+  { label: 'Last 15 minutes', value: '15m', from: 'now-15m' },
+  { label: 'Last 1 hour', value: '1h', from: 'now-1h' },
+  { label: 'Last 3 hours', value: '3h', from: 'now-3h' },
+  { label: 'Last 6 hours', value: '6h', from: 'now-6h' },
+  { label: 'Last 12 hours', value: '12h', from: 'now-12h' },
+  { label: 'Last 24 hours', value: '24h', from: 'now-24h' },
+  { label: 'Last 2 days', value: '48h', from: 'now-2d' },
+  { label: 'Last 7 days', value: '168h', from: 'now-7d' },
+  { label: 'Last 30 days', value: '720h', from: 'now-30d' },
+];
 
 /** The window a time range stands for now, in ms, as the server resolves it; throws the server's reason when it cannot. */
 async function resolveTimeRange(time: string, range: string): Promise<{ from: number; to: number }> {
@@ -286,4 +279,11 @@ async function resolveTimeRange(time: string, range: string): Promise<{ from: nu
   const response = await fetch(`/time-range?${request}`);
   if (!response.ok) throw new Error((await response.text()).trim());
   return (await response.json()) as { from: number; to: number };
+}
+
+/** `ms` as a Go duration in its largest whole unit, as a preset: `2h`, `90m`, `45s`. */
+function formatGoDuration(ms: number): string {
+  if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
+  if (ms % 60_000 === 0) return `${ms / 60_000}m`;
+  return `${Math.round(ms / 1000)}s`;
 }
