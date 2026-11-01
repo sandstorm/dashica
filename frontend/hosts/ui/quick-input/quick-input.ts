@@ -239,6 +239,12 @@ export class QuickInput {
   }
 }
 
+/** A box on screen: closing it removes it and gives the focus back. */
+interface Open {
+  readonly boxContainer: HTMLElement;
+  close(): void;
+}
+
 /** An item of `showQuickPick` as shown: marked where the text matched, `item` the one handed in. */
 type Shown<T extends QuickPickItem> = QuickPickItem & { readonly item: T };
 
@@ -306,20 +312,14 @@ function uniqueId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/** A box on screen: closing it removes it and gives the focus back. */
-interface Open {
-  readonly boxContainer: HTMLElement;
-  close(): void;
-}
-
 function isSeparator<T extends QuickPickItem>(item: T | QuickPickSeparator): item is QuickPickSeparator {
   return (item as Partial<QuickPickSeparator>).kind === QuickPickItemKind.Separator;
 }
 
 /**
  * Picks one item: a listbox the field steers (arrows, Enter) with the active item marked; groups under headings; a
- * `disabled` item is shown and can be active, but is not picked. The listbox's id (and its rows', prefixed by it)
- * differs from every other picker's on the page.
+ * `disabled` item is shown and can be active, and picking it does nothing. The listbox's id (and its rows', prefixed
+ * by it) differs from every other picker's on the page.
  */
 class OnePicker<T extends QuickPickItem> {
   #options: { item: T; optionElement: HTMLElement }[] = [];
@@ -414,9 +414,9 @@ class OnePicker<T extends QuickPickItem> {
 
 /**
  * The quick pick of `createQuickPick`: a box with a field, a progress line, an error line (`message`), the owner's
- * items, "No results" and the prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`. As a `menu` its field is concealed
- * (it keeps the focus, so the keys work at once): a first letter typed makes the first item starting with it active,
- * the next one shows the field and the text from then on goes to the owner as usual.
+ * items, "No results" and the prompt. `boxes` shows and hides it as the workbench's one box, at its `anchor`. As a
+ * `menu` its field is concealed (it keeps the focus, so the keys work at once): a first letter typed makes the first
+ * item starting with it active, the next one shows the field and the text from then on goes to the owner as usual.
  */
 class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   readonly #boxContainer: HTMLElement;

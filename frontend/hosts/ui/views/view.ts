@@ -1,10 +1,8 @@
+// See UiApi in ../ui.ts.
 import { html } from 'htl';
 import { ChevronRight, createElement } from 'lucide';
 import type { Memento } from '../../extension-host/extension-host';
 import './view.css';
-
-/** The views drawn so far: each body's id (`d-view-3`), unique in the page. */
-let drawn = 0;
 
 /**
  * A view of a panel: a header (a chevron, the title, while closed its description, then its actions) above a body
@@ -51,6 +49,9 @@ export function createView(options: ViewOptions): HTMLElement {
   return viewElement;
 }
 
+/** The views drawn so far: each body's id (`d-view-3`), unique in the page. */
+let drawn = 0;
+
 export interface ViewOptions {
   /** Names the view in `state` ("favorites"), unique among the views kept there. */
   readonly id: string;
@@ -64,7 +65,7 @@ export interface ViewOptions {
   readonly collapsed?: boolean;
   /**
    * Keeps whether the viewer closed it: the extension's `globalState` (across visits) or `workspaceState`; without
-   * one it is not kept.
+   * one, only this element keeps it.
    */
   readonly state?: Memento;
   /** What the view shows when open. */

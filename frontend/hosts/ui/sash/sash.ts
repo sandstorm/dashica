@@ -1,3 +1,4 @@
+// See UiApi in ../ui.ts.
 import { EventEmitter, type Event } from '../../../core/event-emitter/event-emitter';
 import './sash.css';
 

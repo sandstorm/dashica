@@ -12,10 +12,10 @@ import type { ContextMenuOptions, Panel, RailButtonOptions, SidePanelOptions } f
  * One side of the workbench (left or right): its rail (a button per panel and per command put there, by `order`, in its
  * top or bottom group) and at most one panel shown, sized by a separator on the panel's inner edge (drag or arrow keys;
  * remembered). A panel shows under a header with its name (in caps) and "…", its menu `panel/<id>`, which always holds
- * "Hide" (its command `workbench.view.<id>.hide`). Which panel
- * shows: the viewer's pick (a rail button; clicking the shown panel's button hides the side), else the side's default
- * panel, else the first panel whose owner asked for it (`setDefault`). As an overlay (`setOverlay`, the narrow
- * workbench's left side) a pick lasts for the moment only, and Escape, a click outside or `dismiss()` close the panel.
+ * "Hide" (its command `workbench.view.<id>.hide`). Which panel shows: the viewer's pick (a rail button; clicking the
+ * shown panel's button hides the side), else the side's default panel, else the first panel whose owner asked for it
+ * (`setDefault`). As an overlay (`setOverlay`, the narrow workbench's left side) a pick lasts for the moment only, and
+ * Escape, a click outside or `dismiss()` close the panel.
  * Each panel's command `workbench.view.<id>` picks it from the keyboard; its rail button's tooltip names the key, as a
  * command button's names its command's; a button whose command cannot run now shows greyed.
  */
