@@ -26,11 +26,6 @@ import (
 	"strings"
 )
 
-const (
-	modulePath    = "github.com/sandstorm/dashica"
-	widgetPkgPath = modulePath + "/lib/dashboard/widget"
-)
-
 func main() {
 	log.SetFlags(0)
 	log.SetPrefix("dashica-gen: ")
@@ -82,6 +77,11 @@ func main() {
 		}
 	}
 }
+
+const (
+	modulePath    = "github.com/sandstorm/dashica"
+	widgetPkgPath = modulePath + "/lib/dashboard/widget"
+)
 
 // model is everything the emitters need, derived from the parsed widget package.
 type model struct {
