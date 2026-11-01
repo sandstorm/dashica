@@ -127,9 +127,9 @@ export class WidgetsHost implements WidgetsApi {
       showWidgetError(el, new Error('no renderer for this widget type'), widget);
       return new Disposable(() => el.replaceChildren());
     }
+    const ctx = new WidgetInstance(widget, el, this, query, this.ui);
+    this.#rendered.add(ctx);
     try {
-      const ctx = new WidgetInstance(widget, el, this, query, this.ui);
-      this.#rendered.add(ctx);
       const rendered = renderer(el, widget, ctx);
       const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
       return new Disposable(() => {
@@ -141,6 +141,9 @@ export class WidgetsHost implements WidgetsApi {
         el.replaceChildren();
       });
     } catch (error) {
+      // a widget that failed to render is no rendered one: nothing redecorates it
+      this.#rendered.delete(ctx);
+      ctx.dispose();
       showWidgetError(el, error, widget);
       return new Disposable(() => el.replaceChildren());
     }

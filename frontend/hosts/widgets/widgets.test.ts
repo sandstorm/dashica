@@ -45,6 +45,21 @@ describe('WidgetsHost', () => {
     expect(testbed.render(requests).el.textContent).toBe('x has no alias (timeBar)');
   });
 
+  it('asks nothing for a widget whose renderer threw', async () => {
+    let failed: Promise<QueryResult> | undefined;
+    testbed.widgets.registerWidget('timeBar', (_el, _widget, given) => {
+      failed = given.runQuery();
+      throw new Error('x has no alias');
+    });
+    testbed.serve('/p/shop/api/1/query', { cnt: [3] });
+    testbed.render(requests);
+    // its query answered: a rendered widget would be decorated
+    await failed;
+    const asked: RenderedWidget[] = [];
+    testbed.widgets.registerDecorationProvider({ provideDecorations: (widget) => (asked.push(widget), [{ badge: 'slow', source: 'timing' }]) });
+    expect(asked).toEqual([]);
+  });
+
   it('refuses a second renderer for a type', () => {
     const renderer = () => new Disposable(() => {});
     testbed.widgets.registerWidget('timeBar', renderer);
