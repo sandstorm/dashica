@@ -9,6 +9,8 @@
 - DO NOT GUESS but investigate the root cause of problems! LET ME KNOW IF YOU DO NOT KNOW.
 - if working on a TODO described in a docs .md file, after the TODO is done record the current state (i.e. check-off the todo)
 
+- FOLLOW `docs/conventions.md`: the rules for all code (layers, naming, comments, commits).
+
 # Tools
 
 - To run Golang compiler/interpreter etc, do `mise exec go -- go ...`
