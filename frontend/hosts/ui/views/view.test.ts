@@ -22,7 +22,7 @@ describe('createView', () => {
     expect(viewElement.querySelector('h2 > button.d-view__toggle .d-view__title')!.textContent).toBe('Favorites');
     expect(toggle(viewElement).getAttribute('aria-expanded')).toBe('true');
     expect(toggle(viewElement).getAttribute('aria-controls')).toBe(body(viewElement).id);
-    expect(body(viewElement).id).toMatch(/^d-view-\d+$/);
+    expect(body(viewElement).id).toMatch(/^d-view-[0-9a-z]+$/);
     expect(body(draw()).id).not.toBe(body(viewElement).id);
     expect(body(viewElement).hidden).toBe(false);
     expect(body(viewElement).textContent).toBe('the entries');

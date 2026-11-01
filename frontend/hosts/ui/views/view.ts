@@ -15,7 +15,7 @@ import './view.css';
 export function createView(options: ViewOptions): HTMLElement {
   const { id, title, description, actionElements = [], state, body } = options;
   const key = `views.${id}.collapsed`;
-  const bodyContainer: HTMLElement = html`<div class="d-view__body" id=${`d-view-${++drawn}`}>${body}</div>`;
+  const bodyContainer: HTMLElement = html`<div class="d-view__body" id=${`d-view-${Math.random().toString(36).slice(2, 10)}`}>${body}</div>`;
   const set = (collapsed: boolean) => {
     viewElement.classList.toggle('d-view--collapsed', collapsed);
     toggleElement.setAttribute('aria-expanded', String(!collapsed));
@@ -48,9 +48,6 @@ export function createView(options: ViewOptions): HTMLElement {
   set(typeof stored === 'boolean' ? stored : (options.collapsed ?? false));
   return viewElement;
 }
-
-/** The views drawn so far: each body's id (`d-view-3`), unique in the page. */
-let drawn = 0;
 
 export interface ViewOptions {
   /** Names the view in `state` ("favorites"), unique among the views kept there. */
