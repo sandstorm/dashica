@@ -60,7 +60,6 @@ function scattered(wanted: string, text: string, target: string): FuzzyMatch | n
   return { score: score - (positions.at(-1)! - positions[0]) / 10, ranges: toRanges(positions) };
 }
 
-/** The first place of `char` from `first` on that starts a word, else `first`. */
 function wordStartOr(first: number, char: string, text: string, target: string): number {
   for (let i = first; i >= 0; i = text.indexOf(char, i + 1)) if (isWordStart(target, i)) return i;
   return first;
