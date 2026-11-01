@@ -32,7 +32,6 @@ export interface ViewerConfig {
 export interface RowsShape {
   /** `result`: the chart's result, its columns the chart's aliases; `edited`: the rows of the SQL the viewer edited. */
   readonly kind: 'result' | 'edited';
-  /** The rows' column names. */
   readonly columns: readonly string[];
 }
 

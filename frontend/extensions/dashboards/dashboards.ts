@@ -244,7 +244,6 @@ function favoritesOf(globalState: Memento): MenuGroupEntry[] {
   return stored.filter((f): f is MenuGroupEntry => typeof f?.url === 'string' && typeof f?.title === 'string');
 }
 
-/** `list` with its item at `from` moved to `to`. */
 function moved<T>(list: readonly T[], from: number, to: number): T[] {
   const rest = list.filter((_, i) => i !== from);
   return [...rest.slice(0, to), list[from], ...rest.slice(to)];

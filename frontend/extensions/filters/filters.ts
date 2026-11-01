@@ -152,7 +152,6 @@ class FilterBar {
     this.draw();
   }
 
-  /** Draws the chips and the buttons. */
   draw(): void {
     const chips = this.query.get(FILTERS);
     // a button's pill shows as the button pressed, not as a chip

@@ -35,10 +35,8 @@ export function drawTable(
   } = {},
 ) {
 
-  // the rows as plain objects for Tabulator
   const data = queryResult.toArray().map((row: any) => row.toJSON());
 
-  // the search box's text; each change calls applySearch
   let searchTerm = '';
 
   // With `showDataPointMenu`, a click on a cell of a category column shows its value's menu (the cellClick handler below)
@@ -105,7 +103,6 @@ export function drawTable(
     applySearch();
   });
 
-  // Filters the rows by the search term
   let tabulatorTable: Tabulator;
   function applySearch() {
     const needle = searchTerm.toLowerCase();
@@ -116,7 +113,6 @@ export function drawTable(
       return;
     }
 
-    // a row whose values, all columns', contain the term
     tabulatorTable.setFilter((rowData: any) => {
       const searchableText = Object.values(rowData)
         .map(v => String(v).toLowerCase())
@@ -456,7 +452,6 @@ function createTooltipManager(table: Tabulator, notifyRendered: () => void = () 
   // the hover tooltip hides as the pointer leaves it: a close button only on pinned ones
   transient.closeButtonElement.style.display = 'none';
 
-  // the pins drawn again on every render of the rows
   table.on('renderComplete', decorate);
   table.on('dataFiltered', decorate);
   table.on('dataSorted', decorate);
@@ -518,7 +513,6 @@ interface Tooltip {
 }
 
 function createTooltip(): Tooltip {
-  // the markup with htl, its parts looked up after it; the behaviour wired below
   const rootContainer = html`<div class="d-sticky-tooltip">
     <div class="d-sticky-tooltip__header">
       <span class="d-sticky-tooltip__index" style="display:none"></span>
@@ -574,7 +568,6 @@ function createTooltip(): Tooltip {
     }
   });
 
-  // a pinned tooltip moves by its header
   let dragDX = 0;
   let dragDY = 0;
 

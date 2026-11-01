@@ -80,7 +80,6 @@ function parseChip(key: string, value: string): FilterChip | undefined {
   return undefined;
 }
 
-/** Each of `chips` in order, an `f` or an `sql`. */
 function entriesOf(chips: readonly FilterChip[]): QueryEntries {
   return chips.map((chip) => (chip.kind === 'sql' ? ['sql', chip.sql] : ['f', chip.key]));
 }
