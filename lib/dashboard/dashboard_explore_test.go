@@ -101,7 +101,7 @@ func TestMarshalForExplore_NoSkipsWhenAllSupported(t *testing.T) {
 	}
 }
 
-// The strict path must still fail loudly — leniency is confined to the export.
+// The strict MarshalDashboard fails on an unregistered widget; only the Explore export is lenient.
 func TestMarshalDashboard_StillFailsOnUnregistered(t *testing.T) {
 	d := New().Widget(unregisteredWidget())
 	if _, err := MarshalDashboard(d); err == nil {

@@ -13,12 +13,9 @@ import (
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
-// Dashboard is the registration contract consumed by Dashica.RegisterDashboard:
-// something that has a title and can mount its own HTTP handlers. It is
-// deliberately small — the fluent construction API (Widget, DefaultTimeRange, ...)
-// lives on the concrete *Builder returned by New(), not on this interface, so
-// that alternative implementations (e.g. the Explore editor) need only satisfy
-// these two methods.
+// Dashboard is what Dashica.RegisterDashboard takes: a page with a title that mounts its own HTTP handlers. The
+// standard one is the *Builder of New, which holds the fluent construction API (Widget, DefaultTimeRange, ...); the
+// Explore editor is another, with only these two methods.
 type Dashboard interface {
 	Title() string
 	// CollectHandlers mounts the page's handlers and is the page they serve as page.json.
@@ -120,10 +117,9 @@ func (d *Builder) CollectHandlers(ctx *rendering.DashboardContext, handlerCollec
 		return PageJson{}, fmt.Errorf("registering the shell: %w", err)
 	}
 
-	// "Open in Explore": redirect to the Explore editor pre-loaded with this
-	// dashboard's state (via the same #s= share-link the editor already reads).
-	// Registered unconditionally; it 404s at request time when Explore is not
-	// wired up. No page links here while Explore is rebuilt (DEPRECATED (workbench)).
+	// "Open in Explore": redirect to the Explore editor pre-loaded with this dashboard's state (the #s= share link the
+	// editor reads). It answers 404 at request time without an Explore view; no page links here (DEPRECATED
+	// (workbench)).
 	if err := handlerCollector.Handle("open-in-explore", d.openInExploreHandler(ctx)); err != nil {
 		return PageJson{}, fmt.Errorf("registering open-in-explore handler: %w", err)
 	}

@@ -25,6 +25,9 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// Dashica is the server of a project's dashboards: the project's main.go builds it with New, registers its
+// dashboard groups and dashboards, and calls ListenAndServe. It serves the workbench shell, each dashboard's page.json
+// and widget handlers, and the endpoints every page shares (/workbench.json, /time-range, /schema.json, /rows).
 type Dashica interface {
 	http.Handler
 	Config() config.Config
@@ -34,6 +37,8 @@ type Dashica interface {
 	RegisterDashboard(url string, dashboard dashboard.Dashboard) Dashica
 }
 
+// New is a Dashica without dashboards yet, for the project's dashboards in `projectFS`: it loads dashica_config (of
+// APP_ENV), starts logging and the alert scheduler, and exits when the config or its app_secret is missing.
 func New(projectFS fs.ReadFileFS) Dashica {
 	cfg, err := config.LoadConfig(os.Getenv("APP_ENV"), false)
 	if err != nil {
@@ -44,8 +49,6 @@ func New(projectFS fs.ReadFileFS) Dashica {
 		println("Failed to load config: ", err.Error())
 		os.Exit(1)
 	}
-
-	// --- Logger initialization ---
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMicro // see clickhouse init-db.sql - monitoring.full_logs.timestamp
 	zerolog.DurationFieldUnit = time.Millisecond          // see clickhouse init-db.sql - monitoring.full_logs.event_duration_ms
@@ -141,66 +144,6 @@ func New(projectFS fs.ReadFileFS) Dashica {
 	return newDashicaImpl(logger, mux, deps)
 }
 
-// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range, /schema.json (the Schema view's,
-// httpserver.SchemaHandler), /rows (a blank Explore tab's query, httpserver.ConnectionRowsHandler) and the start page
-// "/", and no dashboards yet.
-func newDashicaImpl(logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
-	d := &DashicaImpl{
-		cfg:              deps.Config,
-		log:              logger,
-		handler:          mux,
-		handlerCollector: handler_collector.NewValidatingCollector(mux, logger),
-		deps:             deps,
-	}
-	if err := d.handlerCollector.Handle("/workbench.json", http.HandlerFunc(d.serveWorkbenchJson)); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to register /workbench.json")
-	}
-	if err := d.handlerCollector.Handle("/time-range", httpserver.TimeRangeHandler{}); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to register /time-range")
-	}
-	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, Config: deps.Config}
-	if err := d.handlerCollector.Handle("/schema.json", schema); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to register /schema.json")
-	}
-	rows := httpserver.ConnectionRowsHandler{ClickhouseClientManager: deps.ClickhouseClientManager, Config: deps.Config}
-	if err := d.handlerCollector.Handle("/rows", rows); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to register /rows")
-	}
-	if err := dashboard.CollectHome(d.handlerCollector); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to register the start page")
-	}
-	return d
-}
-
-// WorkbenchJson is what "/workbench.json" says about the whole Dashica: what the client needs before any page.
-type WorkbenchJson struct {
-	// Menu is the dashboards by group, in registration order, each with its outline.
-	Menu []rendering.MenuGroup `json:"menu"`
-	// Explore: the Explore view is on (explore_enabled); else the client leaves it out, and its endpoints answer 404.
-	Explore bool `json:"explore"`
-	// SqlEnabled: the filter bar lets the viewer type SQL chips (sql_filter_enabled); else it offers none, and every
-	// query a SQL chip would enter answers it with 400.
-	SqlEnabled bool `json:"sqlEnabled"`
-	// Connections are the names of the ClickHouse connections of dashica_config, sorted: the Schema view's tree.
-	Connections []string `json:"connections"`
-}
-
-// serveWorkbenchJson serves the WorkbenchJson of the groups as they are when asked (dashboards register after New).
-func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request) {
-	menu := d.dashboardGroups
-	if menu == nil {
-		menu = []rendering.MenuGroup{}
-	}
-	connections := d.deps.ClickhouseClientManager.Connections()
-	if connections == nil {
-		connections = []string{}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.Config.ExploreEnabled, SqlEnabled: d.deps.Config.SqlFilterEnabled, Connections: connections}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
 type DashicaImpl struct {
 	cfg              *config.Config
 	log              zerolog.Logger
@@ -216,15 +159,6 @@ type DashicaImpl struct {
 	//
 	// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 	exploreBaseURL string
-}
-
-// exploreView is the marker a dashboard implements to identify itself as the
-// Explore editor. It is structural (Explore need not import this package); the
-// method name doubles as documentation of intent.
-//
-// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
-type exploreView interface {
-	IsExploreView() bool
 }
 
 func (d *DashicaImpl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -291,6 +225,75 @@ func (d *DashicaImpl) RegisterDashboard(url string, dashb dashboard.Dashboard) D
 		Outline: widget.Outline(page.Widgets),
 	})
 	return d
+}
+
+// WorkbenchJson is what "/workbench.json" says about the whole Dashica: what the client needs before any page.
+type WorkbenchJson struct {
+	// Menu is the dashboards by group, in registration order, each with its outline.
+	Menu []rendering.MenuGroup `json:"menu"`
+	// Explore: the Explore view is on (explore_enabled); else the client leaves it out, and its endpoints answer 404.
+	Explore bool `json:"explore"`
+	// SqlEnabled: the filter bar lets the viewer type SQL chips (sql_filter_enabled); else it offers none, and every
+	// query a SQL chip would enter answers it with 400.
+	SqlEnabled bool `json:"sqlEnabled"`
+	// Connections are the names of the ClickHouse connections of dashica_config, sorted: the Schema view's tree.
+	Connections []string `json:"connections"`
+}
+
+// newDashicaImpl is a Dashica serving on `mux`, with /workbench.json, /time-range, /schema.json (the Schema view's,
+// httpserver.SchemaHandler), /rows (a blank Explore tab's query, httpserver.ConnectionRowsHandler) and the start page
+// "/", and no dashboards yet.
+func newDashicaImpl(logger zerolog.Logger, mux *http.ServeMux, deps rendering.Dependencies) *DashicaImpl {
+	d := &DashicaImpl{
+		cfg:              deps.Config,
+		log:              logger,
+		handler:          mux,
+		handlerCollector: handler_collector.NewValidatingCollector(mux, logger),
+		deps:             deps,
+	}
+	if err := d.handlerCollector.Handle("/workbench.json", http.HandlerFunc(d.serveWorkbenchJson)); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /workbench.json")
+	}
+	if err := d.handlerCollector.Handle("/time-range", httpserver.TimeRangeHandler{}); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /time-range")
+	}
+	schema := httpserver.SchemaHandler{ClickhouseClientManager: deps.ClickhouseClientManager, Config: deps.Config}
+	if err := d.handlerCollector.Handle("/schema.json", schema); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /schema.json")
+	}
+	rows := httpserver.ConnectionRowsHandler{ClickhouseClientManager: deps.ClickhouseClientManager, Config: deps.Config}
+	if err := d.handlerCollector.Handle("/rows", rows); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register /rows")
+	}
+	if err := dashboard.CollectHome(d.handlerCollector); err != nil {
+		logger.Fatal().Err(err).Msg("Failed to register the start page")
+	}
+	return d
+}
+
+// serveWorkbenchJson serves the WorkbenchJson of the groups as they are when asked (dashboards register after New).
+func (d *DashicaImpl) serveWorkbenchJson(w http.ResponseWriter, _ *http.Request) {
+	menu := d.dashboardGroups
+	if menu == nil {
+		menu = []rendering.MenuGroup{}
+	}
+	connections := d.deps.ClickhouseClientManager.Connections()
+	if connections == nil {
+		connections = []string{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(WorkbenchJson{Menu: menu, Explore: d.deps.Config.ExploreEnabled, SqlEnabled: d.deps.Config.SqlFilterEnabled, Connections: connections}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// exploreView is the marker a dashboard implements to identify itself as the
+// Explore editor. It is structural (Explore need not import this package); the
+// method name doubles as documentation of intent.
+//
+// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
+type exploreView interface {
+	IsExploreView() bool
 }
 
 func (d *DashicaImpl) isPathRegistered(urlPath string) bool {

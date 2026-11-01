@@ -8,9 +8,7 @@ import (
 )
 
 func TestDashboard_RoundTrip(t *testing.T) {
-	// Note: widget *internals* do not survive yet (per-widget serializers are
-	// generated in a later step); this exercises the dashboard-level envelope:
-	// title, searchBar, and widget type discrimination.
+	// the dashboard-level envelope: title, searchBar, and widget type discrimination
 	orig := New().
 		WithTitle("My Dashboard").
 		HasSearchBar(true).

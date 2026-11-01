@@ -7,16 +7,20 @@ import (
 	"github.com/sandstorm/dashica/lib/dashboard/widget"
 )
 
-// This file makes a dashboard serializable for the Explore builder
-// (see docs/2026-07-21-dynamic-widget-dashboard-ui.md, section 4.1 (4)).
-//
-// Builder keeps its unexported fields; a DTO carries the wire form. The
-// widgets delegate to the widget envelope/registry; searchBar is plain data.
+// MarshalDashboard serializes any Dashboard to JSON. (json.Marshal(d) works too
+// when d holds a *Builder; this is the explicit, discoverable entry point.)
+func MarshalDashboard(d Dashboard) ([]byte, error) {
+	return json.Marshal(d)
+}
 
-type dashboardDTO struct {
-	Title     string                    `json:"title,omitempty"`
-	SearchBar rendering.SearchBarOption `json:"searchBar"`
-	Widgets   widget.Widgets            `json:"widgets"`
+// UnmarshalDashboard reconstructs a Dashboard from JSON produced by
+// MarshalDashboard.
+func UnmarshalDashboard(b []byte) (Dashboard, error) {
+	d := &Builder{}
+	if err := json.Unmarshal(b, d); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 func (d *Builder) MarshalJSON() ([]byte, error) {
@@ -41,21 +45,10 @@ func (d *Builder) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// MarshalDashboard serializes any Dashboard to JSON. (json.Marshal(d) works too
-// when d holds a *Builder; this is the explicit, discoverable entry point.)
-func MarshalDashboard(d Dashboard) ([]byte, error) {
-	return json.Marshal(d)
-}
-
-// MarshalForExplore serializes a Builder for the "Open in Explore" flow: like
-// MarshalJSON, but out-of-scope widgets (alert widgets, schemaTable, … — any
-// type not in the widget registry) are skipped rather than failing the whole
-// export, including when they are nested inside a grid/collapsibleGroup (only
-// the offending child is dropped). It returns the JSON, a note per skipped
-// widget (for logging), and an error only for genuine marshalling failures.
-//
-// The strict MarshalJSON is unchanged; the round-trip invariant still fails
-// loudly. This is the deliberate lenient path for opening compiled dashboards.
+// MarshalForExplore serializes a Builder for the "Open in Explore" flow: like MarshalJSON, but it skips each widget
+// of a type outside the widget registry (alert widgets, schemaTable, …), also inside a grid/collapsibleGroup, where
+// only that child is dropped. It returns the JSON, a note per skipped widget (for logging), and an error only for
+// genuine marshalling failures. MarshalJSON is the strict one, for the round trip.
 //
 // Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 func (d *Builder) MarshalForExplore() ([]byte, []string, error) {
@@ -73,12 +66,10 @@ func (d *Builder) MarshalForExplore() ([]byte, []string, error) {
 	return b, notes(), nil
 }
 
-// UnmarshalDashboard reconstructs a Dashboard from JSON produced by
-// MarshalDashboard.
-func UnmarshalDashboard(b []byte) (Dashboard, error) {
-	d := &Builder{}
-	if err := json.Unmarshal(b, d); err != nil {
-		return nil, err
-	}
-	return d, nil
+// dashboardDTO is the wire form of a Builder for the Explore builder: Builder keeps its unexported fields, the widgets
+// delegate to the widget envelope/registry, searchBar is plain data.
+type dashboardDTO struct {
+	Title     string                    `json:"title,omitempty"`
+	SearchBar rendering.SearchBarOption `json:"searchBar"`
+	Widgets   widget.Widgets            `json:"widgets"`
 }

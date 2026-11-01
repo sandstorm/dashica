@@ -12,32 +12,28 @@ import (
 	"github.com/sandstorm/dashica/lib/util/handler_collector"
 )
 
+// DashboardContext is what a dashboard's CollectHandlers mounts its page with: the page's URL, the services
+// (Deps), and the data URL of each widget once WidgetHandlers mounted it. Dashica makes one per registered dashboard.
 type DashboardContext struct {
-	// MainMenu returns the registered dashboard groups for this Dashica instance (e.g. for building a menu)
+	// MainMenu is the registered dashboard groups of this Dashica.
 	MainMenu *[]MenuGroup
-	// current handler URL - to determine the current page
+	// CurrentHandlerUrl is the page's URL ("/p/shop").
 	CurrentHandlerUrl string
 	FilterButtons     []FilterButton
 
-	// ExploreBaseURL points at the registration URL of the Explore view (e.g.
-	// "/explore"), or is nil / empty when Explore is not registered. It is a
-	// pointer shared across every dashboard context so it resolves at request
-	// time regardless of dashboard/Explore registration order: each dashboard's
-	// own open-in-explore handler redirects to it.
+	// ExploreBaseURL points at the registration URL of the Explore view ("/explore"); nil or empty without one. Every
+	// dashboard context shares the pointer, so each dashboard's open-in-explore handler finds it at request time,
+	// whatever the registration order.
 	//
 	// Deprecated: (workbench) Explore's Go API, kept for its rebuild on the workbench; see docs/2026-10-28-workbench.md §5.
 	ExploreBaseURL *string
 
 	Deps Dependencies
 
-	// UntrustedContent marks a render whose widget definitions come from an
-	// untrusted author rather than compiled-in Go — i.e. a dashboard built or
-	// stored via the Explore view. Widgets that emit author-controlled HTML (the
-	// markdown widget) MUST render in a safe mode when this is set: compiled
-	// markdown is trusted and may embed raw HTML, but Explore-authored markdown
-	// is shown to other viewers and would otherwise be a stored-XSS vector (see
-	// docs/2026-07-21-dynamic-widget-dashboard-ui.md §6). The zero value (false)
-	// keeps every existing compiled dashboard fully trusted.
+	// UntrustedContent marks a render whose widget definitions come from an untrusted author: a dashboard built or
+	// stored via the Explore view. Widgets that emit author-controlled HTML (the markdown widget) MUST then render in a
+	// safe mode, because such markdown is shown to other viewers (a stored-XSS vector). False, the default, is a
+	// compiled dashboard: trusted, its markdown may embed raw HTML.
 	UntrustedContent bool
 
 	nextWidgetId int
@@ -65,6 +61,7 @@ func (c *DashboardContext) DataURL(widget any) string {
 	return c.dataURLs[widget]
 }
 
+// Dependencies are the long-lived services and the loaded config the handlers need; nothing request-specific.
 type Dependencies struct {
 	ClickhouseClientManager *clickhouse.Manager
 	Logger                  zerolog.Logger
@@ -124,6 +121,7 @@ type FilterButton struct {
 	Url string `json:"url,omitempty"`
 }
 
+// SearchBarOption is a dashboard's filter bar: whether it shows, and its buttons.
 type SearchBarOption struct {
 	IsVisible     bool
 	FilterButtons []FilterButton
