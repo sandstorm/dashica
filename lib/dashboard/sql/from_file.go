@@ -193,7 +193,7 @@ func substitutePlaceholders(content string, where []string, autoBucket bool, buc
 	}
 	out := strings.ReplaceAll(content, DashicaFiltersPlaceholder, clause)
 
-	// else the bucket placeholder stays, and ClickHouse fails to parse it (DashicaBucketPlaceholder)
+	// without AutoBucketPlaceholder() or before AdjustBuckets the bucket placeholder stays, and ClickHouse fails to parse it (DashicaBucketPlaceholder)
 	if autoBucket && bucketRounding != "" {
 		out = strings.ReplaceAll(out, DashicaBucketPlaceholder, bucketRounding)
 	}
