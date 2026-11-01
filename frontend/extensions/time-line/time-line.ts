@@ -64,8 +64,8 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
       domain: range ? [range.from, range.to] : undefined,
     },
     y: {
-      // Unlike the time bars, an AutoBucket axis is not normalized to /s:
-      // lines usually show rates or ratios already.
+      // An AutoBucket axis shows the values as they are (the time bars
+      // show them per second): lines usually show rates or ratios already.
       label: props.y.alias,
       grid: true,
       axis: true,

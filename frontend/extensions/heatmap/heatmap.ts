@@ -85,7 +85,7 @@ function drawTimeHeatmap(data: QueryResult, props: TimeHeatmapProps, yBucketSize
   });
 }
 
-/** `color` and `colorScheme` are not used: a bug the port keeps (docs/2026-10-28-workbench.md §5). */
+/** A known bug: the cells are blues (inferno in dark mode) whatever `color` and `colorScheme` say. */
 function drawTimeHeatmapOrdinal(data: QueryResult, props: TimeHeatmapOrdinalProps, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));

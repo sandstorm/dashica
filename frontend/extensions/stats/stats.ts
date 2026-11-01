@@ -29,7 +29,7 @@ interface Stat {
 }
 
 // TODO: fixed colors for different levels??
-/** `fillField`'s alias is taken as the color: a bug the port keeps (docs/2026-10-28-workbench.md §5). */
+/** A known bug: `fillField`'s alias is taken as the color itself, where it is meant as the column of each number's color. */
 function drawStats(data: QueryResult, props: StatsProps): HTMLElement {
   const schema = new SchemaAnalyzer(data);
   if (!props.titleField) {
