@@ -38,9 +38,6 @@ type BarVertical struct {
 	marginBottom *int `dashica-gen:"client"`
 	// marginTop is the top margin in pixels. Zero value: Observable Plot's default.
 	marginTop *int `dashica-gen:"client"`
-	// colorScheme is currently unused by this widget; reserved for a future
-	// direct color-scheme override.
-	colorScheme color.Scheme `dashica-gen:"client"`
 	// color configures the color scale used for fill. Zero value: an ordinal
 	// scale with the observable10 scheme, shown with a legend.
 	color *color.ColorScale `dashica-gen:"client"`

@@ -71,8 +71,8 @@ func gocodeJSONLiteral(m *model) (string, error) {
 // splitGocodeFields partitions a widget's fields into constructor arguments
 // (ordered by CtorOrder) and chained builder methods (struct field order).
 //
-// A field with no builder method (a struct field the fluent API never exposes,
-// e.g. BarVertical.colorScheme, reserved for future use) is still emitted with
+// A field with no builder method (a struct field the fluent API never exposes)
+// is still emitted with
 // an empty Method. lib/explore's emitter skips it when its value is the zero
 // value (so it never appears in serialized props) and fails loudly only if it is
 // somehow set — the faithful point at which "cannot reproduce this in Go"

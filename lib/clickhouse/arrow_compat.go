@@ -120,6 +120,21 @@ func PlainArrowCast(column, columnType string) string {
 	}
 }
 
+// unwrapColumnType is `t` without the Nullable(…) and LowCardinality(…) around it.
+func unwrapColumnType(t string) string {
+	t = strings.TrimSpace(t)
+	for {
+		inner, ok := strings.CutPrefix(t, "Nullable(")
+		if !ok {
+			inner, ok = strings.CutPrefix(t, "LowCardinality(")
+		}
+		if !ok {
+			return t
+		}
+		t = strings.TrimSpace(strings.TrimSuffix(inner, ")"))
+	}
+}
+
 // trimTrailingSemicolons strips trailing whitespace and statement terminators so
 // the query can be embedded as a `( ... )` subexpression.
 func trimTrailingSemicolons(query string) string {

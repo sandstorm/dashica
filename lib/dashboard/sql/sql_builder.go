@@ -284,10 +284,6 @@ func BaseTable(q SqlQueryable) (table, database string, ok bool) {
 	return b.from, b.database, true
 }
 
-// TODO REMOVE ME
-type SqlBuildCtx interface {
-}
-
 func hasAutoBucket(fields []SqlField) bool {
 	for _, f := range fields {
 		if _, ok := f.(autoBucketField); ok {

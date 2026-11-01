@@ -29,10 +29,6 @@ func TestClickhouseE2E(t *testing.T) {
 		testQueryJSON(t, ctx, clickhouseManager)
 	})
 
-	t.Run("introspectSchema", func(t *testing.T) {
-		testIntrospectSchema(t, ctx, clickhouseManager)
-	})
-
 	t.Run("schema", func(t *testing.T) {
 		testSchema(t, ctx, clickhouseManager)
 	})
@@ -149,41 +145,6 @@ func testArrowWrapOrdering(t *testing.T, ctx context.Context, clickhouseManager 
 	}
 }
 
-func testIntrospectSchema(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
-	dbClient, err := clickhouseManager.GetClient("alert_storage")
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	schema, err := dbClient.IntrospectSchema(ctx)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-	assertions.AssertEquals(t, "schema.Tables does not match",
-		[]string{"full_logs", "mv_caddy_accesslog"}, schema.Tables)
-	assertions.AssertEquals(t, "schema.CommonColumns does not match",
-		[]string{"customer_project", "customer_tenant", "host_group", "host_name", "timestamp"}, schema.CommonColumns)
-
-	// Columns carries per-table name/type detail (in schema order). Assert the
-	// tables are present and spot-check a representative column's type rather
-	// than pinning the entire column list (brittle against schema tweaks).
-	if _, ok := schema.Columns["full_logs"]; !ok {
-		t.Fatalf("expected columns for full_logs, got %v", schema.Columns)
-	}
-	if _, ok := schema.Columns["mv_caddy_accesslog"]; !ok {
-		t.Fatalf("expected columns for mv_caddy_accesslog, got %v", schema.Columns)
-	}
-	timestampType := ""
-	for _, c := range schema.Columns["full_logs"] {
-		if c.Name == "timestamp" {
-			timestampType = c.Type
-		}
-	}
-	assertions.AssertEquals(t, "full_logs.timestamp type", "DateTime64(6)", timestampType)
-}
-
-// testSchema asks the Schema of the testing ClickHouse: full_logs with its ORDER BY, columns and a default, and the
-// system tables; asked again with refresh.
 func testSchema(t *testing.T, ctx context.Context, clickhouseManager *ClientManager) {
 	dbClient, err := clickhouseManager.GetClient("default")
 	require.NoError(t, err)

@@ -23,9 +23,6 @@ type Client struct {
 	httpClient   *http.Client
 	logger       zerolog.Logger
 
-	introspectedSchemaMutex  sync.Mutex
-	introspectedSchemaCached *IntrospectedSchema
-
 	// schemaCached is its Schema once asked (Client.Schema), guarded by schemaMutex
 	schemaMutex  sync.Mutex
 	schemaCached *Schema
