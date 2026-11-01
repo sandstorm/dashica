@@ -3,9 +3,10 @@ import { instance as viz } from '@viz-js/viz';
 import { Bug, SquareArrowOutUpRight, createElement } from 'lucide';
 import { Disposable } from '../../core/disposable/disposable';
 import type { Extension, Memento } from '../../hosts/extension-host/extension-host';
-import type { RenderedWidget } from '../../hosts/widgets/widgets';
+import type { QueryResult, RenderedWidget } from '../../hosts/widgets/widgets';
 import { createView, type MenuAnchor } from '../../hosts/ui/ui';
 import { drawTable, type ShowTableMenu } from '../chart-library/table';
+import { diagnosticsOf } from '../filter-library/diagnostics';
 import { widgetTitle } from '../widget-library/widget-title';
 import './debug.css';
 
@@ -134,7 +135,7 @@ async function showDebug(el: HTMLElement, active: RenderedWidget, showMenu: Show
       html`<div class="d-debug__parts">
         ${pre(JSON.stringify(info.stats, null, 2))}
         <h3 class="d-debug__heading">ClickHouse summary of the chart's answer</h3>
-        ${pre(JSON.stringify(active.lastResult?.clickhouseSummary ?? null, null, 2))}
+        ${pre(JSON.stringify(active.lastResult ? clickhouseSummaryOf(active.lastResult) : null, null, 2))}
       </div>`,
       true,
     )}
@@ -183,13 +184,18 @@ export function statusParts(active: RenderedWidget | undefined): readonly Status
     case 'error':
       return [{ text: shorten(status.message), tone: 'error' }, { text: `${status.ms} ms`, tone: 'muted' }];
     case 'done': {
-      const { ignored = [], skipped } = status.diagnostics;
+      const { ignored = [], skipped } = active.lastResult ? diagnosticsOf(active.lastResult) : {};
       if (skipped) return [{ text: `skipped: ${skipped}`, tone: 'muted' }];
       const parts: StatusPart[] = [{ text: `${status.rows.toLocaleString('en')} ${status.rows === 1 ? 'row' : 'rows'}`, tone: 'plain' }, { text: `${status.ms} ms`, tone: 'plain' }];
       if (ignored.length > 0) parts.push({ text: `ignores ${ignored.join(', ')}`, tone: 'muted' });
       return parts;
     }
   }
+}
+
+/** ClickHouse's summary of the query that answered `result` (X-Clickhouse-Summary: rows and bytes read, elapsed time); `null` without. */
+export function clickhouseSummaryOf({ headers }: Pick<QueryResult, 'headers'>): unknown {
+  return JSON.parse(headers.get('X-Clickhouse-Summary') || 'null');
 }
 
 /** The first line of `message`, at most 80 characters. */

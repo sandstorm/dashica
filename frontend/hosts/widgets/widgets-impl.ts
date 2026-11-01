@@ -167,7 +167,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     if (turn !== this.#queries) return result;
     const ms = Math.round(performance.now() - started);
     this.lastResult = result;
-    this.#setStatus({ kind: 'done', rows: result.numRows, ms, diagnostics: result.dashicaDiagnostics ?? {} });
+    this.#setStatus({ kind: 'done', rows: result.numRows, ms });
     return result;
   }
 
@@ -201,21 +201,10 @@ function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<WidgetNod
   el.replaceChildren(shown);
 }
 
-/**
- * The Arrow table at `url`, with what the server said about it in the headers (resolved time range, bucket size, …;
- * the Diagnostics and the column types percent-encoded, as they carry any text); an empty table for a chart that did
- * not run (204, its Diagnostics say why).
- */
+/** The Arrow table at `url` with the answer's headers; an empty table for a 204 (no content). */
 async function fetchQueryResult(url: string, signal?: AbortSignal): Promise<QueryResult> {
   const response = await fetch(url, { signal });
   if (response.status !== 200 && response.status !== 204) throw new Error(await response.text());
-  const result = (response.status === 204 ? new Arrow.Table() : await Arrow.tableFromIPC(response)) as QueryResult;
-  result.dashicaResolvedTimeRange = JSON.parse(response.headers.get('X-Dashica-Resolved-Time-Range') || 'null');
-  const bucketSize = response.headers.get('X-Dashica-Bucket-Size');
-  if (bucketSize != null) result.dashicaBucketSize = parseInt(bucketSize);
-  result.clickhouseSummary = JSON.parse(response.headers.get('X-Clickhouse-Summary') || 'null');
-  result.dashicaAlertIf = JSON.parse(response.headers.get('X-Dashica-Alert-If') || 'null');
-  result.dashicaDiagnostics = JSON.parse(decodeURIComponent(response.headers.get('X-Dashica-Diagnostics') || '{}'));
-  result.dashicaColumnTypes = JSON.parse(decodeURIComponent(response.headers.get('X-Dashica-Column-Types') || '{}'));
-  return result;
+  const table = response.status === 204 ? new Arrow.Table() : await Arrow.tableFromIPC(response);
+  return Object.assign(table, { headers: response.headers });
 }

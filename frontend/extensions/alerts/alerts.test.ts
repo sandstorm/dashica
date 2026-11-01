@@ -2,7 +2,7 @@
 // Tests for alerts.ts: an alert group’s statuses and one alert’s history drawn from the widget’s data.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { settle, widgetTestbed } from '../../hosts/widgets/widgets-testing';
-import { alerts } from './alerts';
+import { alerts, thresholdsOf } from './alerts';
 
 let testbed: ReturnType<typeof widgetTestbed>;
 
@@ -38,5 +38,11 @@ describe('alerts', () => {
     expect(error(el)).toBeUndefined();
     expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
     expect(el.querySelectorAll('.d-chart-frame__body svg g[stroke="red"] line')).toHaveLength(1);
+  });
+
+  it('reads an alert’s thresholds from its answer, those set and not 0, none without the header', () => {
+    expect(thresholdsOf({ headers: new Headers({ 'X-Dashica-Alert-If': '{"value_gt":10,"value_lt":1}' }) })).toEqual([10, 1]);
+    expect(thresholdsOf({ headers: new Headers({ 'X-Dashica-Alert-If': '{"value_gt":null,"value_lt":0}' }) })).toEqual([]);
+    expect(thresholdsOf({ headers: new Headers() })).toEqual([]);
   });
 });

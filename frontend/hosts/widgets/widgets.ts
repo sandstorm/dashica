@@ -51,7 +51,7 @@ export type WidgetRecord = Readonly<Record<string, unknown>>;
 export type WidgetStatus =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
-  | { readonly kind: 'done'; readonly rows: number; readonly ms: number; readonly diagnostics: Diagnostics }
+  | { readonly kind: 'done'; readonly rows: number; readonly ms: number }
   | { readonly kind: 'error'; readonly message: string; readonly ms: number };
 
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
@@ -94,31 +94,13 @@ export interface WidgetMenuContext {
   readonly lastResult: QueryResult | undefined;
 }
 
-/** A widget's data: the Arrow table its handler answered, and what the server said about it in the headers. */
+/**
+ * A widget's data: the Arrow table its handler answered, an empty one for a 204 (no content), and the answer's
+ * headers as they came. The host reads none of them; what a header says is read by its user, through a pure function
+ * next to it (the chart library's time range and column types, the alert chart's thresholds, Debug's summary).
+ */
 export type QueryResult = Table & {
-  /** The time range the server queried, in ms since the epoch: a time chart's domain. */
-  dashicaResolvedTimeRange?: { from: number; to: number } | null;
-  /** The bucket size the server picked for an `AutoBucket` time axis, in ms. */
-  dashicaBucketSize?: number | null;
-  /** ClickHouse's summary of the query: rows and bytes read, elapsed time. */
-  clickhouseSummary?: unknown;
-  /** The thresholds of an alert, drawn as lines on its chart. */
-  dashicaAlertIf?: { value_gt?: number | null; value_lt?: number | null } | null;
-  /** What the chart did with the page's filters (X-Dashica-Diagnostics); empty when it has nothing to say. */
-  dashicaDiagnostics?: Diagnostics;
-  /**
-   * The ClickHouse type of each column by its name (X-Dashica-Column-Types: `{timestamp: 'DateTime'}`), as the query
-   * has it before the Arrow casts (a `DateTime` arrives as seconds); empty when the server sent none.
-   */
-  dashicaColumnTypes?: Readonly<Record<string, string>>;
+  readonly headers: Headers;
 };
-
-/** What a chart tells about one answer: the pills it does not apply, or that it did not run. */
-export interface Diagnostics {
-  /** The labels of the page's pills the chart ignores (`['customer = acme']`: on another table), in the order of the URL. */
-  readonly ignored?: readonly string[];
-  /** Why the chart did not run; then its result has no rows. */
-  readonly skipped?: string;
-}
 
 export { WidgetsHost } from './widgets-impl';

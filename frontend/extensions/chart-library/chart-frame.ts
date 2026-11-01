@@ -2,7 +2,8 @@
 import { html } from 'htl';
 import { EllipsisVertical, createElement } from 'lucide';
 import type { Disposable } from '../../core/disposable/disposable';
-import type { Diagnostics, QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
+import { diagnosticsOf, type Diagnostics } from '../filter-library/diagnostics';
 import { formatTime } from '../time-library/format-time';
 import { TIME, customRange } from '../time-library/time-state';
 import './chart-frame.css';
@@ -122,7 +123,7 @@ export class ChartFrame {
     this.#spinner.hidden = false;
     try {
       this.#result = await this.#ctx.runQuery(controller.signal);
-      this.#showDiagnostics(this.#result.dashicaDiagnostics ?? {});
+      this.#showDiagnostics(diagnosticsOf(this.#result));
       await this.#draw();
     } catch (error) {
       if (controller.signal.aborted) return;

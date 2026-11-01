@@ -6,7 +6,7 @@ import { Braces, Copy, Pin, X, createElement } from 'lucide';
 import type { TableProps } from '../../generated/zz_generated.dashica';
 import type { MenuAnchor } from '../../hosts/ui/ui';
 import type { QueryResult, WidgetRecord } from '../../hosts/widgets/widgets';
-import { candidateOf } from './candidate';
+import { candidateOf, columnTypesOf } from './candidate';
 import type { OfferFilters } from '../filter-library/offer';
 import './table.css';
 
@@ -656,7 +656,7 @@ export function drawTable(
     const fieldName = cell.getField();
     const value = cell.getValue();
     if (!offerFilters || !filters(fieldName) || value === null || value === undefined) return;
-    offerFilters(cell.getElement(), [candidateOf(fieldName, value, queryResult.dashicaColumnTypes)]);
+    offerFilters(cell.getElement(), [candidateOf(fieldName, value, columnTypesOf(queryResult))]);
   });
 
   // Re-paint search highlights after every (re)render — covers filter changes,

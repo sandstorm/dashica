@@ -9,7 +9,7 @@ import type { Extension, ExtensionContext, Memento } from '../extension-host/ext
 import type { PageApi, PoppedView } from '../page/page';
 import { QueryHost } from '../query/query';
 import { UiHost, type ContextMenuOptions } from '../ui/ui';
-import { WidgetsHost, type RenderedWidget, type WidgetStatus } from './widgets';
+import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetStatus } from './widgets';
 
 /**
  * For the tests of a widget renderer: a `WidgetsHost` on a `UiHost`, widgets rendered with one `QueryHost` (as one
@@ -134,13 +134,16 @@ export interface FakeWidget extends RenderedWidget {
   setStatus(status: WidgetStatus): void;
 }
 
-/** `widget` as rendered, with `url` and `status` (default: answered, 2 rows). */
-export function fakeWidget(widget: WidgetNode, { url = (path: string) => path, status = { kind: 'done', rows: 2, ms: 5, diagnostics: {} } }: { url?: (path: string) => string; status?: WidgetStatus } = {}): FakeWidget {
+/** `widget` as rendered, with `url`, `status` (default: answered, 2 rows) and `lastResult` (default none). */
+export function fakeWidget(
+  widget: WidgetNode,
+  { url = (path: string) => path, status = { kind: 'done', rows: 2, ms: 5 }, lastResult }: { url?: (path: string) => string; status?: WidgetStatus; lastResult?: QueryResult } = {},
+): FakeWidget {
   const statusChanged = new EventEmitter<void>();
   return {
     widget,
     url,
-    lastResult: undefined,
+    lastResult,
     get status() {
       return status;
     },

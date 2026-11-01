@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 // Tests for debug.ts: the panel following the active widget, asking /debug only while shown, its views, the status bar;
 // popped out into a tab, bound to the widget active then.
+import { Table } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { CommandOptions } from '../../hosts/commands/commands';
 import type { ExtensionContext, Memento } from '../../hosts/extension-host/extension-host';
 import type { PoppedView } from '../../hosts/page/page';
-import type { WidgetStatus } from '../../hosts/widgets/widgets';
+import type { QueryResult, WidgetStatus } from '../../hosts/widgets/widgets';
 import { fakeWidget, type FakeWidget } from '../../hosts/widgets/widgets-testing';
-import { debug, statusParts } from './debug';
+import { clickhouseSummaryOf, debug, statusParts } from './debug';
 
 let body: HTMLElement;
 let status: HTMLElement;
@@ -96,10 +97,13 @@ const settle = async () => {
 };
 
 /** A chart with the data under `/p/shop/api/<api>`. */
-function chart(widgetStatus: WidgetStatus, api = 1): FakeWidget {
+function chart(widgetStatus: WidgetStatus, api = 1, lastResult?: QueryResult): FakeWidget {
   const widget = { type: 'timeBar', props: { title: 'Requests', x: { kind: 'expr', alias: 'time' }, y: { kind: 'expr', alias: 'value' } }, dataUrl: `/p/shop/api/${api}` } as FakeWidget['widget'];
-  return fakeWidget(widget, { url: (path) => `/p/shop/api/${api}${path}?time=24h`, status: widgetStatus });
+  return fakeWidget(widget, { url: (path) => `/p/shop/api/${api}${path}?time=24h`, status: widgetStatus, lastResult });
 }
+
+/** An answer of no rows with `headers`. */
+const answer = (headers: Record<string, string>): QueryResult => Object.assign(new Table(), { headers: new Headers(headers) });
 
 /** Makes `widget` the active one, as the host tells it. */
 const activate = (widget: FakeWidget | undefined) => {
@@ -129,7 +133,7 @@ describe('debug', () => {
     commands['debug.popOut']();
     expect(popped).toEqual([]);
 
-    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
+    activate(chart({ kind: 'done', rows: 3, ms: 12 }));
     expect(enabled()).toBe(true);
     commands['debug.popOut']();
     expect(popped.map((view) => view.title)).toEqual(['Debug: Requests']);
@@ -141,21 +145,21 @@ describe('debug', () => {
 
     // another active widget: the tab stays with its own, whose next answer it asks for
     const bound = active!;
-    activate(chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 2));
-    bound.setStatus({ kind: 'done', rows: 4, ms: 9, diagnostics: {} });
+    activate(chart({ kind: 'done', rows: 1, ms: 5 }, 2));
+    bound.setStatus({ kind: 'done', rows: 4, ms: 9 });
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h', '/p/shop/api/1/debug?time=24h']);
 
     // the tab closed: nothing more
     shown.dispose();
-    bound.setStatus({ kind: 'done', rows: 5, ms: 9, diagnostics: {} });
+    bound.setStatus({ kind: 'done', rows: 5, ms: 9 });
     await settle();
     expect(requested).toHaveLength(2);
   });
 
   it('asks nothing while hidden; shown without an active widget, it hints to click a chart', () => {
-    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
-    active!.setStatus({ kind: 'done', rows: 4, ms: 9, diagnostics: {} });
+    activate(chart({ kind: 'done', rows: 3, ms: 12 }));
+    active!.setStatus({ kind: 'done', rows: 4, ms: 9 });
     expect(requested).toEqual([]);
     active = undefined;
     showPanel();
@@ -163,7 +167,7 @@ describe('debug', () => {
   });
 
   it('shows the active widget’s query and EXPLAIN as views, and follows it', async () => {
-    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
+    activate(chart({ kind: 'done', rows: 3, ms: 12 }));
     showPanel();
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h']);
@@ -175,7 +179,7 @@ describe('debug', () => {
     // its query running again: kept; answered: asked again
     active!.setStatus({ kind: 'loading' });
     expect(requested).toHaveLength(1);
-    active!.setStatus({ kind: 'done', rows: 4, ms: 9, diagnostics: {} });
+    active!.setStatus({ kind: 'done', rows: 4, ms: 9 });
     await settle();
     expect(requested).toHaveLength(2);
 
@@ -183,20 +187,20 @@ describe('debug', () => {
     const before = active!;
     activate(chart({ kind: 'loading' }, 2));
     await settle();
-    before.setStatus({ kind: 'done', rows: 5, ms: 3, diagnostics: {} });
+    before.setStatus({ kind: 'done', rows: 5, ms: 3 });
     await settle();
     expect(requested).toEqual(['/p/shop/api/1/debug?time=24h', '/p/shop/api/1/debug?time=24h', '/p/shop/api/2/debug?time=24h']);
 
     // hidden: nothing more
     panel.visible = false;
     visibility.fire();
-    activate(chart({ kind: 'done', rows: 1, ms: 5, diagnostics: {} }, 3));
-    active!.setStatus({ kind: 'done', rows: 2, ms: 5, diagnostics: {} });
+    activate(chart({ kind: 'done', rows: 1, ms: 5 }, 3));
+    active!.setStatus({ kind: 'done', rows: 2, ms: 5 });
     expect(requested).toHaveLength(3);
   });
 
   it('asks nothing again when an aborted query puts back its status', async () => {
-    activate(chart({ kind: 'done', rows: 3, ms: 12, diagnostics: {} }));
+    activate(chart({ kind: 'done', rows: 3, ms: 12 }));
     showPanel();
     await settle();
     expect(requested).toHaveLength(1);
@@ -219,9 +223,9 @@ describe('debug', () => {
 
   it('says the active widget’s status in the status bar; a click opens the panel', () => {
     expect(status.textContent).toBe('No active chart');
-    activate(chart({ kind: 'loading' }));
+    activate(chart({ kind: 'loading' }, 1, answer({ 'X-Dashica-Diagnostics': '{"ignored":["host"]}' })));
     expect(status.textContent).toBe('querying…');
-    active!.setStatus({ kind: 'done', rows: 1234, ms: 87, diagnostics: { ignored: ['host'] } });
+    active!.setStatus({ kind: 'done', rows: 1234, ms: 87 });
     expect([...status.children].map((part) => part.textContent)).toEqual(['1,234 rows', '87 ms', 'ignores host']);
     status.click();
     expect(panel.shown).toBe(1);
@@ -229,13 +233,13 @@ describe('debug', () => {
 });
 
 describe('statusParts', () => {
-  const texts = (widgetStatus: WidgetStatus) => statusParts(chart(widgetStatus)).map((part) => `${part.tone}:${part.text}`);
+  const texts = (widgetStatus: WidgetStatus, lastResult?: QueryResult) => statusParts(chart(widgetStatus, 1, lastResult)).map((part) => `${part.tone}:${part.text}`);
 
   it('says how the last query went', () => {
     expect(texts({ kind: 'idle' })).toEqual(['muted:not queried yet']);
     expect(texts({ kind: 'loading' })).toEqual(['muted:querying…']);
-    expect(texts({ kind: 'done', rows: 1, ms: 3, diagnostics: {} })).toEqual(['plain:1 row', 'plain:3 ms']);
-    expect(texts({ kind: 'done', rows: 0, ms: 2, diagnostics: { skipped: 'needs host' } })).toEqual(['muted:skipped: needs host']);
+    expect(texts({ kind: 'done', rows: 1, ms: 3 })).toEqual(['plain:1 row', 'plain:3 ms']);
+    expect(texts({ kind: 'done', rows: 0, ms: 2 }, answer({ 'X-Dashica-Diagnostics': '{"skipped":"needs host"}' }))).toEqual(['muted:skipped: needs host']);
   });
 
   it('shortens an error to its first line', () => {
@@ -243,5 +247,12 @@ describe('statusParts', () => {
     expect(error.tone).toBe('error');
     expect(error.text).toHaveLength(80);
     expect(error.text.endsWith('…')).toBe(true);
+  });
+});
+
+describe('clickhouseSummaryOf', () => {
+  it('reads ClickHouse’s summary of the answer, null without the header', () => {
+    expect(clickhouseSummaryOf(answer({ 'X-Clickhouse-Summary': '{"read_rows":"12"}' }))).toEqual({ read_rows: '12' });
+    expect(clickhouseSummaryOf(answer({}))).toBeNull();
   });
 });

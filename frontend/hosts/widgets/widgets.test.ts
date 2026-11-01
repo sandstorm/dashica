@@ -87,45 +87,21 @@ describe('WidgetsHost', () => {
       testbed.render(requests);
     });
 
-    it('queries the widget’s handler with the page’s query state, and reads what the server says in the headers', async () => {
+    it('queries the widget’s handler with the page’s query state, and passes the answer’s headers through', async () => {
       testbed.query.set(TIME, presetRange('1h'));
-      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Bucket-Size': '900000', 'X-Dashica-Resolved-Time-Range': '{"from":1,"to":2}' });
+      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Example': 'as sent' });
       const result = await ctx.runQuery();
       expect(result.toArray().map((row) => row.cnt)).toEqual([3]);
-      expect(result.dashicaBucketSize).toBe(900000);
-      expect(result.dashicaResolvedTimeRange).toEqual({ from: 1, to: 2 });
+      expect(result.headers.get('X-Example')).toBe('as sent');
       expect(testbed.requests[0].searchParams.get('time')).toBe('1h');
     });
 
-    it('reads the chart’s diagnostics, empty without the header', async () => {
-      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host","status"]}' });
-      expect((await ctx.runQuery()).dashicaDiagnostics).toEqual({ ignored: ['host', 'status'] });
-      testbed.serve('/p/shop/api/1/query', { cnt: [3] });
-      expect((await ctx.runQuery()).dashicaDiagnostics).toEqual({});
-    });
-
-    it('decodes the percent-encoded diagnostics and column types, so any text survives the header', async () => {
-      testbed.serve('/p/shop/api/1/query', { cnt: [3] }, {
-        'X-Dashica-Diagnostics': '%7B%22ignored%22:%5B%22customer%20%E2%89%A0%20acme%22%2C%22user%20=%20J%C3%B6rg%22%5D%7D',
-        'X-Dashica-Column-Types': '%7B%22gr%C3%B6%C3%9Fe%22:%22Float64%22%7D',
-      });
-      const result = await ctx.runQuery();
-      expect(result.dashicaDiagnostics).toEqual({ ignored: ['customer ≠ acme', 'user = Jörg'] });
-      expect(result.dashicaColumnTypes).toEqual({ größe: 'Float64' });
-    });
-
-    it('reads the columns’ ClickHouse types, empty without the header', async () => {
-      testbed.serve('/p/shop/api/1/query', { timestamp: [3] }, { 'X-Dashica-Column-Types': '{"timestamp":"DateTime"}' });
-      expect((await ctx.runQuery()).dashicaColumnTypes).toEqual({ timestamp: 'DateTime' });
-      testbed.serve('/p/shop/api/1/query', { timestamp: [3] });
-      expect((await ctx.runQuery()).dashicaColumnTypes).toEqual({});
-    });
-
-    it('answers a chart that did not run with no rows and why', async () => {
-      testbed.serveNothing('/p/shop/api/1/query', { 'X-Dashica-Diagnostics': '{"skipped":"pick a host"}' });
+    it('answers a 204 with an empty table and its headers', async () => {
+      testbed.serveNothing('/p/shop/api/1/query', { 'X-Example': 'nothing' });
       const result = await ctx.runQuery();
       expect(result.numRows).toBe(0);
-      expect(result.dashicaDiagnostics).toEqual({ skipped: 'pick a host' });
+      expect(result.numCols).toBe(0);
+      expect(result.headers.get('X-Example')).toBe('nothing');
     });
 
     it('rejects with the server’s message', async () => {
@@ -224,8 +200,8 @@ describe('WidgetsHost', () => {
       expect(changes).toBe(1);
     });
 
-    it('tells how its query goes: rows and time, an error, its diagnostics', async () => {
-      testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] }, { 'X-Dashica-Diagnostics': '{"ignored":["host"]}' });
+    it('tells how its query goes: rows and time, an error', async () => {
+      testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
       const { el } = testbed.render(requests);
       press(el);
       let statuses = 0;
@@ -235,7 +211,7 @@ describe('WidgetsHost', () => {
       expect(testbed.widgets.active?.status).toEqual({ kind: 'loading' });
       await answered;
       const status = testbed.widgets.active?.status;
-      expect(status).toMatchObject({ kind: 'done', rows: 3, diagnostics: { ignored: ['host'] } });
+      expect(status).toMatchObject({ kind: 'done', rows: 3 });
       expect(testbed.widgets.active?.lastResult?.numRows).toBe(3);
       expect(testbed.widgets.active?.url('/debug')).toBe('/p/shop/api/1/debug?time=24h');
       testbed.serveText('/p/shop/api/1/query', 'Code: 60. Table default.http_logs does not exist', 500);

@@ -5,28 +5,34 @@ import type { DrawOptions } from './chart-frame';
 import { SchemaAnalyzer } from './schema';
 import { filterOnClick } from './filter-on-click';
 import type { OfferFilters } from '../filter-library/offer';
+import { bucketSizeOf, resolvedTimeRangeOf } from './time-axis';
 import { timeBrush } from './time-brush';
 
 /**
  * A bar per time bucket (`x`) as high as its measure (`y`), stacked by `fill`, over the time range the server queried;
- * an alert's thresholds (`X-Dashica-Alert-If`) as red lines. The widget types `timeBar` and `alertDetail` draw it.
- * With `offerFilters`, a click on a bar offers its fill and facets to filter by or exclude.
+ * `thresholds` (an alert's, read by the alert chart) as red lines. The widget types `timeBar` and `alertDetail` draw
+ * it. With `offerFilters`, a click on a bar offers its fill and facets to filter by or exclude.
  *
  * The bucket size is the x field's, or the server's for an `AutoBucket` axis: the y axis then shows per second, since
  * a bucket size the server picks says nothing about the bars' height ("logs per 15 minutes or per 5?").
  */
-export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: DrawOptions, offerFilters?: OfferFilters) {
+export function drawTimeBars(
+  data: QueryResult,
+  props: TimeBarProps,
+  options: DrawOptions,
+  { offerFilters, thresholds = [] }: { readonly offerFilters?: OfferFilters; readonly thresholds?: readonly number[] } = {},
+) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
-  const xBucketSize = data.dashicaBucketSize ?? props.x.xBucketSizeMs;
+  const serverBucketSize = bucketSizeOf(data);
+  const xBucketSize = serverBucketSize ?? props.x.xBucketSizeMs;
   if (!xBucketSize) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
   }
-  const perSecond = data.dashicaBucketSize != null ? (value: number) => (value / xBucketSize) * 1000 : undefined;
-  const range = data.dashicaResolvedTimeRange;
+  const perSecond = serverBucketSize != null ? (value: number) => (value / xBucketSize) * 1000 : undefined;
+  const range = resolvedTimeRangeOf(data);
   const buckets = range ? Math.floor((range.to - range.from) / xBucketSize) : undefined;
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
-  const alertIf = data.dashicaAlertIf;
   const bars: Plot.RectYOptions = {
     x1: x,
     x2: (d: Record<string, number>) => d[x] + xBucketSize,
@@ -73,9 +79,7 @@ export function drawTimeBars(data: QueryResult, props: TimeBarProps, options: Dr
       offerFilters ? filterOnClick(Plot.rectY, data, { ...bars, fields: [props.fill, props.fx, props.fy], offerFilters }) : null,
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),
-      // Alert threshold lines from X-Dashica-Alert-If header
-      alertIf?.value_gt ? Plot.ruleY([alertIf.value_gt], { stroke: 'red', strokeWidth: 2 }) : null,
-      alertIf?.value_lt ? Plot.ruleY([alertIf.value_lt], { stroke: 'red', strokeWidth: 2 }) : null,
+      thresholds.length > 0 ? Plot.ruleY(thresholds, { stroke: 'red', strokeWidth: 2 }) : null,
     ],
   });
 }

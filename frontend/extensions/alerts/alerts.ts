@@ -3,12 +3,13 @@ import type { TimeBarProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
+import { resolvedTimeRangeOf } from '../chart-library/time-axis';
 import { drawTimeBars } from '../chart-library/time-bars';
 
 /**
  * The widget types `alertOverview` and `alertDetail`: the status of the alerts of a group over time, one row per alert,
- * and the history of one alert's value with its thresholds as red lines (`chart-library/time-bars.ts`), each in a
- * chart frame.
+ * and the history of one alert's value with its thresholds (`thresholdsOf`, X-Dashica-Alert-If) as red lines
+ * (`chart-library/time-bars.ts`), each in a chart frame.
  */
 export const alerts: Extension = {
   id: 'alerts',
@@ -26,7 +27,7 @@ function renderAlertOverview(el: HTMLElement, _widget: WidgetOf<'alertOverview'>
 
 /** A row per alert (`alert_id_key`), a line per status from `start` to `end`: thin when OK, else thick, with a tooltip. */
 function drawAlertOverview(data: QueryResult, options: DrawOptions) {
-  const range = data.dashicaResolvedTimeRange;
+  const range = resolvedTimeRangeOf(data);
   return Plot.plot({
     width: options.width,
     marginLeft: 130,
@@ -93,6 +94,15 @@ function renderAlertDetail(el: HTMLElement, widget: WidgetOf<'alertDetail'>, ctx
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: 200,
-    draw: (result, options) => drawTimeBars(result, history, options),
+    draw: (result, options) => drawTimeBars(result, history, options, { thresholds: thresholdsOf(result) }),
   });
+}
+
+/**
+ * The thresholds of the alert whose history `result` is (X-Dashica-Alert-If: `{value_gt, value_lt}`), those set and
+ * not 0, drawn as red lines; none without the header.
+ */
+export function thresholdsOf({ headers }: Pick<QueryResult, 'headers'>): number[] {
+  const alertIf: { value_gt?: number | null; value_lt?: number | null } | null = JSON.parse(headers.get('X-Dashica-Alert-If') || 'null');
+  return [alertIf?.value_gt, alertIf?.value_lt].filter((value): value is number => !!value);
 }

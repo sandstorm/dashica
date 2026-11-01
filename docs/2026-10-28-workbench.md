@@ -356,7 +356,7 @@ Escape keeps it; removing the widget (its page rendered anew, its tab closed) en
   | undefined` refers to the widget itself (`{widget, url(path), lastResult, status, onDidChangeStatus}`, the same
   object as long as it is rendered; its event ends when it is removed; records left it in 9e, §3.4.5), and
   `widgets.onDidChangeActive` fires only when another widget or tab becomes active or the widget is removed. The
-  widget's `onDidChangeStatus` fires when its query started, answered or failed. `WidgetStatus` = `idle` | `loading` | `done {rows, ms, diagnostics}` | `error {message,
+  widget's `onDidChangeStatus` fires when its query started, answered or failed. `WidgetStatus` = `idle` | `loading` | `done {rows, ms}` (its `diagnostics` gone in 9ae, §3.15 D38) | `error {message,
   ms}`, set by `ctx.runQuery()` itself, so every widget with data has one; `ms` is the time until the answer in the
   browser *(proposed)*. Only the latest `ctx.runQuery()` sets the status and `lastResult`: an earlier one still answering
   changes neither, so a refresh during a load keeps "querying…"; an aborted latest one puts back the status of the last
@@ -494,7 +494,9 @@ widgets.registerWidget('timeBar', renderTimeBar);
 function renderTimeBar(el, widget: WidgetOf<'timeBar'>, ctx): Disposable   // widget: generated type (§3.3)
 
 ctx.runQuery(): Promise<QueryResult>       // Arrow table; tracks loading / ok / error itself (status bar, Debug)
-result.dashicaDiagnostics                  // {ignored: string[], skipped?: string}, from X-Dashica-Diagnostics (§3.8)
+result.headers                             // the answer's headers as they came; the host reads none (9ae, D38): each user
+                                           // reads its own through a pure function, diagnosticsOf (filter-library, §3.8),
+                                           // columnTypesOf, resolvedTimeRangeOf, bucketSizeOf (chart-library), thresholdsOf (alerts)
 ctx.query                                  // the tab's QueryApi: get(TIME), set(TIME, v), onDidChange(TIME, l), requestParams (§3.7)
 ctx.query.onDidRequestRefresh              // time, filter, param or refresh changed
 ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
@@ -791,7 +793,7 @@ so 500 (as before 6.4). The handler calls the chart's `ApplyFilters`, else `filt
 `X-Dashica-Diagnostics`.
 
 ✅ (step 6.5) **The client keeps, shows and sends them.** A chip's label is its id. `QueryResult.dashicaDiagnostics`
-is the header's JSON (`{ignored?, skipped?}`, `{}` without it; a 204 is an empty table); `ChartFrame` shows "ignores
+(since 9ae `diagnosticsOf(result)` in `filter-library`, §3.15 D38) is the header's JSON (`{ignored?, skipped?}`, `{}` without it; a 204 is an empty table); `ChartFrame` shows "ignores
 host, path" in the chart's title row (since 2026-10-31: the frame draws every chart's title, Plot and the table draw
 none), hidden while it ignores none, after a failed query and while skipped, with the chart's drawing muted while
 it shows (D28, since 9r), and "skipped: …" (`d-chart-frame__skipped`) in place of the chart.
@@ -1181,7 +1183,7 @@ interface WidgetsApi {
 
 interface RenderedWidget {                                // the widget itself, as window.activeTextEditor (step 8b)
   readonly widget: WidgetNode; url(path: string): string; readonly lastResult: QueryResult | undefined;
-  readonly status: WidgetStatus;                          // idle | loading | done {rows, ms, diagnostics} | error {message, ms}
+  readonly status: WidgetStatus;                          // idle | loading | done {rows, ms} | error {message, ms}
   readonly onDidChangeStatus: Event<void>;                // records are the table's own: details.showRecords (§3.4.5, 9e)
 }
 
@@ -1777,7 +1779,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
 - **A click's type:** a chart's Arrow answer names its columns' ClickHouse types in `X-Dashica-Column-Types` (`{"timestamp":
   "DateTime"}`, JSON, since 9u percent-encoded as `X-Dashica-Diagnostics`), taken from the `DESCRIBE` that `ensureArrowCompatible` runs for every Arrow query anyway,
   before the casts (a `DateTime` arrives as UInt32 seconds) *(proposed: no extra query; the header is the
-  `clickhouse` client's; `util.ASCIIJSON`, moved out of `httpserver` for it, went with 9u)*; `QueryResult.dashicaColumnTypes`;
+  `clickhouse` client's; `util.ASCIIJSON`, moved out of `httpserver` for it, went with 9u)*; read by `columnTypesOf(result)`
+  (`chart-library/candidate.ts`, since 9ae; until then `QueryResult.dashicaColumnTypes`);
   `chart-library/candidate.ts` `candidateOf` gives each candidate its type and writes a time as ISO 8601 in UTC
   (`2026-10-31T10:00:00.000Z`), a day as `2026-10-31` (`widget-library/clickhouse-type.ts`: `typeKind`, `pillValue`,
   by the unit Arrow carries: `DateTime` seconds, `Date` days, `DateTime64` / `Date32` ms; since 9m a `DateTime64(4…9)`
@@ -2055,6 +2058,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9ab ✅ 2026-11-01 | **BUGFIX a single Escape closes the SQL input box** (§3.15 D12, step 9aa): `codemirror.ts` binds CodeMirror's default keys but Escape (`DEFAULT_KEYS`, its `simplifySelection` gone), so the box's prefilled, selected text no longer takes the first Escape; the completion's Escape stays its own. Files: `frontend/extensions/sql-library/codemirror.{ts,test.ts}`. ✅ (vitest, typecheck, top comments green) | *(proposed)* Escape no longer collapses a selection in Explore's editor either |
 | 9ac ✅ 2026-11-01 | **BUGFIX a column and a computed field of one name stay two fields** (§3.15 D27): `filter.Apply` groups the pills by table, field, `Column` and op, so `host = web-1` on the column and `host = shop` on `lower(host_name) AS host` are AND-ed, not OR-ed; `/values` and `/type` leave out only the pills of the field asked (`othersThan`: the column's for a column or a field that is just one, else the computed field's). Files: `lib/dashboard/filter/filter{,_test}.go`, `lib/dashboard/widget/widget_common.go`, `query_filters_test.go`. ✅ (`go vet`, Go tests without ClickHouse green; the ClickHouse-bound ones blocked in the sandbox) | |
 | 9ad ✅ 2026-11-01 | **D38 (1) the filter contract into `filter-library`** (§3.5, §3.8, §3.11, §3.15): `frontend/extensions/filter-library/offer.ts` (`OFFER`, `FilterCandidate`, `PillSource`, `OfferFilters`, `offerFiltersOf`, + test) out of `hosts/widgets/widgets.ts` and `chart-library/filter-on-click.ts`; the charts, `table`, the Explore view and the `filters` extension import it; `chart-library/offer-testing.ts` (`recordOffers`) replaces the testbed's `offers` and its fake `filters.offer`. ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* the testbed's fake command left in this step, not in 9ag; the command's id a constant `OFFER` |
+| 9ae ✅ 2026-11-01 | **D38 (2) the widgets host passes the headers through** (§3.4.4, §3.6, §3.8, §3.11, §3.15): `QueryResult` = Arrow `Table & { headers: Headers }` (`fetchQueryResult` reads no header); `WidgetStatus.done` without `diagnostics`; the `dashica*` fields and `clickhouseSummary` gone. Readers next to their users: `filter-library/diagnostics.ts` (`Diagnostics`, `diagnosticsOf`, also for the Explore view's `fetchRows`), `chart-library/candidate.ts` (`columnTypesOf`), `chart-library/time-axis.ts` (`resolvedTimeRangeOf`, `bucketSizeOf`: time bars, time line, alert overview), `alerts.ts` (`thresholdsOf`; `drawTimeBars(…, { offerFilters, thresholds })` draws the lines it is given), `debug.ts` (`clickhouseSummaryOf`); `fakeWidget` takes a `lastResult` (+ tests of each reader). ✅ 2026-11-01 (vitest, typecheck, top comments green; no Go change; Playwright not run, no spec changed) | *(proposed)* `headers` the fetch's `Headers` itself; ClickHouse's summary read by Debug, its only user; Debug's status bar reads the Diagnostics from `lastResult` until 9af |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

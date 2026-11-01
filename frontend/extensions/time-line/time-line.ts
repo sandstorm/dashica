@@ -7,6 +7,7 @@ import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import { filterOnClick } from '../chart-library/filter-on-click';
 import { offerFiltersOf, type OfferFilters } from '../filter-library/offer';
+import { bucketSizeOf, resolvedTimeRangeOf } from '../chart-library/time-axis';
 import { timeBrush } from '../chart-library/time-brush';
 
 /**
@@ -29,10 +30,10 @@ function renderTimeLine(el: HTMLElement, widget: WidgetOf<'timeLine'>, ctx: Widg
 
 function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, offerFilters: OfferFilters) {
   const schema = new SchemaAnalyzer(data);
-  if (!(data.dashicaBucketSize ?? props.x.xBucketSizeMs)) {
+  if (!(bucketSizeOf(data) ?? props.x.xBucketSizeMs)) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
   }
-  const range = data.dashicaResolvedTimeRange;
+  const range = resolvedTimeRangeOf(data);
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
   const lines: Plot.LineOptions = {
     x: schema.requiredColumn(props.x.alias, 'x'),

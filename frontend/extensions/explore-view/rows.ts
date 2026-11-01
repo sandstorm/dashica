@@ -1,6 +1,6 @@
 // See exploreView in explore-view.ts.
 import type { ChartSql } from '../../generated/zz_generated.dashica';
-import type { Diagnostics } from '../../hosts/widgets/widgets';
+import { diagnosticsOf, type Diagnostics } from '../filter-library/diagnostics';
 
 /** What `<rowsUrl>` answered: the rows in Arrow and what its headers said about them. */
 export interface RowsAnswer {
@@ -65,7 +65,7 @@ export async function fetchRows(url: string, signal?: AbortSignal): Promise<Rows
   return {
     arrow: response.status === 204 ? undefined : await response.arrayBuffer(),
     limit: limit ? parseInt(limit) : undefined,
-    diagnostics: JSON.parse(decodeURIComponent(response.headers.get('X-Dashica-Diagnostics') || '{}')),
+    diagnostics: diagnosticsOf(response),
   };
 }
 

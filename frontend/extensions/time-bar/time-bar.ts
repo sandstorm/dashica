@@ -18,6 +18,6 @@ function renderTimeBar(el: HTMLElement, widget: WidgetOf<'timeBar'>, ctx: Widget
   return new ChartFrame(el, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeBars(result, widget.props, options, offerFiltersOf(commands, widget)),
+    draw: (result, options) => drawTimeBars(result, widget.props, options, { offerFilters: offerFiltersOf(commands, widget) }),
   });
 }

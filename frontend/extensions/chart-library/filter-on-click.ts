@@ -2,7 +2,7 @@ import * as Plot from '@observablehq/plot';
 import type { SqlFieldProps } from '../../generated/zz_generated.dashica';
 import type { QueryResult } from '../../hosts/widgets/widgets';
 import type { OfferFilters } from '../filter-library/offer';
-import { candidateOf } from './candidate';
+import { candidateOf, columnTypesOf } from './candidate';
 import './filter-on-click.css';
 
 /**
@@ -10,7 +10,7 @@ import './filter-on-click.css';
  * mark function, `Plot.barY`) with the chart mark's `options` (its tip left out) under Plot's pointer transform, so it
  * points at the same row as the tip, stacking included. A click while it points at a row hands `offerFilters` the row's
  * categories as candidates: one per field of `fields` that is a category with a value, in order, each by its alias
- * (`candidateOf`, with the column's type the answer names). Its
+ * (`candidateOf`, with the column's type the answer names, `columnTypesOf`). Its
  * element is an empty `g`, with `d-filter-on-click--pointing` while it points at a row (the pointer cursor).
  * `null` without a category among `fields`. Every Plot chart type puts one after its mark.
  */
@@ -23,6 +23,7 @@ export function filterOnClick<O extends Plot.MarkOptions>(
     return field !== undefined && isCategory(field) && fields.findIndex((other) => other?.alias === field.alias) === at;
   });
   if (categories.length === 0) return null;
+  const types = columnTypesOf(data);
   // the row each rendered element points at; the pointer replaces the element whenever it points elsewhere. A faceted
   // chart has one element per facet, and Plot's pointer empties the losing facets' elements only an animation frame later
   // (pointer.js), so the row clicked is the one of the element that points, asked of the DOM
@@ -44,7 +45,7 @@ export function filterOnClick<O extends Plot.MarkOptions>(
       if (!row) return;
       const candidates = categories.flatMap((field) => {
         const value = row[field.alias];
-        return value == null ? [] : [candidateOf(field.alias, value, data.dashicaColumnTypes)];
+        return value == null ? [] : [candidateOf(field.alias, value, types)];
       });
       if (candidates.length > 0) offerFilters({ x: event.clientX, y: event.clientY }, candidates);
     });
