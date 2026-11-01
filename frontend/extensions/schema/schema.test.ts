@@ -72,6 +72,8 @@ describe('drawTable', () => {
       'day Date MATERIALIZED toDate(timestamp)',
     ]);
     expect([...el.querySelectorAll('.d-schema__key')].map((k) => k.textContent)).toEqual(['Engine', 'ORDER BY', 'PARTITION BY', 'Primary key', 'TTL']);
+    // each key and value its own cell of the two-column grid, not wrapped together in one
+    expect([...el.querySelector('.d-schema__keys')!.children].map((c) => c.tagName)).toEqual(['DT', 'DD', 'DT', 'DD', 'DT', 'DD', 'DT', 'DD', 'DT', 'DD']);
     expect(el.querySelector('.d-schema__index')!.textContent).toBe('INDEX path_idx path TYPE bloom_filter(0.01) GRANULARITY 4');
     expect(drawTable({ ...httpLogs, skipIndices: [] }).querySelector('.d-schema__indices')).toBeNull();
   });

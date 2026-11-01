@@ -216,7 +216,8 @@ export function drawTable(table: SchemaTable): HTMLElement {
           .filter(([, value]) => value)
           .map(([key, value]) => {
             const comment = key === 'Comment' ? ' d-schema__table-comment' : '';
-            return html`<dt class=${`d-schema__key${comment}`}>${key}</dt><dd class=${`d-schema__value${comment}`}>${value}</dd>`;
+            // a fragment: html wraps two top-level nodes in a span, which would take one grid cell for both
+            return html.fragment`<dt class=${`d-schema__key${comment}`}>${key}</dt><dd class=${`d-schema__value${comment}`}>${value}</dd>`;
           })}
       </dl>
       ${table.skipIndices.length === 0
