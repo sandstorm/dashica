@@ -73,7 +73,6 @@ export interface PageContext {
   readonly hash: string;
   /** Fires when only this tab's hash changed (a link to a chart, back and forward). */
   readonly onDidChangeHash: Event<void>;
-  /** Closes the tab. */
   close(): void;
 }
 

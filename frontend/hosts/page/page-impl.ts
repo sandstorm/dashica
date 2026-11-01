@@ -72,7 +72,6 @@ export class PageHost implements PageApi {
     return this.#popped.has(this.#list.active);
   }
 
-  /** The active tab's query state (`activeQuery`). */
   get activeQuery(): QueryHost {
     return this.#active().query;
   }
@@ -409,7 +408,6 @@ export class PageHost implements PageApi {
 /** The page kind of a popped-out view, named in its tab's hash with the tab's id (`#view=<id>`). */
 const POPPED = 'view';
 
-/** What the page host keeps for one open tab. */
 interface OpenTab {
   readonly id: string;
   /** Its element in the content region; `hidden` in the background. */

@@ -24,7 +24,6 @@ export interface TabList {
 /** At most this many tabs are open; opening one more closes the one shown least recently. */
 export const TAB_LIMIT = 10;
 
-/** The list of only `tab`. */
 export function singleTab(tab: Tab): TabList {
   return { tabs: [tab], active: tab.id, recent: [tab.id] };
 }

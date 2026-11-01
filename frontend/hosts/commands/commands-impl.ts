@@ -122,7 +122,6 @@ function parseKey(key: string, mac: boolean): (event: KeyboardEvent) => boolean 
     event.code === code && event.ctrlKey === wanted.has('Ctrl') && event.metaKey === wanted.has('Meta') && event.altKey === wanted.has('Alt') && event.shiftKey === wanted.has('Shift');
 }
 
-/** The `KeyboardEvent.key` of a modifier named in a binding. */
 function modifierKey(modifier: string, mac: boolean): string {
   if (modifier === 'Mod') return mac ? 'Meta' : 'Control';
   return modifier === 'Ctrl' ? 'Control' : modifier;

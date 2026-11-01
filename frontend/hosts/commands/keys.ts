@@ -12,7 +12,6 @@ export function keyLabel(key: string, mac = IS_MAC): string {
   return [...parts.map((modifier) => labels[modifier] ?? modifier), keyName].join(mac ? '' : '+');
 }
 
-/** The platform the browser runs on. */
 export const PLATFORM: Platform = typeof navigator === 'undefined' ? 'linux' : /Mac|iPhone|iPad/.test(navigator.platform) ? 'mac' : /Win/.test(navigator.platform) ? 'win' : 'linux';
 
 /** A modifier tapped twice (`Shift Shift`). */

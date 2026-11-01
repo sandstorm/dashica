@@ -26,7 +26,6 @@ export interface ExtensionContributions {
   readonly keybindings?: readonly KeybindingContribution[];
 }
 
-/** What `activate` gets. */
 export interface ExtensionContext {
   /** Disposed with the workbench, the last first. */
   readonly subscriptions: { dispose(): unknown }[];

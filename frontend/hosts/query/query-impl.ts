@@ -170,7 +170,6 @@ interface HeldValue {
   readonly changed: EventEmitter<void>;
 }
 
-/** Whether `a` and `b` are the same entries in the same order. */
 function sameEntries(a: QueryEntries, b: QueryEntries): boolean {
   return a.length === b.length && a.every(([key, value], i) => key === b[i][0] && value === b[i][1]);
 }
