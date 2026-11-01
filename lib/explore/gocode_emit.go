@@ -34,7 +34,9 @@ import (
 // WidgetGocode describes how to reconstruct one widget type as a fluent Go
 // builder chain: the constructor call plus the chained option methods. It (and
 // GocodeField / GocodeEnumValue below) is the Go model of the JSON table
-// dashica-gen emits into the widget package (WidgetGocodeJSON()).
+// dashica-gen emits into the widget package (WidgetGocodeJSON()); Go-code
+// generation is an Explore concern, so these types live here, not in
+// lib/dashboard/widget.
 type WidgetGocode struct {
 	// Constructor is the factory function name, e.g. "NewTimeBar", emitted
 	// qualified as widget.NewTimeBar.

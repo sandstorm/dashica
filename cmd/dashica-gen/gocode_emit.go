@@ -13,10 +13,11 @@ import (
 // This file emits the Go-code-generation table into zz_generated.dashica.go,
 // consumed by lib/explore's Go code generator.
 //
-// The table is emitted as an opaque JSON blob (a string constant + accessor);
-// lib/explore owns the Go types and unmarshals the blob at init. The
-// field↔method mapping is still VERIFIED here at generation time via the
-// classified model.
+// Go-code generation is an Explore concern, so the widget package does not
+// carry its model types: the table is emitted as an opaque JSON blob (a string
+// constant + accessor), and lib/explore owns the Go types and unmarshals the
+// blob at init. The field↔method mapping is still VERIFIED here at generation
+// time via the classified model.
 //
 // The DTOs below mirror lib/explore's WidgetGocode / GocodeField /
 // GocodeEnumValue (kept in sync by their shared JSON tags; the round-trip and
