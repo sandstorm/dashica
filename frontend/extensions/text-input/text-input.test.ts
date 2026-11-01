@@ -8,7 +8,8 @@ import { textInput } from './text-input';
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
-  testbed = widgetTestbed();
+  // declared as by the dashboard page
+  testbed = widgetTestbed({ keys: [PARAMS] });
   testbed.activate(textInput);
 });
 

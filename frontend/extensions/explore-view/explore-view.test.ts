@@ -50,8 +50,8 @@ beforeEach(() => {
   renderers = new Map();
   closed = 0;
   query = new QueryHost();
-  // sent along from here on, as by the time-range extension
-  query.get(TIME);
+  // sent along, declared as by the time-range extension
+  query.declare(TIME);
   query.load({ search: '?time=1h' });
   subscriptions = [];
   vi.stubGlobal('fetch', async () => new Response('rows'));

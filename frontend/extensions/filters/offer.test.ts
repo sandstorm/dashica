@@ -33,6 +33,8 @@ const choose = (label: string) => {
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
+  // declared as by the filters extension
+  query.declare(FILTERS);
   query.load();
   host = document.body.appendChild(document.createElement('div'));
   quickInput = new QuickInput(host);

@@ -15,6 +15,7 @@ beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
   // the refresh extension's state, which a fixed range turns off
+  query.declare(REFRESH);
   query.load();
   bar = document.body.appendChild(document.createElement('div'));
   stored = new Map();

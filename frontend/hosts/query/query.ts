@@ -6,10 +6,17 @@ import type { PageJson } from '../../generated/zz_generated.dashica';
  * The state every query of a tab's page depends on, kept in the tab's URL: each tab has its own, so a link opens the
  * page as it was shared, and the browser's back button goes to the state before. The host knows no key of its own;
  * each part of the state is a typed key that carries its URL format (`queryKey`), defined once by the extension or
- * library it belongs to and imported by its readers. Widgets query again on `onDidRequestRefresh` and send
- * `requestParams()` along; extensions get the active tab's (`activeQuery`).
+ * library it belongs to and imported by its readers. The extension that owns a key declares it in its `activate`
+ * (`declare`), so every key is known before the first page; using a key no extension declared throws. Widgets query
+ * again on `onDidRequestRefresh` and send `requestParams()` along; extensions get the active tab's (`activeQuery`).
  */
 export interface QueryApi {
+  /**
+   * Makes `key` part of every tab's state: from now on it is read from and written to the URL and, when
+   * `sentToServer`, sent; disposing takes it out again. Its owner calls it in `activate`
+   * (`subscriptions.push(query.declare(TIME))`), a reader never does. Throws for a URL key a declared key holds.
+   */
+  declare<T>(key: QueryKey<T>): Disposable;
   /** The value of `key` here (to an extension: the active tab's), its URL's or its default. */
   get<T>(key: QueryKey<T>): T;
   /** Sets `key` to `value`; one the URL holds as it holds the value now changes nothing. */
@@ -25,14 +32,14 @@ export interface QueryApi {
   refresh(): void;
   /**
    * What the data handlers read: the URL entries of each key sent to the server (`sentToServer`), in the order the
-   * keys were first used, a default left out as in the URL (the handlers know their page's `defaultTime`).
+   * keys were declared, a default left out as in the URL (the handlers know their page's `defaultTime`).
    */
   requestParams(): URLSearchParams;
 }
 
 /**
- * A part of the query state with its URL format (`queryKey`): a value of `T` in each tab. The host knows a key from
- * its first use; whoever defines it owns it.
+ * A part of the query state with its URL format (`queryKey`): a value of `T` in each tab. Whoever defines it owns it
+ * and declares it (`QueryApi.declare`).
  */
 export interface QueryKey<T> {
   /** The URL's keys it is kept in (`['f', 'sql']`). */
@@ -64,7 +71,7 @@ export interface QueryKeySpec<T> {
 
 /**
  * The key kept in the URL's keys `urlKeys` (`'refresh'`, `['time', 'range']`) as `spec` says
- * (`queryKey<AutoRefresh>('refresh', { parse, format })`); a URL key belongs to one key only.
+ * (`queryKey<AutoRefresh>('refresh', { parse, format })`); a URL key belongs to one declared key only.
  */
 export function queryKey<T>(urlKeys: string | readonly string[], spec: QueryKeySpec<T>): QueryKey<T> {
   return {

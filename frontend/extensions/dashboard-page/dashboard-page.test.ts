@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Tests for dashboard-page.ts: the widgets one below the other with their tab's query state, taken down with the page;
-// a link to a chart.
+// the page params declared, sent on every page; a link to a chart.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { Memento } from '../../hosts/extension-host/extension-host';
@@ -59,7 +59,7 @@ beforeEach(() => {
 async function start(url: string): Promise<PageHost> {
   history.replaceState(null, '', url);
   page = new PageHost(window, { menu: [], explore: false, sqlEnabled: false, connections: [] }, content, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento);
-  // the active tab's query state registers for every tab, as `activeQuery` does
+  // declared through the active tab's query state, for every tab, as through `activeQuery`
   dashboardPage.activate({ page, query: page.activeQuery, widgets: testbed.widgets, subscriptions: [] } as never);
   await page.start();
   return page;
@@ -93,6 +93,10 @@ describe('dashboardPage', () => {
     expect(states).toEqual([shown.activeQuery]);
   });
 
+  it('sends the page params of the URL on a page without form widgets', async () => {
+    const shown = await start('/p/shop?wp=%7B%22path%22%3A%22%2Fapi%22%7D');
+    expect(shown.activeQuery.requestParams().get('wp')).toBe('{"path":"/api"}');
+  });
 
   it('takes the widgets down with the page', async () => {
     (await start('/p/shop')).dispose();

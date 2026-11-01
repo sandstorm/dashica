@@ -8,7 +8,7 @@ import { TIME, customRange, presetRange } from '../time-library/time-state';
 import './time-range.css';
 
 /**
- * The time range of the page's queries (the query key `TIME`: `?time=1h`, `?time=custom&range=…`), in the top bar:
+ * The time range of the page's queries (the query key `TIME`, declared here: `?time=1h`, `?time=custom&range=…`), in the top bar:
  * a button showing the range ("Last 1 hour", "2026-10-29 10:00 to 12:00") that opens the picker, ‹ › shifting the
  * window by its length, ⊖ zooming out to twice the window. On every page, the start page too.
  * The picker has From / To, each an absolute time or relative to now (`now-6h`), and the quick ranges (the presets),
@@ -19,6 +19,7 @@ import './time-range.css';
 export const timeRange: Extension = {
   id: 'timeRange',
   activate({ ui, query, globalState, subscriptions }) {
+    subscriptions.push(query.declare(TIME));
     const picker = new TimeRangePicker(query, globalState);
     picker.show();
     subscriptions.push(query.onDidChange(TIME, () => picker.show()));

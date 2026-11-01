@@ -7,7 +7,7 @@ import type { PageJson, WidgetNode } from '../../generated/zz_generated.dashica'
 import { CommandsHost } from '../commands/commands';
 import type { Extension, ExtensionContext, Memento } from '../extension-host/extension-host';
 import type { PageApi, PoppedView } from '../page/page';
-import { QueryHost } from '../query/query';
+import { QueryHost, type QueryKey } from '../query/query';
 import { UiHost, type ContextMenuOptions } from '../ui/ui';
 import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetDecoration, type WidgetStatus } from './widgets';
 
@@ -17,11 +17,13 @@ import { WidgetsHost, type QueryResult, type RenderedWidget, type WidgetDecorati
  * `query`, `ui`, `commands` and `page`); `serve` answers a URL path (`/p/shop/api/1/query`) with an Arrow table or an
  * error; `scrollIntoView` makes every chart visible, `resize` sets every chart's width; `menus` are the context menus
  * shown. `dispose` in `afterEach`. For the tests of an extension that follows the active widget, `fakeWidget` is a
- * `RenderedWidget` whose status and decorations the test sets. `sqlEnabled` is `page.workbench`'s (default on).
+ * `RenderedWidget` whose status and decorations the test sets. `sqlEnabled` is `page.workbench`'s (default on); `keys`
+ * are the query keys declared, as their extensions would (`[TIME, FILTERS]`).
  */
-export function widgetTestbed({ sqlEnabled = true }: { sqlEnabled?: boolean } = {}) {
+export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: boolean; keys?: readonly QueryKey<unknown>[] } = {}) {
   history.replaceState(null, '', '/p/shop');
   const query = new QueryHost();
+  for (const key of keys) query.declare(key);
   const menus: { menuId: string; options: ContextMenuOptions }[] = [];
   const pageChanged = new EventEmitter<PageJson | undefined>();
   /** The views extensions popped out (`page.popOut`), in order. */

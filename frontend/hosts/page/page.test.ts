@@ -39,8 +39,8 @@ function createHost(browserWindow: Window = window): PageHost {
     contexts[shown.title] = context;
     return new Disposable(() => rendered.push(`disposed ${shown.title}`));
   });
-  // a key every chart sends, kept per page: a page opens in its own default
-  created.activeQuery.get(TEST_TIME);
+  // a key every chart sends, kept per page, declared as its extension would: a page opens in its own default
+  created.activeQuery.declare(TEST_TIME);
   return created;
 }
 

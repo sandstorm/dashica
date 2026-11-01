@@ -33,6 +33,7 @@ describe('TIME', () => {
 
   it('is sent as the URL has it, the page’s default left out', () => {
     const query = new QueryHost();
+    query.declare(TIME);
     query.load({ search: '', page: shop('168h') });
     expect(query.get(TIME)).toEqual(presetRange('168h'));
     expect(query.requestParams().toString()).toBe('');

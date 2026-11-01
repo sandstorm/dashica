@@ -17,7 +17,7 @@ import { completionOf, loadSqlEditors, showSqlInputBox, type SqlCompletion } fro
 import './filters.css';
 
 /**
- * The filters of a page, kept in its tab's query state (`FILTERS`: `?f=<key>&sql=…`), and the filter
+ * The filters of a page, kept in its tab's query state (`FILTERS`, declared here: `?f=<key>&sql=…`), and the filter
  * bar of a page that has one (`page.json`'s `filterBar`): it shows one chip per filter, a pill
  * ("host = a", made and signed by the server) or SQL ("SQL: duration > 2000"), each removed with its ×; a click on a
  * SQL chip's text asks a new one below the chip. A field's pill is edited as Grafana's ad hoc filter chips are: a click on its operator
@@ -43,6 +43,7 @@ import './filters.css';
 export const filters: Extension = {
   id: 'filters',
   activate({ ui, page, query, commands, widgets, subscriptions }) {
+    subscriptions.push(query.declare(FILTERS));
     const { sqlEnabled, explore } = page.workbench;
     // the names a SQL condition completes: the schema is part of Explore (/schema.json only with explore.enabled)
     const schemas = explore ? new Schemas() : undefined;

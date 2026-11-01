@@ -1,25 +1,33 @@
 // See QueryApi in query.ts.
-import type { Disposable } from '../../core/disposable/disposable';
+import { Disposable } from '../../core/disposable/disposable';
 import { EventEmitter } from '../../core/event-emitter/event-emitter';
 import type { PageJson } from '../../generated/zz_generated.dashica';
 import type { QueryApi, QueryEntries, QueryKey } from './query';
 
 /**
- * The keys used so far in any tab, in the order first used: the tabs' query hosts share one, so each tab writes and
- * sends every key, also one it never read itself.
+ * The keys declared (`QueryApi.declare`), in the order declared: the tabs' query hosts share one, so each tab writes
+ * and sends every key, also one it never read itself.
  */
 export class QueryKeys {
   readonly #keys: QueryKey<unknown>[] = [];
 
-  /** Knows `key` from now on; throws for a URL key another key holds. */
-  use(key: QueryKey<unknown>): void {
-    if (this.#keys.includes(key)) return;
+  /** Knows `key` until disposed; throws for a URL key a declared key holds (`key` itself declared before, too). */
+  declare(key: QueryKey<unknown>): Disposable {
     const taken = key.urlKeys.find((urlKey) => this.#keys.some((other) => other.urlKeys.includes(urlKey)));
-    if (taken !== undefined) throw new Error(`The URL key ${taken} belongs to another query key`);
+    if (taken !== undefined) throw new Error(`The URL key ${taken} belongs to a query key declared before`);
     this.#keys.push(key);
+    return new Disposable(() => {
+      const index = this.#keys.indexOf(key);
+      if (index >= 0) this.#keys.splice(index, 1);
+    });
   }
 
-  /** The keys used, in the order first used. */
+  /** Throws unless `key` is declared: a key is used only after its owner declared it. */
+  check(key: QueryKey<unknown>): void {
+    if (!this.#keys.includes(key)) throw new Error(`The query key ${key.urlKeys.join(', ')} is not declared: no extension declared it (query.declare)`);
+  }
+
+  /** The keys declared, in the order declared. */
   all(): readonly QueryKey<unknown>[] {
     return this.#keys;
   }
@@ -44,7 +52,7 @@ export class QueryHost implements QueryApi {
   /** The keys' values read or set here; a value not read since the last load is parsed when read. */
   readonly #values = new Map<QueryKey<unknown>, HeldValue>();
 
-  /** `keys`: the keys used, all tabs'. */
+  /** `keys`: the keys declared, all tabs'. */
   constructor(private readonly keys = new QueryKeys()) {}
 
   /**
@@ -59,6 +67,10 @@ export class QueryHost implements QueryApi {
     for (const held of this.#values.values()) held.known = false;
     for (const held of this.#values.values()) held.changed.fire();
     this.refresh();
+  }
+
+  declare<T>(key: QueryKey<T>): Disposable {
+    return this.keys.declare(key);
   }
 
   get<T>(key: QueryKey<T>): T {
@@ -104,11 +116,11 @@ export class QueryHost implements QueryApi {
     for (const held of this.#values.values()) held.changed.dispose();
   }
 
-  /** The value held for `key` here, known to every tab from its first use. */
+  /** The value held for `key` here; throws for a key not declared. */
   #held(key: QueryKey<unknown>): HeldValue {
+    this.keys.check(key);
     let held = this.#values.get(key);
     if (!held) {
-      this.keys.use(key);
       this.#values.set(key, (held = { value: undefined, known: false, changed: new EventEmitter<void>() }));
     }
     return held;

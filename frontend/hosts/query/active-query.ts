@@ -46,6 +46,8 @@ export function activeQuery(source: ActiveQuerySource): QueryApi & { dispose(): 
     }
   });
   return {
+    // the tabs share their keys: declared in the active tab, a key is declared in each
+    declare: (key) => active().declare(key),
     get: (key) => active().get(key),
     set: (key, value) => active().set(key, value),
     onDidChange(key, listener) {

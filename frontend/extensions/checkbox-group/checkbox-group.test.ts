@@ -9,7 +9,8 @@ import { checkboxGroup } from './checkbox-group';
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
-  testbed = widgetTestbed();
+  // declared as by the dashboard page
+  testbed = widgetTestbed({ keys: [PARAMS] });
   testbed.activate(checkboxGroup);
 });
 

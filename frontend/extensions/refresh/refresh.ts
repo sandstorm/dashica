@@ -8,7 +8,7 @@ import { REFRESH, type AutoRefresh } from '../time-library/refresh-state';
 
 /**
  * Refresh in the top bar, as one split button: ⟳ queries the page again now (also the command `refresh.now`), the
- * interval beside it queries again every so often (the query key `REFRESH`, `?refresh=30`; "Off" by default). On
+ * interval beside it queries again every so often (the query key `REFRESH`, declared here, `?refresh=30`; "Off" by default). On
  * every page, the start page too. Auto refresh pauses while its tab is in the background or the browser tab is hidden
  * (`autoRefresh`).
  */
@@ -18,6 +18,7 @@ export const refresh: Extension = {
     commands: [{ command: 'refresh.now', title: 'Refresh', category: 'Page' }],
   },
   activate({ ui, query, page, commands, subscriptions }) {
+    subscriptions.push(query.declare(REFRESH));
     const button: HTMLButtonElement = html`<button
       type="button"
       class="d-button d-button--icon d-segmented__item"

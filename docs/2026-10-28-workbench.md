@@ -521,32 +521,36 @@ ctx.decorations, ctx.onDidChangeDecorations // what providers say about its answ
 
 ### 3.7 Query state and one request format
 
-✅ **Typed keys (D24, step 9j; D36, step 9w, 2026-10-31):** the `query` host is a plain per-tab URL state store that
+✅ **Typed keys (D24, step 9j; D36, step 9w, 2026-10-31; declared since 9am, D41, 2026-11-01):** the `query` host is a plain per-tab URL state store that
 knows no key of its own. Each part of the state is a typed key that carries its URL format, defined once where the
 state belongs: `export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value, page),
 sentToServer })`. Readers and writers import the key and use `query.get(TIME)`, `query.set(TIME, value)`,
 `query.onDidChange(TIME, listener)` (to an extension the active tab's, `activeQuery`; to a widget its tab's,
-`ctx.query`): typed by the key, no generic argument, no cast, never `undefined`. Nothing is registered: the host knows
-a key from its first use, in any tab (`QueryKeys`, shared by the tabs), so it writes and sends it in every tab from
-then on; ownership is who defines the key. The host keeps each tab's values (parsed from the tab's query string when
-first read, so a key first used after a load reads the URL loaded), writes them into their URL keys a moment after a
-change (the other keys kept as they are), fires the change, and `requestParams()` sends each key's server entries in
-the order the keys were first used. A key sent to the server (`sentToServer: true`; since 9al, D40, a boolean) sends
+`ctx.query`): typed by the key, no generic argument, no cast, never `undefined`. The extension that owns a key
+declares it in its `activate`, `subscriptions.push(query.declare(TIME))` (since 9am, D41): `time-range` declares
+`TIME`, `refresh` `REFRESH`, `filters` `FILTERS`, `dashboardPage` `PARAMS`. All extensions activate before the first
+page (`createWorkbench`), so every key is known to every tab from the start (`QueryKeys`, shared by the tabs);
+disposing the declaration takes the key out again. A URL key claimed by two declared keys throws at `declare`;
+`get` / `set` / `onDidChange` of a key no extension declared throw an `Error` naming its URL keys. Those three have
+no side effect; a reader (`ChartFrame` setting `TIME` after a drag, the form widgets) never declares. The host keeps
+each tab's values (parsed from the tab's query string when first read, so a key first read after a load reads the URL
+loaded), writes them into their URL keys a moment after a change (the other keys kept as they are), fires the change,
+and `requestParams()` sends each key's server entries in the order the keys were declared (the activation order:
+`time`, `range`, `f`, `sql`, `wp`). A key sent to the server (`sentToServer: true`; since 9al, D40, a boolean) sends
 exactly its URL entries, `format(value, page)` with the tab's page, so a default is left out of the request as of the
 URL (the data handlers know their page's `defaultTime`), and asks the widgets to query again on its change; one
 without does not (auto refresh). A `set` the URL would hold alike changes nothing. *(proposed)* The page
 shown is given to `parse` / `format` for the defaults it declares (`defaultTime`), in place of a `default` per key;
 one key may span several URL keys (`time` + `range`, `f` + `sql` in chip order), so `parse` reads the whole query
-string; the first argument of `queryKey` is the URL key or keys, not a separate name; a key the server reads is sent
-only once something used it, which every key's owner does on activation or render (`time-range`, `filters`, the form
-widgets) *(proposed)*.
+string; the first argument of `queryKey` is the URL key or keys, not a separate name *(proposed)*. A declared key the
+server reads is sent on every page, read or not: `?wp` also on a page without form widgets (9am).
 
 | Key | Defined in, used by | Holds | URL | Notes |
 |---|---|---|---|---|
-| `TIME` | `time-library/time-state.ts`; `time-range`, `ChartFrame` | time range | `?time=1h`, `?time=custom&range=…` | default the page's (`.DefaultTimeRange("168h")`, fallback `24h`); sent as the URL has it, the default left out (the handlers take their page's, D40) |
-| `REFRESH` | `time-library/refresh-state.ts`; `refresh`, `time-range` | auto refresh | `?refresh=30` | not sent |
-| `FILTERS` | `filters/chips.ts`; `filters` | one list of chips: pills and SQL chips (step 7b, §3.8); later a time-window filter | `?f=…&sql=…`, each repeatable, in chip order | `addChip` / `replaceChip` / `removeChips` |
-| `PARAMS` | `widget-library/params-state.ts`; the form widgets | values of form widgets | `?wp=…` | `withParam` |
+| `TIME` | `time-library/time-state.ts`; declared by `time-range`, also set by `ChartFrame` | time range | `?time=1h`, `?time=custom&range=…` | default the page's (`.DefaultTimeRange("168h")`, fallback `24h`); sent as the URL has it, the default left out (the handlers take their page's, D40) |
+| `REFRESH` | `time-library/refresh-state.ts`; declared by `refresh`, also set by `time-range` | auto refresh | `?refresh=30` | not sent |
+| `FILTERS` | `filters/chips.ts`; declared by `filters` | one list of chips: pills and SQL chips (step 7b, §3.8); later a time-window filter | `?f=…&sql=…`, each repeatable, in chip order | `addChip` / `replaceChip` / `removeChips` |
+| `PARAMS` | `widget-library/params-state.ts`; declared by `dashboardPage`, used by the form widgets | values of form widgets | `?wp=…` | `withParam` |
 | `cursor` | — | hovered timestamp | — (ephemeral) | later: synchronized crosshair across all time charts |
 
 Who writes another extension's state: a range dragged across a time chart sets `TIME` (`ChartFrame`);
@@ -1180,14 +1184,15 @@ interface PageApi {
 
 // query — the state every query depends on (§3.7)
 interface QueryApi {                        // knows no key of its own: typed keys (9w)
-  get<T>(key: QueryKey<T>): T;              // never undefined: the key's URL value or its default
+  declare<T>(key: QueryKey<T>): Disposable; // by the key's owner in activate (9am, D41); a URL key in one declared key only
+  get<T>(key: QueryKey<T>): T;              // never undefined: the key's URL value or its default; an undeclared key throws
   set<T>(key: QueryKey<T>, value: T): void;
   onDidChange<T>(key: QueryKey<T>, listener: () => void): Disposable;
   refresh(): void;
   readonly onDidRequestRefresh: Event<void>;
-  requestParams(): URLSearchParams;         // what every data handler reads; one format with step 6
+  requestParams(): URLSearchParams;         // what every data handler reads, in declaration order; one format with step 6
 }
-// defined once where the state belongs (time-library, filters, widget-library), known to the host from its first use
+// defined once where the state belongs (time-library, filters, widget-library), declared by its owning extension
 export const TIME = queryKey<TimeRange>(['time', 'range'], { parse(url, page), format(value, page), sentToServer: true });
 // a sent key sends format(value, page) with the tab's page: a default is left out as in the URL (D40)
 
@@ -1720,7 +1725,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   "is too complicated"):** a key carries its URL format, `export const TIME = queryKey<TimeRange>('time', { parse,
   format, sentToServer: true })`, defined once where the state belongs; readers and writers use `query.get(TIME)`,
   `query.set(TIME, value)`, `query.onDidChange(TIME, listener)`, typed by the key, never `undefined`; a key used for the
-  first time is known to the host from the key itself. The widget context's query state is `ctx.query`. Gone:
+  first time is known to the host from the key itself (since 9am, D41, declared by its owner in `activate` instead). The widget context's query state is `ctx.query`. Gone:
   `registerState`, `state<T>(id)`, string state ids, the dispose of registrations. Ownership is who defines the key
   (§3.7). *(proposed)* The data fetch that was `ctx.query()` is `ctx.runQuery()`, as `ctx.query` is now the query
   state; `queryKey`'s first argument is the URL key or keys (`['time', 'range']`); `sentToServer` is `true` (its URL
@@ -1795,6 +1800,19 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `QueryKey.request` (now `QueryKey.sentToServer`), `format(value, undefined)`, `TIME`'s own function. *(proposed)* The
   default reaches the handlers as a value (`DataHandler`'s parameter) rather than the context itself; `page.json` keeps
   `defaultTime` empty for a page that declares none, the client's fallback is the same `24h`.
+- **D41 Query keys declared in `activate` (9am, decided 2026-11-01; maintainer, on `created.activeQuery.get(TIME);` in
+  `page.test.ts` with its result unused: "WHY IS THIS NOT USING the get result???", then "THE REGISTRATION SHOULD BE IN
+  activate I guess?", the design answered "YES THIS IS GOOD"):** `query.declare(KEY): Disposable`, called in the
+  owner's `activate` and pushed to its subscriptions: `time-range` declares `TIME`, `refresh` `REFRESH`, `filters`
+  `FILTERS`, `dashboardPage` `PARAMS`; disposing removes the key. A URL key claimed by two declared keys throws at
+  `declare`. `get` / `set` / `onDidChange` are free of side effects; an undeclared key throws an `Error` naming its URL
+  keys and saying no extension declared it. The URL's and the request's key order is the declaration (activation)
+  order. Readers never declare. Gone: "known from first use" (`QueryKeys.use`) and every read made only for its side
+  effect (`page.test.ts`, the testbeds); tests declare the keys they use (`widgetTestbed({ keys: [TIME] })`, or
+  `query.declare(TIME)` on a `QueryHost`). D36's open point is closed: `?wp` is sent on every page again.
+  *(proposed)* `declare` is a method of `QueryApi` itself, so a tab's `QueryHost` and `activeQuery` both have it
+  (the tabs share their `QueryKeys`, so declaring through either declares for all); declaring the same key twice
+  throws as a second key of its URL keys does.
 - **D30 A menu mode of the quick input (9s, decided 2026-10-31; maintainer, on the global "…" showing a quick pick with
   an empty search field: "a menu one would expect usually has no search bar, and the opener (the three dots) stays
   open/active until the menu is dismissed. Still I think this could be built inside the quick pick"):** one quick
@@ -2139,6 +2157,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9aj ✅ 2026-10-31 | **BUGFIX a computed field that cannot be described costs `/fields` nothing else** (§3.15 D39): `HandleFields` takes the chart's query and its computed fields (`fieldTypes`): one `DESCRIBE` of all, should it fail one per field, a field whose own fails left out of `computed` and logged, so the table's columns and the other fields keep their types. Tests: Go `httpserver` (`fieldTypes` one of all else one of each; `HandleFields` with an unreachable ClickHouse answers the columns). Deviation: a computed field without a type whose alias is also a column of the table shows the column's type (`typeIn`) *(proposed)* | |
 | 9ak ✅ 2026-10-31 | **BUGFIX a widget whose renderer throws is no rendered widget** (§3.5): `WidgetsHost.render` takes its `WidgetInstance` out of the rendered ones again and disposes it, so it is neither kept nor redecorated. Test: vitest (no provider asked for a widget whose renderer threw) | |
 | 9al ✅ 2026-11-01 | **D40 the handlers know their page's default time range; `sentToServer` a boolean** (§3.7, §3.15): Go `rendering.DashboardContext.DefaultTime` (set by `Builder.CollectHandlers`, `24h` when unset), `httpserver.DefaultTimeRange`, `httpserver.ParseQueryState(r, defaultTime)` (no `time` is the default; the missing-time error gone), `widget.DataHandler(deps, defaultTime, w)`, `queryHandler`, `fieldsHandler`, `valuesHandler`, Speedscope and the alert widgets with it, `withHandler.Handler(deps, defaultTime)`; `/time-range` and the old Explore's preview pass `24h`. Client: `QueryKeySpec.sentToServer?: boolean`, `QueryKey.sentToServer` in place of `request`, `requestParams()` appends `format(value, page)` of each sent key; `TIME`, `TEST_TIME` `sentToServer: true`. Tests: Go `dashboard` (a chart's `/sql` without `time` covers the dashboard's 168h, with `time=1h` 1h, 24h on a page declaring none), `httpserver` (`ParseQueryState` takes the default), `widget` (an unreadable time range is a 400); vitest: `QueryHost.requestParams` leaves out a key's default, `TIME` sent without the page's default, refresh not sent (kept), the widget's URLs, Speedscope, the filter bar's `/fields` with another range. Playwright (adjusted, not run): `e2e/explore-view.spec.ts`'s link test uses `time=1h`, as the default is no longer in the request. Deviation: the default reaches the handlers as a parameter, not the context *(proposed)* | the page's default once, in Go |
+| 9am ✅ 2026-11-01 | **D41 query keys declared in `activate`** (§3.7, §3.15): `QueryApi.declare(key): Disposable` in `QueryHost` (on the shared `QueryKeys.declare`, a URL key in one declared key only) and `activeQuery`; `QueryKeys.check` makes `get` / `set` / `onDidChange` of an undeclared key throw (its URL keys named, "no extension declared it"); `QueryKeys.use` and first-use order gone, the order is the declaration order. `time-range` declares `TIME`, `refresh` `REFRESH`, `filters` `FILTERS`, `dashboardPage` `PARAMS`. Tests: `page.test.ts` declares `TEST_TIME` in place of the unused `get`; `widgetTestbed({ keys })`; every test declares the keys it uses as its extension would; vitest: declaring, a second key of a URL key refused, an undeclared key refused in `get` / `set` / `onDidChange`, declaration order in URL and request, a disposed key no longer sent, a sent key sent unread (`?wp` on a page without form widgets, `dashboard-page.test.ts`). No Go change; Playwright not run, no spec changed. Deviation: `declare` on `QueryApi`, the same key twice refused *(proposed)* | every key known before the first page |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

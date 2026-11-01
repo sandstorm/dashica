@@ -20,13 +20,14 @@ const COLORS = queryKey<string>('colors', {
 });
 
 beforeEach(() => {
-  // a key used in one tab is known in every tab
+  // a key declared is known in every tab
   const keys = new QueryKeys();
   shop = new QueryHost(keys);
   checkout = new QueryHost(keys);
   tabsChanged = new EventEmitter<void>();
   source = { activeQuery: shop, onDidChangeTabs: tabsChanged.event };
   query = activeQuery(source);
+  query.declare(COLORS);
   shop.load({ search: '?colors=red' });
   checkout.load({ search: '?colors=blue' });
   events = [];

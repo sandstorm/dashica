@@ -143,8 +143,8 @@ beforeEach(() => {
   madeEditors = [];
   schemasAsked = [];
   query = new QueryHost();
-  // sent along from here on, as by the time-range extension
-  query.get(TIME);
+  // sent along, declared as by the time-range extension
+  query.declare(TIME);
   query.load({ search: '?time=1h' });
   tables = [];
   schema = { time: 'datetime', status: 'integer', host: 'string', requests: 'integer' };

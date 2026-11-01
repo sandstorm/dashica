@@ -9,9 +9,8 @@ import { speedscopeLink } from './speedscope-link';
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
-  testbed = widgetTestbed();
-  // sent along from here on, as by the time-range extension
-  testbed.query.get(TIME);
+  // sent along, declared as by the time-range extension and the dashboard page
+  testbed = widgetTestbed({ keys: [TIME, PARAMS] });
   testbed.activate(speedscopeLink);
 });
 

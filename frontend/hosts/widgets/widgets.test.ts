@@ -14,9 +14,8 @@ import { settle, widgetTestbed } from './widgets-testing';
 let testbed: ReturnType<typeof widgetTestbed>;
 
 beforeEach(() => {
-  testbed = widgetTestbed();
   // a key every request carries
-  testbed.query.get(TEST_TIME);
+  testbed = widgetTestbed({ keys: [TEST_TIME] });
 });
 
 afterEach(() => testbed.dispose());

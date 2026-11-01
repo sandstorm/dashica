@@ -102,6 +102,8 @@ function show(shown: PageJson | undefined): void {
 beforeEach(() => {
   history.replaceState(null, '', '/p/shop');
   query = new QueryHost();
+  // declared as by the time-range extension; the filters extension declares its own
+  query.declare(TIME);
   query.load();
   topBar = document.body.appendChild(document.createElement('div'));
   bar = document.body.appendChild(document.createElement('div'));
