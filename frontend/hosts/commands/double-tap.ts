@@ -3,10 +3,10 @@ import { Disposable } from '../../core/disposable/disposable';
 
 /**
  * Calls `onDoubleTap` when `modifier` (a `KeyboardEvent.key`: `Shift`, `Control`, `Alt`, `Meta`) is pressed twice on
- * `target`, alone and within `DOUBLE_TAP_INTERVAL`; it fires on the second release, outside text fields.
+ * `targetElement`, alone and within `DOUBLE_TAP_INTERVAL`; it fires on the second release, outside text fields.
  * `now`: the clock in milliseconds.
  */
-export function listenForDoubleTap(target: HTMLElement, modifier: string, onDoubleTap: () => void, now: () => number = Date.now): Disposable {
+export function listenForDoubleTap(targetElement: HTMLElement, modifier: string, onDoubleTap: () => void, now: () => number = Date.now): Disposable {
   /** `down`: pressed alone; `up`: released after such a press (at `releasedAt`); `again`: pressed a second time. */
   let state: 'idle' | 'down' | 'up' | 'again' = 'idle';
   let releasedAt = 0;
@@ -22,13 +22,13 @@ export function listenForDoubleTap(target: HTMLElement, modifier: string, onDoub
     releasedAt = now();
   };
   const reset = () => (state = 'idle');
-  target.addEventListener('keydown', keydown, true);
-  target.addEventListener('keyup', keyup, true);
-  target.addEventListener('pointerdown', reset, true);
+  targetElement.addEventListener('keydown', keydown, true);
+  targetElement.addEventListener('keyup', keyup, true);
+  targetElement.addEventListener('pointerdown', reset, true);
   return new Disposable(() => {
-    target.removeEventListener('keydown', keydown, true);
-    target.removeEventListener('keyup', keyup, true);
-    target.removeEventListener('pointerdown', reset, true);
+    targetElement.removeEventListener('keydown', keydown, true);
+    targetElement.removeEventListener('keyup', keyup, true);
+    targetElement.removeEventListener('pointerdown', reset, true);
   });
 }
 

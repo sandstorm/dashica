@@ -22,7 +22,7 @@ import './widgets.css';
  * The workbench's `WidgetsApi`, and how the page renders its widgets (`render`). The active widget of each tab is kept
  * under the tab's query state; `tabs` tells which tab is active. Each rendered widget with data is a `WidgetInstance`:
  * its renderer's context and, as `active`, the widget itself. The decoration providers are asked by each instance when
- * its query answered (`decorate`), and for every rendered instance when one fires.
+ * its query answered (`decorationsOf`), and for every rendered instance when one fires.
  */
 export class WidgetsHost implements WidgetsApi {
   // `any`: each renderer takes the widgets of its own type, the one it is registered for
@@ -53,8 +53,8 @@ export class WidgetsHost implements WidgetsApi {
   activate(widget: WidgetInstance): void {
     const before = this.#active.get(widget.query);
     if (before === widget) return;
-    before?.el.classList.remove(ACTIVE);
-    widget.el.classList.add(ACTIVE);
+    before?.widgetContainer.classList.remove(ACTIVE);
+    widget.widgetContainer.classList.add(ACTIVE);
     this.#active.set(widget.query, widget);
     this.#tell();
   }
@@ -62,7 +62,7 @@ export class WidgetsHost implements WidgetsApi {
   /** `widget` is removed: its tab has no active widget if it was that one. */
   deactivate(widget: WidgetInstance): void {
     if (this.#active.get(widget.query) !== widget) return;
-    widget.el.classList.remove(ACTIVE);
+    widget.widgetContainer.classList.remove(ACTIVE);
     this.#active.delete(widget.query);
     this.#tell();
   }
@@ -78,12 +78,12 @@ export class WidgetsHost implements WidgetsApi {
 
   registerDecorationProvider(provider: WidgetDecorationProvider): Disposable {
     this.#providers.push(provider);
-    const listening = provider.onDidChangeDecorations?.(() => this.#redecorate());
-    this.#redecorate();
+    const listening = provider.onDidChangeDecorations?.(() => this.#askProvidersAgain());
+    this.#askProvidersAgain();
     return new Disposable(() => {
       listening?.dispose();
       this.#providers.splice(this.#providers.indexOf(provider), 1);
-      this.#redecorate();
+      this.#askProvidersAgain();
     });
   }
 
@@ -91,7 +91,7 @@ export class WidgetsHost implements WidgetsApi {
    * The decorations of `widget` for its answer `result`, of every provider in order; a provider that throws adds
    * none (its error goes to the console).
    */
-  decorate(widget: RenderedWidget, result: QueryResult): readonly WidgetDecoration[] {
+  decorationsOf(widget: RenderedWidget, result: QueryResult): readonly WidgetDecoration[] {
     return this.#providers.flatMap((provider) => {
       try {
         return provider.provideDecorations(widget, result) ?? [];
@@ -103,7 +103,7 @@ export class WidgetsHost implements WidgetsApi {
   }
 
   /** Asks the providers again for each rendered widget. */
-  #redecorate(): void {
+  #askProvidersAgain(): void {
     for (const widget of this.#rendered) widget.redecorate();
   }
 
@@ -119,49 +119,49 @@ export class WidgetsHost implements WidgetsApi {
     return new Disposable(() => this.#renderers.delete(type));
   }
 
-  /** Renders `widget` into `el` with `query` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
-  render(el: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable {
-    if ('dataUrl' in widget && widget.dataUrl) el.dataset.dataUrl = widget.dataUrl;
+  /** Renders `widget` into `widgetContainer` with `query` until disposed; a type without renderer, or a renderer that throws, shows its error there. */
+  render(widgetContainer: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable {
+    if ('dataUrl' in widget && widget.dataUrl) widgetContainer.dataset.dataUrl = widget.dataUrl;
     const renderer = this.#renderers.get(widget.type);
     if (!renderer) {
-      showWidgetError(el, new Error('no renderer for this widget type'), widget);
-      return new Disposable(() => el.replaceChildren());
+      showWidgetError(widgetContainer, new Error('no renderer for this widget type'), widget);
+      return new Disposable(() => widgetContainer.replaceChildren());
     }
-    const ctx = new WidgetInstance(widget, el, this, query, this.ui);
+    const ctx = new WidgetInstance(widget, widgetContainer, this, query, this.ui);
     this.#rendered.add(ctx);
     try {
-      const rendered = renderer(el, widget, ctx);
-      const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(el, ctx) : Disposable.from();
+      const rendered = renderer(widgetContainer, widget, ctx);
+      const listening = 'dataUrl' in widget && widget.dataUrl ? this.#activateOn(widgetContainer, ctx) : Disposable.from();
       return new Disposable(() => {
         listening.dispose();
         this.deactivate(ctx);
         this.#rendered.delete(ctx);
         rendered.dispose();
         ctx.dispose();
-        el.replaceChildren();
+        widgetContainer.replaceChildren();
       });
     } catch (error) {
       // a widget that failed to render is no rendered one: nothing redecorates it
       this.#rendered.delete(ctx);
       ctx.dispose();
-      showWidgetError(el, error, widget);
-      return new Disposable(() => el.replaceChildren());
+      showWidgetError(widgetContainer, error, widget);
+      return new Disposable(() => widgetContainer.replaceChildren());
     }
   }
 
   /**
-   * A press or the focus anywhere in `el` makes `ctx` active, unless it lands in a widget with data inside it. The
-   * press is heard on its way down (capture), since a chart may stop the presses on its marks.
+   * A press or the focus anywhere in `widgetContainer` makes `ctx` active, unless it lands in a widget with data inside
+   * it. The press is heard on its way down (capture), since a chart may stop the presses on its marks.
    */
-  #activateOn(el: HTMLElement, ctx: WidgetInstance): Disposable {
+  #activateOn(widgetContainer: HTMLElement, ctx: WidgetInstance): Disposable {
     const onEvent = (event: Event) => {
-      if (event.target instanceof Element && event.target.closest('[data-data-url]') === el) this.activate(ctx);
+      if (event.target instanceof Element && event.target.closest('[data-data-url]') === widgetContainer) this.activate(ctx);
     };
-    el.addEventListener('pointerdown', onEvent, true);
-    el.addEventListener('focusin', onEvent);
+    widgetContainer.addEventListener('pointerdown', onEvent, true);
+    widgetContainer.addEventListener('focusin', onEvent);
     return new Disposable(() => {
-      el.removeEventListener('pointerdown', onEvent, true);
-      el.removeEventListener('focusin', onEvent);
+      widgetContainer.removeEventListener('pointerdown', onEvent, true);
+      widgetContainer.removeEventListener('focusin', onEvent);
     });
   }
 }
@@ -189,7 +189,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   constructor(
     readonly widget: WidgetNode,
     /** The element it is rendered into, outlined while it is active. */
-    readonly el: HTMLElement,
+    readonly widgetContainer: HTMLElement,
     private readonly host: WidgetsHost,
     readonly query: QueryApi,
     private readonly ui: Pick<UiApi, 'showContextMenu'>,
@@ -205,7 +205,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
 
   /** Asks the providers again for the last answer, while that is the status shown; none after a failed query. */
   redecorate(): void {
-    this.#setDecorations(this.#settled.kind === 'done' && this.lastResult ? this.host.decorate(this, this.lastResult) : []);
+    this.#setDecorations(this.#settled.kind === 'done' && this.lastResult ? this.host.decorationsOf(this, this.lastResult) : []);
   }
 
   #setDecorations(decorations: readonly WidgetDecoration[]): void {
@@ -239,7 +239,7 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     if (turn !== this.#queries) return result;
     const ms = Math.round(performance.now() - started);
     this.lastResult = result;
-    this.#setDecorations(this.host.decorate(this, result));
+    this.#setDecorations(this.host.decorationsOf(this, result));
     this.#setStatus({ kind: 'done', rows: result.numRows, ms });
     return result;
   }
@@ -250,8 +250,8 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
     this.#onDidChangeStatus.fire();
   }
 
-  renderChild(el: HTMLElement, child: WidgetNode): Disposable {
-    return this.host.render(el, child, this.query);
+  renderChild(childContainer: HTMLElement, child: WidgetNode): Disposable {
+    return this.host.render(childContainer, child, this.query);
   }
 
   showMenu(menuId: string, anchor: MenuAnchor, context?: object): void {
@@ -266,13 +266,13 @@ class WidgetInstance implements WidgetContext, WidgetMenuContext, RenderedWidget
   }
 }
 
-/** Shows `error` in `el` in place of the widget: its message and the widget's type. */
-function showWidgetError(el: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
+/** Shows `error` in `widgetContainer` in place of the widget: its message and the widget's type. */
+function showWidgetError(widgetContainer: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
   const message = error instanceof Error ? error.message : String(error);
-  const shown = el.ownerDocument.createElement('div');
-  shown.className = 'd-widget-error';
-  shown.textContent = `${message} (${widget.type})`;
-  el.replaceChildren(shown);
+  const errorElement = widgetContainer.ownerDocument.createElement('div');
+  errorElement.className = 'd-widget-error';
+  errorElement.textContent = `${message} (${widget.type})`;
+  widgetContainer.replaceChildren(errorElement);
 }
 
 /** The Arrow table at `url` with the answer's headers; an empty table for a 204 (no content). */

@@ -19,16 +19,16 @@ import type { ContextMenuOptions, Panel, RailButtonOptions, SidePanelOptions } f
  * command button's names its command's; a button whose command cannot run now shows greyed.
  */
 export class SideBar {
-  readonly element: HTMLElement;
+  readonly sideBarContainer: HTMLElement;
   /** The rail's start, before its buttons: what the layout's owner puts there (the left one: the global menu's "…"). */
-  readonly railStart: HTMLElement;
-  readonly #rail: HTMLElement;
+  readonly railStartContainer: HTMLElement;
+  readonly #railContainer: HTMLElement;
   /** The rail's buttons at its far end (`alignment: 'bottom'`); the others go before it. */
-  readonly #bottom: HTMLElement;
+  readonly #bottomContainer: HTMLElement;
   /** Each rail button's `order`. */
   readonly #orders = new WeakMap<Element, number>();
-  readonly #panel: HTMLElement;
-  readonly #resizer: HTMLElement;
+  readonly #panelContainer: HTMLElement;
+  readonly #resizerElement: HTMLElement;
   readonly #panels = new Map<string, PanelEntry>();
   /** The rail's command buttons (`addButton`). */
   readonly #buttons = new Set<HTMLElement>();
@@ -37,11 +37,11 @@ export class SideBar {
   #defaultPanel: string | null | undefined;
   #overlay = false;
   /** Where the focus was before a panel's command focused it, to go back there when the command hides it. */
-  #returnFocus: HTMLElement | null = null;
+  #returnFocusElement: HTMLElement | null = null;
   readonly #cleanup: (() => void)[] = [];
 
   constructor(
-    private readonly host: HTMLElement,
+    private readonly hostContainer: HTMLElement,
     readonly side: Side,
     /** Restored from what the viewer had; changed in place, then `owner.save` is called. */
     readonly state: SideBarState,
@@ -49,19 +49,19 @@ export class SideBar {
   ) {
     this.#size = SIZES[side];
     this.state.size = this.#clamp(state.size);
-    this.railStart = html`<div class="d-workbench__rail-start"></div>`;
-    this.#bottom = html`<div class="d-workbench__rail-bottom"></div>`;
-    this.#rail = html`<div class="d-workbench__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.railStart}${this.#bottom}</div>`;
-    this.#resizer = this.#createResizer();
-    this.#panel = html`<div class="d-workbench__panel">${this.#resizer}</div>`;
+    this.railStartContainer = html`<div class="d-workbench__rail-start"></div>`;
+    this.#bottomContainer = html`<div class="d-workbench__rail-bottom"></div>`;
+    this.#railContainer = html`<div class="d-workbench__rail" role="toolbar" aria-label=${side === 'left' ? 'Left panels' : 'Right panels'} aria-orientation="vertical">${this.railStartContainer}${this.#bottomContainer}</div>`;
+    this.#resizerElement = this.#createResizer();
+    this.#panelContainer = html`<div class="d-workbench__panel">${this.#resizerElement}</div>`;
     const onkeydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && this.#overlay && this.#shown) this.#closeFromKeyboard();
     };
     // the rail on the workbench's outer edge
-    const [first, second] = side === 'left' ? [this.#rail, this.#panel] : [this.#panel, this.#rail];
-    this.element = html`<div class="d-workbench__side d-workbench__side--${side}" onkeydown=${onkeydown}>${first}${second}</div>`;
-    this.#listen(host.ownerDocument, 'pointerdown', (event) => {
-      if (this.#overlay && this.#shown && !event.composedPath().includes(this.element)) this.show(null);
+    const [firstElement, secondElement] = side === 'left' ? [this.#railContainer, this.#panelContainer] : [this.#panelContainer, this.#railContainer];
+    this.sideBarContainer = html`<div class="d-workbench__side d-workbench__side--${side}" onkeydown=${onkeydown}>${firstElement}${secondElement}</div>`;
+    this.#listen(hostContainer.ownerDocument, 'pointerdown', (event) => {
+      if (this.#overlay && this.#shown && !event.composedPath().includes(this.sideBarContainer)) this.show(null);
     });
     this.layout();
   }
@@ -75,20 +75,20 @@ export class SideBar {
     const hide = `${command}.hide`;
     const menu = `panel/${id}`;
     const suffix = Math.random().toString(36).slice(2, 8);
-    const body = html`<div class="d-workbench__panel-body" id=${`wb-panel-${id}-${suffix}`} data-panel=${id}
+    const bodyContainer = html`<div class="d-workbench__panel-body" id=${`wb-panel-${id}-${suffix}`} data-panel=${id}
       aria-labelledby=${`wb-panel-title-${id}-${suffix}`}></div>`;
-    const button = this.#railButton(options, command, () => this.#choose(this.#shown === id ? null : id));
-    button.setAttribute('aria-controls', body.id);
-    button.dataset.testid = `wb-panel-toggle-${id}`;
-    const actions: HTMLButtonElement = html`<button type="button" class="d-workbench__panel-actions" aria-label=${`${options.label} actions`}
-      title="More actions" aria-haspopup="dialog" onclick=${() => this.owner.menus.showContextMenu(menu, { anchor: actions, title: options.label })}></button>`;
-    actions.append(createElement(Ellipsis, { width: 16, height: 16 }));
-    const header = html`<div class="d-workbench__panel-header" data-testid=${`wb-panel-header-${id}`}>
-      <h2 class="d-workbench__panel-title" id=${`wb-panel-title-${id}-${suffix}`}>${options.label}</h2>${actions}
+    const buttonElement = this.#railButton(options, command, () => this.#choose(this.#shown === id ? null : id));
+    buttonElement.setAttribute('aria-controls', bodyContainer.id);
+    buttonElement.dataset.testid = `wb-panel-toggle-${id}`;
+    const actionsButtonElement: HTMLButtonElement = html`<button type="button" class="d-workbench__panel-actions" aria-label=${`${options.label} actions`}
+      title="More actions" aria-haspopup="dialog" onclick=${() => this.owner.menus.showContextMenu(menu, { anchor: actionsButtonElement, title: options.label })}></button>`;
+    actionsButtonElement.append(createElement(Ellipsis, { width: 16, height: 16 }));
+    const headerContainer = html`<div class="d-workbench__panel-header" data-testid=${`wb-panel-header-${id}`}>
+      <h2 class="d-workbench__panel-title" id=${`wb-panel-title-${id}-${suffix}`}>${options.label}</h2>${actionsButtonElement}
     </div>`;
-    this.#place(button, options.order ?? 0, options.alignment === 'bottom');
-    this.#panel.insertBefore(header, this.#resizer);
-    this.#panel.insertBefore(body, this.#resizer);
+    this.#place(buttonElement, options.order ?? 0, options.alignment === 'bottom');
+    this.#panelContainer.insertBefore(headerContainer, this.#resizerElement);
+    this.#panelContainer.insertBefore(bodyContainer, this.#resizerElement);
     const registration = Disposable.from(
       this.owner.commands.registerCommand(command, () => this.#toggleFocus(id)),
       this.owner.commands.registerCommand(hide, () => {
@@ -96,11 +96,11 @@ export class SideBar {
       }),
       this.owner.menus.registerMenuItem(menu, { command: hide, title: 'Hide', group: 'panel' }),
     );
-    const entry: PanelEntry = { body, header, button, registration, fallback: false, available: true, visible: false, visibility: new EventEmitter<void>() };
+    const entry: PanelEntry = { bodyContainer, headerContainer, buttonElement, registration, fallback: false, available: true, visible: false, visibility: new EventEmitter<void>() };
     this.#panels.set(id, entry);
     this.layout();
     return {
-      body,
+      bodyContainer,
       get visible() {
         return entry.visible;
       },
@@ -118,16 +118,16 @@ export class SideBar {
 
   /** Adds a rail button running `options.command`, until disposed. */
   addButton(id: string, options: RailButtonOptions): Disposable {
-    const button = this.#railButton(options, options.command, () => {
+    const buttonElement = this.#railButton(options, options.command, () => {
       this.owner.commands.executeCommand(options.command).catch((error: unknown) => console.error(`Command ${options.command} failed:`, error));
     });
-    button.dataset.testid = `wb-rail-button-${id}`;
-    this.#place(button, options.order ?? 0, options.alignment === 'bottom');
-    this.#buttons.add(button);
+    buttonElement.dataset.testid = `wb-rail-button-${id}`;
+    this.#place(buttonElement, options.order ?? 0, options.alignment === 'bottom');
+    this.#buttons.add(buttonElement);
     this.layout();
     return new Disposable(() => {
-      if (!this.#buttons.delete(button)) return;
-      button.remove();
+      if (!this.#buttons.delete(buttonElement)) return;
+      buttonElement.remove();
       this.layout();
     });
   }
@@ -153,14 +153,14 @@ export class SideBar {
 
   show(id: string | null): void {
     this.#shown = id;
-    this.element.hidden = this.#buttons.size === 0 && ![...this.#panels.values()].some((panel) => panel.available);
+    this.sideBarContainer.hidden = this.#buttons.size === 0 && ![...this.#panels.values()].some((panel) => panel.available);
     for (const [panelId, panel] of this.#panels) {
-      panel.button.hidden = !panel.available;
-      panel.button.setAttribute('aria-pressed', String(panelId === id));
-      panel.body.hidden = panelId !== id;
-      panel.header.hidden = panelId !== id;
+      panel.buttonElement.hidden = !panel.available;
+      panel.buttonElement.setAttribute('aria-pressed', String(panelId === id));
+      panel.bodyContainer.hidden = panelId !== id;
+      panel.headerContainer.hidden = panelId !== id;
     }
-    this.#panel.hidden = id === null;
+    this.#panelContainer.hidden = id === null;
     this.#applySize();
     // told after the layout is done, so a listener sees it as it is
     for (const [panelId, panel] of this.#panels) {
@@ -173,8 +173,8 @@ export class SideBar {
 
   dispose(): void {
     for (const stop of this.#cleanup) stop();
-    this.element.remove();
-    this.host.style.removeProperty('--d-workbench-right-side');
+    this.sideBarContainer.remove();
+    this.hostContainer.style.removeProperty('--d-workbench-right-side');
   }
 
   /**
@@ -187,30 +187,30 @@ export class SideBar {
       const key = this.owner.commands.keybindingLabel(command);
       const { enabled, disabledReason } = this.owner.commands.enablement(command);
       const title = key ? `${options.label} (${key})` : options.label;
-      button.title = disabledReason ? `${title}: ${disabledReason}` : title;
-      if (enabled) button.removeAttribute('aria-disabled');
-      else button.setAttribute('aria-disabled', 'true');
+      buttonElement.title = disabledReason ? `${title}: ${disabledReason}` : title;
+      if (enabled) buttonElement.removeAttribute('aria-disabled');
+      else buttonElement.setAttribute('aria-disabled', 'true');
       return enabled;
     };
     const onclick = () => {
       if (describe()) click();
     };
-    const button = html<HTMLButtonElement>`<button type="button" class="d-workbench__rail-button" aria-label=${options.label}
+    const buttonElement = html<HTMLButtonElement>`<button type="button" class="d-workbench__rail-button" aria-label=${options.label}
       onpointerenter=${describe} onfocus=${describe} onclick=${onclick}></button>`;
     describe();
-    button.insertAdjacentHTML('beforeend', options.icon);
-    return button;
+    buttonElement.insertAdjacentHTML('beforeend', options.icon);
+    return buttonElement;
   }
 
   /**
-   * Inserts `button` into the rail's top or bottom group, before the first of its buttons with a higher order (the
-   * rail's start has none, so it stays first).
+   * Inserts `buttonElement` into the rail's top or bottom group, before the first of its buttons with a higher order
+   * (the rail's start has none, so it stays first).
    */
-  #place(button: HTMLElement, order: number, bottom: boolean): void {
-    this.#orders.set(button, order);
-    const group = bottom ? this.#bottom : this.#rail;
-    const next = [...group.children].find((other) => (this.#orders.get(other) ?? -Infinity) > order);
-    group.insertBefore(button, next ?? (bottom ? null : this.#bottom));
+  #place(buttonElement: HTMLElement, order: number, bottom: boolean): void {
+    this.#orders.set(buttonElement, order);
+    const groupContainer = bottom ? this.#bottomContainer : this.#railContainer;
+    const nextElement = [...groupContainer.children].find((otherElement) => (this.#orders.get(otherElement) ?? -Infinity) > order);
+    groupContainer.insertBefore(buttonElement, nextElement ?? (bottom ? null : this.#bottomContainer));
   }
 
   #resolve(): string | null {
@@ -250,22 +250,22 @@ export class SideBar {
     if (!this.#isAvailable(id)) return;
     this.#choose(id);
     if (preserveFocus) return;
-    const root = this.host.getRootNode() as Document | ShadowRoot;
-    const body = this.#panels.get(id)!.body;
-    if (!body.contains(root.activeElement)) this.#returnFocus = root.activeElement instanceof HTMLElement ? root.activeElement : null;
-    const target = body.querySelector<HTMLElement>('[autofocus]') ?? body.querySelector<HTMLElement>(FOCUSABLE) ?? body;
-    if (target === body) body.tabIndex = -1;
-    target.focus();
+    const root = this.hostContainer.getRootNode() as Document | ShadowRoot;
+    const bodyContainer = this.#panels.get(id)!.bodyContainer;
+    if (!bodyContainer.contains(root.activeElement)) this.#returnFocusElement = root.activeElement instanceof HTMLElement ? root.activeElement : null;
+    const targetElement = bodyContainer.querySelector<HTMLElement>('[autofocus]') ?? bodyContainer.querySelector<HTMLElement>(FOCUSABLE) ?? bodyContainer;
+    if (targetElement === bodyContainer) bodyContainer.tabIndex = -1;
+    targetElement.focus();
   }
 
   /** `workbench.view.<id>`: shows and focuses panel `id`, or hides the side while it is shown and has the focus. */
   #toggleFocus(id: string): void {
-    const body = this.#panels.get(id)?.body;
-    const root = this.host.getRootNode() as Document | ShadowRoot;
-    if (this.#shown !== id || !body?.contains(root.activeElement)) return this.#reveal(id, false);
+    const bodyContainer = this.#panels.get(id)?.bodyContainer;
+    const root = this.hostContainer.getRootNode() as Document | ShadowRoot;
+    if (this.#shown !== id || !bodyContainer?.contains(root.activeElement)) return this.#reveal(id, false);
     this.#choose(null);
-    if (this.#returnFocus?.isConnected) this.#returnFocus.focus();
-    this.#returnFocus = null;
+    if (this.#returnFocusElement?.isConnected) this.#returnFocusElement.focus();
+    this.#returnFocusElement = null;
   }
 
   #dismiss(): void {
@@ -275,9 +275,9 @@ export class SideBar {
   #remove(id: string): void {
     const panel = this.#panels.get(id);
     if (!panel) return;
-    panel.body.remove();
-    panel.header.remove();
-    panel.button.remove();
+    panel.bodyContainer.remove();
+    panel.headerContainer.remove();
+    panel.buttonElement.remove();
     panel.registration.dispose();
     panel.visibility.dispose();
     this.#panels.delete(id);
@@ -286,17 +286,17 @@ export class SideBar {
   }
 
   #closeFromKeyboard(): void {
-    const button = this.#shown ? this.#panels.get(this.#shown)?.button : null;
+    const buttonElement = this.#shown ? this.#panels.get(this.#shown)?.buttonElement : null;
     this.show(null);
-    button?.focus();
+    buttonElement?.focus();
   }
 
   #applySize(): void {
     const size = this.state.size;
-    if (this.#size.unit === 'px') this.#panel.style.width = `${size}px`;
-    else if (this.#shown === null) this.host.style.removeProperty('--d-workbench-right-side');
-    else this.host.style.setProperty('--d-workbench-right-side', `minmax(0, ${size}%)`);
-    this.#resizer.setAttribute('aria-valuenow', String(size));
+    if (this.#size.unit === 'px') this.#panelContainer.style.width = `${size}px`;
+    else if (this.#shown === null) this.hostContainer.style.removeProperty('--d-workbench-right-side');
+    else this.hostContainer.style.setProperty('--d-workbench-right-side', `minmax(0, ${size}%)`);
+    this.#resizerElement.setAttribute('aria-valuenow', String(size));
   }
 
   #clamp(size: number): number {
@@ -321,7 +321,7 @@ export class SideBar {
       this.#resize(this.state.size + direction * outwards * step);
     };
     const onpointerdown = (event: PointerEvent) => {
-      const start = { x: event.clientX, size: this.state.size, width: this.host.getBoundingClientRect().width || 1 };
+      const start = { x: event.clientX, size: this.state.size, width: this.hostContainer.getBoundingClientRect().width || 1 };
       const perPixel = this.#size.unit === 'px' ? 1 : 100 / start.width;
       this.#track(event, (e) => this.#resize(start.size + (e.clientX - start.x) * outwards * perPixel));
     };
@@ -332,13 +332,13 @@ export class SideBar {
   /** Follows the pointer from `event` until it is released, calling `move` (a resize in progress). */
   #track(event: PointerEvent, move: (event: PointerEvent) => void): void {
     event.preventDefault();
-    const doc = this.host.ownerDocument;
+    const doc = this.hostContainer.ownerDocument;
     const up = () => {
       doc.removeEventListener('pointermove', move);
       doc.removeEventListener('pointerup', up);
-      this.host.classList.remove('d-workbench--resizing');
+      this.hostContainer.classList.remove('d-workbench--resizing');
     };
-    this.host.classList.add('d-workbench--resizing');
+    this.hostContainer.classList.add('d-workbench--resizing');
     doc.addEventListener('pointermove', move);
     doc.addEventListener('pointerup', up);
   }
@@ -386,10 +386,10 @@ export interface PanelMenus {
 }
 
 interface PanelEntry {
-  body: HTMLElement;
-  /** Its name and "…", above `body`. */
-  header: HTMLElement;
-  button: HTMLButtonElement;
+  bodyContainer: HTMLElement;
+  /** Its name and "…", above `bodyContainer`. */
+  headerContainer: HTMLElement;
+  buttonElement: HTMLButtonElement;
   /** Its commands `workbench.view.<id>` and `.hide`, and "Hide" in its menu. */
   registration: Disposable;
   fallback: boolean;

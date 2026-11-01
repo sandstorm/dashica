@@ -15,8 +15,8 @@ afterEach(() => testbed.dispose());
 
 describe('markdown', () => {
   it('shows the HTML the server rendered below its title', () => {
-    const { el } = testbed.render({ type: 'markdown', props: { title: 'About', html: '<h1 id="shop">Shop</h1>' } });
-    expect(el.querySelector('h2')!.textContent).toBe('About');
-    expect(el.querySelector('.d-markdown__body')!.innerHTML).toBe('<h1 id="shop">Shop</h1>');
+    const { widgetContainer } = testbed.render({ type: 'markdown', props: { title: 'About', html: '<h1 id="shop">Shop</h1>' } });
+    expect(widgetContainer.querySelector('h2')!.textContent).toBe('About');
+    expect(widgetContainer.querySelector('.d-markdown__body')!.innerHTML).toBe('<h1 id="shop">Shop</h1>');
   });
 });

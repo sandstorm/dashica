@@ -56,14 +56,14 @@ export interface PageApi {
  */
 export interface PoppedView {
   readonly title: string;
-  render(el: HTMLElement): Disposable;
+  render(viewContainer: HTMLElement): Disposable;
 }
 
 /**
- * Fills `el` with `page` for one tab; disposing the result stops what it started. `el` is emptied after. `title`:
- * what the tab says instead of the page's title (`Explore: Requests`).
+ * Fills `pageContainer` with `page` for one tab; disposing the result stops what it started. `pageContainer` is emptied
+ * after. `title`: what the tab says instead of the page's title (`Explore: Requests`).
  */
-export type PageRenderer = (el: HTMLElement, page: PageJson, context: PageContext) => { dispose(): unknown; readonly title?: string };
+export type PageRenderer = (pageContainer: HTMLElement, page: PageJson, context: PageContext) => { dispose(): unknown; readonly title?: string };
 
 /** What a page renderer gets about its tab. */
 export interface PageContext {

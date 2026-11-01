@@ -8,10 +8,10 @@ import type { PageApi, PageContext, PageRenderer, PoppedView } from './page';
 import { closeTab, openTab, restoreTabs, showTab, storedTabs, titleOf, updateTab, type Tab, type TabList } from './tabs';
 
 /**
- * The workbench's `PageApi` in `browserWindow`, a tab's page in an element of its own in `content` (`hidden` while
- * the tab is in the background). The open tabs come back from `state` (sessionStorage, key `tabs`) after a reload;
- * those in the background stay unloaded until shown. `start` loads the active tab's page. A popped-out view is the
- * page kind `view` (`#view=<tab id>`), which only names a kind while its view is in memory.
+ * The workbench's `PageApi` in `browserWindow`, a tab's page in an element of its own in `contentContainer` (`hidden`
+ * while the tab is in the background). The open tabs come back from `state` (sessionStorage, key `tabs`) after a
+ * reload; those in the background stay unloaded until shown. `start` loads the active tab's page. A popped-out view is
+ * the page kind `view` (`#view=<tab id>`), which only names a kind while its view is in memory.
  */
 export class PageHost implements PageApi {
   readonly #onDidChangePage = new EventEmitter<PageJson | undefined>();
@@ -31,12 +31,12 @@ export class PageHost implements PageApi {
   constructor(
     private readonly browserWindow: Window,
     readonly workbench: WorkbenchJson,
-    private readonly content: HTMLElement,
+    private readonly contentContainer: HTMLElement,
     private readonly state: Memento,
   ) {
-    this.#renderers.set(POPPED, (el, _page, context) => {
+    this.#renderers.set(POPPED, (pageContainer, _page, context) => {
       const view = this.#popped.get(new URLSearchParams(context.hash.slice(1)).get(POPPED)!)!;
-      const rendered = view.render(el);
+      const rendered = view.render(pageContainer);
       return { dispose: () => rendered.dispose(), title: view.title };
     });
     const { history } = browserWindow;
@@ -154,9 +154,9 @@ export class PageHost implements PageApi {
   }
 
   #createTab(id: string): OpenTab {
-    const el = this.content.appendChild(this.browserWindow.document.createElement('div'));
-    el.className = 'd-workbench__tab-page';
-    el.hidden = id !== this.#list.active;
+    const tabContainer = this.contentContainer.appendChild(this.browserWindow.document.createElement('div'));
+    tabContainer.className = 'd-workbench__tab-page';
+    tabContainer.hidden = id !== this.#list.active;
     const query = new QueryHost(this.#keys);
     const hashChanged = new EventEmitter<void>();
     const context: PageContext = {
@@ -168,7 +168,7 @@ export class PageHost implements PageApi {
       close: () => this.closeTab(id),
     };
     const tabOf = () => this.#tab(id);
-    const open: OpenTab = { id, el, query, context, hashChanged, listening: Disposable.from(), page: undefined, rendered: undefined, renderedAs: undefined, loading: undefined, loaded: false, scrollTop: 0 };
+    const open: OpenTab = { id, tabContainer, query, context, hashChanged, listening: Disposable.from(), page: undefined, rendered: undefined, renderedAs: undefined, loading: undefined, loaded: false, scrollTop: 0 };
     open.listening = query.onDidChangeSearch((search) => {
       const shown = new URL(tabOf().url, 'http://dashica');
       this.#setUrl(open, shown.pathname + search + shown.hash, id === this.#list.active ? 'push' : 'none');
@@ -183,7 +183,7 @@ export class PageHost implements PageApi {
     open.listening.dispose();
     open.hashChanged.dispose();
     open.query.dispose();
-    open.el.remove();
+    open.tabContainer.remove();
   }
 
   /**
@@ -203,13 +203,13 @@ export class PageHost implements PageApi {
     const switched = before !== list.active;
     const hidden = this.#open.get(before);
     if (switched && hidden) {
-      hidden.scrollTop = hidden.el.scrollTop;
-      hidden.el.hidden = true;
+      hidden.scrollTop = hidden.tabContainer.scrollTop;
+      hidden.tabContainer.hidden = true;
     }
     const shown = this.#active();
     if (switched) {
-      shown.el.hidden = false;
-      shown.el.scrollTop = shown.scrollTop;
+      shown.tabContainer.hidden = false;
+      shown.tabContainer.scrollTop = shown.scrollTop;
     }
     this.#writeAddressBar(history);
     this.#save();
@@ -339,10 +339,10 @@ export class PageHost implements PageApi {
       this.#showError(open, new Error(`no renderer for the page kind ${kind}`));
       return;
     }
-    const el = open.el.appendChild(this.browserWindow.document.createElement('div'));
-    el.className = 'd-workbench__page';
+    const pageContainer = open.tabContainer.appendChild(this.browserWindow.document.createElement('div'));
+    pageContainer.className = 'd-workbench__page';
     try {
-      open.rendered = renderer(el, page, open.context);
+      open.rendered = renderer(pageContainer, page, open.context);
     } catch (error) {
       this.#showError(open, error);
       return;
@@ -372,10 +372,10 @@ export class PageHost implements PageApi {
 
   #showError(open: OpenTab, error: unknown): void {
     this.#unrender(open);
-    const shown = this.browserWindow.document.createElement('div');
-    shown.className = 'd-notice d-notice--error';
-    shown.textContent = error instanceof Error ? error.message : String(error);
-    open.el.replaceChildren(shown);
+    const errorElement = this.browserWindow.document.createElement('div');
+    errorElement.className = 'd-notice d-notice--error';
+    errorElement.textContent = error instanceof Error ? error.message : String(error);
+    open.tabContainer.replaceChildren(errorElement);
     this.#setTitle(open, titleOf(this.#tab(open.id).url));
     if (open.id === this.#list.active) this.#onDidChangePage.fire(undefined);
   }
@@ -385,7 +385,7 @@ export class PageHost implements PageApi {
     open.rendered = undefined;
     open.renderedAs = undefined;
     open.page = undefined;
-    open.el.replaceChildren();
+    open.tabContainer.replaceChildren();
   }
 
   /**
@@ -395,9 +395,9 @@ export class PageHost implements PageApi {
    */
   #followLink(event: MouseEvent): void {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const link = (event.target as Element | null)?.closest?.('a[href]');
-    if (!(link instanceof HTMLAnchorElement) || (link.target && link.target !== '_self') || link.hasAttribute('download')) return;
-    const target = new URL(link.href);
+    const linkElement = (event.target as Element | null)?.closest?.('a[href]');
+    if (!(linkElement instanceof HTMLAnchorElement) || (linkElement.target && linkElement.target !== '_self') || linkElement.hasAttribute('download')) return;
+    const target = new URL(linkElement.href);
     const location = this.browserWindow.location;
     if (target.origin !== location.origin) return;
     if (target.pathname === location.pathname && target.search === location.search) return;
@@ -413,7 +413,7 @@ const POPPED = 'view';
 interface OpenTab {
   readonly id: string;
   /** Its element in the content region; `hidden` in the background. */
-  readonly el: HTMLElement;
+  readonly tabContainer: HTMLElement;
   readonly query: QueryHost;
   readonly context: PageContext;
   readonly hashChanged: EventEmitter<void>;

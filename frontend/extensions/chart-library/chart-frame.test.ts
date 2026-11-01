@@ -48,16 +48,16 @@ describe('ChartFrame', () => {
 
   it('shows the title above the chart, and queries only once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { cnt: [3, 4] });
-    const { el } = testbed.render(requests);
-    const title = el.querySelector<HTMLElement>('.d-chart-frame__title')!;
+    const { widgetContainer } = testbed.render(requests);
+    const title = widgetContainer.querySelector<HTMLElement>('.d-chart-frame__title')!;
     expect(title.textContent).toBe('Requests');
-    expect(title.nextElementSibling!.contains(body(el))).toBe(true);
+    expect(title.nextElementSibling!.contains(body(widgetContainer))).toBe(true);
     testbed.query.refresh();
     await settle();
     expect(testbed.requests).toHaveLength(0);
     testbed.scrollIntoView();
     await settle();
-    expect(body(el).textContent).toBe('2 rows');
+    expect(body(widgetContainer).textContent).toBe('2 rows');
     expect(title.textContent).toBe('Requests');
   });
 
@@ -91,10 +91,10 @@ describe('ChartFrame', () => {
 
   it('shows the error of a failed query in the chart', async () => {
     testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
-    const { el } = testbed.render(requests);
+    const { widgetContainer } = testbed.render(requests);
     testbed.scrollIntoView();
     await settle();
-    expect(body(el).textContent).toBe('Unknown identifier status');
+    expect(body(widgetContainer).textContent).toBe('Unknown identifier status');
   });
 
   /** What the test's decoration provider gives each answer from now on. */
@@ -109,53 +109,53 @@ describe('ChartFrame', () => {
   it('draws a badge per decoration in its title row, with its tooltip, until it has none', async () => {
     decorating = [ignores, { badge: 'slow', source: 'test' }];
     testbed.serve('/p/shop/api/1/query', { cnt: [3] });
-    const { el } = testbed.render(requests);
+    const { widgetContainer } = testbed.render(requests);
     testbed.scrollIntoView();
     await settle();
-    expect(badges(el)).toEqual([
+    expect(badges(widgetContainer)).toEqual([
       { text: 'ignores host = a', title: 'not applied' },
       { text: 'slow', title: '' },
     ]);
-    expect(el.querySelector('.d-chart-frame__title')!.textContent).toBe('Requestsignores host = aslow');
+    expect(widgetContainer.querySelector('.d-chart-frame__title')!.textContent).toBe('Requestsignores host = aslow');
     decorating = [];
     testbed.query.refresh();
     await settle();
-    expect(badges(el)).toEqual([]);
+    expect(badges(widgetContainer)).toEqual([]);
   });
 
   it('draws a chart muted while a decoration says so, and at full strength again without', async () => {
-    const { el } = testbed.render(requests);
-    expect(muted(el)).toBe(false);
+    const { widgetContainer } = testbed.render(requests);
+    expect(muted(widgetContainer)).toBe(false);
     decorating = [ignores];
     testbed.serve('/p/shop/api/1/query', { cnt: [3] });
     testbed.scrollIntoView();
     await settle();
-    expect(muted(el)).toBe(true);
+    expect(muted(widgetContainer)).toBe(true);
     decorating = [{ badge: 'slow', source: 'test' }];
     testbed.query.refresh();
     await settle();
-    expect(muted(el)).toBe(false);
+    expect(muted(widgetContainer)).toBe(false);
   });
 
   it('has no decorations, unmuted, after a failed query', async () => {
     decorating = [ignores];
     testbed.serve('/p/shop/api/1/query', { cnt: [3] });
-    const { el } = testbed.render(requests);
+    const { widgetContainer } = testbed.render(requests);
     testbed.scrollIntoView();
     await settle();
     testbed.serveText('/p/shop/api/1/query', 'Unknown identifier status', 500);
     testbed.query.refresh();
     await settle();
-    expect(badges(el)).toEqual([]);
-    expect(muted(el)).toBe(false);
+    expect(badges(widgetContainer)).toEqual([]);
+    expect(muted(widgetContainer)).toBe(false);
   });
 
   it('shows the title row of a chart without title only for its badges', async () => {
     testbed.widgets.registerWidget('stats', (el, _widget, ctx) => new ChartFrame(el, ctx, { draw: () => document.createElement('figure') }));
     decorating = [ignores];
     testbed.serve('/p/shop/api/2/query', { cnt: [3] });
-    const { el } = testbed.render({ type: 'stats', props: {}, dataUrl: '/p/shop/api/2' } as WidgetNode);
-    const title = el.querySelector<HTMLElement>('.d-chart-frame__title')!;
+    const { widgetContainer } = testbed.render({ type: 'stats', props: {}, dataUrl: '/p/shop/api/2' } as WidgetNode);
+    const title = widgetContainer.querySelector<HTMLElement>('.d-chart-frame__title')!;
     expect(title.hidden).toBe(true);
     testbed.scrollIntoView();
     await settle();
@@ -165,17 +165,17 @@ describe('ChartFrame', () => {
   it('draws nothing for an answer without a table (a chart that did not run), and draws it again once it runs', async () => {
     decorating = [{ badge: 'skipped: pick a host', source: 'test' }];
     testbed.serveNothing('/p/shop/api/1/query', {});
-    const { el } = testbed.render(requests);
+    const { widgetContainer } = testbed.render(requests);
     testbed.scrollIntoView();
     await settle();
     expect(drawn).toEqual([]);
-    expect(body(el).childElementCount).toBe(0);
-    expect(badges(el).map(({ text }) => text)).toEqual(['skipped: pick a host']);
+    expect(body(widgetContainer).childElementCount).toBe(0);
+    expect(badges(widgetContainer).map(({ text }) => text)).toEqual(['skipped: pick a host']);
     decorating = [];
     testbed.serve('/p/shop/api/1/query', { time: [1], cnt: [3] });
     testbed.query.refresh();
     await settle();
-    expect(body(el).textContent).toBe('1 rows');
+    expect(body(widgetContainer).textContent).toBe('1 rows');
   });
 
   it('sets the page’s time range to the range dragged across the chart', async () => {
@@ -188,8 +188,8 @@ describe('ChartFrame', () => {
   });
 
   it('opens the widget’s menu from its button', () => {
-    const { el } = testbed.render(requests);
-    el.querySelector<HTMLButtonElement>('.d-chart-frame__menu button')!.click();
+    const { widgetContainer } = testbed.render(requests);
+    widgetContainer.querySelector<HTMLButtonElement>('.d-chart-frame__menu button')!.click();
     expect(testbed.menus.map((menu) => menu.menuId)).toEqual(['widget/context']);
   });
 });

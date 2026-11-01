@@ -4,14 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandsHost, keyLabel, type Platform } from './commands';
 
 function setup({ platform = 'win' as Platform } = {}) {
-  const root = document.body.appendChild(document.createElement('div'));
-  const inner = root.appendChild(document.createElement('div'));
-  return { root, inner, commands: new CommandsHost(root, { platform }) };
+  const rootElement = document.body.appendChild(document.createElement('div'));
+  const innerElement = rootElement.appendChild(document.createElement('div'));
+  return { rootElement, innerElement, commands: new CommandsHost(rootElement, { platform }) };
 }
 
-function press(target: HTMLElement, init: KeyboardEventInit) {
+function press(targetElement: HTMLElement, init: KeyboardEventInit) {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
-  target.dispatchEvent(event);
+  targetElement.dispatchEvent(event);
   return event;
 }
 
@@ -51,13 +51,13 @@ describe('CommandsHost', () => {
   });
 
   it('runs a bound key anywhere inside, before (and instead of) the content', () => {
-    const { inner, commands } = setup();
+    const { innerElement, commands } = setup();
     const run = vi.fn();
     commands.registerCommand('test.run', run);
     commands.declareKeybindings([{ key: 'Mod+Alt+KeyM', command: 'test.run' }]);
     const content = vi.fn();
-    inner.addEventListener('keydown', content);
-    const event = press(inner, { code: 'KeyM', altKey: true, ctrlKey: true });
+    innerElement.addEventListener('keydown', content);
+    const event = press(innerElement, { code: 'KeyM', altKey: true, ctrlKey: true });
     expect(run).toHaveBeenCalledTimes(1);
     expect(content).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(true);
@@ -69,19 +69,19 @@ describe('CommandsHost', () => {
     other.commands.registerCommand('test.run', run);
     other.commands.declareKeybindings([{ key: 'Alt+Digit1', command: 'test.run' }]);
     other.commands.declareKeybindings([{ key: 'Mod+KeyK', command: 'test.run' }]);
-    expect(press(other.inner, { code: 'Digit1', altKey: true, ctrlKey: true }).defaultPrevented).toBe(false);
-    expect(press(other.inner, { code: 'Digit1', altKey: true, shiftKey: true }).defaultPrevented).toBe(false);
-    expect(press(other.inner, { code: 'KeyK', metaKey: true }).defaultPrevented).toBe(false);
+    expect(press(other.innerElement, { code: 'Digit1', altKey: true, ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(press(other.innerElement, { code: 'Digit1', altKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(press(other.innerElement, { code: 'KeyK', metaKey: true }).defaultPrevented).toBe(false);
     expect(run).not.toHaveBeenCalled();
-    press(other.inner, { code: 'Digit1', altKey: true });
-    press(other.inner, { code: 'KeyK', ctrlKey: true });
+    press(other.innerElement, { code: 'Digit1', altKey: true });
+    press(other.innerElement, { code: 'KeyK', ctrlKey: true });
     expect(run).toHaveBeenCalledTimes(2);
 
     const mac = setup({ platform: 'mac' });
     mac.commands.registerCommand('test.run', run);
     mac.commands.declareKeybindings([{ key: 'Mod+KeyK', command: 'test.run' }]);
-    expect(press(mac.inner, { code: 'KeyK', ctrlKey: true }).defaultPrevented).toBe(false);
-    press(mac.inner, { code: 'KeyK', metaKey: true });
+    expect(press(mac.innerElement, { code: 'KeyK', ctrlKey: true }).defaultPrevented).toBe(false);
+    press(mac.innerElement, { code: 'KeyK', metaKey: true });
     expect(run).toHaveBeenCalledTimes(3);
   });
 
@@ -99,8 +99,8 @@ describe('CommandsHost', () => {
     expect([mac.commands.keybindingLabel('test.find'), mac.commands.keybindingLabel('test.dashboards')]).toEqual(['⌘⇧F', '⌃1']);
     const run = vi.fn();
     mac.commands.registerCommand('test.dashboards', run);
-    press(mac.inner, { code: 'Digit1', altKey: true });
-    press(mac.inner, { code: 'Digit1', ctrlKey: true });
+    press(mac.innerElement, { code: 'Digit1', altKey: true });
+    press(mac.innerElement, { code: 'Digit1', ctrlKey: true });
     expect(run).toHaveBeenCalledTimes(1);
   });
 
@@ -116,12 +116,12 @@ describe('CommandsHost', () => {
       return commands.keybindingLabel('test.dashboards');
     };
     expect([keysOn('mac'), keysOn('win'), keysOn('linux')]).toEqual(['⌃1', 'Alt+1', undefined]);
-    const { inner, commands } = setup();
+    const { innerElement, commands } = setup();
     commands.declareKeybindings(declared);
     commands.registerCommand('test.open', run);
     commands.declareKeybindings([{ key: 'Mod+KeyP', command: 'test.open' }]);
-    press(inner, { code: 'KeyO', ctrlKey: true, shiftKey: true });
-    press(inner, { code: 'KeyP', ctrlKey: true });
+    press(innerElement, { code: 'KeyO', ctrlKey: true, shiftKey: true });
+    press(innerElement, { code: 'KeyP', ctrlKey: true });
     expect(run.mock.calls).toEqual([['/'], []]);
   });
 
@@ -131,23 +131,23 @@ describe('CommandsHost', () => {
   });
 
   it('logs a bound command that fails, the key still taken', async () => {
-    const { inner, commands } = setup();
+    const { innerElement, commands } = setup();
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     commands.registerCommand('test.fails', () => Promise.reject(new Error('nope')));
     commands.declareKeybindings([{ key: 'Mod+KeyK', command: 'test.fails' }]);
-    expect(press(inner, { code: 'KeyK', ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(press(innerElement, { code: 'KeyK', ctrlKey: true }).defaultPrevented).toBe(true);
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Command test.fails failed:', expect.objectContaining({ message: 'nope' })));
   });
 
   it('leaves other keys to the content, and bound keys once the command is gone', () => {
-    const { inner, commands } = setup();
+    const { innerElement, commands } = setup();
     const run = vi.fn();
     const command = commands.registerCommand('test.run', run);
     commands.declareKeybindings([{ key: 'Mod+Alt+KeyM', command: 'test.run' }]);
-    press(inner, { code: 'KeyM', ctrlKey: true });
-    press(inner, { code: 'KeyN', altKey: true, ctrlKey: true });
+    press(innerElement, { code: 'KeyM', ctrlKey: true });
+    press(innerElement, { code: 'KeyN', altKey: true, ctrlKey: true });
     command.dispose();
-    expect(press(inner, { code: 'KeyM', altKey: true, ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(press(innerElement, { code: 'KeyM', altKey: true, ctrlKey: true }).defaultPrevented).toBe(false);
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -156,12 +156,12 @@ describe('CommandsHost', () => {
   });
 
   it('binds a modifier tapped twice (Shift Shift), named so, until the host is disposed', () => {
-    const { inner, commands } = setup();
+    const { innerElement, commands } = setup();
     const run = vi.fn();
     commands.registerCommand('test.search', run);
     commands.declareKeybindings([{ key: 'Shift Shift', command: 'test.search', args: 'all' }]);
     const tapShift = () => {
-      for (const type of ['keydown', 'keyup', 'keydown', 'keyup']) inner.dispatchEvent(new KeyboardEvent(type, { key: 'Shift', shiftKey: type === 'keydown', bubbles: true }));
+      for (const type of ['keydown', 'keyup', 'keydown', 'keyup']) innerElement.dispatchEvent(new KeyboardEvent(type, { key: 'Shift', shiftKey: type === 'keydown', bubbles: true }));
     };
     tapShift();
     expect(run.mock.calls).toEqual([['all']]);
@@ -194,7 +194,7 @@ describe('CommandsHost', () => {
   });
 
   it('runs a command that is not enabled from code, as VS Code does, but not from its keys, which go on to the content', async () => {
-    const { inner, root, commands } = setup();
+    const { innerElement, rootElement, commands } = setup();
     const run = vi.fn();
     let enabled = false;
     commands.registerCommand('test.run', run, { enablement: () => enabled });
@@ -203,14 +203,14 @@ describe('CommandsHost', () => {
       { key: 'Shift Shift', command: 'test.run' },
     ]);
     const content = vi.fn();
-    root.addEventListener('keydown', content);
-    expect(press(inner, { code: 'KeyM', ctrlKey: true }).defaultPrevented).toBe(false);
-    for (const type of ['keydown', 'keyup', 'keydown', 'keyup']) inner.dispatchEvent(new KeyboardEvent(type, { key: 'Shift', shiftKey: type === 'keydown', bubbles: true }));
+    rootElement.addEventListener('keydown', content);
+    expect(press(innerElement, { code: 'KeyM', ctrlKey: true }).defaultPrevented).toBe(false);
+    for (const type of ['keydown', 'keyup', 'keydown', 'keyup']) innerElement.dispatchEvent(new KeyboardEvent(type, { key: 'Shift', shiftKey: type === 'keydown', bubbles: true }));
     expect([run.mock.calls.length, content.mock.calls.length > 0]).toEqual([0, true]);
     await commands.executeCommand('test.run', 'given');
     expect(run.mock.calls).toEqual([['given']]);
     enabled = true;
-    expect(press(inner, { code: 'KeyM', ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(press(innerElement, { code: 'KeyM', ctrlKey: true }).defaultPrevented).toBe(true);
     expect(run).toHaveBeenCalledTimes(2);
   });
 });

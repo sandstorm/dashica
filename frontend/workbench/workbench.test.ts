@@ -13,7 +13,7 @@ import { settle } from '../hosts/widgets/widgets-testing';
 import { createWorkbench } from './workbench';
 
 let workbench: Disposable;
-let host: HTMLElement;
+let hostContainer: HTMLElement;
 /** The workbench's `ui`, as an extension sees it. */
 let ui: UiApi;
 /** The workbench's `page`, as an extension sees it. */
@@ -36,9 +36,9 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', async (url: string) =>
     new Response(JSON.stringify({ kind: 'dashboard', title: titles[url], filterBar: false, filterButtons: [], widgets: [] })),
   );
-  host = document.body.appendChild(document.createElement('div'));
+  hostContainer = document.body.appendChild(document.createElement('div'));
   const grab = { id: 'test', activate: (context: { ui: UiApi; page: PageApi }) => void ((ui = context.ui), (page = context.page)) };
-  workbench = createWorkbench(host, { extensions: [dashboardPage, timeRange, refresh, grab], workbench: { menu: [], explore: false, sqlEnabled: false, connections: [] } });
+  workbench = createWorkbench(hostContainer, { extensions: [dashboardPage, timeRange, refresh, grab], workbench: { menu: [], explore: false, sqlEnabled: false, connections: [] } });
   await settle();
 });
 
@@ -51,9 +51,9 @@ afterEach(() => {
   history.replaceState(null, '', '/');
 });
 
-const rangeButton = () => host.querySelector<HTMLButtonElement>('button[aria-haspopup=dialog].d-segmented__item')!;
-const interval = () => host.querySelector<HTMLSelectElement>('select[aria-label="Auto refresh"]')!;
-const tab = (title: string) => [...host.querySelectorAll<HTMLElement>('[role=tab]')].find((el) => el.textContent === title)!;
+const rangeButton = () => hostContainer.querySelector<HTMLButtonElement>('button[aria-haspopup=dialog].d-segmented__item')!;
+const interval = () => hostContainer.querySelector<HTMLSelectElement>('select[aria-label="Auto refresh"]')!;
+const tab = (title: string) => [...hostContainer.querySelectorAll<HTMLElement>('[role=tab]')].find((tabElement) => tabElement.textContent === title)!;
 
 describe('createWorkbench', () => {
   it('shows the active tab’s time range and auto refresh in the top bar, after each switch', async () => {
@@ -73,44 +73,44 @@ describe('createWorkbench', () => {
   });
 
   it('opens the start page in a new tab with "+", after the active one', async () => {
-    host.querySelector<HTMLButtonElement>('[data-testid=wb-tab-add]')!.click();
+    hostContainer.querySelector<HTMLButtonElement>('[data-testid=wb-tab-add]')!.click();
     await settle();
-    expect(host.querySelectorAll('[role=tab]')).toHaveLength(3);
+    expect(hostContainer.querySelectorAll('[role=tab]')).toHaveLength(3);
     expect(location.pathname).toBe('/');
-    expect(host.querySelectorAll('[role=tab]')[1].getAttribute('aria-selected')).toBe('true');
+    expect(hostContainer.querySelectorAll('[role=tab]')[1].getAttribute('aria-selected')).toBe('true');
   });
 
   it('shows the global menu’s "…" first in the left rail while the menu has entries, and the menu on a click', async () => {
-    const button = host.querySelector<HTMLButtonElement>('[data-testid=wb-global-menu]')!;
-    expect(host.querySelector('.d-workbench__side--left .d-workbench__rail button')).toBe(button);
-    expect(host.querySelector('[data-testid=wb-top-bar] [data-testid=wb-global-menu]')).toBeNull();
-    expect(button.hidden).toBe(true);
+    const buttonElement = hostContainer.querySelector<HTMLButtonElement>('[data-testid=wb-global-menu]')!;
+    expect(hostContainer.querySelector('.d-workbench__side--left .d-workbench__rail button')).toBe(buttonElement);
+    expect(hostContainer.querySelector('[data-testid=wb-top-bar] [data-testid=wb-global-menu]')).toBeNull();
+    expect(buttonElement.hidden).toBe(true);
     const entry = ui.registerMenuItem('workbench/global', { command: 'test.global', title: 'Something global' });
-    expect(button.hidden).toBe(false);
-    button.click();
-    const options = [...host.querySelectorAll<HTMLElement>('[role=option]')];
-    expect(options.map((option) => option.textContent)).toEqual(['Something global']);
+    expect(buttonElement.hidden).toBe(false);
+    buttonElement.click();
+    const optionElements = [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')];
+    expect(optionElements.map((optionElement) => optionElement.textContent)).toEqual(['Something global']);
     entry.dispose();
-    expect(button.hidden).toBe(true);
+    expect(buttonElement.hidden).toBe(true);
   });
 
   it('shows a popped-out view’s tab with the tabs only in the top bar and no filter bar; the page’s tab with them again', async () => {
-    const filterBar = host.querySelector<HTMLElement>('[data-testid=wb-filter-bar]')!;
+    const filterBarContainer = hostContainer.querySelector<HTMLElement>('[data-testid=wb-filter-bar]')!;
     ui.registerBarItem('filter', document.createElement('span'), { alignment: 'left' });
-    const shown = (el: Element) => !el.closest('[hidden]');
+    const shown = (checkedElement: Element) => !checkedElement.closest('[hidden]');
     expect(shown(rangeButton())).toBe(true);
-    expect(shown(filterBar)).toBe(true);
+    expect(shown(filterBarContainer)).toBe(true);
 
-    await page.popOut({ title: 'Debug: Requests', render: (el) => ((el.textContent = 'debug'), Disposable.from()) });
+    await page.popOut({ title: 'Debug: Requests', render: (viewContainer) => ((viewContainer.textContent = 'debug'), Disposable.from()) });
     expect(shown(tab('Debug: Requests'))).toBe(true);
-    expect(shown(host.querySelector('[data-testid=wb-tab-add]')!)).toBe(true);
+    expect(shown(hostContainer.querySelector('[data-testid=wb-tab-add]')!)).toBe(true);
     expect(shown(rangeButton())).toBe(false);
     expect(shown(interval())).toBe(false);
-    expect(shown(filterBar)).toBe(false);
+    expect(shown(filterBarContainer)).toBe(false);
 
     tab('Shop').click();
     expect(shown(rangeButton())).toBe(true);
     expect(shown(interval())).toBe(true);
-    expect(shown(filterBar)).toBe(true);
+    expect(shown(filterBarContainer)).toBe(true);
   });
 });

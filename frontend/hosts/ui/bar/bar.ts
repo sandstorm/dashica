@@ -10,34 +10,34 @@ import type { BarPlacement, UiApi } from '../ui';
  * While `withhold` says so, its items are hidden as if it had none (a popped-out view's tab).
  */
 export class Bar {
-  readonly #bar: HTMLElement;
-  readonly #sides: Record<BarPlacement['alignment'], { element: HTMLElement; entries: Entry[] }>;
+  readonly #barContainer: HTMLElement;
+  readonly #sides: Record<BarPlacement['alignment'], { sideContainer: HTMLElement; entries: Entry[] }>;
   #withheld = false;
 
-  /** Fills `bar`, the layout's region; `fixed` goes between the `left` and the `center` items. */
+  /** Fills `barContainer`, the layout's region; `fixedElement` goes between the `left` and the `center` items. */
   constructor(
-    bar: HTMLElement,
-    private readonly fixed?: HTMLElement,
+    barContainer: HTMLElement,
+    private readonly fixedElement?: HTMLElement,
   ) {
-    this.#bar = bar;
-    const side = (alignment: string) => ({ element: html`<div class="d-workbench__bar-${alignment}"></div>`, entries: [] as Entry[] });
+    this.#barContainer = barContainer;
+    const side = (alignment: string) => ({ sideContainer: html`<div class="d-workbench__bar-${alignment}"></div>`, entries: [] as Entry[] });
     this.#sides = { left: side('left'), center: side('center'), right: side('right') };
-    bar.append(this.#sides.left.element, ...(fixed ? [fixed] : []), this.#sides.center.element, this.#sides.right.element);
+    barContainer.append(this.#sides.left.sideContainer, ...(fixedElement ? [fixedElement] : []), this.#sides.center.sideContainer, this.#sides.right.sideContainer);
     this.#update();
   }
 
-  /** Shows `element` where `placement` says, until disposed. */
-  add(element: HTMLElement, placement: BarPlacement): Disposable {
+  /** Shows `itemElement` where `placement` says, until disposed. */
+  add(itemElement: HTMLElement, placement: BarPlacement): Disposable {
     const side = this.#sides[placement.alignment];
-    const entry = { element, priority: placement.priority ?? 0 };
+    const entry = { itemElement, priority: placement.priority ?? 0 };
     // the sort is stable: equal priorities stay in registration order
     side.entries = [...side.entries, entry].sort((a, b) => b.priority - a.priority);
-    side.element.append(...side.entries.map((each) => each.element));
+    side.sideContainer.append(...side.entries.map((each) => each.itemElement));
     this.#update();
     return new Disposable(() => {
       if (!side.entries.includes(entry)) return;
       side.entries = side.entries.filter((each) => each !== entry);
-      element.remove();
+      itemElement.remove();
       this.#update();
     });
   }
@@ -45,16 +45,16 @@ export class Bar {
   /** Hides the items while `withheld`, whatever they are, and shows them again after; the fixed part stays. */
   withhold(withheld: boolean): void {
     this.#withheld = withheld;
-    for (const side of Object.values(this.#sides)) side.element.hidden = withheld;
+    for (const side of Object.values(this.#sides)) side.sideContainer.hidden = withheld;
     this.#update();
   }
 
   #update(): void {
-    this.#bar.hidden = !this.fixed && (this.#withheld || Object.values(this.#sides).every((side) => side.entries.length === 0));
+    this.#barContainer.hidden = !this.fixedElement && (this.#withheld || Object.values(this.#sides).every((side) => side.entries.length === 0));
   }
 }
 
 interface Entry {
-  readonly element: HTMLElement;
+  readonly itemElement: HTMLElement;
   readonly priority: number;
 }

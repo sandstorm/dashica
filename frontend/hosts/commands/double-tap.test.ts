@@ -6,16 +6,16 @@ import { listenForDoubleTap } from './double-tap';
 afterEach(() => document.body.replaceChildren());
 
 function setup() {
-  const host = document.body.appendChild(document.createElement('div'));
+  const hostContainer = document.body.appendChild(document.createElement('div'));
   // content inside that keeps its keys to itself (as a chart's or table's own key handling may)
-  const content = host.appendChild(document.createElement('div'));
-  content.addEventListener('keydown', (event) => event.stopPropagation());
-  content.addEventListener('keyup', (event) => event.stopPropagation());
+  const contentContainer = hostContainer.appendChild(document.createElement('div'));
+  contentContainer.addEventListener('keydown', (event) => event.stopPropagation());
+  contentContainer.addEventListener('keyup', (event) => event.stopPropagation());
   let time = 0;
   const onDoubleShift = vi.fn();
-  listenForDoubleTap(host, 'Shift', onDoubleShift, () => time);
+  listenForDoubleTap(hostContainer, 'Shift', onDoubleShift, () => time);
   const send = (type: 'keydown' | 'keyup', key: string, init: KeyboardEventInit = {}) =>
-    content.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, ...init }));
+    contentContainer.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, ...init }));
   /** Shift down and up, `wait` ms after the previous step. */
   const tap = (wait = 0, init: KeyboardEventInit = {}) => {
     time += wait;
@@ -76,18 +76,18 @@ describe('listenForDoubleTap', () => {
   });
 
   it('does not count presses in a text field (an input box), and counts another modifier alone', () => {
-    const host = document.body.appendChild(document.createElement('div'));
-    const field = host.appendChild(document.createElement('input'));
+    const hostContainer = document.body.appendChild(document.createElement('div'));
+    const fieldElement = hostContainer.appendChild(document.createElement('input'));
     const onAlt = vi.fn();
-    listenForDoubleTap(host, 'Alt', onAlt);
-    const tapOn = (target: Element, key: string, init: KeyboardEventInit) => {
-      for (const type of ['keydown', 'keyup']) target.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, ...(type === 'keydown' ? init : {}) }));
+    listenForDoubleTap(hostContainer, 'Alt', onAlt);
+    const tapOn = (targetElement: Element, key: string, init: KeyboardEventInit) => {
+      for (const type of ['keydown', 'keyup']) targetElement.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, ...(type === 'keydown' ? init : {}) }));
     };
-    tapOn(field, 'Alt', { altKey: true });
-    tapOn(field, 'Alt', { altKey: true });
+    tapOn(fieldElement, 'Alt', { altKey: true });
+    tapOn(fieldElement, 'Alt', { altKey: true });
     expect(onAlt).not.toHaveBeenCalled();
-    tapOn(host, 'Alt', { altKey: true });
-    tapOn(host, 'Alt', { altKey: true });
+    tapOn(hostContainer, 'Alt', { altKey: true });
+    tapOn(hostContainer, 'Alt', { altKey: true });
     expect(onAlt).toHaveBeenCalledTimes(1);
   });
 });

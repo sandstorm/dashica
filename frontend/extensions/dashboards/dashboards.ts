@@ -24,7 +24,7 @@ export const dashboards: Extension = {
     subscriptions.push(panel);
     const favoritesChanged = new EventEmitter<void>();
     subscriptions.push(favoritesChanged);
-    const menu = new DashboardsMenu(panel.body, context, () => favoritesChanged.fire());
+    const menu = new DashboardsMenu(panel.bodyContainer, context, () => favoritesChanged.fire());
     menu.render();
     subscriptions.push(
       page.registerPageRenderer('home', (el) => {

@@ -4,18 +4,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TabBar } from './tab-bar';
 
-let container: HTMLElement;
+let tabBarContainer: HTMLElement;
 let bar: TabBar;
 let chosen: string[];
 let closed: string[];
 let added: number;
 
 beforeEach(() => {
-  container = document.body.appendChild(document.createElement('div'));
+  tabBarContainer = document.body.appendChild(document.createElement('div'));
   chosen = [];
   closed = [];
   added = 0;
-  bar = new TabBar(container, { onDidChoose: (id) => chosen.push(id), onDidClose: (id) => closed.push(id), onDidAdd: () => added++ });
+  bar = new TabBar(tabBarContainer, { onDidChoose: (id) => chosen.push(id), onDidClose: (id) => closed.push(id), onDidAdd: () => added++ });
   bar.update(
     [
       { id: 'a', title: 'Shop' },
@@ -30,12 +30,12 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const tabs = () => [...container.querySelectorAll<HTMLButtonElement>('[role=tab]')];
+const tabs = () => [...tabBarContainer.querySelectorAll<HTMLButtonElement>('[role=tab]')];
 
 describe('TabBar', () => {
   it('shows a tab per page in a tab list, the shown one selected', () => {
-    expect(container.querySelector('[role=tablist]')!.getAttribute('aria-label')).toBe('Open pages');
-    expect(tabs().map((tab) => [tab.textContent, tab.getAttribute('aria-selected')])).toEqual([
+    expect(tabBarContainer.querySelector('[role=tablist]')!.getAttribute('aria-label')).toBe('Open pages');
+    expect(tabs().map((tabElement) => [tabElement.textContent, tabElement.getAttribute('aria-selected')])).toEqual([
       ['Shop', 'false'],
       ['Explore: Requests', 'true'],
     ]);
@@ -48,7 +48,7 @@ describe('TabBar', () => {
   });
 
   it('asks to close a tab by its × or a middle click, without choosing it', () => {
-    container.querySelector<HTMLButtonElement>('[aria-label="Close Shop"]')!.click();
+    tabBarContainer.querySelector<HTMLButtonElement>('[aria-label="Close Shop"]')!.click();
     tabs()[1].dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
     expect(closed).toEqual(['a', 'b']);
     expect(chosen).toEqual([]);
@@ -56,21 +56,21 @@ describe('TabBar', () => {
 
   it('has no × on the last tab, and a middle click leaves it open', () => {
     bar.update([{ id: 'a', title: 'Shop' }], 'a');
-    expect(container.querySelector('.d-workbench__tab-close')).toBeNull();
+    expect(tabBarContainer.querySelector('.d-workbench__tab-close')).toBeNull();
     tabs()[0].dispatchEvent(new MouseEvent('auxclick', { bubbles: true, button: 1 }));
     expect(closed).toEqual([]);
   });
 
   it('asks for a new tab by "+", after the tabs, without choosing one', () => {
-    const add = container.querySelector<HTMLButtonElement>('[aria-label="New tab"]')!;
-    expect(container.lastElementChild).toBe(add);
-    add.click();
+    const addButtonElement = tabBarContainer.querySelector<HTMLButtonElement>('[aria-label="New tab"]')!;
+    expect(tabBarContainer.lastElementChild).toBe(addButtonElement);
+    addButtonElement.click();
     expect(added).toBe(1);
     expect(chosen).toEqual([]);
   });
 
   it('takes its tab list and "+" out of the container when disposed', () => {
     bar.dispose();
-    expect(container.children).toHaveLength(0);
+    expect(tabBarContainer.children).toHaveLength(0);
   });
 });

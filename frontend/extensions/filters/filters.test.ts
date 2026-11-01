@@ -322,8 +322,8 @@ describe('filters', () => {
     expect(picks).toEqual([{ labels: ['— Advanced', 'SQL condition…'], anchor: add() }]);
     expect(asked).toEqual([expect.objectContaining({ title: 'SQL condition', anchor: add() })]);
     // the SQL editor is the box's field
-    expect(asked[0].field!.input.getAttribute('aria-label')).toBe('SQL condition');
-    expect(asked[0].field!.element.classList).toContain('cm-editor');
+    expect(asked[0].field!.inputElement.getAttribute('aria-label')).toBe('SQL condition');
+    expect(asked[0].field!.fieldElement.classList).toContain('cm-editor');
     answer = undefined;
     add()!.click();
     answer = '  ';

@@ -22,11 +22,11 @@ export interface WidgetsApi {
   /** Renders the widgets of `type` until disposed; one renderer per type. */
   registerWidget<T extends WidgetType>(type: T, renderer: WidgetRenderer<T>): Disposable;
   /**
-   * Renders `widget` (one of a page's widgets) into `el` until disposed, with `query` (its tab's query state,
-   * `PageContext.query`); a type without renderer shows its error there. A widget with data marks `el` with its URL
-   * (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
+   * Renders `widget` (one of a page's widgets) into `widgetContainer` until disposed, with `query` (its tab's query
+   * state, `PageContext.query`); a type without renderer shows its error there. A widget with data marks
+   * `widgetContainer` with its URL (`data-data-url="/p/shop/api/3"`), where a link to the chart finds it.
    */
-  render(el: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable;
+  render(widgetContainer: HTMLElement, widget: WidgetNode, query: QueryApi): Disposable;
   /**
    * The active tab's active widget, the same object as long as it is rendered; `undefined` while the viewer has not
    * pressed or focused in a widget with data of that tab, or after it was removed.
@@ -95,8 +95,8 @@ export type WidgetStatus =
 /** A widget as `page.json` has it, for one type (`WidgetOf<'timeBar'>`: its props are `TimeBarProps`). */
 export type WidgetOf<T extends WidgetType> = Extract<WidgetNode, { type: T }>;
 
-/** Fills `el` with `widget`; disposing the result stops what it started (queries, listeners). `el` is emptied after. */
-export type WidgetRenderer<T extends WidgetType> = (el: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext) => { dispose(): unknown };
+/** Fills `widgetContainer` with `widget`; disposing the result stops what it started (queries, listeners). `widgetContainer` is emptied after. */
+export type WidgetRenderer<T extends WidgetType> = (widgetContainer: HTMLElement, widget: WidgetOf<T>, ctx: WidgetContext) => { dispose(): unknown };
 
 /** What a widget's renderer gets to work with; its decorations for the chart frame. */
 export interface WidgetContext extends Decorated {
@@ -113,8 +113,8 @@ export interface WidgetContext extends Decorated {
   runQuery(signal?: AbortSignal): Promise<QueryResult>;
   /** `path` below the widget's handler with the page's query state (`/p/shop/api/8/speedscope-query?time=1h&sql=…`). */
   url(path: string): string;
-  /** Renders `child` (a grid's area, a group's widget) into `el`. */
-  renderChild(el: HTMLElement, child: WidgetNode): Disposable;
+  /** Renders `child` (a grid's area, a group's widget) into `childContainer`. */
+  renderChild(childContainer: HTMLElement, child: WidgetNode): Disposable;
   /**
    * Pops up the menu `menuId` at `anchor` (an element, or a point such as a right click's), for this widget: its
    * context and its entries' argument are the widget's `WidgetMenuContext` with the fields of `context` (a table

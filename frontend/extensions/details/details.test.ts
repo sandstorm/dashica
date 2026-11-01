@@ -28,7 +28,7 @@ beforeEach(() => {
     subscriptions: [],
     ui: {
       registerSidePanel: () => ({
-        body,
+        bodyContainer: body,
         get visible() {
           return panel.visible;
         },

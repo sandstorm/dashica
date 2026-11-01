@@ -39,8 +39,8 @@ export const debug: Extension = {
       showing = undefined;
       if (!panel.visible) return;
       const active = widgets.active;
-      if (active) showing = followDebug(panel.body, active, showMenu, globalState);
-      else panel.body.replaceChildren(html`<div class="d-debug__hint">Click a chart to see what it queried.</div>`);
+      if (active) showing = followDebug(panel.bodyContainer, active, showMenu, globalState);
+      else panel.bodyContainer.replaceChildren(html`<div class="d-debug__hint">Click a chart to see what it queried.</div>`);
     };
     /** The active widget's status and decorations, listened to for the status bar. */
     let following: Disposable | undefined;

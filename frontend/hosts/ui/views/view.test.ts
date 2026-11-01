@@ -13,49 +13,49 @@ afterEach(() => {
 const state = () => StorageMemento.of(document, 'localStorage', 'dashica:global:test:');
 const draw = (options: Partial<ViewOptions> = {}) =>
   document.body.appendChild(createView({ id: 'favorites', title: 'Favorites', description: '2', state: state(), body: document.createTextNode('the entries'), ...options }));
-const toggle = (view: HTMLElement) => view.querySelector<HTMLButtonElement>('.d-view__toggle')!;
-const body = (view: HTMLElement) => view.querySelector<HTMLElement>('.d-view__body')!;
+const toggle = (viewElement: HTMLElement) => viewElement.querySelector<HTMLButtonElement>('.d-view__toggle')!;
+const body = (viewElement: HTMLElement) => viewElement.querySelector<HTMLElement>('.d-view__body')!;
 
 describe('createView', () => {
   it('shows its title as a heading button that controls its open body', () => {
-    const view = draw();
-    expect(view.querySelector('h2 > button.d-view__toggle .d-view__title')!.textContent).toBe('Favorites');
-    expect(toggle(view).getAttribute('aria-expanded')).toBe('true');
-    expect(toggle(view).getAttribute('aria-controls')).toBe(body(view).id);
-    expect(body(view).id).toMatch(/^d-view-\d+$/);
-    expect(body(draw()).id).not.toBe(body(view).id);
-    expect(body(view).hidden).toBe(false);
-    expect(body(view).textContent).toBe('the entries');
+    const viewElement = draw();
+    expect(viewElement.querySelector('h2 > button.d-view__toggle .d-view__title')!.textContent).toBe('Favorites');
+    expect(toggle(viewElement).getAttribute('aria-expanded')).toBe('true');
+    expect(toggle(viewElement).getAttribute('aria-controls')).toBe(body(viewElement).id);
+    expect(body(viewElement).id).toMatch(/^d-view-\d+$/);
+    expect(body(draw()).id).not.toBe(body(viewElement).id);
+    expect(body(viewElement).hidden).toBe(false);
+    expect(body(viewElement).textContent).toBe('the entries');
   });
 
   it('closes and opens with a click, and is drawn anew as the viewer left it', () => {
     toggle(draw()).click();
-    const again = draw();
-    expect(toggle(again).getAttribute('aria-expanded')).toBe('false');
-    expect(body(again).hidden).toBe(true);
-    expect(again.classList).toContain('d-view--collapsed');
-    toggle(again).click();
+    const secondViewElement = draw();
+    expect(toggle(secondViewElement).getAttribute('aria-expanded')).toBe('false');
+    expect(body(secondViewElement).hidden).toBe(true);
+    expect(secondViewElement.classList).toContain('d-view--collapsed');
+    toggle(secondViewElement).click();
     expect(body(draw()).hidden).toBe(false);
   });
 
   it('closes with ArrowLeft and opens with ArrowRight; other keys and Alt+arrows leave it', () => {
-    const view = draw();
-    const press = (key: string, init: KeyboardEventInit = {}) => toggle(view).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+    const viewElement = draw();
+    const press = (key: string, init: KeyboardEventInit = {}) => toggle(viewElement).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
     press('ArrowLeft');
-    expect(body(view).hidden).toBe(true);
+    expect(body(viewElement).hidden).toBe(true);
     press('ArrowLeft');
-    expect(body(view).hidden).toBe(true);
+    expect(body(viewElement).hidden).toBe(true);
     press('ArrowRight', { altKey: true });
     press('ArrowDown');
-    expect(body(view).hidden).toBe(true);
+    expect(body(viewElement).hidden).toBe(true);
     press('ArrowRight');
-    expect(body(view).hidden).toBe(false);
+    expect(body(viewElement).hidden).toBe(false);
   });
 
   it('starts closed when it says so, until the viewer opens it', () => {
-    const view = draw({ collapsed: true });
-    expect(body(view).hidden).toBe(true);
-    toggle(view).click();
+    const viewElement = draw({ collapsed: true });
+    expect(body(viewElement).hidden).toBe(true);
+    toggle(viewElement).click();
     expect(body(draw({ collapsed: true })).hidden).toBe(false);
   });
 
@@ -67,17 +67,17 @@ describe('createView', () => {
   });
 
   it('keeps nothing without a memento: drawn anew, it starts as it says', () => {
-    const view = draw({ state: undefined, collapsed: false });
-    toggle(view).click();
-    expect(body(view).hidden).toBe(true);
+    const viewElement = draw({ state: undefined, collapsed: false });
+    toggle(viewElement).click();
+    expect(body(viewElement).hidden).toBe(true);
     expect(body(draw({ state: undefined, collapsed: false })).hidden).toBe(false);
     expect(localStorage.length).toBe(0);
   });
 
   it('shows its description after the title and its actions at the header end', () => {
-    const action = document.createElement('button');
-    const view = draw({ actions: [action] });
-    expect(view.querySelector('.d-view__toggle .d-view__description')!.textContent).toBe('2');
-    expect(view.querySelector('.d-view__header > .d-view__actions')!.firstElementChild).toBe(action);
+    const actionElement = document.createElement('button');
+    const viewElement = draw({ actionElements: [actionElement] });
+    expect(viewElement.querySelector('.d-view__toggle .d-view__description')!.textContent).toBe('2');
+    expect(viewElement.querySelector('.d-view__header > .d-view__actions')!.firstElementChild).toBe(actionElement);
   });
 });

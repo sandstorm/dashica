@@ -15,13 +15,13 @@ let drawn = 0;
  * it is kept by this element only, and a view drawn anew starts as `collapsed` says.
  */
 export function createView(options: ViewOptions): HTMLElement {
-  const { id, title, description, actions = [], state, body } = options;
+  const { id, title, description, actionElements = [], state, body } = options;
   const key = `views.${id}.collapsed`;
-  const bodyEl: HTMLElement = html`<div class="d-view__body" id=${`d-view-${++drawn}`}>${body}</div>`;
+  const bodyContainer: HTMLElement = html`<div class="d-view__body" id=${`d-view-${++drawn}`}>${body}</div>`;
   const set = (collapsed: boolean) => {
-    view.classList.toggle('d-view--collapsed', collapsed);
-    toggle.setAttribute('aria-expanded', String(!collapsed));
-    bodyEl.hidden = collapsed;
+    viewElement.classList.toggle('d-view--collapsed', collapsed);
+    toggleElement.setAttribute('aria-expanded', String(!collapsed));
+    bodyContainer.hidden = collapsed;
   };
   const choose = (collapsed: boolean) => {
     set(collapsed);
@@ -33,22 +33,22 @@ export function createView(options: ViewOptions): HTMLElement {
     event.preventDefault();
     choose(collapsed);
   };
-  const toggle: HTMLButtonElement = html`<button type="button" class="d-view__toggle" aria-controls=${bodyEl.id}
-    onclick=${() => choose(toggle.getAttribute('aria-expanded') === 'true')} onkeydown=${onkeydown}>
+  const toggleElement: HTMLButtonElement = html`<button type="button" class="d-view__toggle" aria-controls=${bodyContainer.id}
+    onclick=${() => choose(toggleElement.getAttribute('aria-expanded') === 'true')} onkeydown=${onkeydown}>
     ${createElement(ChevronRight, { width: 16, height: 16, class: 'd-view__chevron', 'aria-hidden': 'true' })}
     <span class="d-view__title">${title}</span>
     ${description ? html`<span class="d-view__description">${description}</span>` : ''}
   </button>`;
-  const view: HTMLElement = html`<section class="d-view" data-view=${id}>
+  const viewElement: HTMLElement = html`<section class="d-view" data-view=${id}>
     <div class="d-view__header">
-      <h2 class="d-view__heading">${toggle}</h2>
-      ${actions.length > 0 ? html`<div class="d-view__actions">${actions}</div>` : ''}
+      <h2 class="d-view__heading">${toggleElement}</h2>
+      ${actionElements.length > 0 ? html`<div class="d-view__actions">${actionElements}</div>` : ''}
     </div>
-    ${bodyEl}
+    ${bodyContainer}
   </section>`;
   const stored = state?.get<unknown>(key);
   set(typeof stored === 'boolean' ? stored : (options.collapsed ?? false));
-  return view;
+  return viewElement;
 }
 
 export interface ViewOptions {
@@ -59,7 +59,7 @@ export interface ViewOptions {
   /** Muted after the title while the view is closed, e.g. how many entries it holds ("3"). */
   readonly description?: string;
   /** Buttons at the header's end. */
-  readonly actions?: readonly HTMLElement[];
+  readonly actionElements?: readonly HTMLElement[];
   /** Closed until the viewer opens it; default open. */
   readonly collapsed?: boolean;
   /**

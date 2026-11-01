@@ -12,7 +12,7 @@ import { settle } from '../widgets/widgets-testing';
 import type { PageContext } from './page';
 import { PageHost } from './page';
 
-let content: HTMLElement;
+let contentContainer: HTMLElement;
 let host: PageHost;
 /** The pages the server has, by path. */
 let pages: Record<string, PageJson>;
@@ -32,9 +32,9 @@ const memento = (): Memento => ({
 });
 
 function createHost(browserWindow: Window = window): PageHost {
-  const created = new PageHost(browserWindow, { menu: [], explore: false, sqlEnabled: false, connections: [] }, content, memento());
-  created.registerPageRenderer('dashboard', (el, shown, context) => {
-    el.textContent = shown.title;
+  const created = new PageHost(browserWindow, { menu: [], explore: false, sqlEnabled: false, connections: [] }, contentContainer, memento());
+  created.registerPageRenderer('dashboard', (pageContainer, shown, context) => {
+    pageContainer.textContent = shown.title;
     rendered.push(shown.title);
     contexts[shown.title] = context;
     return new Disposable(() => rendered.push(`disposed ${shown.title}`));
@@ -62,7 +62,7 @@ beforeEach(() => {
       return shown ? new Response(JSON.stringify(shown)) : new Response('404 page not found', { status: 404 });
     }),
   );
-  content = document.body.appendChild(document.createElement('main'));
+  contentContainer = document.body.appendChild(document.createElement('main'));
   host = createHost();
 });
 
@@ -107,7 +107,7 @@ function windowAssigning(assign: (url: string) => void): Window {
 }
 
 /** The text of the tab shown. */
-const shownText = () => [...content.children].find((el) => !(el as HTMLElement).hidden)?.textContent;
+const shownText = () => [...contentContainer.children].find((tabContainer) => !(tabContainer as HTMLElement).hidden)?.textContent;
 const address = () => location.pathname + location.search + location.hash;
 const fetched = () => vi.mocked(fetch).mock.calls.map(([url]) => url);
 /** Goes back one entry and waits for the browser's `popstate`. */
@@ -194,9 +194,9 @@ describe('PageHost', () => {
 
   it('opens a link to another page in the active tab', async () => {
     await host.start();
-    const link = content.appendChild(document.createElement('a'));
-    link.href = '/p/checkout';
-    link.click();
+    const linkElement = contentContainer.appendChild(document.createElement('a'));
+    linkElement.href = '/p/checkout';
+    linkElement.click();
     await settle();
     expect(location.pathname).toBe('/p/checkout');
     expect(shownText()).toContain('Checkout');
@@ -205,12 +205,12 @@ describe('PageHost', () => {
 
   it('leaves a link with a target or a modifier key to the browser', async () => {
     await host.start();
-    const link = content.appendChild(document.createElement('a'));
-    link.href = '/p/checkout';
-    link.target = '_blank';
-    link.click();
-    link.removeAttribute('target');
-    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
+    const linkElement = contentContainer.appendChild(document.createElement('a'));
+    linkElement.href = '/p/checkout';
+    linkElement.target = '_blank';
+    linkElement.click();
+    linkElement.removeAttribute('target');
+    linkElement.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true }));
     await settle();
     expect(location.pathname).toBe('/p/shop');
   });
@@ -245,7 +245,7 @@ describe('PageHost', () => {
   it('shows a page it cannot load in the tab', async () => {
     reloadAt('/p/gone');
     await host.start();
-    expect(content.querySelector('.d-notice--error')!.textContent).toContain('/p/gone: 404');
+    expect(contentContainer.querySelector('.d-notice--error')!.textContent).toContain('/p/gone: 404');
     expect(host.current).toBeUndefined();
     expect(host.activeTab.title).toBe('/p/gone');
   });
@@ -253,14 +253,14 @@ describe('PageHost', () => {
   it('shows a page of a kind without renderer in the tab', async () => {
     pages['/p/shop/page.json'] = { ...page('Docs'), kind: 'docs' };
     await host.start();
-    expect(content.querySelector('.d-notice--error')!.textContent).toBe('no renderer for the page kind docs');
+    expect(contentContainer.querySelector('.d-notice--error')!.textContent).toBe('no renderer for the page kind docs');
   });
 
   describe('tabs', () => {
     it('opens a page in a new tab after the active one as a new entry, keeping the tab before rendered and hidden', async () => {
       await host.start();
       const shop = host.activeTab;
-      const shopElement = content.children[0] as HTMLElement;
+      const shopElement = contentContainer.children[0] as HTMLElement;
       const entries = history.length;
       const changes: (string | undefined)[] = [];
       host.onDidChangePage((shown) => changes.push(shown?.title));
@@ -363,7 +363,7 @@ describe('PageHost', () => {
       expect(address()).toBe('/p/shop');
       expect(history.length).toBe(entries);
       expect(rendered).toEqual(['Shop', 'Checkout', 'disposed Checkout']);
-      expect(content.children).toHaveLength(1);
+      expect(contentContainer.children).toHaveLength(1);
       host.closeTab(host.activeTab.id);
       expect(host.tabs).toHaveLength(1);
     });
@@ -400,8 +400,8 @@ describe('PageHost', () => {
 
     it('renders a tab whose hash names a registered kind by that kind’s renderer, its title the renderer’s', async () => {
       const explored: string[] = [];
-      host.registerPageRenderer('explore', (el, shown, context) => {
-        el.textContent = `explore ${context.hash}`;
+      host.registerPageRenderer('explore', (pageContainer, shown, context) => {
+        pageContainer.textContent = `explore ${context.hash}`;
         explored.push(context.hash);
         return { dispose: () => explored.push('disposed'), title: `Explore: ${shown.title}` };
       });
@@ -429,7 +429,7 @@ describe('PageHost', () => {
       await host.navigate('/p/checkout', { newTab: true });
       const [shop, checkout] = host.tabs;
       host.dispose();
-      content.replaceChildren();
+      contentContainer.replaceChildren();
       vi.mocked(fetch).mockClear();
 
       host = createHost();
@@ -450,7 +450,7 @@ describe('PageHost', () => {
       await host.navigate('/p/shop?time=1h');
       host.showTab(host.tabs[0].id);
       host.dispose();
-      content.replaceChildren();
+      contentContainer.replaceChildren();
       host = createHost();
       await host.start();
       vi.mocked(fetch).mockClear();
@@ -471,8 +471,8 @@ describe('PageHost', () => {
       const views: string[] = [];
       await host.popOut({
         title: 'Debug: Requests',
-        render: (el) => {
-          el.textContent = 'debug of Requests';
+        render: (viewContainer) => {
+          viewContainer.textContent = 'debug of Requests';
           views.push('rendered');
           return new Disposable(() => views.push('disposed'));
         },
@@ -498,12 +498,12 @@ describe('PageHost', () => {
       await host.start();
       await host.navigate('/p/checkout', { newTab: true });
       const checkout = host.activeTab;
-      await host.popOut({ title: 'Details: Orders', render: (el) => ((el.textContent = 'records'), Disposable.from()) });
+      await host.popOut({ title: 'Details: Orders', render: (viewContainer) => ((viewContainer.textContent = 'records'), Disposable.from()) });
       const popped = host.activeTab;
       expect(stored.get('tabs')).toEqual({ tabs: [host.tabs[0], checkout], active: checkout.id });
 
       host.dispose();
-      content.replaceChildren();
+      contentContainer.replaceChildren();
       host = createHost();
       await host.start();
       expect(host.tabs.map((tab) => tab.id)).toEqual([host.tabs[0].id, checkout.id]);
@@ -539,7 +539,7 @@ describe('PageHost', () => {
       expect(assign).not.toHaveBeenCalled();
       expect(host.activeTab.title).toBe('Checkout');
       expect(host.tabs[0].url).toBe('/public/report.pdf');
-      expect(content.querySelector('.d-notice--error')!.textContent).toContain('/public/report.pdf: 404');
+      expect(contentContainer.querySelector('.d-notice--error')!.textContent).toContain('/public/report.pdf: 404');
     });
   });
 });

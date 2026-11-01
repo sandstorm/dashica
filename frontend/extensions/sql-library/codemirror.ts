@@ -147,8 +147,8 @@ export const sqlEditors: SqlEditors = {
       }),
     });
     return {
-      element: view.dom,
-      input: view.contentDOM,
+      fieldElement: view.dom,
+      inputElement: view.contentDOM,
       get value() {
         return view.state.doc.toString();
       },

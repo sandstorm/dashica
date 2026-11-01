@@ -36,7 +36,7 @@ export const schema: Extension = {
         body: html`<div class="d-schema__tree">${connections.length === 0 ? html`<div class="d-schema__hint">No connections.</div>` : connections.map((c) => c.element)}</div>`,
       })}
     </div>`;
-    panel.body.replaceChildren(root);
+    panel.bodyContainer.replaceChildren(root);
 
     let showComments = globalState.get('showComments', true);
     const drawComments = () => root.classList.toggle('d-schema--no-comments', !showComments);

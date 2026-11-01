@@ -55,7 +55,7 @@ beforeEach(() => {
     globalState: memento,
     ui: {
       registerSidePanel: () => ({
-        body,
+        bodyContainer: body,
         get visible() {
           return panel.visible;
         },

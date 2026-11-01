@@ -17,22 +17,22 @@ import {
 } from '../ui';
 
 /**
- * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `host` (a new
- * one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the top in
- * the middle; an input box's validation message below its field (its own one-line field, or the caller's,
- * `InputBoxOptions.field`). Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was.
- * A menu's box (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
+ * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `hostContainer`
+ * (a new one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the
+ * top in the middle; an input box's validation message below its field (its own one-line field, or the caller's,
+ * `InputBoxOptions.field`). Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was. A
+ * menu's box (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
  */
 export class QuickInput {
   #open: Open | null = null;
 
-  constructor(private readonly host: HTMLElement) {}
+  constructor(private readonly hostContainer: HTMLElement) {}
 
   createQuickPick<T extends QuickPickItem>(): QuickPick<T> {
     return new OwnedQuickPick<T>({
-      show: (box, field, onHide, anchor, opener) => this.#present(box, field, onHide, anchor, opener),
-      hide: (box) => {
-        if (this.#open?.box === box) this.#open.close();
+      show: (boxContainer, fieldElement, onHide, anchor, openerElement) => this.#present(boxContainer, fieldElement, onHide, anchor, openerElement),
+      hide: (boxContainer) => {
+        if (this.#open?.boxContainer === boxContainer) this.#open.close();
       },
     });
   }
@@ -101,24 +101,24 @@ export class QuickInput {
     const name = options.title ?? 'Input';
     const { field } = options;
     // a field of the caller's (a SQL editor), else the one-line text field
-    const own = field ? undefined : html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" placeholder=${options.placeholder ?? ''}>`;
-    if (own) own.value = options.value ?? '';
-    const input = field?.input ?? own!;
-    const text = () => field?.value ?? own!.value;
-    const message = html`<div class="d-workbench__quick-pick-message" id=${uniqueId('dashica-input-box-message')} aria-live="polite" hidden></div>`;
-    const prompt = options.prompt ? html`<div class="d-workbench__quick-pick-hint" id=${uniqueId('dashica-input-box')}>${options.prompt}</div>` : null;
-    input.setAttribute('aria-label', name);
-    input.setAttribute('aria-describedby', prompt ? `${message.id} ${prompt.id}` : message.id);
-    const box = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field?.element ?? own}${message}${prompt}</div>`;
+    const ownInputElement = field ? undefined : html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" placeholder=${options.placeholder ?? ''}>`;
+    if (ownInputElement) ownInputElement.value = options.value ?? '';
+    const inputElement = field?.inputElement ?? ownInputElement!;
+    const text = () => field?.value ?? ownInputElement!.value;
+    const messageElement = html`<div class="d-workbench__quick-pick-message" id=${uniqueId('dashica-input-box-message')} aria-live="polite" hidden></div>`;
+    const promptElement = options.prompt ? html`<div class="d-workbench__quick-pick-hint" id=${uniqueId('dashica-input-box')}>${options.prompt}</div>` : null;
+    inputElement.setAttribute('aria-label', name);
+    inputElement.setAttribute('aria-describedby', promptElement ? `${messageElement.id} ${promptElement.id}` : messageElement.id);
+    const boxContainer = html`<div class="d-workbench__quick-pick" role="dialog" aria-label=${name}>${field?.fieldElement ?? ownInputElement}${messageElement}${promptElement}</div>`;
     // shows what `validateInput` says of the text in the field; whether Enter takes it
     const validate = (): boolean => {
       const said = options.validateInput?.(text());
-      message.textContent = said?.message ?? '';
-      message.hidden = !said;
+      messageElement.textContent = said?.message ?? '';
+      messageElement.hidden = !said;
       const error = said?.severity === InputBoxValidationSeverity.Error;
-      message.classList.toggle('d-workbench__quick-pick-message--error', error);
-      if (error) input.setAttribute('aria-invalid', 'true');
-      else input.removeAttribute('aria-invalid');
+      messageElement.classList.toggle('d-workbench__quick-pick-message--error', error);
+      if (error) inputElement.setAttribute('aria-invalid', 'true');
+      else inputElement.removeAttribute('aria-invalid');
       return !error;
     };
     return new Promise((resolve) => {
@@ -126,11 +126,11 @@ export class QuickInput {
       const accept = () => {
         if (!validate()) return;
         value = text();
-        if (this.#open?.box === box) this.#open.close();
+        if (this.#open?.boxContainer === boxContainer) this.#open.close();
       };
       const listening = field ? [field.onDidChangeValue(validate), field.onDidAccept(accept)] : [];
-      own?.addEventListener('input', validate);
-      own?.addEventListener('keydown', (event) => {
+      ownInputElement?.addEventListener('input', validate);
+      ownInputElement?.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
         accept();
@@ -140,10 +140,10 @@ export class QuickInput {
         for (const listener of listening) listener.dispose();
         resolve(value);
       };
-      this.#present(box, field ?? own!, hidden, options.anchor);
+      this.#present(boxContainer, field ?? ownInputElement!, hidden, options.anchor);
       const [start, end] = options.valueSelection ?? [0, text().length];
       if (field) field.select(start, end);
-      else own!.setSelectionRange(start, end);
+      else ownInputElement!.setSelectionRange(start, end);
     });
   }
 
@@ -157,15 +157,15 @@ export class QuickInput {
   }
 
   /**
-   * Shows `box` (hiding an open one) at `anchor` and focuses `focus`, `opener` expanded meanwhile; Escape, a press
-   * outside or `close` remove it and call `onHide`.
+   * Shows `boxContainer` (hiding an open one) at `anchor` and focuses `focus`, `openerElement` expanded meanwhile;
+   * Escape, a press outside or `close` remove it and call `onHide`.
    */
-  #present(box: HTMLElement, focus: { focus(): void }, onHide: () => void, anchor: MenuAnchor | undefined, opener?: Element): void {
+  #present(boxContainer: HTMLElement, focus: { focus(): void }, onHide: () => void, anchor: MenuAnchor | undefined, openerElement?: Element): void {
     this.#open?.close();
-    const doc = this.host.ownerDocument;
-    const previous = doc.activeElement;
+    const doc = this.hostContainer.ownerDocument;
+    const previousElement = doc.activeElement;
     const outside = (event: MouseEvent) => {
-      if (!event.composedPath().includes(box)) close();
+      if (!event.composedPath().includes(boxContainer)) close();
     };
     const onkeydown = (event: KeyboardEvent) => {
       // a key the field took itself (its completion's Escape) stays the field's
@@ -179,19 +179,19 @@ export class QuickInput {
       if (done) return;
       done = true;
       doc.removeEventListener('mousedown', outside, true);
-      box.removeEventListener('keydown', onkeydown);
-      const hadFocus = box.contains(doc.activeElement);
-      box.remove();
-      opener?.setAttribute('aria-expanded', 'false');
-      if (this.#open?.box === box) this.#open = null;
-      if (hadFocus && previous instanceof HTMLElement && previous.isConnected) previous.focus();
+      boxContainer.removeEventListener('keydown', onkeydown);
+      const hadFocus = boxContainer.contains(doc.activeElement);
+      boxContainer.remove();
+      openerElement?.setAttribute('aria-expanded', 'false');
+      if (this.#open?.boxContainer === boxContainer) this.#open = null;
+      if (hadFocus && previousElement instanceof HTMLElement && previousElement.isConnected) previousElement.focus();
       onHide();
     };
-    box.addEventListener('keydown', onkeydown);
-    this.#open = { box, close };
-    this.host.append(box);
-    opener?.setAttribute('aria-expanded', 'true');
-    place(box, anchor);
+    boxContainer.addEventListener('keydown', onkeydown);
+    this.#open = { boxContainer, close };
+    this.hostContainer.append(boxContainer);
+    openerElement?.setAttribute('aria-expanded', 'true');
+    place(boxContainer, anchor);
     doc.addEventListener('mousedown', outside, true);
     focus.focus();
   }
@@ -223,19 +223,19 @@ function narrow<T extends QuickPickItem>(items: readonly (T | QuickPickSeparator
   return shown;
 }
 
-/** Puts `box` at `anchor` (below an element's left edge, or at a point), inside the viewport; else where its CSS says. */
-function place(box: HTMLElement, anchor: MenuAnchor | undefined): void {
-  box.classList.toggle('d-workbench__quick-pick--anchored', anchor !== undefined);
+/** Puts `boxContainer` at `anchor` (below an element's left edge, or at a point), inside the viewport; else where its CSS says. */
+function place(boxContainer: HTMLElement, anchor: MenuAnchor | undefined): void {
+  boxContainer.classList.toggle('d-workbench__quick-pick--anchored', anchor !== undefined);
   if (!anchor) {
-    box.style.left = box.style.top = '';
+    boxContainer.style.left = boxContainer.style.top = '';
     return;
   }
-  const view = box.ownerDocument.defaultView;
+  const view = boxContainer.ownerDocument.defaultView;
   const point = anchor instanceof Element ? { x: anchor.getBoundingClientRect().left, y: anchor.getBoundingClientRect().bottom } : anchor;
-  const maxX = Math.max(0, (view?.innerWidth ?? 0) - box.offsetWidth);
-  const maxY = Math.max(0, (view?.innerHeight ?? 0) - box.offsetHeight);
-  box.style.left = `${Math.min(Math.max(point.x, 0), maxX)}px`;
-  box.style.top = `${Math.min(Math.max(point.y, 0), maxY)}px`;
+  const maxX = Math.max(0, (view?.innerWidth ?? 0) - boxContainer.offsetWidth);
+  const maxY = Math.max(0, (view?.innerHeight ?? 0) - boxContainer.offsetHeight);
+  boxContainer.style.left = `${Math.min(Math.max(point.x, 0), maxX)}px`;
+  boxContainer.style.top = `${Math.min(Math.max(point.y, 0), maxY)}px`;
 }
 
 /** `prefix` and a random part: an id no other box on the page has. */
@@ -245,7 +245,7 @@ function uniqueId(prefix: string): string {
 
 /** A box on screen: closing it removes it and gives the focus back. */
 interface Open {
-  readonly box: HTMLElement;
+  readonly boxContainer: HTMLElement;
   close(): void;
 }
 
@@ -259,18 +259,18 @@ function isSeparator<T extends QuickPickItem>(item: T | QuickPickSeparator): ite
  * differs from every other picker's on the page.
  */
 class OnePicker<T extends QuickPickItem> {
-  #options: { item: T; element: HTMLElement }[] = [];
+  #options: { item: T; optionElement: HTMLElement }[] = [];
   #active = 0;
   #rows = 0;
 
   constructor(
-    private readonly parts: { listbox: HTMLElement; input: HTMLInputElement },
+    private readonly parts: { listboxContainer: HTMLElement; inputElement: HTMLInputElement },
     /** `modified`: picked with Cmd / Ctrl (Enter, a click). */
     private readonly pick: (item: T, modified: boolean) => void,
   ) {
-    const { listbox, input } = parts;
-    listbox.id = uniqueId('dashica-quick-pick');
-    input.setAttribute('aria-controls', listbox.id);
+    const { listboxContainer, inputElement } = parts;
+    listboxContainer.id = uniqueId('dashica-quick-pick');
+    inputElement.setAttribute('aria-controls', listboxContainer.id);
   }
 
   /** How many items are shown. */
@@ -282,15 +282,15 @@ class OnePicker<T extends QuickPickItem> {
   show(items: readonly (T | QuickPickSeparator)[]): void {
     this.#options = [];
     // a column for the check marks, so every item's label starts at the same place
-    this.parts.listbox.classList.toggle('d-workbench__quick-pick-list--checks', items.some((item) => !isSeparator(item) && item.checked !== undefined));
-    const rows: HTMLElement[] = [];
-    let group: HTMLElement | null = null;
+    this.parts.listboxContainer.classList.toggle('d-workbench__quick-pick-list--checks', items.some((item) => !isSeparator(item) && item.checked !== undefined));
+    const rowElements: HTMLElement[] = [];
+    let groupContainer: HTMLElement | null = null;
     for (const item of items) {
-      if (isSeparator(item)) rows.push((group = this.#group(item)));
-      else if (group) group.append(this.#option(item));
-      else rows.push(this.#option(item));
+      if (isSeparator(item)) rowElements.push((groupContainer = this.#group(item)));
+      else if (groupContainer) groupContainer.append(this.#option(item));
+      else rowElements.push(this.#option(item));
     }
-    this.parts.listbox.replaceChildren(...rows);
+    this.parts.listboxContainer.replaceChildren(...rowElements);
     this.#activate(0);
   }
 
@@ -316,36 +316,36 @@ class OnePicker<T extends QuickPickItem> {
   /** A group under a heading, which names it; without a label, a group of its own only. */
   #group(separator: QuickPickSeparator): HTMLElement {
     if (!separator.label) return html`<div class="d-workbench__quick-pick-group" role="group"></div>`;
-    const id = `${this.parts.listbox.id}-${++this.#rows}`;
-    const description = separator.description ? html.fragment` <span class="d-workbench__quick-pick-heading-description">${separator.description}</span>` : null;
+    const id = `${this.parts.listboxContainer.id}-${++this.#rows}`;
+    const descriptionElement = separator.description ? html.fragment` <span class="d-workbench__quick-pick-heading-description">${separator.description}</span>` : null;
     return html`<div class="d-workbench__quick-pick-group" role="group" aria-labelledby=${id}>
-      <div class="d-workbench__quick-pick-heading" id=${id} role="presentation">${separator.label}${description}</div>
+      <div class="d-workbench__quick-pick-heading" id=${id} role="presentation">${separator.label}${descriptionElement}</div>
     </div>`;
   }
 
   #option(item: T): HTMLElement {
-    const option = itemElement(item);
-    option.setAttribute('role', 'option');
-    if (item.checked !== undefined) option.setAttribute('aria-checked', String(item.checked));
-    if (item.disabled) option.setAttribute('aria-disabled', 'true');
-    if (item.tooltip) option.title = item.tooltip;
-    option.id = `${this.parts.listbox.id}-${++this.#rows}`;
+    const optionElement = itemElement(item);
+    optionElement.setAttribute('role', 'option');
+    if (item.checked !== undefined) optionElement.setAttribute('aria-checked', String(item.checked));
+    if (item.disabled) optionElement.setAttribute('aria-disabled', 'true');
+    if (item.tooltip) optionElement.title = item.tooltip;
+    optionElement.id = `${this.parts.listboxContainer.id}-${++this.#rows}`;
     // keeps the focus in the field
-    option.addEventListener('mousedown', (event) => event.preventDefault());
-    option.addEventListener('click', (event) => item.disabled || this.pick(item, event.metaKey || event.ctrlKey));
-    this.#options.push({ item, element: option });
-    return option;
+    optionElement.addEventListener('mousedown', (event) => event.preventDefault());
+    optionElement.addEventListener('click', (event) => item.disabled || this.pick(item, event.metaKey || event.ctrlKey));
+    this.#options.push({ item, optionElement });
+    return optionElement;
   }
 
   #activate(index: number): void {
     this.#active = index;
-    for (const { element } of this.#options) element.setAttribute('aria-selected', 'false');
+    for (const { optionElement } of this.#options) optionElement.setAttribute('aria-selected', 'false');
     const active = this.#options[index];
     if (active) {
-      active.element.setAttribute('aria-selected', 'true');
-      active.element.scrollIntoView?.({ block: 'nearest' });
-      this.parts.input.setAttribute('aria-activedescendant', active.element.id);
-    } else this.parts.input.removeAttribute('aria-activedescendant');
+      active.optionElement.setAttribute('aria-selected', 'true');
+      active.optionElement.scrollIntoView?.({ block: 'nearest' });
+      this.parts.inputElement.setAttribute('aria-activedescendant', active.optionElement.id);
+    } else this.parts.inputElement.removeAttribute('aria-activedescendant');
   }
 }
 
@@ -356,11 +356,11 @@ class OnePicker<T extends QuickPickItem> {
  * the next one shows the field and the text from then on goes to the owner as usual.
  */
 class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
-  readonly #box: HTMLElement;
-  readonly #field: HTMLInputElement;
-  readonly #progress: HTMLElement;
-  readonly #empty: HTMLElement;
-  readonly #prompt: HTMLElement;
+  readonly #boxContainer: HTMLElement;
+  readonly #fieldElement: HTMLInputElement;
+  readonly #progressElement: HTMLElement;
+  readonly #emptyElement: HTMLElement;
+  readonly #promptElement: HTMLElement;
   readonly #picker: OnePicker<T>;
   readonly #changed = new EventEmitter<string>();
   readonly #accepted = new EventEmitter<QuickPickAccept>();
@@ -378,22 +378,22 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 
   constructor(
     private readonly boxes: {
-      show(box: HTMLElement, field: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined, opener: Element | undefined): void;
-      hide(box: HTMLElement): void;
+      show(boxContainer: HTMLElement, fieldElement: HTMLElement, onHide: () => void, anchor: MenuAnchor | undefined, openerElement: Element | undefined): void;
+      hide(boxContainer: HTMLElement): void;
     },
   ) {
-    this.#field = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" role="combobox" aria-autocomplete="list" aria-expanded="true"
+    this.#fieldElement = html<HTMLInputElement>`<input type="text" class="d-workbench__quick-pick-field" role="combobox" aria-autocomplete="list" aria-expanded="true"
       oninput=${() => this.#typed()} onkeydown=${(event: KeyboardEvent) => this.#picker.key(event)}>`;
-    this.#progress = html`<div class="d-workbench__quick-pick-progress"></div>`;
-    const listbox = html`<div class="d-workbench__quick-pick-list" role="listbox"></div>`;
-    this.#empty = html`<div class="d-workbench__quick-pick-empty">No results</div>`;
-    this.#prompt = html`<div class="d-workbench__quick-pick-hint"></div>`;
-    this.#box = html`<div class="d-workbench__quick-pick" role="dialog">${this.#field}${this.#progress}${listbox}${this.#empty}${this.#prompt}</div>`;
-    this.#picker = new OnePicker<T>({ listbox, input: this.#field }, (item, modified) => {
+    this.#progressElement = html`<div class="d-workbench__quick-pick-progress"></div>`;
+    const listboxContainer = html`<div class="d-workbench__quick-pick-list" role="listbox"></div>`;
+    this.#emptyElement = html`<div class="d-workbench__quick-pick-empty">No results</div>`;
+    this.#promptElement = html`<div class="d-workbench__quick-pick-hint"></div>`;
+    this.#boxContainer = html`<div class="d-workbench__quick-pick" role="dialog">${this.#fieldElement}${this.#progressElement}${listboxContainer}${this.#emptyElement}${this.#promptElement}</div>`;
+    this.#picker = new OnePicker<T>({ listboxContainer, inputElement: this.#fieldElement }, (item, modified) => {
       this.#selected = [item];
       this.#accepted.fire({ newTab: modified });
     });
-    this.#prompt.id = `${listbox.id}-hint`;
+    this.#promptElement.id = `${listboxContainer.id}-hint`;
     this.#update();
   }
 
@@ -407,30 +407,30 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   }
 
   get placeholder(): string | undefined {
-    return this.#field.placeholder || undefined;
+    return this.#fieldElement.placeholder || undefined;
   }
 
   set placeholder(placeholder: string | undefined) {
-    this.#field.placeholder = placeholder ?? '';
+    this.#fieldElement.placeholder = placeholder ?? '';
   }
 
   get value(): string {
-    return this.#field.value;
+    return this.#fieldElement.value;
   }
 
   set value(value: string) {
-    this.#field.value = value;
-    this.#field.setSelectionRange(value.length, value.length);
+    this.#fieldElement.value = value;
+    this.#fieldElement.setSelectionRange(value.length, value.length);
     if (value !== '') this.#conceal(false);
     this.#changed.fire(value);
   }
 
   get prompt(): string | undefined {
-    return this.#prompt.textContent || undefined;
+    return this.#promptElement.textContent || undefined;
   }
 
   set prompt(prompt: string | undefined) {
-    this.#prompt.textContent = prompt ?? '';
+    this.#promptElement.textContent = prompt ?? '';
     this.#update();
   }
 
@@ -460,18 +460,18 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   show(): void {
     if (this.#shown) return;
     this.#shown = true;
-    this.#box.classList.toggle('d-workbench__quick-pick--menu', this.menu);
-    this.#conceal(this.menu && this.#field.value === '');
-    const opener = this.menu && this.anchor instanceof Element ? this.anchor : undefined;
-    this.boxes.show(this.#box, this.#field, () => {
+    this.#boxContainer.classList.toggle('d-workbench__quick-pick--menu', this.menu);
+    this.#conceal(this.menu && this.#fieldElement.value === '');
+    const openerElement = this.menu && this.anchor instanceof Element ? this.anchor : undefined;
+    this.boxes.show(this.#boxContainer, this.#fieldElement, () => {
       this.#shown = false;
       this.#hidden.fire();
-    }, this.anchor, opener);
-    this.#field.setSelectionRange(this.#field.value.length, this.#field.value.length);
+    }, this.anchor, openerElement);
+    this.#fieldElement.setSelectionRange(this.#fieldElement.value.length, this.#fieldElement.value.length);
   }
 
   hide(): void {
-    this.boxes.hide(this.#box);
+    this.boxes.hide(this.#boxContainer);
   }
 
   dispose(): void {
@@ -483,8 +483,8 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
 
   /** The text typed: while the field is concealed, a letter only jumps (`OnePicker.jump`); else it goes to the owner. */
   #typed(): void {
-    const value = this.#field.value;
-    if (this.#field.classList.contains(CONCEALED)) {
+    const value = this.#fieldElement.value;
+    if (this.#fieldElement.classList.contains(CONCEALED)) {
       if (value.length <= 1) {
         this.#picker.jump(value);
         return;
@@ -495,19 +495,19 @@ class OwnedQuickPick<T extends QuickPickItem> implements QuickPick<T> {
   }
 
   #conceal(concealed: boolean): void {
-    this.#field.classList.toggle(CONCEALED, concealed);
+    this.#fieldElement.classList.toggle(CONCEALED, concealed);
   }
 
   /** The names, the progress line, "No results" and the prompt as the state says. */
   #update(): void {
     const name = this.#title ?? 'Pick';
-    this.#box.setAttribute('aria-label', name);
-    this.#field.setAttribute('aria-label', name);
-    this.#progress.hidden = !this.#busy;
-    this.#empty.hidden = this.#busy || this.#picker.size > 0 || this.#field.value.trim() === '';
-    this.#prompt.hidden = !this.#prompt.textContent;
-    if (this.#prompt.hidden) this.#field.removeAttribute('aria-describedby');
-    else this.#field.setAttribute('aria-describedby', this.#prompt.id);
+    this.#boxContainer.setAttribute('aria-label', name);
+    this.#fieldElement.setAttribute('aria-label', name);
+    this.#progressElement.hidden = !this.#busy;
+    this.#emptyElement.hidden = this.#busy || this.#picker.size > 0 || this.#fieldElement.value.trim() === '';
+    this.#promptElement.hidden = !this.#promptElement.textContent;
+    if (this.#promptElement.hidden) this.#fieldElement.removeAttribute('aria-describedby');
+    else this.#fieldElement.setAttribute('aria-describedby', this.#promptElement.id);
   }
 }
 
@@ -520,15 +520,15 @@ const CONCEALED = 'd-workbench__quick-pick-field--concealed';
  */
 function itemElement(item: QuickPickItem): HTMLElement {
   const highlights = item.highlights ?? {};
-  const space = (part: Node | null) => (part ? html.fragment` ${part}` : null);
-  const check = html`<span class="d-workbench__quick-pick-check" aria-hidden="true">${item.checked ? '✓' : ''}</span>`;
-  let icon: HTMLElement | null = null;
+  const space = (partElement: Node | null) => (partElement ? html.fragment` ${partElement}` : null);
+  const checkElement = html`<span class="d-workbench__quick-pick-check" aria-hidden="true">${item.checked ? '✓' : ''}</span>`;
+  let iconElement: HTMLElement | null = null;
   if (item.icon) {
-    const span: HTMLElement = html`<span class="d-workbench__quick-pick-icon" role="img" aria-label=${item.icon.label}></span>`;
-    span.insertAdjacentHTML('beforeend', item.icon.svg);
-    icon = span;
+    const iconSpanElement: HTMLElement = html`<span class="d-workbench__quick-pick-icon" role="img" aria-label=${item.icon.label}></span>`;
+    iconSpanElement.insertAdjacentHTML('beforeend', item.icon.svg);
+    iconElement = iconSpanElement;
   }
-  return html`<div class="d-workbench__quick-pick-item">${check}${icon ? html.fragment`${icon} ` : null}${highlighted('d-workbench__quick-pick-label', item.label, highlights.label)}${space(
+  return html`<div class="d-workbench__quick-pick-item">${checkElement}${iconElement ? html.fragment`${iconElement} ` : null}${highlighted('d-workbench__quick-pick-label', item.label, highlights.label)}${space(
     item.description ? highlighted('d-workbench__quick-pick-description', item.description, highlights.description) : null,
   )}${space(item.keybinding ? html`<kbd class="d-workbench__quick-pick-keybinding">${item.keybinding}</kbd>` : null)}${space(
     item.detail ? highlighted('d-workbench__quick-pick-detail', item.detail, highlights.detail) : null,

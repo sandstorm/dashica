@@ -54,11 +54,11 @@ const click = (menu: ReturnType<typeof openCellMenu>, label: string) =>
 describe('table', () => {
   it('draws the rows below its title, which the chart frame shows', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { title: 'Latest', height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { title: 'Latest', height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
-    expect(error(el)).toBeUndefined();
-    expect(el.querySelector('.d-chart-frame__title')!.textContent).toBe('Latest');
-    expect(el.querySelectorAll('.tabulator-cell[tabulator-field="path"]')).toHaveLength(2);
+    expect(error(widgetContainer)).toBeUndefined();
+    expect(widgetContainer.querySelector('.d-chart-frame__title')!.textContent).toBe('Latest');
+    expect(widgetContainer.querySelectorAll('.tabulator-cell[tabulator-field="path"]')).toHaveLength(2);
   });
 
   it('gives its ticked rows to details.showRecords on each change; the press makes it active; a resize keeps them, a new answer and its removal clear them', async () => {
@@ -66,14 +66,14 @@ describe('table', () => {
     testbed.commands.registerCommand('details.showRecords', (shown) => given.push(shown));
     const widget = { type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' } as const;
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
-    const { el, rendered } = testbed.render(widget);
+    const { widgetContainer, rendered } = testbed.render(widget);
     await inView();
     // a first answer, nothing ticked: nothing to tell
     expect(given).toEqual([]);
     expect(testbed.widgets.active).toBeUndefined();
 
     const tick = (row: number) => {
-      const box = el.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row];
+      const box = widgetContainer.querySelectorAll<HTMLInputElement>('.tabulator-row input[type=checkbox]')[row];
       box.dispatchEvent(new Event('pointerdown', { bubbles: true }));
       box.click();
     };
@@ -82,14 +82,14 @@ describe('table', () => {
     expect(given).toEqual([{ widget, records: [{ path: '/login', status: 500 }] }]);
     tick(0);
     expect(given.at(-1)).toEqual({ widget, records: [{ path: '/login', status: 500 }, { path: '/api', status: 200 }] });
-    expect(el.querySelector('.d-record-panel')).toBeNull();
+    expect(widgetContainer.querySelector('.d-record-panel')).toBeNull();
 
-    const drawn = el.querySelector('.tabulator');
+    const drawn = widgetContainer.querySelector('.tabulator');
     testbed.resize(480);
     await settle();
-    expect(el.querySelector('.tabulator')).toBe(drawn);
+    expect(widgetContainer.querySelector('.tabulator')).toBe(drawn);
     expect(given).toHaveLength(2);
-    expect(el.querySelectorAll('.tabulator-row input[type=checkbox]:checked')).toHaveLength(2);
+    expect(widgetContainer.querySelectorAll('.tabulator-row input[type=checkbox]:checked')).toHaveLength(2);
 
     testbed.query.refresh();
     await settle();
@@ -102,10 +102,10 @@ describe('table', () => {
 
   it('offers the value of a clicked cell by its column’s name, below the cell, with the table’s pills', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] });
     await inView();
 
-    const cell = cellAt(el, 'status', 1);
+    const cell = cellAt(widgetContainer, 'status', 1);
     expect(cell.classList.contains('d-table__filterable')).toBe(true);
     cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers).toEqual([{ at: cell, candidates: [{ fieldId: 'status', value: '500' }], source: { dataUrl: '/p/shop/api/1', filterable: ['path', 'status'] } }]);
@@ -114,40 +114,40 @@ describe('table', () => {
   it('offers a timestamp cell as ISO 8601 with its column’s ClickHouse type', async () => {
     const at = Date.UTC(2026, 9, 31, 10, 0, 0);
     testbed.serve('/p/shop/api/1/query', { timestamp: [at / 1000] }, { 'X-Dashica-Column-Types': '{"timestamp":"DateTime"}' });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['timestamp'] });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['timestamp'] });
     await inView();
 
-    cellAt(el, 'timestamp', 0).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    cellAt(widgetContainer, 'timestamp', 0).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers.at(-1)?.candidates).toEqual([{ fieldId: 'timestamp', value: '2026-10-31T10:00:00.000Z', type: 'DateTime' }]);
   });
 
   it('offers nothing from a NULL cell', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', null], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
     await inView();
 
-    cellAt(el, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    cellAt(widgetContainer, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers).toEqual([]);
   });
 
   it('offers only in its category columns: a measure, or a table without categories, offers nothing', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], cnt: [3] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
     await inView();
 
-    const cnt = cellAt(el, 'cnt', 0);
+    const cnt = cellAt(widgetContainer, 'cnt', 0);
     expect(cnt.classList.contains('d-table__filterable')).toBe(false);
     cnt.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers).toEqual([]);
-    expect(cellAt(el, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
+    expect(cellAt(widgetContainer, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
   });
 
   it('offers nothing in a list column, even one named a category', async () => {
     testbed.serve('/p/shop/api/1/query', new Table({ tags: vectorFromArray([['a', 'b']], new List(new Field('item', new Utf8(), true))) }));
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['tags'] });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['tags'] });
     await inView();
 
-    const tags = cellAt(el, 'tags', 0);
+    const tags = cellAt(widgetContainer, 'tags', 0);
     expect(tags.classList.contains('d-table__filterable')).toBe(false);
     tags.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(offers).toEqual([]);
@@ -155,30 +155,30 @@ describe('table', () => {
 
   it('keeps only the SQL entries no filter op says in a cell’s menu', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
 
-    const menu = openCellMenu(el, 'path', 0);
+    const menu = openCellMenu(widgetContainer, 'path', 0);
     expect(menu).toMatchObject({ menuId: 'table/cell', options: { anchor: { x: 5, y: 6 }, context: { column: 'path', value: '/api', widget: { type: 'table' } } } });
     expect(labels(menu)).toEqual(['Filter: Contains this value']);
   });
 
   it('keeps the time window entries in SQL for a timestamp column', async () => {
     testbed.serve('/p/shop/api/1/query', { timestamp: [1761730000] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
 
-    expect(labels(openCellMenu(el, 'timestamp', 0))).toEqual(['Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
+    expect(labels(openCellMenu(widgetContainer, 'timestamp', 0))).toEqual(['Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
   });
 
   it('has all SQL entries in the menu of a table whose cells do not filter on a click, and a time window around a timestamp', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
     const unfiltering = (menu: ReturnType<typeof openCellMenu>) => ({ ...menu, entries: testbed.ui.getMenuItems<object>(menu.menuId, { ...menu.options.context, filtering: false }) });
 
-    expect(labels(unfiltering(openCellMenu(el, 'path', 0)))).toEqual(['Filter: Equals this value', 'Filter: Not equals this value', 'Filter: Contains this value']);
-    const time = unfiltering(openCellMenu(el, 'timestamp', 0));
+    expect(labels(unfiltering(openCellMenu(widgetContainer, 'path', 0)))).toEqual(['Filter: Equals this value', 'Filter: Not equals this value', 'Filter: Contains this value']);
+    const time = unfiltering(openCellMenu(widgetContainer, 'timestamp', 0));
     expect(labels(time)).toEqual(['Filter: Equals this timestamp', 'Filter: Time ±5 minutes', 'Filter: Time ±1 hour', 'Filter: Time ±24 hours']);
     await click(time, 'Filter: Time ±1 hour');
     expect(addedSql).toEqual(['timestamp BETWEEN 1761726400 AND 1761733600']);
@@ -186,9 +186,9 @@ describe('table', () => {
 
   it('shows table/header from a column header’s menu button; its entries size the columns', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
-    const button = el.querySelector<HTMLButtonElement>('.tabulator-col[tabulator-field="path"] .d-table__header-menu')!;
+    const button = widgetContainer.querySelector<HTMLButtonElement>('.tabulator-col[tabulator-field="path"] .d-table__header-menu')!;
     button.click();
     const shown = testbed.menus.at(-1)!;
     expect(shown).toMatchObject({ menuId: 'table/header', options: { anchor: button, context: { column: 'path' } } });
@@ -201,10 +201,10 @@ describe('table', () => {
 
   it('adds a SQL chip from a cell’s menu', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], status: [200, 500] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
 
-    await click(openCellMenu(el, 'path', 0), 'Filter: Contains this value');
+    await click(openCellMenu(widgetContainer, 'path', 0), 'Filter: Contains this value');
 
     expect(addedSql).toEqual(["path LIKE '%/api%'"]);
   });
@@ -216,10 +216,10 @@ describe('table', () => {
     testbed.activate(table);
     vi.stubGlobal('CSS', {});
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], timestamp: [1761730000000] });
-    const { el } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
     await inView();
 
-    expect(labels(openCellMenu(el, 'path', 0))).toEqual([]);
-    expect(labels(openCellMenu(el, 'timestamp', 0))).toEqual([]);
+    expect(labels(openCellMenu(widgetContainer, 'path', 0))).toEqual([]);
+    expect(labels(openCellMenu(widgetContainer, 'timestamp', 0))).toEqual([]);
   });
 });

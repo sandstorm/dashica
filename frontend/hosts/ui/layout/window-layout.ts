@@ -18,20 +18,20 @@ import { restoreSideBarState, SideBar, type PanelCommands, type PanelMenus, type
  * outside, or `dismiss()` (e.g. after a dashboard was chosen in it).
  */
 export class WindowLayout {
-  readonly topBar: HTMLElement;
+  readonly topBarContainer: HTMLElement;
   /** In the top bar, between its left and its other items: where the tab bar (`TabBar`) goes. */
-  readonly tabBar: HTMLElement;
+  readonly tabBarContainer: HTMLElement;
   /** The left rail's start, above its buttons: where the global menu's "…" goes. */
-  readonly railStart: HTMLElement;
-  readonly filterBar: HTMLElement;
-  readonly content: HTMLElement;
-  readonly statusBar: HTMLElement;
+  readonly railStartContainer: HTMLElement;
+  readonly filterBarContainer: HTMLElement;
+  readonly contentContainer: HTMLElement;
+  readonly statusBarContainer: HTMLElement;
   readonly #sides: Record<Side, SideBar>;
-  readonly #center: HTMLElement;
+  readonly #centerContainer: HTMLElement;
   readonly #cleanup: (() => void)[] = [];
 
   constructor(
-    private readonly host: HTMLElement,
+    private readonly hostContainer: HTMLElement,
     /** Where the layout keeps its state for the browser session (key `layout`). */
     memento: Memento,
     /** Where each panel's commands `workbench.view.<id>` go, what rail buttons run, and the keys buttons name. */
@@ -42,18 +42,18 @@ export class WindowLayout {
     const saved = memento.get<unknown>('layout');
     const save = () => void memento.update('layout', { left: this.#sides.left.state, right: this.#sides.right.state });
     this.#sides = {
-      left: new SideBar(host, 'left', restoreSideBarState(saved, 'left'), { save, commands, menus }),
-      right: new SideBar(host, 'right', restoreSideBarState(saved, 'right'), { save, commands, menus }),
+      left: new SideBar(hostContainer, 'left', restoreSideBarState(saved, 'left'), { save, commands, menus }),
+      right: new SideBar(hostContainer, 'right', restoreSideBarState(saved, 'right'), { save, commands, menus }),
     };
-    this.tabBar = html`<div class="d-workbench__tab-bar" data-testid="wb-tab-bar"></div>`;
-    this.topBar = html`<div class="d-workbench__top-bar" data-testid="wb-top-bar">${this.tabBar}</div>`;
-    this.filterBar = html`<div class="d-workbench__filter-bar" data-testid="wb-filter-bar"></div>`;
-    this.content = html`<div class="d-workbench__content"></div>`;
-    this.#center = html`<div class="d-workbench__center">${this.topBar}${this.filterBar}${this.content}</div>`;
-    this.statusBar = html`<div class="d-workbench__status-bar"></div>`;
-    this.railStart = this.#sides.left.railStart;
-    host.classList.add('d-workbench');
-    host.append(this.#sides.left.element, this.#center, this.#sides.right.element, this.statusBar);
+    this.tabBarContainer = html`<div class="d-workbench__tab-bar" data-testid="wb-tab-bar"></div>`;
+    this.topBarContainer = html`<div class="d-workbench__top-bar" data-testid="wb-top-bar">${this.tabBarContainer}</div>`;
+    this.filterBarContainer = html`<div class="d-workbench__filter-bar" data-testid="wb-filter-bar"></div>`;
+    this.contentContainer = html`<div class="d-workbench__content"></div>`;
+    this.#centerContainer = html`<div class="d-workbench__center">${this.topBarContainer}${this.filterBarContainer}${this.contentContainer}</div>`;
+    this.statusBarContainer = html`<div class="d-workbench__status-bar"></div>`;
+    this.railStartContainer = this.#sides.left.railStartContainer;
+    hostContainer.classList.add('d-workbench');
+    hostContainer.append(this.#sides.left.sideBarContainer, this.#centerContainer, this.#sides.right.sideBarContainer, this.statusBarContainer);
     this.#watchWidth();
   }
 
@@ -84,9 +84,9 @@ export class WindowLayout {
     for (const stop of this.#cleanup) stop();
     this.#sides.left.dispose();
     this.#sides.right.dispose();
-    this.#center.remove();
-    this.statusBar.remove();
-    this.host.classList.remove('d-workbench', 'd-workbench--narrow');
+    this.#centerContainer.remove();
+    this.statusBarContainer.remove();
+    this.hostContainer.classList.remove('d-workbench', 'd-workbench--narrow');
   }
 
   #refuseTaken(id: string): void {
@@ -95,17 +95,17 @@ export class WindowLayout {
 
   /** Narrow or not, from the workbench's width (ResizeObserver; without it the workbench counts as wide). */
   #watchWidth(): void {
-    const view = this.host.ownerDocument.defaultView;
+    const view = this.hostContainer.ownerDocument.defaultView;
     if (!view?.ResizeObserver) return;
     let narrow = false;
     const observer = new view.ResizeObserver(() => {
-      const now = this.host.clientWidth > 0 && this.host.clientWidth < NARROW;
+      const now = this.hostContainer.clientWidth > 0 && this.hostContainer.clientWidth < NARROW;
       if (now === narrow) return;
       narrow = now;
-      this.host.classList.toggle('d-workbench--narrow', narrow);
+      this.hostContainer.classList.toggle('d-workbench--narrow', narrow);
       this.#sides.left.setOverlay(narrow);
     });
-    observer.observe(this.host);
+    observer.observe(this.hostContainer);
     this.#cleanup.push(() => observer.disconnect());
   }
 }

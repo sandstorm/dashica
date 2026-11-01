@@ -7,84 +7,84 @@
  * The bar shows with a single tab too.
  */
 export class TabBar {
-  readonly #tabs: HTMLElement;
-  readonly #add: HTMLButtonElement;
+  readonly #tabsContainer: HTMLElement;
+  readonly #addButtonElement: HTMLButtonElement;
 
-  /** Appends the bar's tab list to `container` (the workbench's tab bar region). */
-  constructor(container: HTMLElement, options: TabBarOptions) {
-    const doc = container.ownerDocument;
-    this.#tabs = doc.createElement('div');
-    this.#tabs.className = 'd-workbench__tab-list';
-    this.#tabs.setAttribute('role', 'tablist');
-    this.#tabs.setAttribute('aria-label', 'Open pages');
-    this.#add = doc.createElement('button');
-    this.#add.type = 'button';
-    this.#add.className = 'd-workbench__tab-add';
-    this.#add.setAttribute('aria-label', 'New tab');
-    this.#add.title = 'New tab';
-    this.#add.dataset.testid = 'wb-tab-add';
-    this.#add.textContent = '+';
-    this.#add.addEventListener('click', () => options.onDidAdd());
-    container.append(this.#tabs, this.#add);
-    this.#tabs.addEventListener('click', (event) => {
-      const close = (event.target as HTMLElement).closest<HTMLElement>('[data-close]');
-      if (close?.dataset.close) {
-        options.onDidClose(close.dataset.close);
+  /** Appends the bar's tab list to `tabBarContainer` (the workbench's tab bar region). */
+  constructor(tabBarContainer: HTMLElement, options: TabBarOptions) {
+    const doc = tabBarContainer.ownerDocument;
+    this.#tabsContainer = doc.createElement('div');
+    this.#tabsContainer.className = 'd-workbench__tab-list';
+    this.#tabsContainer.setAttribute('role', 'tablist');
+    this.#tabsContainer.setAttribute('aria-label', 'Open pages');
+    this.#addButtonElement = doc.createElement('button');
+    this.#addButtonElement.type = 'button';
+    this.#addButtonElement.className = 'd-workbench__tab-add';
+    this.#addButtonElement.setAttribute('aria-label', 'New tab');
+    this.#addButtonElement.title = 'New tab';
+    this.#addButtonElement.dataset.testid = 'wb-tab-add';
+    this.#addButtonElement.textContent = '+';
+    this.#addButtonElement.addEventListener('click', () => options.onDidAdd());
+    tabBarContainer.append(this.#tabsContainer, this.#addButtonElement);
+    this.#tabsContainer.addEventListener('click', (event) => {
+      const closeButtonElement = (event.target as HTMLElement).closest<HTMLElement>('[data-close]');
+      if (closeButtonElement?.dataset.close) {
+        options.onDidClose(closeButtonElement.dataset.close);
         return;
       }
-      const tab = (event.target as HTMLElement).closest<HTMLElement>('[role=tab]');
-      if (tab?.dataset.tabId && tab.getAttribute('aria-selected') !== 'true') options.onDidChoose(tab.dataset.tabId);
+      const tabElement = (event.target as HTMLElement).closest<HTMLElement>('[role=tab]');
+      if (tabElement?.dataset.tabId && tabElement.getAttribute('aria-selected') !== 'true') options.onDidChoose(tabElement.dataset.tabId);
     });
     // a middle click closes the tab
-    this.#tabs.addEventListener('auxclick', (event) => {
-      const tab = (event.target as HTMLElement).closest<HTMLElement>('[data-tab-id]');
-      if (event.button === 1 && tab?.dataset.tabId && this.#tabs.querySelectorAll('[role=tab]').length > 1) {
+    this.#tabsContainer.addEventListener('auxclick', (event) => {
+      const tabElement = (event.target as HTMLElement).closest<HTMLElement>('[data-tab-id]');
+      if (event.button === 1 && tabElement?.dataset.tabId && this.#tabsContainer.querySelectorAll('[role=tab]').length > 1) {
         event.preventDefault();
-        options.onDidClose(tab.dataset.tabId);
+        options.onDidClose(tabElement.dataset.tabId);
       }
     });
     // keeps a middle press from starting to scroll
-    this.#tabs.addEventListener('mousedown', (event) => {
+    this.#tabsContainer.addEventListener('mousedown', (event) => {
       if (event.button === 1) event.preventDefault();
     });
   }
 
   /** Shows a tab per entry of `tabs`, `shown` selected; × only while there are several. */
   update(tabs: readonly TabBarTab[], shown: string): void {
-    const doc = this.#tabs.ownerDocument;
-    this.#tabs.replaceChildren(
+    const doc = this.#tabsContainer.ownerDocument;
+    this.#tabsContainer.replaceChildren(
       ...tabs.map(({ id, title }) => {
-        const item = doc.createElement('div');
-        item.className = id === shown ? 'd-workbench__tab d-workbench__tab--active' : 'd-workbench__tab';
-        item.dataset.tabId = id;
-        const tab = doc.createElement('button');
-        tab.type = 'button';
-        tab.className = 'd-workbench__tab-title';
-        tab.setAttribute('role', 'tab');
-        tab.setAttribute('aria-selected', String(id === shown));
-        tab.dataset.tabId = id;
-        tab.dataset.testid = 'wb-tab';
-        tab.title = title;
-        tab.textContent = title;
-        item.append(tab);
+        const itemContainer = doc.createElement('div');
+        itemContainer.className = id === shown ? 'd-workbench__tab d-workbench__tab--active' : 'd-workbench__tab';
+        itemContainer.dataset.tabId = id;
+        const tabElement = doc.createElement('button');
+        tabElement.type = 'button';
+        tabElement.className = 'd-workbench__tab-title';
+        tabElement.setAttribute('role', 'tab');
+        tabElement.setAttribute('aria-selected', String(id === shown));
+        tabElement.dataset.tabId = id;
+        tabElement.dataset.testid = 'wb-tab';
+        tabElement.title = title;
+        tabElement.textContent = title;
+        itemContainer.append(tabElement);
         if (tabs.length > 1) {
-          const close = doc.createElement('button');
-          close.type = 'button';
-          close.className = 'd-workbench__tab-close';
-          close.setAttribute('aria-label', `Close ${title}`);
-          close.title = 'Close';
-          close.dataset.close = id;
-          close.textContent = '×';
-          item.append(close);
+          const closeButtonElement = doc.createElement('button');
+          closeButtonElement.type = 'button';
+          closeButtonElement.className = 'd-workbench__tab-close';
+          closeButtonElement.setAttribute('aria-label', `Close ${title}`);
+          closeButtonElement.title = 'Close';
+          closeButtonElement.dataset.close = id;
+          closeButtonElement.textContent = '×';
+          itemContainer.append(closeButtonElement);
         }
-        return item;
+        return itemContainer;
       }),
     );
   }
 
   dispose(): void {
-    this.#tabs.remove();
-    this.#add.remove();
+    this.#tabsContainer.remove();
+    this.#addButtonElement.remove();
   }
 }
 

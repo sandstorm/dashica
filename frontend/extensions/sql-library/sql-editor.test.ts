@@ -76,7 +76,7 @@ describe('showSqlInputBox', () => {
     expect(answer).toBe('a = 1');
     expect(asked).toEqual([expect.objectContaining({ title: 'SQL condition', prompt: 'p', anchor, field: made.at(-1) })]);
     const editor = made.at(-1)!;
-    expect(editor.input.getAttribute('aria-label')).toBe('SQL condition');
+    expect(editor.inputElement.getAttribute('aria-label')).toBe('SQL condition');
     expect(editor.setCompletion).toHaveBeenCalledWith(completion);
     expect(editor.dispose).toHaveBeenCalled();
   });

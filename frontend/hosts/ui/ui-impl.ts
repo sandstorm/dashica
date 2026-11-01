@@ -26,8 +26,8 @@ import './layout/window-layout.css';
 import './quick-input/quick-input.css';
 
 /**
- * The workbench's `UiApi`, laid out in `host`. `content`: the region the tabs' pages go into; `tabBar`: the tab bar's;
- * `railStart`: the global menu's "…", at the left rail's start.
+ * The workbench's `UiApi`, laid out in `hostContainer`. `contentContainer`: the region the tabs' pages go into;
+ * `tabBarContainer`: the tab bar's; `railStartContainer`: the global menu's "…", at the left rail's start.
  */
 export class UiHost implements UiApi {
   readonly #layout: WindowLayout;
@@ -39,30 +39,30 @@ export class UiHost implements UiApi {
   readonly #searchProviders = new Set<SearchProvider>();
   readonly onDidChangeMenu;
 
-  constructor(host: HTMLElement, layoutState: Memento, commands: CommandsHost) {
+  constructor(hostContainer: HTMLElement, layoutState: Memento, commands: CommandsHost) {
     this.#menus = new Menus(() => commands.getCommands());
-    this.#quickInput = new QuickInput(host);
-    this.#notifications = new Notifications(host);
+    this.#quickInput = new QuickInput(hostContainer);
+    this.#notifications = new Notifications(hostContainer);
     this.#contextMenu = new ContextMenu(this.#quickInput, this.#menus, commands);
-    this.#layout = new WindowLayout(host, layoutState, commands, this);
+    this.#layout = new WindowLayout(hostContainer, layoutState, commands, this);
     this.#bars = {
-      top: new Bar(this.#layout.topBar, this.#layout.tabBar),
-      filter: new Bar(this.#layout.filterBar),
-      status: new Bar(this.#layout.statusBar),
+      top: new Bar(this.#layout.topBarContainer, this.#layout.tabBarContainer),
+      filter: new Bar(this.#layout.filterBarContainer),
+      status: new Bar(this.#layout.statusBarContainer),
     };
     this.onDidChangeMenu = this.#menus.onDidChange;
   }
 
-  get content(): HTMLElement {
-    return this.#layout.content;
+  get contentContainer(): HTMLElement {
+    return this.#layout.contentContainer;
   }
 
-  get tabBar(): HTMLElement {
-    return this.#layout.tabBar;
+  get tabBarContainer(): HTMLElement {
+    return this.#layout.tabBarContainer;
   }
 
-  get railStart(): HTMLElement {
-    return this.#layout.railStart;
+  get railStartContainer(): HTMLElement {
+    return this.#layout.railStartContainer;
   }
 
   /**
@@ -82,8 +82,8 @@ export class UiHost implements UiApi {
     return this.#layout.addRailButton(id, options);
   }
 
-  registerBarItem(bar: 'top' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable {
-    return this.#bars[bar].add(element, placement);
+  registerBarItem(bar: 'top' | 'filter' | 'status', itemElement: HTMLElement, placement: BarPlacement): Disposable {
+    return this.#bars[bar].add(itemElement, placement);
   }
 
   registerMenuItem<C extends object = MenuContext>(menuId: string, item: MenuItem<C>): Disposable {

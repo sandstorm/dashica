@@ -16,7 +16,7 @@ afterEach(() => testbed.dispose());
 
 describe('grid', () => {
   it('lays out its areas as the template draws them, each area’s widget in its cell', async () => {
-    const { el } = testbed.render({
+    const { widgetContainer } = testbed.render({
       type: 'grid',
       props: { template: ['a b', 'c c'], gap: '4px' },
       children: {
@@ -25,7 +25,7 @@ describe('grid', () => {
       },
     });
     await settle();
-    const layout = el.firstElementChild as HTMLElement;
+    const layout = widgetContainer.firstElementChild as HTMLElement;
     expect(layout.style.gridTemplateColumns).toBe('repeat(2, 1fr)');
     expect(layout.style.gridTemplateAreas).toBe('"a b" "c c"');
     expect(layout.style.gap).toBe('4px');

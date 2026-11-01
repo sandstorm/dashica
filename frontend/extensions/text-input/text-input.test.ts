@@ -31,8 +31,8 @@ describe('textInput', () => {
   });
 
   it('writes what is typed into its param', () => {
-    const { el } = testbed.render({ type: 'textInput', props: { name: 'path', label: 'Path', placeholder: '/api/' } });
-    const input = el.querySelector('input')!;
+    const { widgetContainer } = testbed.render({ type: 'textInput', props: { name: 'path', label: 'Path', placeholder: '/api/' } });
+    const input = widgetContainer.querySelector('input')!;
     expect(input.placeholder).toBe('/api/');
     type(input, '/api/orders');
     expect(param('path')).toBe('/api/orders');
@@ -40,8 +40,8 @@ describe('textInput', () => {
 
   it('with prependCaret, stores the text with a leading ^ and shows it without', () => {
     setParam('path', '^/api/');
-    const { el } = testbed.render({ type: 'textInput', props: { name: 'path', prependCaret: true } });
-    const input = el.querySelector('input')!;
+    const { widgetContainer } = testbed.render({ type: 'textInput', props: { name: 'path', prependCaret: true } });
+    const input = widgetContainer.querySelector('input')!;
     expect(input.value).toBe('/api/');
     type(input, '/checkout');
     expect(param('path')).toBe('^/checkout');

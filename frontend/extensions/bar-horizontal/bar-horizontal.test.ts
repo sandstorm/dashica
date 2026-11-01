@@ -31,18 +31,18 @@ const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textCont
 describe('barHorizontal', () => {
   it('draws the widget’s data once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], cnt: [30, 2] });
-    const { el } = testbed.render({ type: 'barHorizontal', props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' } }, dataUrl: '/p/shop/api/1', filterable });
+    const { widgetContainer } = testbed.render({ type: 'barHorizontal', props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' } }, dataUrl: '/p/shop/api/1', filterable });
     await inView();
-    expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
+    expect(error(widgetContainer)).toBeUndefined();
+    expect(widgetContainer.querySelectorAll('.d-chart-frame__body svg rect').length).toBeGreaterThan(0);
   });
 
   it('runs filters.offer with the category and the fill of a clicked bar and the chart’s pills', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'], host: ['a', 'b'], cnt: [30, 2] });
     const props = { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } } as const;
-    const { el } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
+    const { widgetContainer } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
-    await clickMark(el.querySelectorAll('g[aria-label="bar"] rect')[1]);
+    await clickMark(widgetContainer.querySelectorAll('g[aria-label="bar"] rect')[1]);
     expect(offers.map(({ candidates, source }) => ({ candidates, source }))).toEqual([
       {
         candidates: [{ fieldId: 'path', value: '/login' }, { fieldId: 'host', value: 'b' }],
@@ -57,13 +57,13 @@ describe('barHorizontal', () => {
     const paths = Array.from({ length: 16 }, (_, at) => `/${at}`);
     testbed.serve('/p/shop/api/1/query', { path: ['/0', '/1', '/1', ...paths.slice(2)], host: ['a', 'a', 'b', ...paths.slice(2).map(() => 'a')], cnt: [1, 1, 10, ...paths.slice(2).map(() => 1)] });
     const props = { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'expr', alias: 'path' }, fill: { kind: 'expr', alias: 'host' } } as const;
-    const { el } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
+    const { widgetContainer } = testbed.render({ type: 'barHorizontal', props, dataUrl: '/p/shop/api/1', filterable });
     await inView();
-    const [short, , long] = el.querySelectorAll('g[aria-label="bar"] rect');
+    const [short, , long] = widgetContainer.querySelectorAll('g[aria-label="bar"] rect');
     const [, y] = anchor(short!);
     // below /0's middle, still on its band, as far right as /1's "b" is in its middle
     await clickAtPoint((short as SVGElement).ownerSVGElement!, [anchor(long!)[0], y + 0.4 * Number(short!.getAttribute('height'))]);
-    const shown = /path (\S+)/.exec(el.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
+    const shown = /path (\S+)/.exec(widgetContainer.querySelector('g[aria-label="tip"]')?.textContent ?? '')?.[1];
     expect([shown, offers.at(-1)?.candidates.map(({ value }) => value)]).toEqual(['/0', ['/0', 'a']]);
   });
 });

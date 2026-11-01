@@ -34,9 +34,9 @@ export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: b
     onDidChangePage: pageChanged.event,
     popOut: async (view) => void popped.push(view),
   };
-  const workbench = document.body.appendChild(document.createElement('div'));
-  const commands = new CommandsHost(workbench);
-  const ui = new UiHost(workbench, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
+  const workbenchContainer = document.body.appendChild(document.createElement('div'));
+  const commands = new CommandsHost(workbenchContainer);
+  const ui = new UiHost(workbenchContainer, { get: (_key: string, defaultValue?: unknown) => defaultValue, update: async () => {} } as Memento, commands);
   const widgets = new WidgetsHost({ showContextMenu: (menuId, options) => menus.push({ menuId, options }) }, { activeQuery: query, onDidChangeTabs: () => Disposable.from() });
   const answers = new Map<string, () => Response>();
   const requests: URL[] = [];
@@ -103,9 +103,9 @@ export function widgetTestbed({ sqlEnabled = true, keys = [] }: { sqlEnabled?: b
     },
     /** Renders `widget` into a new element in the document. */
     render(widget: WidgetNode) {
-      const el = document.body.appendChild(document.createElement('div'));
-      const rendered = widgets.render(el, widget, query);
-      return { el, rendered };
+      const widgetContainer = document.body.appendChild(document.createElement('div'));
+      const rendered = widgets.render(widgetContainer, widget, query);
+      return { widgetContainer, rendered };
     },
     scrollIntoView() {
       for (const callback of intersections) callback([{ isIntersecting: true }]);

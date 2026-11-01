@@ -32,7 +32,7 @@ export const details: Extension = {
     const update = () => {
       status.textContent = recordsSelected(shown?.records.length ?? 0);
       status.hidden = !shown;
-      if (panel.visible) panel.body.replaceChildren(drawDetails(shown));
+      if (panel.visible) panel.bodyContainer.replaceChildren(drawDetails(shown));
     };
     update();
     subscriptions.push(

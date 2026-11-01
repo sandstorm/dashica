@@ -72,17 +72,17 @@ declare global {
  */
 window.Dashica = {
   async boot() {
-    const host = document.getElementById('workbench')!;
+    const workbenchContainer = document.getElementById('workbench')!;
     let workbench: WorkbenchJson;
     try {
       const response = await fetch('/workbench.json');
       if (!response.ok) throw new Error(`/workbench.json: ${response.status} ${await response.text()}`);
       workbench = await response.json();
     } catch (error) {
-      host.textContent = error instanceof Error ? error.message : String(error);
-      host.className = 'd-notice d-notice--error';
+      workbenchContainer.textContent = error instanceof Error ? error.message : String(error);
+      workbenchContainer.className = 'd-notice d-notice--error';
       return;
     }
-    createWorkbench(host, { extensions: EXTENSIONS, workbench });
+    createWorkbench(workbenchContainer, { extensions: EXTENSIONS, workbench });
   },
 };

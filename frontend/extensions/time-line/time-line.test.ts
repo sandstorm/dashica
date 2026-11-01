@@ -34,18 +34,18 @@ const error = (el: HTMLElement) => el.querySelector('.d-widget-error')?.textCont
 describe('timeLine', () => {
   it('draws the widget’s data once it is in view', async () => {
     testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], cnt: [3, 5] });
-    const { el } = testbed.render({ type: 'timeLine', props: { x: { kind: 'autoBucket', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable });
+    const { widgetContainer } = testbed.render({ type: 'timeLine', props: { x: { kind: 'autoBucket', alias: 'time', xBucketSizeMs: QUARTER }, y: { kind: 'count', alias: 'cnt' } }, dataUrl: '/p/shop/api/1', filterable });
     await inView();
-    expect(error(el)).toBeUndefined();
-    expect(el.querySelectorAll('.d-chart-frame__body svg path').length).toBeGreaterThan(0);
+    expect(error(widgetContainer)).toBeUndefined();
+    expect(widgetContainer.querySelectorAll('.d-chart-frame__body svg path').length).toBeGreaterThan(0);
   });
 
   it('draws a line in the color stroke, or one per value of strokeField, which wins', async () => {
     testbed.serve('/p/shop/api/1/query', { time: [T0, T0 + QUARTER], cnt: [3, 5], host: ['a', 'b'] });
     const x = { kind: 'expr' as const, alias: 'time', xBucketSizeMs: QUARTER };
     const y = { kind: 'count' as const, alias: 'cnt' };
-    const colored = testbed.render({ type: 'timeLine', props: { x, y, stroke: '#ff0000' }, dataUrl: '/p/shop/api/1', filterable }).el;
-    const perHost = testbed.render({ type: 'timeLine', props: { x, y, stroke: '#ff0000', strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1', filterable }).el;
+    const colored = testbed.render({ type: 'timeLine', props: { x, y, stroke: '#ff0000' }, dataUrl: '/p/shop/api/1', filterable }).widgetContainer;
+    const perHost = testbed.render({ type: 'timeLine', props: { x, y, stroke: '#ff0000', strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1', filterable }).widgetContainer;
     await inView();
     expect(colored.querySelector('svg g[stroke="#ff0000"] path')).not.toBeNull();
     expect(perHost.querySelector('svg g[stroke="#ff0000"]')).toBeNull();
@@ -63,8 +63,8 @@ describe('timeLine', () => {
       testbed.serve('/p/shop/api/2/query', rows);
       const strokeField = { kind: 'expr' as const, alias: 'host' };
       const zField = { kind: 'expr' as const, alias: 'session' };
-      const both = testbed.render({ type: 'timeLine', props: { x, y, strokeField, zField }, dataUrl: '/p/shop/api/1', filterable }).el;
-      const strokeOnly = testbed.render({ type: 'timeLine', props: { x, y, strokeField }, dataUrl: '/p/shop/api/2', filterable }).el;
+      const both = testbed.render({ type: 'timeLine', props: { x, y, strokeField, zField }, dataUrl: '/p/shop/api/1', filterable }).widgetContainer;
+      const strokeOnly = testbed.render({ type: 'timeLine', props: { x, y, strokeField }, dataUrl: '/p/shop/api/2', filterable }).widgetContainer;
       await inView();
       await clickMark(lines(both)[1]);
       await clickMark(lines(strokeOnly)[1]);
@@ -76,10 +76,10 @@ describe('timeLine', () => {
 
     it('on the drag area offers the line Plot points at below it', async () => {
       testbed.serve('/p/shop/api/1/query', rows);
-      const { el } = testbed.render({ type: 'timeLine', props: { x, y, strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1', filterable });
+      const { widgetContainer } = testbed.render({ type: 'timeLine', props: { x, y, strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1', filterable });
       await inView();
-      const overlay = el.querySelector('svg .overlay')!;
-      await clickMark(lines(el)[0], overlay);
+      const overlay = widgetContainer.querySelector('svg .overlay')!;
+      await clickMark(lines(widgetContainer)[0], overlay);
       expect(offers.map(({ candidates }) => candidates)).toEqual([[{ fieldId: 'host', value: 'a' }]]);
     });
   });

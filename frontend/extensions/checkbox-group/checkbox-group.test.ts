@@ -37,31 +37,31 @@ function checkbox(el: HTMLElement, option: string): HTMLInputElement {
 
 describe('checkboxGroup', () => {
   it('sets its defaults when the page has no param yet', () => {
-    const { el } = testbed.render(methods);
+    const { widgetContainer } = testbed.render(methods);
     expect(param('methods')).toBe('["GET"]');
-    expect(checkbox(el, 'GET').checked).toBe(true);
-    expect(checkbox(el, 'POST').checked).toBe(false);
+    expect(checkbox(widgetContainer, 'GET').checked).toBe(true);
+    expect(checkbox(widgetContainer, 'POST').checked).toBe(false);
   });
 
   it('keeps the param the page has', () => {
     setParam('methods', '["POST"]');
-    const { el } = testbed.render(methods);
+    const { widgetContainer } = testbed.render(methods);
     expect(param('methods')).toBe('["POST"]');
-    expect(checkbox(el, 'POST').checked).toBe(true);
+    expect(checkbox(widgetContainer, 'POST').checked).toBe(true);
   });
 
   it('writes a click into the param', () => {
-    const { el } = testbed.render(methods);
-    checkbox(el, 'POST').click();
+    const { widgetContainer } = testbed.render(methods);
+    checkbox(widgetContainer, 'POST').click();
     expect(param('methods')).toBe('["GET","POST"]');
-    checkbox(el, 'GET').click();
+    checkbox(widgetContainer, 'GET').click();
     expect(param('methods')).toBe('["POST"]');
   });
 
   it('shows a param set elsewhere (the back button)', () => {
-    const { el } = testbed.render(methods);
+    const { widgetContainer } = testbed.render(methods);
     setParam('methods', '["POST"]');
-    expect(checkbox(el, 'GET').checked).toBe(false);
-    expect(checkbox(el, 'POST').checked).toBe(true);
+    expect(checkbox(widgetContainer, 'GET').checked).toBe(false);
+    expect(checkbox(widgetContainer, 'POST').checked).toBe(true);
   });
 });

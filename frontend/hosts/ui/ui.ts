@@ -17,10 +17,10 @@ export interface UiApi {
   /** Adds a button running `options.command` to the rail of `options.side`, until disposed; its tooltip names the command's key. */
   registerRailButton(id: string, options: RailButtonOptions): Disposable;
   /**
-   * Puts `element` into `bar` where `placement` says, until disposed; a bar shows while it has an item (the top bar
+   * Puts `itemElement` into `bar` where `placement` says, until disposed; a bar shows while it has an item (the top bar
    * always: it holds the tabs, its `left` items before them, `center` and `right` ones after them).
    */
-  registerBarItem(bar: 'top' | 'filter' | 'status', element: HTMLElement, placement: BarPlacement): Disposable;
+  registerBarItem(bar: 'top' | 'filter' | 'status', itemElement: HTMLElement, placement: BarPlacement): Disposable;
   /**
    * Adds `item` to the menu `menuId` until disposed. A menu is only an id; whoever shows it documents its context `C`
    * and its arguments, e.g. `dashboards/entry`: `{ url, title }` of a dashboard entry, its URL as the argument.
@@ -157,15 +157,16 @@ export interface InputBoxOptions {
 }
 
 /**
- * A field `showInputBox` shows in place of its text field: the box focuses it, describes its `input` by its message and
- * prompt, takes its text on `onDidAccept` (Escape and a press elsewhere hide the box as usual) and checks it on
- * `onDidChangeValue`. A key the field takes itself (its completion's Escape) is default prevented, so the box leaves it.
+ * A field `showInputBox` shows in place of its text field: the box focuses it, describes its `inputElement` by its
+ * message and prompt, takes its text on `onDidAccept` (Escape and a press elsewhere hide the box as usual) and checks
+ * it on `onDidChangeValue`. A key the field takes itself (its completion's Escape) is default prevented, so the box
+ * leaves it.
  */
 export interface InputBoxField {
   /** What the box shows, its message below it. */
-  readonly element: HTMLElement;
+  readonly fieldElement: HTMLElement;
   /** The element the keys go to (its role `textbox`): named, described and marked `aria-invalid` by the box. */
-  readonly input: HTMLElement;
+  readonly inputElement: HTMLElement;
   /** The text in it. */
   readonly value: string;
   /** Selects [start, end) of its text. */
@@ -309,7 +310,7 @@ export interface RailButtonOptions {
 
 /** A registered panel: the element its content goes into, how it opens, and whether it is shown. */
 export interface Panel {
-  readonly body: HTMLElement;
+  readonly bodyContainer: HTMLElement;
   /** Shown now (also as the narrow workbench's overlay); an unavailable panel is hidden. */
   readonly visible: boolean;
   /** Fires when `visible` changes, e.g. to work for the panel only while it is seen. */

@@ -31,8 +31,8 @@ describe('speedscopeLink', () => {
   it('links the viewer to its query with the page’s time range and params', () => {
     testbed.query.set(TIME, presetRange('1h'));
     setParam('path', '^/api/');
-    const { el } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
-    const link = el.querySelector('a')!;
+    const { widgetContainer } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
+    const link = widgetContainer.querySelector('a')!;
     expect(link.textContent).toBe('Open Speedscope');
     const profile = profileUrl(link);
     expect(profile.pathname).toBe('/p/shop/api/4/speedscope-query');
@@ -41,8 +41,8 @@ describe('speedscopeLink', () => {
   });
 
   it('opens the viewer in a tab of the workbench on a click, in an iframe; a click with a modifier key stays the browser’s', () => {
-    const { el } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
-    const link = el.querySelector('a')!;
+    const { widgetContainer } = testbed.render({ type: 'speedscopeLink', props: {}, dataUrl: '/p/shop/api/4' });
+    const link = widgetContainer.querySelector('a')!;
     const withCtrl = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
     link.dispatchEvent(withCtrl);
     expect(testbed.popped).toEqual([]);
@@ -58,9 +58,9 @@ describe('speedscopeLink', () => {
   });
 
   it('follows a change of the time range', () => {
-    const { el } = testbed.render({ type: 'speedscopeLink', props: { title: 'Flame graph' }, dataUrl: '/p/shop/api/4' });
+    const { widgetContainer } = testbed.render({ type: 'speedscopeLink', props: { title: 'Flame graph' }, dataUrl: '/p/shop/api/4' });
     testbed.query.set(TIME, presetRange('1h'));
-    const link = el.querySelector('a')!;
+    const link = widgetContainer.querySelector('a')!;
     expect(link.textContent).toBe('Flame graph');
     expect(profileUrl(link).searchParams.get('time')).toBe('1h');
   });

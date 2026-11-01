@@ -36,44 +36,44 @@ function commandsWith(
 }
 
 function setup(menus = menusWith('dashboards/entry', ENTRIES), more: Parameters<typeof commandsWith>[0] = {}) {
-  const host = document.body.appendChild(document.createElement('div'));
-  const trigger = host.appendChild(document.createElement('button'));
-  trigger.focus();
+  const hostContainer = document.body.appendChild(document.createElement('div'));
+  const triggerElement = hostContainer.appendChild(document.createElement('button'));
+  triggerElement.focus();
   const ran: unknown[][] = [];
-  const quickInput = new QuickInput(host);
+  const quickInput = new QuickInput(hostContainer);
   const menu = new ContextMenu(
     quickInput,
     menus,
     commandsWith({
-      executeCommand: async (command, ...args) => void ran.push([command, document.activeElement === trigger, ...args]),
+      executeCommand: async (command, ...args) => void ran.push([command, document.activeElement === triggerElement, ...args]),
       keybindingLabel: (command) => (command === 'dashboards.copyLink' ? '⌘C' : undefined),
       ...more,
     }),
   );
   const show = (favorite = true) => menu.show('dashboards/entry', { anchor: { x: 10, y: 20 }, title: 'Shop', context: { favorite }, args: ['/p/shop'] });
-  const items = () => [...host.querySelectorAll<HTMLElement>('[role=option]')];
-  const field = () => host.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
-  const isOpen = () => host.querySelector('.d-workbench__quick-pick') !== null;
-  return { host, trigger, menu, quickInput, show, ran, items, field, isOpen };
+  const items = () => [...hostContainer.querySelectorAll<HTMLElement>('[role=option]')];
+  const field = () => hostContainer.querySelector<HTMLInputElement>('.d-workbench__quick-pick input')!;
+  const isOpen = () => hostContainer.querySelector('.d-workbench__quick-pick') !== null;
+  return { hostContainer, triggerElement, menu, quickInput, show, ran, items, field, isOpen };
 }
 
 describe('ContextMenu', () => {
   it("lists the menu's entries for the context in the quick pick at the anchor, a line between groups, the field focused", () => {
-    const { host, show, items, field } = setup();
+    const { hostContainer, show, items, field } = setup();
     show();
-    const box = host.querySelector<HTMLElement>('.d-workbench__quick-pick')!;
-    expect([box.getAttribute('aria-label'), box.style.left, box.style.top, document.activeElement]).toEqual(['Shop', '10px', '20px', field()]);
-    expect([...host.querySelectorAll('[role=group]')].map((group) => group.querySelectorAll('[role=option]').length)).toEqual([1]);
-    expect(items().map((item) => item.textContent)).toEqual(['Open in new tab', 'Copy link ⌘C', 'favorites.remove']);
+    const boxContainer = hostContainer.querySelector<HTMLElement>('.d-workbench__quick-pick')!;
+    expect([boxContainer.getAttribute('aria-label'), boxContainer.style.left, boxContainer.style.top, document.activeElement]).toEqual(['Shop', '10px', '20px', field()]);
+    expect([...hostContainer.querySelectorAll('[role=group]')].map((groupContainer) => groupContainer.querySelectorAll('[role=option]').length)).toEqual([1]);
+    expect(items().map((itemElement) => itemElement.textContent)).toEqual(['Open in new tab', 'Copy link ⌘C', 'favorites.remove']);
     expect(items()[2].parentElement!.getAttribute('role')).toBe('group');
   });
 
   it('shows as a menu: no field in sight, its opener expanded until it is dismissed', () => {
-    const { trigger, menu, field } = setup();
-    menu.show('dashboards/entry', { anchor: trigger, title: 'Shop' });
-    expect([field().classList.contains('d-workbench__quick-pick-field--concealed'), trigger.getAttribute('aria-expanded')]).toEqual([true, 'true']);
+    const { triggerElement, menu, field } = setup();
+    menu.show('dashboards/entry', { anchor: triggerElement, title: 'Shop' });
+    expect([field().classList.contains('d-workbench__quick-pick-field--concealed'), triggerElement.getAttribute('aria-expanded')]).toEqual([true, 'true']);
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(triggerElement.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('shows an entry with `toggled` with a check mark as it says in the context', () => {
@@ -83,15 +83,15 @@ describe('ContextMenu', () => {
       { command: 'dashboards.togglePinned', title: 'Pinned', toggled: () => false },
       { command: 'dashboards.copyLink', title: 'Copy link', group: 'z' },
     ];
-    const { host, menu, items: options } = setup(menusWith('page/title', items));
-    menu.show('page/title', { anchor: host, title: 'Shop', context: { favorite: true } });
-    expect(options().map((entry) => [entry.getAttribute('aria-checked'), entry.textContent])).toEqual([
+    const { hostContainer, menu, items: options } = setup(menusWith('page/title', items));
+    menu.show('page/title', { anchor: hostContainer, title: 'Shop', context: { favorite: true } });
+    expect(options().map((entryElement) => [entryElement.getAttribute('aria-checked'), entryElement.textContent])).toEqual([
       ['true', '✓Favorite'],
       ['false', 'Pinned'],
       [null, 'Copy link ⌘C'],
     ]);
     expect(shown).toEqual([{ favorite: true }]);
-    expect(host.querySelector('[role=listbox]')!.classList.contains('d-workbench__quick-pick-list--checks')).toBe(true);
+    expect(hostContainer.querySelector('[role=listbox]')!.classList.contains('d-workbench__quick-pick-list--checks')).toBe(true);
   });
 
   it("shows an entry whose command is not enabled greyed with the command's reason, asked each time, and runs nothing when it is chosen", () => {
@@ -100,11 +100,11 @@ describe('ContextMenu', () => {
       { command: 'dashboards.copyLink', title: 'Copy link' },
     ];
     let explore = false;
-    const { host, menu, items: options, field, ran, isOpen } = setup(menusWith('workbench/global', items), {
+    const { hostContainer, menu, items: options, field, ran, isOpen } = setup(menusWith('workbench/global', items), {
       enablement: (command) => (command !== 'exploreView.open' || explore ? { enabled: true } : { enabled: false, disabledReason: 'Explore is not enabled (explore.enabled)' }),
     });
-    menu.show('workbench/global', { anchor: host, title: 'Dashica' });
-    expect(options().map((entry) => [entry.getAttribute('aria-disabled'), entry.title])).toEqual([
+    menu.show('workbench/global', { anchor: hostContainer, title: 'Dashica' });
+    expect(options().map((entryElement) => [entryElement.getAttribute('aria-disabled'), entryElement.title])).toEqual([
       ['true', 'Explore is not enabled (explore.enabled)'],
       [null, ''],
     ]);
@@ -112,7 +112,7 @@ describe('ContextMenu', () => {
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     expect([ran, isOpen()]).toEqual([[], true]);
     explore = true;
-    menu.show('workbench/global', { anchor: host, title: 'Dashica' });
+    menu.show('workbench/global', { anchor: hostContainer, title: 'Dashica' });
     expect([options()[0].hasAttribute('aria-disabled'), options()[0].title]).toEqual([false, '']);
     options()[0].click();
     expect(ran).toEqual([['exploreView.open', true]]);
@@ -131,16 +131,16 @@ describe('ContextMenu', () => {
     show();
     field().value = 'copy';
     field().dispatchEvent(new Event('input', { bubbles: true }));
-    expect(items().map((item) => item.textContent)).toEqual(['Copy link ⌘C']);
+    expect(items().map((itemElement) => itemElement.textContent)).toEqual(['Copy link ⌘C']);
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     expect(ran).toEqual([['dashboards.copyLink', true, '/p/shop']]);
   });
 
   it('logs a failing command', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { host, menu } = setup(menusWith('m', [{ command: 'dashboards.copyLink' }]), { executeCommand: async () => Promise.reject(new Error('no')) });
-    menu.show('m', { anchor: host, title: 'm' });
-    host.querySelector<HTMLElement>('[role=option]')!.click();
+    const { hostContainer, menu } = setup(menusWith('m', [{ command: 'dashboards.copyLink' }]), { executeCommand: async () => Promise.reject(new Error('no')) });
+    menu.show('m', { anchor: hostContainer, title: 'm' });
+    hostContainer.querySelector<HTMLElement>('[role=option]')!.click();
     await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Command dashboards.copyLink failed:', expect.any(Error)));
     error.mockRestore();
   });
@@ -153,16 +153,16 @@ describe('ContextMenu', () => {
   });
 
   it('closes on Escape (the focus back), on a press elsewhere and on a new menu, running nothing', () => {
-    const { host, show, field, trigger, ran, isOpen } = setup();
+    const { hostContainer, show, field, triggerElement, ran, isOpen } = setup();
     show();
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    expect([isOpen(), document.activeElement]).toEqual([false, trigger]);
+    expect([isOpen(), document.activeElement]).toEqual([false, triggerElement]);
     show();
     document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     expect(isOpen()).toBe(false);
     show();
     show(false);
-    expect(host.querySelectorAll('.d-workbench__quick-pick')).toHaveLength(1);
+    expect(hostContainer.querySelectorAll('.d-workbench__quick-pick')).toHaveLength(1);
     expect(ran).toEqual([]);
   });
 });

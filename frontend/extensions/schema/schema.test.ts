@@ -102,7 +102,7 @@ describe('schema', () => {
         registerSidePanel: () => (
           registered++,
           {
-            body,
+            bodyContainer: body,
             get visible() {
               return visible;
             },

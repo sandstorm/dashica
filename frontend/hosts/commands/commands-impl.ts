@@ -4,7 +4,7 @@ import type { CommandContribution, CommandEnablement, CommandOptions, Commands, 
 import { DOUBLE_TAP, keyLabel, LABELS, PLATFORM } from './commands-helpers';
 import { listenForDoubleTap } from './double-tap';
 
-/** The workbench's `Commands`; listens for the bound keys on `root`. `platform`: whose keys apply, default the browser's. */
+/** The workbench's `Commands`; listens for the bound keys on `rootElement`. `platform`: whose keys apply, default the browser's. */
 export class CommandsHost implements Commands {
   readonly #handlers = new Map<string, CommandHandler>();
   readonly #options = new Map<string, CommandOptions>();
@@ -15,12 +15,12 @@ export class CommandsHost implements Commands {
   readonly #mac: boolean;
 
   constructor(
-    private readonly root: HTMLElement,
+    private readonly rootElement: HTMLElement,
     options: { platform?: Platform } = {},
   ) {
     this.#platform = options.platform ?? PLATFORM;
     this.#mac = this.#platform === 'mac';
-    root.addEventListener('keydown', this.#handleKey, true);
+    rootElement.addEventListener('keydown', this.#handleKey, true);
   }
 
   registerCommand(id: string, handler: CommandHandler, options: CommandOptions = {}): Disposable {
@@ -72,7 +72,7 @@ export class CommandsHost implements Commands {
   }
 
   dispose(): void {
-    this.root.removeEventListener('keydown', this.#handleKey, true);
+    this.rootElement.removeEventListener('keydown', this.#handleKey, true);
     this.#handlers.clear();
     this.#options.clear();
     this.#keybindings.length = 0;
@@ -83,7 +83,7 @@ export class CommandsHost implements Commands {
     const tapped = DOUBLE_TAP.exec(key)?.[1];
     const binding = { key, matches: tapped ? () => false : parseKey(key, this.#mac), command, args: args === undefined ? [] : [args] };
     this.#keybindings.push(binding);
-    if (tapped) this.#taps.push(listenForDoubleTap(this.root, modifierKey(tapped, this.#mac), () => this.#run(binding)));
+    if (tapped) this.#taps.push(listenForDoubleTap(this.rootElement, modifierKey(tapped, this.#mac), () => this.#run(binding)));
   }
 
   readonly #handleKey = (event: KeyboardEvent): void => {

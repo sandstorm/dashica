@@ -25,28 +25,28 @@ const requests: WidgetNode = { type: 'timeBar', props: { title: 'Requests', x: {
 describe('WidgetsHost', () => {
   it('renders a widget with the renderer of its type, and empties the element when disposed', () => {
     const disposed: string[] = [];
-    testbed.widgets.registerWidget('timeBar', (el, widget) => {
-      el.textContent = widget.props.title ?? '';
+    testbed.widgets.registerWidget('timeBar', (widgetContainer, widget) => {
+      widgetContainer.textContent = widget.props.title ?? '';
       return new Disposable(() => disposed.push(widget.type));
     });
-    const { el, rendered } = testbed.render(requests);
-    expect(el.textContent).toBe('Requests');
+    const { widgetContainer, rendered } = testbed.render(requests);
+    expect(widgetContainer.textContent).toBe('Requests');
     rendered.dispose();
     expect(disposed).toEqual(['timeBar']);
-    expect(el.textContent).toBe('');
+    expect(widgetContainer.textContent).toBe('');
   });
 
   it('shows the error in place of a widget without renderer, or whose renderer throws', () => {
-    expect(testbed.render(requests).el.textContent).toBe('no renderer for this widget type (timeBar)');
+    expect(testbed.render(requests).widgetContainer.textContent).toBe('no renderer for this widget type (timeBar)');
     testbed.widgets.registerWidget('timeBar', () => {
       throw new Error('x has no alias');
     });
-    expect(testbed.render(requests).el.textContent).toBe('x has no alias (timeBar)');
+    expect(testbed.render(requests).widgetContainer.textContent).toBe('x has no alias (timeBar)');
   });
 
   it('asks nothing for a widget whose renderer threw', async () => {
     let failed: Promise<QueryResult> | undefined;
-    testbed.widgets.registerWidget('timeBar', (_el, _widget, given) => {
+    testbed.widgets.registerWidget('timeBar', (_widgetContainer, _widget, given) => {
       failed = given.runQuery();
       throw new Error('x has no alias');
     });
@@ -66,24 +66,24 @@ describe('WidgetsHost', () => {
   });
 
   it('renders the children of a widget with their own renderers', () => {
-    testbed.widgets.registerWidget('grid', (el, widget, ctx) =>
-      Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child))),
+    testbed.widgets.registerWidget('grid', (widgetContainer, widget, ctx) =>
+      Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(widgetContainer.appendChild(document.createElement('div')), child))),
     );
-    testbed.widgets.registerWidget('markdown', (el, widget) => {
-      el.textContent = widget.props.title ?? '';
+    testbed.widgets.registerWidget('markdown', (widgetContainer, widget) => {
+      widgetContainer.textContent = widget.props.title ?? '';
       return new Disposable(() => {});
     });
     const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: { title: 'Shop' } } } };
-    expect(testbed.render(grid).el.textContent).toBe('Shop');
+    expect(testbed.render(grid).widgetContainer.textContent).toBe('Shop');
   });
 
   it('renders a widget and its children with the query state it is given (its tab’s)', () => {
     const states: unknown[] = [];
-    testbed.widgets.registerWidget('grid', (el, widget, ctx) => {
+    testbed.widgets.registerWidget('grid', (widgetContainer, widget, ctx) => {
       states.push(ctx.query);
-      return Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child)));
+      return Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(widgetContainer.appendChild(document.createElement('div')), child)));
     });
-    testbed.widgets.registerWidget('markdown', (_el, _widget, ctx) => (states.push(ctx.query), new Disposable(() => {})));
+    testbed.widgets.registerWidget('markdown', (_widgetContainer, _widget, ctx) => (states.push(ctx.query), new Disposable(() => {})));
     const tab = new QueryHost();
     const grid: WidgetNode = { type: 'grid', props: {}, children: { a: { type: 'markdown', props: {} } } };
     testbed.widgets.render(document.body.appendChild(document.createElement('div')), grid, tab);
@@ -95,7 +95,7 @@ describe('WidgetsHost', () => {
     let ctx: WidgetContext;
 
     beforeEach(() => {
-      testbed.widgets.registerWidget('timeBar', (_el, _widget, given) => {
+      testbed.widgets.registerWidget('timeBar', (_widgetContainer, _widget, given) => {
         ctx = given;
         return new Disposable(() => {});
       });
@@ -133,8 +133,8 @@ describe('WidgetsHost', () => {
     it('shows a menu for the widget, with what it queried last', async () => {
       testbed.serve('/p/shop/api/1/query', { cnt: [3] });
       await ctx.runQuery();
-      const anchor = document.body.appendChild(document.createElement('button'));
-      ctx.showMenu('widget/context', anchor);
+      const anchorElement = document.body.appendChild(document.createElement('button'));
+      ctx.showMenu('widget/context', anchorElement);
       ctx.showMenu('shop/rows', { x: 10, y: 20 });
       const [{ menuId, options }, rows] = testbed.menus;
       expect(menuId).toBe('widget/context');
@@ -154,29 +154,29 @@ describe('WidgetsHost', () => {
     beforeEach(() => {
       contexts = [];
       changes = 0;
-      testbed.widgets.registerWidget('timeBar', (el, _widget, ctx) => {
+      testbed.widgets.registerWidget('timeBar', (widgetContainer, _widget, ctx) => {
         contexts.push(ctx);
-        el.append(document.createElement('button'));
+        widgetContainer.append(document.createElement('button'));
         return new Disposable(() => {});
       });
       testbed.widgets.onDidChangeActive(() => changes++);
     });
 
-    const press = (el: Element) => el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    const press = (targetElement: Element) => targetElement.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
 
     it('is the widget with data pressed or focused in last, outlined; Escape keeps it, removing it ends it', () => {
       const first = testbed.render(requests);
       const second = testbed.render(errors);
       expect(testbed.widgets.active).toBeUndefined();
-      press(first.el.querySelector('button')!);
+      press(first.widgetContainer.querySelector('button')!);
       expect(testbed.widgets.active?.widget).toBe(requests);
-      expect(first.el.classList.contains('d-widget--active')).toBe(true);
-      second.el.querySelector('button')!.focus();
+      expect(first.widgetContainer.classList.contains('d-widget--active')).toBe(true);
+      second.widgetContainer.querySelector('button')!.focus();
       expect(testbed.widgets.active?.widget).toBe(errors);
-      expect(first.el.classList.contains('d-widget--active')).toBe(false);
-      expect(second.el.classList.contains('d-widget--active')).toBe(true);
+      expect(first.widgetContainer.classList.contains('d-widget--active')).toBe(false);
+      expect(second.widgetContainer.classList.contains('d-widget--active')).toBe(true);
       expect(changes).toBe(2);
-      press(second.el);
+      press(second.widgetContainer);
       expect(changes).toBe(2);
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
       expect(testbed.widgets.active?.widget).toBe(errors);
@@ -186,28 +186,28 @@ describe('WidgetsHost', () => {
     });
 
     it('is the widget pressed in also when its chart stops the press, as a chart does on a mark it selects from', () => {
-      const { el } = testbed.render(requests);
-      const mark = el.querySelector('button')!;
-      mark.addEventListener('pointerdown', (event) => event.stopPropagation(), true);
-      press(mark);
+      const { widgetContainer } = testbed.render(requests);
+      const markElement = widgetContainer.querySelector('button')!;
+      markElement.addEventListener('pointerdown', (event) => event.stopPropagation(), true);
+      press(markElement);
       expect(testbed.widgets.active?.widget).toBe(requests);
     });
 
     it('is the innermost widget with data: a press on a chart in a grid makes the chart active', () => {
-      testbed.widgets.registerWidget('grid', (el, widget, ctx) =>
-        Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(el.appendChild(document.createElement('div')), child))),
+      testbed.widgets.registerWidget('grid', (widgetContainer, widget, ctx) =>
+        Disposable.from(...Object.values(widget.children ?? {}).map((child) => ctx.renderChild(widgetContainer.appendChild(document.createElement('div')), child))),
       );
-      const { el } = testbed.render({ type: 'grid', props: {}, children: { a: requests } });
-      press(el.querySelector('button')!);
+      const { widgetContainer } = testbed.render({ type: 'grid', props: {}, children: { a: requests } });
+      press(widgetContainer.querySelector('button')!);
       expect(testbed.widgets.active?.widget).toBe(requests);
-      press(el);
+      press(widgetContainer);
       expect(testbed.widgets.active?.widget).toBe(requests);
     });
 
     it('is the widget itself, the same object on each read, which tells its status by its own event', async () => {
       testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
-      const { el } = testbed.render(requests);
-      press(el);
+      const { widgetContainer } = testbed.render(requests);
+      press(widgetContainer);
       const active = testbed.widgets.active!;
       let statuses = 0;
       active.onDidChangeStatus(() => statuses++);
@@ -219,8 +219,8 @@ describe('WidgetsHost', () => {
 
     it('tells how its query goes: rows and time, an error', async () => {
       testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
-      const { el } = testbed.render(requests);
-      press(el);
+      const { widgetContainer } = testbed.render(requests);
+      press(widgetContainer);
       let statuses = 0;
       testbed.widgets.active!.onDidChangeStatus(() => statuses++);
       expect(testbed.widgets.active?.status).toEqual({ kind: 'idle' });
@@ -240,8 +240,8 @@ describe('WidgetsHost', () => {
 
     it('tells the latest query only: an aborted earlier one keeps it loading, an aborted latest one puts back the last answer', async () => {
       testbed.serve('/p/shop/api/1/query', { time: [1, 2, 3] });
-      const { el } = testbed.render(requests);
-      press(el);
+      const { widgetContainer } = testbed.render(requests);
+      press(widgetContainer);
       await contexts[0].runQuery();
       const answered = testbed.widgets.active?.status;
       // each fetch waits until it is aborted, rejecting then as the browser does, or answered
@@ -280,13 +280,13 @@ describe('WidgetsHost', () => {
       widgets.registerWidget('timeBar', () => new Disposable(() => {}));
       let told = 0;
       widgets.onDidChangeActive(() => told++);
-      const inFirst = document.body.appendChild(document.createElement('div'));
-      const inOther = document.body.appendChild(document.createElement('div'));
+      const inFirstElement = document.body.appendChild(document.createElement('div'));
+      const inOtherElement = document.body.appendChild(document.createElement('div'));
       const first = source.activeQuery;
-      widgets.render(inFirst, requests, first);
-      widgets.render(inOther, errors, other);
-      press(inFirst);
-      press(inOther);
+      widgets.render(inFirstElement, requests, first);
+      widgets.render(inOtherElement, errors, other);
+      press(inFirstElement);
+      press(inOtherElement);
       expect(widgets.active?.widget).toBe(requests);
       expect(told).toBe(1);
       source.activeQuery = other;
@@ -306,7 +306,7 @@ describe('WidgetsHost', () => {
     const slow: WidgetDecoration = { badge: 'slow', tooltip: 'over a second', source: 'timing' };
 
     beforeEach(() => {
-      testbed.widgets.registerWidget('timeBar', (_el, _widget, given) => {
+      testbed.widgets.registerWidget('timeBar', (_widgetContainer, _widget, given) => {
         ctx = given;
         return new Disposable(() => {});
       });

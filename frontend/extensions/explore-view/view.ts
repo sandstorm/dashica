@@ -281,7 +281,7 @@ class ExploreView {
     editor.onDidAccept(() => this.#run());
     editor.onDidChangeValue(() => this.#showSqlNote());
     this.#editor = editor;
-    this.#sqlHost.replaceChildren(editor.element);
+    this.#sqlHost.replaceChildren(editor.fieldElement);
     this.#complete();
   }
 
