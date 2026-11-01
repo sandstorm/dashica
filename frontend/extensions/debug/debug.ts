@@ -32,7 +32,7 @@ export const debug: Extension = {
 
     /** What the panel shows while visible: the active widget's debug info, followed. */
     let showing: Disposable | undefined;
-    const showPanel = () => {
+    const drawPanel = () => {
       showing?.dispose();
       showing = undefined;
       if (!panel.visible) return;
@@ -48,10 +48,10 @@ export const debug: Extension = {
       const redraw = () => drawStatus(statusElement, active);
       following = active && Disposable.from(active.onDidChangeStatus(redraw), active.onDidChangeDecorations(redraw));
       drawStatus(statusElement, widgets.active);
-      showPanel();
+      drawPanel();
     };
     follow();
-    subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(showPanel));
+    subscriptions.push(widgets.onDidChangeActive(follow), panel.onDidChangeVisibility(drawPanel));
     subscriptions.push({ dispose: () => (showing?.dispose(), following?.dispose()) });
     // a press on the chart's menu button made it active already
     subscriptions.push(commands.registerCommand('debug.showWidget', () => panel.show()));
@@ -78,7 +78,7 @@ export const debug: Extension = {
 };
 
 /**
- * Shows in `debugContainer` what `widget` queried (`showDebug`), and asks again when its query answered or failed.
+ * Shows in `debugContainer` what `widget` queried (`drawDebug`), and asks again when its query answered or failed.
  * While its query runs, `debugContainer` keeps what it shows; an aborted query putting back the status asked for asks
  * nothing. Its decorations are drawn anew on each change.
  */
@@ -88,13 +88,13 @@ export function followDebug(debugContainer: HTMLElement, widget: RenderedWidget,
   const decorationsContainer: HTMLElement = html`<div class="d-debug__decorations"></div>`;
   const drawDecorations = () => decorationsContainer.replaceChildren(decorationList(widget.decorations));
   drawDecorations();
-  void showDebug(debugContainer, widget, decorationsContainer, showMenu, state, loading.signal);
+  void drawDebug(debugContainer, widget, decorationsContainer, showMenu, state, loading.signal);
   const listening = widget.onDidChangeStatus(() => {
     if (widget.status.kind === 'loading' || widget.status === asked) return;
     loading.abort();
     loading = new AbortController();
     asked = widget.status;
-    void showDebug(debugContainer, widget, decorationsContainer, showMenu, state, loading.signal);
+    void drawDebug(debugContainer, widget, decorationsContainer, showMenu, state, loading.signal);
   });
   const decorating = widget.onDidChangeDecorations(drawDecorations);
   return new Disposable(() => {
@@ -154,7 +154,7 @@ function drawStatus(statusElement: HTMLElement, active: RenderedWidget | undefin
  * Fills `debugContainer` with what `active` queried, as views (their state in `state`), `decorationsContainer` (its
  * decorations, drawn by the caller) among them; a failed request shows its error there.
  */
-async function showDebug(debugContainer: HTMLElement, active: RenderedWidget, decorationsContainer: HTMLElement, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
+async function drawDebug(debugContainer: HTMLElement, active: RenderedWidget, decorationsContainer: HTMLElement, showMenu: ShowTableMenu, state: Memento, signal: AbortSignal): Promise<void> {
   debugContainer.replaceChildren(html`<div class="d-debug"><span class="d-spinner"></span></div>`);
   let info: DebugInfo;
   try {
@@ -201,7 +201,7 @@ async function showDebug(debugContainer: HTMLElement, active: RenderedWidget, de
 
   if (active.lastResult) resultContainer.append(drawTable(active.lastResult, { height: 400 }, { showMenu }));
   else resultContainer.textContent = 'The chart has not queried yet.';
-  await showPipeline(pipelineContainer, info.explainPipeline);
+  await drawPipeline(pipelineContainer, info.explainPipeline);
 }
 
 /** What `<dataUrl>/debug` answers (httpserver.DebugInfo). */
@@ -220,7 +220,7 @@ function pre(text: string): HTMLElement {
 }
 
 /** The pipeline as a graph when ClickHouse gave a DOT graph, else as text; also as text when the graph cannot be drawn. */
-async function showPipeline(pipelineContainer: HTMLElement, pipeline: string): Promise<void> {
+async function drawPipeline(pipelineContainer: HTMLElement, pipeline: string): Promise<void> {
   if (!pipeline.trim().startsWith('digraph')) {
     pipelineContainer.replaceChildren(pre(pipeline));
     return;

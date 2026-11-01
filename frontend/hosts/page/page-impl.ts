@@ -302,7 +302,7 @@ export class PageHost implements PageApi {
       } catch (error) {
         if (abort.signal.aborted) return;
         this.#arrive(open, url, how);
-        this.#showError(open, error);
+        this.#drawError(open, error);
         return;
       }
       if (abort.signal.aborted) return;
@@ -335,7 +335,7 @@ export class PageHost implements PageApi {
     open.renderedAs = named ? `${named[0]}=${named[1]}` : page.kind;
     const renderer = this.#renderers.get(kind);
     if (!renderer) {
-      this.#showError(open, new Error(`no renderer for the page kind ${kind}`));
+      this.#drawError(open, new Error(`no renderer for the page kind ${kind}`));
       return;
     }
     const pageContainer = open.tabContainer.appendChild(this.browserWindow.document.createElement('div'));
@@ -343,7 +343,7 @@ export class PageHost implements PageApi {
     try {
       open.rendered = renderer(pageContainer, page, open.context);
     } catch (error) {
-      this.#showError(open, error);
+      this.#drawError(open, error);
       return;
     }
     this.#setTitle(open, open.rendered.title || page.title || titleOf(this.#tab(open.id).url));
@@ -369,7 +369,7 @@ export class PageHost implements PageApi {
     return [...new URLSearchParams(hashOf(this.#tab(open.id)).slice(1))].find(([key, value]) => this.#renderers.has(key) && (key !== POPPED || this.#popped.has(value)));
   }
 
-  #showError(open: OpenTab, error: unknown): void {
+  #drawError(open: OpenTab, error: unknown): void {
     this.#unrender(open);
     const errorElement = this.browserWindow.document.createElement('div');
     errorElement.className = 'd-notice d-notice--error';

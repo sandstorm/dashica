@@ -107,7 +107,7 @@ export class ChartFrame {
       await this.#draw();
     } catch (error) {
       if (controller.signal.aborted) return;
-      this.#showError(error);
+      this.#drawError(error);
     } finally {
       if (this.#running === controller) this.#spinnerElement.hidden = true;
     }
@@ -131,7 +131,7 @@ export class ChartFrame {
       if (this.#bodyContainer.firstElementChild !== chartElement) this.#bodyContainer.replaceChildren(chartElement);
       this.#shimmerElement.hidden = true;
     } catch (error) {
-      if (turn === this.#drawn) this.#showError(error);
+      if (turn === this.#drawn) this.#drawError(error);
     }
   }
 
@@ -144,11 +144,11 @@ export class ChartFrame {
     this.#titleElement.hidden = !this.#options.title && decorations.length === 0;
   }
 
-  #showError(error: unknown): void {
-    this.#showMessage('d-widget-error', error instanceof Error ? error.message : String(error));
+  #drawError(error: unknown): void {
+    this.#drawMessage('d-widget-error', error instanceof Error ? error.message : String(error));
   }
 
-  #showMessage(className: string, message: string): void {
+  #drawMessage(className: string, message: string): void {
     const noticeElement = this.#bodyContainer.ownerDocument.createElement('div');
     noticeElement.className = className;
     noticeElement.textContent = message;

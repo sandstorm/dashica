@@ -1627,7 +1627,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   the host keeps rendering widgets, the active widget and its status. The small helpers move out of the hosts by
   their users: `widgetTitle` (Debug, Details, the Explore view) to `extensions/widget-library/widget-title.ts`,
   `formatTime` (the time picker, `ChartFrame`'s dragged range) to `extensions/time-library/format-time.ts`
-  *(proposed)*. `showWidgetError` stays in the `widgets` host, unexported: only the host shows an error in place
+  *(proposed)*. `drawWidgetError` stays in the `widgets` host, unexported: only the host shows an error in place
   of a widget (a type without renderer, a renderer that throws) *(proposed)*.
 - **D23 Layout fix of D5 (9i, decided after 9h):** the left rail and the left side panel go full height, from the
   window's top to the status bar; the tab row (tabs, "+", at its end the funnel (gone since 9o, D26), time range, refresh) sits only above

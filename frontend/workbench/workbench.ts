@@ -28,8 +28,8 @@ export function createWorkbench(hostContainer: HTMLElement, options: { extension
   const widgets = new WidgetsHost(ui, commands, page);
   const extensions = new ExtensionHost({ commands, ui, page, query, widgets, ownerDocument: doc });
   extensions.activate(options.extensions);
-  const tabs = showTabs(page, ui.tabBarContainer, commands);
-  const globalMenu = showGlobalMenu(ui);
+  const tabs = drawTabs(page, ui.tabBarContainer, commands);
+  const globalMenu = drawGlobalMenu(ui);
   const pageBars = page.onDidChangeTabs(() => ui.showPageBars(!page.showsPoppedView));
   void page.start();
   return new Disposable(() => {
@@ -49,7 +49,7 @@ export function createWorkbench(hostContainer: HTMLElement, options: { extension
  * The tab bar in `regionContainer`, drawn anew on each change of the tabs; "+" opens the start page in a new tab (or
  * shows the tab that has it). The tab commands work on the active tab.
  */
-function showTabs(page: PageHost, regionContainer: HTMLElement, commands: CommandsHost): Disposable {
+function drawTabs(page: PageHost, regionContainer: HTMLElement, commands: CommandsHost): Disposable {
   const bar = new TabBar(regionContainer, {
     onDidChoose: (id) => page.showTab(id),
     onDidClose: (id) => page.closeTab(id),
@@ -75,7 +75,7 @@ function showTabs(page: PageHost, regionContainer: HTMLElement, commands: Comman
 const GLOBAL_MENU = 'workbench/global';
 
 /** The "…" at the left rail's start, above search everywhere. */
-function showGlobalMenu(ui: UiHost): Disposable {
+function drawGlobalMenu(ui: UiHost): Disposable {
   const menuButtonElement: HTMLButtonElement = html`<button type="button" class="d-workbench__rail-button" aria-label="Dashica menu" title="Menu"
     aria-haspopup="dialog" data-testid="wb-global-menu" onclick=${() => ui.showContextMenu(GLOBAL_MENU, { anchor: menuButtonElement, title: 'Dashica' })}></button>`;
   menuButtonElement.append(createElement(Ellipsis, { width: 16, height: 16 }));

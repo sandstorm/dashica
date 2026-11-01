@@ -278,7 +278,7 @@ class ExploreView {
     if (this.#disposed) return;
     const editor = editors.create({ label: 'SQL', testId: 'explore-view-sql-text', value: this.#draft });
     editor.onDidAccept(() => this.#run());
-    editor.onDidChangeValue(() => this.#showSqlNote());
+    editor.onDidChangeValue(() => this.#drawSqlNote());
     this.#editor = editor;
     this.#sqlHostContainer.replaceChildren(editor.fieldElement);
     this.#complete();
@@ -324,7 +324,7 @@ class ExploreView {
     this.#statusElement.textContent = 'loading…';
     const { widget, query } = this.options;
     if (widget === undefined && this.#edited === undefined) {
-      this.#showMessage('Write a query; Run shows its rows.', 'notice');
+      this.#drawMessage('Write a query; Run shows its rows.', 'notice');
       return;
     }
     if (widget !== undefined && this.#edited === undefined && !this.#sqlPanelContainer.hidden) void this.#loadSql();
@@ -333,7 +333,7 @@ class ExploreView {
     try {
       answer = await fetchRows(url, loading.signal);
     } catch (error) {
-      if (!loading.signal.aborted) this.#showMessage(error, 'error');
+      if (!loading.signal.aborted) this.#drawMessage(error, 'error');
       return;
     }
     if (loading.signal.aborted) return;
@@ -341,21 +341,21 @@ class ExploreView {
     this.#ignoredElement.hidden = ignored.length === 0;
     this.#ignoredElement.textContent = `ignores ${ignored.join(', ')}`;
     if (!answer.arrow) {
-      this.#showMessage(`skipped: ${answer.diagnostics.skipped ?? 'no rows'}`, 'notice');
+      this.#drawMessage(`skipped: ${answer.diagnostics.skipped ?? 'no rows'}`, 'notice');
       return;
     }
     try {
-      await this.#show(answer.arrow, loading.signal);
+      await this.#draw(answer.arrow, loading.signal);
       if (loading.signal.aborted || !this.#shown) return;
       this.#statusElement.textContent = describeRows(answer, await this.#shown.table.size());
     } catch (error) {
-      if (!loading.signal.aborted) this.#showMessage(error, 'error');
+      if (!loading.signal.aborted) this.#drawMessage(error, 'error');
     }
   }
 
   /** Shows `arrow` after the rows shown before, unless a later load or the view's end came first. */
-  #show(arrow: ArrayBuffer, signal: AbortSignal): Promise<void> {
-    const showing = this.#showing.then(() => (signal.aborted || this.#disposed ? undefined : this.#showNow(arrow, signal)));
+  #draw(arrow: ArrayBuffer, signal: AbortSignal): Promise<void> {
+    const showing = this.#showing.then(() => (signal.aborted || this.#disposed ? undefined : this.#drawNow(arrow, signal)));
     this.#showing = showing.catch(() => undefined);
     return showing;
   }
@@ -364,7 +364,7 @@ class ExploreView {
    * Shows `arrow`: into the table shown (the viewer keeps its config), else a new table and viewer with the saved or
    * the chart's config, its settings panel open. A table made when the load was stopped meanwhile is deleted unshown.
    */
-  async #showNow(arrow: ArrayBuffer, signal: AbortSignal): Promise<void> {
+  async #drawNow(arrow: ArrayBuffer, signal: AbortSignal): Promise<void> {
     const stale = () => signal.aborted || this.#disposed;
     if (this.#shown) {
       try {
@@ -428,8 +428,8 @@ class ExploreView {
     const draft = this.#text !== (this.#chartSql?.sql ?? '') && this.#text !== '';
     this.#chartSql = chartSql;
     if (!draft) this.#text = chartSql.sql;
-    this.#showParameters();
-    this.#showSqlNote();
+    this.#drawParameters();
+    this.#drawSqlNote();
   }
 
   #setSqlOpen(open: boolean): void {
@@ -486,7 +486,7 @@ class ExploreView {
   }
 
   /** Lists `#shownParameters` beside the editor by name, `{name}` and its value; hidden without any. */
-  #showParameters(): void {
+  #drawParameters(): void {
     const entries = Object.entries(this.#shownParameters()).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     this.#parametersContainer.replaceChildren(...entries.map(([name, value]) => html.fragment`<dt><code>{${name}}</code></dt><dd>${value}</dd>`));
     this.#parametersContainer.hidden = entries.length === 0;
@@ -503,12 +503,12 @@ class ExploreView {
       this.#text = this.#edited!.sql;
       this.#setSqlOpen(true);
     } else if (this.#chartSql !== undefined) this.#text = this.#chartSql.sql;
-    this.#showParameters();
-    this.#showSqlNote();
+    this.#drawParameters();
+    this.#drawSqlNote();
   }
 
   /** "not run" while the editor's text is not the SQL whose rows are shown. */
-  #showSqlNote(): void {
+  #drawSqlNote(): void {
     const shown = this.#edited?.sql ?? this.#chartSql?.sql;
     this.#sqlNoteElement.textContent = shown !== undefined && this.#text !== shown ? 'not run' : '';
   }
@@ -547,14 +547,14 @@ class ExploreView {
     if (saved) {
       try {
         await this.#shown!.viewerElement.restore({ ...saved, theme: this.#theme() });
-        this.#showNotes(notes);
+        this.#drawNotes(notes);
         return;
       } catch (error) {
         notes.push(`the kept view does not fit these rows (${error instanceof Error ? error.message : String(error)}); shown as the chart`);
       }
     }
     await this.#shown!.viewerElement.restore({ ...initial.config, theme: this.#theme() });
-    this.#showNotes(notes);
+    this.#drawNotes(notes);
   }
 
   /**
@@ -612,13 +612,13 @@ class ExploreView {
     return { field: last[0], value: String(last[2]) };
   }
 
-  #showNotes(notes: readonly string[]): void {
+  #drawNotes(notes: readonly string[]): void {
     this.#notesContainer.replaceChildren(...notes.map((note) => html`<li>${note}</li>`));
     this.#notesContainer.hidden = notes.length === 0;
   }
 
   /** Shows `message` in place of the viewer, which goes; the next rows bring a new one. */
-  #showMessage(message: unknown, kind: 'error' | 'notice'): void {
+  #drawMessage(message: unknown, kind: 'error' | 'notice'): void {
     this.#statusElement.textContent = '';
     this.#dropViewer();
     this.#messageElement.className = kind === 'error' ? 'd-notice d-notice--error' : 'd-notice';

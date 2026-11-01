@@ -67,7 +67,7 @@ export class WidgetsHost implements WidgetsApi {
     if ('dataUrl' in widget && widget.dataUrl) widgetContainer.dataset.dataUrl = widget.dataUrl;
     const renderer = this.#renderers.get(widget.type);
     if (!renderer) {
-      showWidgetError(widgetContainer, new Error('no renderer for this widget type'), widget);
+      drawWidgetError(widgetContainer, new Error('no renderer for this widget type'), widget);
       return new Disposable(() => widgetContainer.replaceChildren());
     }
     const ctx = new WidgetInstance(widget, widgetContainer, this, query, this.ui);
@@ -87,7 +87,7 @@ export class WidgetsHost implements WidgetsApi {
       // a widget that failed to render is no rendered one: nothing redecorates it
       this.#rendered.delete(ctx);
       ctx.dispose();
-      showWidgetError(widgetContainer, error, widget);
+      drawWidgetError(widgetContainer, error, widget);
       return new Disposable(() => widgetContainer.replaceChildren());
     }
   }
@@ -216,7 +216,7 @@ export class WidgetsHost implements WidgetsApi {
 }
 
 /** Shows `error` in `widgetContainer` in place of the widget: its message and the widget's type. */
-function showWidgetError(widgetContainer: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
+function drawWidgetError(widgetContainer: HTMLElement, error: unknown, widget: Pick<WidgetNode, 'type'>): void {
   const message = error instanceof Error ? error.message : String(error);
   const errorElement = widgetContainer.ownerDocument.createElement('div');
   errorElement.className = 'd-widget-error';
