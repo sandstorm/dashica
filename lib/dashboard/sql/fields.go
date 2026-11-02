@@ -89,6 +89,53 @@ func Count() SqlField {
 	}
 }
 
+// CountIf counts the rows of `condition` (`level = 'error'`): a count like Count(), for one series of a chart whose
+// base query reads all rows.
+func CountIf(condition string) SqlField {
+	return &fieldImpl{
+		kind:       kindCount,
+		definition: fmt.Sprintf("countIf(%s)", condition),
+		alias:      "cnt",
+	}
+}
+
+// RatioField is the quotient of two measures, a measure itself: NULL where the denominator is 0 (a time bucket without
+// rows has no ratio) or below Min.
+type RatioField struct {
+	*fieldImpl
+	numerator, denominator SqlField
+}
+
+// Ratio is `numerator / denominator` (`sql.Ratio(sql.CountIf("status >= 500"), sql.Count())`).
+func Ratio(numerator, denominator SqlField) *RatioField {
+	return &RatioField{
+		fieldImpl: &fieldImpl{
+			kind:       kindExpr,
+			definition: fmt.Sprintf("%s / nullIf(%s, 0)", numerator.Definition(), denominator.Definition()),
+			alias:      "ratio",
+		},
+		numerator:   numerator,
+		denominator: denominator,
+	}
+}
+
+// Min is the ratio NULL where the denominator is below `minimum`: no failure rate of 3 orders.
+func (r *RatioField) Min(minimum int64) *RatioField {
+	return r.with(func(f *fieldImpl) {
+		f.definition = fmt.Sprintf("if(%s < %d, NULL, %s / %s)", r.denominator.Definition(), minimum, r.numerator.Definition(), r.denominator.Definition())
+	})
+}
+
+func (r *RatioField) WithAlias(s string) SqlField {
+	return r.with(func(f *fieldImpl) { f.alias = s })
+}
+
+func (r *RatioField) with(change func(f *fieldImpl)) *RatioField {
+	field := *r.fieldImpl
+	change(&field)
+	return &RatioField{fieldImpl: &field, numerator: r.numerator, denominator: r.denominator}
+}
+
 func Enum(field string) SqlField {
 	return &fieldImpl{
 		kind:       kindEnum,
@@ -98,11 +145,11 @@ func Enum(field string) SqlField {
 }
 
 // IsCategory is whether `f` holds categories a chart can be filtered by: a column, an Enum or an expression
-// (`JSONExtractString(attrs, 'host')`); a count is a measure, a time bucket (Timestamp15Min, TimestampField,
+// (`JSONExtractString(attrs, 'host')`); a count and a Ratio are measures, a time bucket (Timestamp15Min, TimestampField,
 // AutoBucket) a time axis, a constant (`sql.Field("'darkred'")`, a fixed colour of a Fill) the same on every row.
 func IsCategory(f SqlField) bool {
 	switch field := f.(type) {
-	case autoBucketField:
+	case autoBucketField, *RatioField:
 		return false
 	case *fieldImpl:
 		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0 && !literal.MatchString(field.definition)

@@ -95,6 +95,8 @@ func MarshalFieldProps(f SqlField) ([]byte, error) {
 		return []byte("null"), nil
 	case *autoBucketFieldImpl:
 		return json.Marshal(sqlFieldPropsDTO{Kind: kindAutoBucket, Alias: f.alias_, XBucketSizeMs: f.sizeMs})
+	case *RatioField:
+		return MarshalFieldProps(f.fieldImpl)
 	case *fieldImpl:
 		kind := f.kind
 		if kind == (fieldKind{}) {

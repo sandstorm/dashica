@@ -85,6 +85,7 @@ func TestMarshalFieldProps_KindAliasAndBucketSizeOnly(t *testing.T) {
 		{Enum("level"), `{"kind":"enum","alias":"level"}`},
 		{Timestamp15Min(), `{"kind":"expr","alias":"time","xBucketSizeMs":900000}`},
 		{AutoBucketAs("ts", "bucket"), `{"kind":"autoBucket","alias":"bucket","xBucketSizeMs":900000}`},
+		{Ratio(CountIf("status >= 500"), Count()).Min(50).WithAlias("failure_rate"), `{"kind":"expr","alias":"failure_rate"}`},
 		{nil, `null`},
 	}
 	for _, tt := range tests {
