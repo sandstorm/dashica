@@ -8,37 +8,55 @@ import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
  * What a click on a chart's mark, a table's cell or an Explore view's group row offers to filter by: in the widgets
  * host's data point menu, for each data point whose field the widget names `filterable` (page.json's), in order, one
  * item per op of its type (`opsOf`), each with its own sign: "status = 500" to filter by it (a filter icon), "status ≠ 500" to exclude it (a minus icon), for a number or a
- * time "timestamp ≥ 2026-10-31T10:00:00.000Z" and the like to compare with it (a chevron; a time's `≥` and `≤` first).
- * Each runs `filters.addPill` with the widget's `dataUrl`, whose `/pill` makes the pill. None for a widget without
- * filterable fields.
+ * time "timestamp ≥ 2026-10-31T10:00:00.000Z" and the like to compare with it (a chevron; a time's `≥` and `≤` first);
+ * for two or more of them last "instance = shop_a AND status = failed", which filters by all at once. Each runs
+ * `filters.addPill` with the widget's `dataUrl`, whose `/pill` makes the pills. None for a widget without filterable
+ * fields.
  */
 export const filterMenuProvider: DataPointMenuProvider = {
   provideDataPointMenuItems({ widget }, dataPoints): readonly DataPointMenuItem[] {
     if (!('dataUrl' in widget) || !('filterable' in widget) || !widget.filterable) return [];
     const { dataUrl, filterable } = widget;
-    return dataPoints
-      .filter(({ field }) => filterable.includes(field))
-      .flatMap(({ field, value, type }) =>
-        opsOf(type).map((op) => ({
-          label: `${field} ${OP_SIGNS[op]} ${value}`,
-          icon: OP_ICONS[op],
-          command: ADD_PILL,
-          arguments: [dataUrl, field, op, value],
-        })),
-      );
+    const filtering = dataPoints.filter(({ field }) => filterable.includes(field));
+    const each = filtering.flatMap(({ field, value, type }) =>
+      opsOf(type).map((op) => ({
+        label: `${field} ${OP_SIGNS[op]} ${value}`,
+        icon: OP_ICONS[op],
+        command: ADD_PILL,
+        arguments: [dataUrl, [{ field, op, value }]],
+      })),
+    );
+    if (filtering.length < 2) return each;
+    const all = filtering.map(({ field, value }): FieldPill => ({ field, op: 'eq', value }));
+    return [
+      ...each,
+      {
+        label: all.map(({ field, value }) => `${field} ${OP_SIGNS.eq} ${value}`).join(' AND '),
+        icon: OP_ICONS.eq,
+        command: ADD_PILL,
+        arguments: [dataUrl, all],
+      },
+    ];
   },
 };
 
-/** The command a data point menu's filter runs (`(dataUrl, field, op, value)`), which `addPill` does. */
+/** The command a data point menu's filter runs (`(dataUrl, pills)`), which `addPill` does. */
 export const ADD_PILL = 'filters.addPill';
 
+/** A pill of a field a click asks for: `status` `eq` `500`. */
+export interface FieldPill {
+  readonly field: string;
+  readonly op: FilterOp;
+  readonly value: string;
+}
+
 /**
- * Adds the pill `<dataUrl>/pill` makes of `field` `op` `value` to the chips of `query` (the active tab's: the click
- * happened in the tab shown). Rejects with the server's message, adding none: the data point menu, still open, shows it.
+ * Adds the pills `<dataUrl>/pill` makes of `pills` to the chips of `query` (the active tab's: the click happened in the
+ * tab shown), all at once. Rejects with the server's message, adding none: the data point menu, still open, shows it.
  */
-export async function addPill(query: Pick<QueryApi, 'get' | 'set'>, dataUrl: string, field: string, op: FilterOp, value: string): Promise<void> {
-  const { key } = await fetchPill(dataUrl, { field, op, value });
-  query.set(FILTERS, addChip(query.get(FILTERS), { kind: 'pill', key }));
+export async function addPill(query: Pick<QueryApi, 'get' | 'set'>, dataUrl: string, pills: readonly FieldPill[]): Promise<void> {
+  const keys = await Promise.all(pills.map(async (pill) => (await fetchPill(dataUrl, pill)).key));
+  query.set(FILTERS, keys.reduce((chips, key) => addChip(chips, { kind: 'pill', key }), query.get(FILTERS)));
 }
 
 /**

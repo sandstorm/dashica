@@ -287,6 +287,14 @@ func TestFilterableFields_TheCategoriesOfAChartWithATable(t *testing.T) {
 			NewBarVertical(sql.FromFile("colors.sql", sql.Table("http_logs"))).X(sql.NewFieldAlias("host")).Y(sql.NewFieldAlias("cnt")).Fill(sql.NewFieldAlias("color")),
 			[]string{"host"},
 		},
+		"the GROUP BY beside a fill disabled in the filter popup": {
+			NewTimeBar(logs).
+				AdjustQuery(sql.Select(sql.Field("host")), sql.GroupBy(sql.Field("host")), sql.Select(sql.Field("status")), sql.GroupBy(sql.Field("status"))).
+				X(sql.Timestamp15Min()).
+				Y(sql.Count()).
+				Fill(sql.Field("concat('hsl(', cityHash64(host) % 360, 'deg 60% 50%)')").WithAlias("color").DisableInFilterPopup()),
+			[]string{"host", "status"},
+		},
 	}
 	for name, tt := range tests {
 		if got := aliases(tt.chart); !slices.Equal(got, tt.want) {

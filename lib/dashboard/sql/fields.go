@@ -130,6 +130,9 @@ func (r *RatioField) WithAlias(s string) SqlField {
 	return r.with(func(f *fieldImpl) { f.alias = s })
 }
 
+// DisableInFilterPopup is the ratio itself: a measure filters nothing.
+func (r *RatioField) DisableInFilterPopup() SqlField { return r }
+
 func (r *RatioField) with(change func(f *fieldImpl)) *RatioField {
 	field := *r.fieldImpl
 	change(&field)
@@ -146,13 +149,14 @@ func Enum(field string) SqlField {
 
 // IsCategory is whether `f` holds categories a chart can be filtered by: a column, an Enum or an expression
 // (`JSONExtractString(attrs, 'host')`); a count and a Ratio are measures, a time bucket (Timestamp15Min, TimestampField,
-// AutoBucket) a time axis, a constant (`sql.Field("'darkred'")`, a fixed colour of a Fill) the same on every row.
+// AutoBucket) a time axis, a constant (`sql.Field("'darkred'")`, a fixed colour of a Fill) the same on every row, a
+// field with DisableInFilterPopup one its author keeps out of the filters.
 func IsCategory(f SqlField) bool {
 	switch field := f.(type) {
 	case autoBucketField, *RatioField:
 		return false
 	case *fieldImpl:
-		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0 && !literal.MatchString(field.definition)
+		return field.kind != kindCount && field.timestamp_xBucketSizeMs == 0 && !literal.MatchString(field.definition) && !field.disabledInFilterPopup
 	}
 	return true
 }
@@ -234,6 +238,9 @@ func (f *autoBucketFieldImpl) WithAlias(s string) SqlField {
 
 // FilterAs is the bucket itself: a time bucket filters nothing.
 func (f *autoBucketFieldImpl) FilterAs(func(op Op, value string) string) SqlField { return f }
+
+// DisableInFilterPopup is the bucket itself: a time bucket filters nothing.
+func (f *autoBucketFieldImpl) DisableInFilterPopup() SqlField { return f }
 
 func (f *autoBucketFieldImpl) withRounding(roundingFn string, sizeMs int64) autoBucketField {
 	cloned := *f

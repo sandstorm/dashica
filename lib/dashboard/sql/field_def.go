@@ -10,6 +10,10 @@ type SqlField interface {
 	// string) string { return op.Compare("customer_project", "customer-"+value) })`. The condition quotes the value
 	// itself (Op.Compare, Quote). A time bucket stays one that cannot filter.
 	FilterAs(condition func(op Op, value string) string) SqlField
+	// DisableInFilterPopup is the field a click on a chart does not offer to filter by (IsCategory false): a Fill that
+	// only colours its rows (`concat('hsl(', cityHash64(instance) % 360, 'deg 60% 50%)')`), whose chart offers its other
+	// fields.
+	DisableInFilterPopup() SqlField
 }
 
 func Field(definition string) SqlField {
@@ -35,6 +39,7 @@ type fieldImpl struct {
 	// filterAs is the condition of its pill for an op and a value (FilterAs); nil: `(<definition>) <op> <quoted
 	// value>`. Go only, left out of the serialization.
 	filterAs func(op Op, value string) string
+	disabledInFilterPopup bool
 }
 
 func (f *fieldImpl) WithAlias(s string) SqlField {
@@ -46,6 +51,12 @@ func (f *fieldImpl) WithAlias(s string) SqlField {
 func (f *fieldImpl) FilterAs(condition func(op Op, value string) string) SqlField {
 	cloned := *f
 	cloned.filterAs = condition
+	return &cloned
+}
+
+func (f *fieldImpl) DisableInFilterPopup() SqlField {
+	cloned := *f
+	cloned.disabledInFilterPopup = true
 	return &cloned
 }
 

@@ -11,7 +11,7 @@ import { timeCursor } from './time-cursor';
 /**
  * A bar per time bucket (`x`) as high as its measure (`y`), stacked by `fill`, over the time range the server queried;
  * `thresholds` (an alert's, read by the alert chart) as red lines. The widget types `timeBar` and `alertDetail` draw
- * it. With `ctx`, a click on a bar shows the data point menu of its fill and facets (`filterOnClick`). The tip shows a
+ * it. With `ctx` and `widget`, a click on a bar shows the data point menu of the widget's `filterable` fields (`filterOnClick`). The tip shows a
  * bar's time bucket first (`timeBucketTip`), the axis the time zone (`timeAxisLabel`).
  *
  * The bucket size is the x field's, or the server's for an `AutoBucket` axis: the y axis then shows per second, since
@@ -21,7 +21,7 @@ export function drawTimeBars(
   data: QueryResult,
   props: TimeBarProps,
   options: DrawOptions,
-  { ctx, thresholds = [] }: { readonly ctx?: Pick<WidgetContext, 'showDataPointMenu'>; readonly thresholds?: readonly number[] } = {},
+  { ctx, widget, thresholds = [] }: { readonly ctx?: Pick<WidgetContext, 'showDataPointMenu'>; readonly widget?: { readonly filterable?: readonly string[] }; readonly thresholds?: readonly number[] } = {},
 ) {
   const schema = new SchemaAnalyzer(data);
   const x = String(schema.requiredColumn(props.x.alias, 'x'));
@@ -77,7 +77,7 @@ export function drawTimeBars(
     },
     marks: [
       Plot.rectY(data, { ...bars, tip: { ...timeBucketTip(x, xBucketSize, props.x.alias, props.tipChannels), pointer } }),
-      ctx ? filterOnClick(Plot.rectY, data, { ...bars, pointer, fields: [props.fill, props.fx, props.fy], ctx }) : null,
+      ctx && widget ? filterOnClick(Plot.rectY, data, { ...bars, pointer, widget, ctx }) : null,
       timeCursor(options.timeCursor),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),

@@ -8,7 +8,7 @@ import { InputBoxValidationSeverity, type UiApi } from '../../hosts/ui/ui';
 import { FILTERS, addChip, removeChips, replaceChip, type FilterChip, type FilterOp, type Pill, type PillFilter, type SqlFilter } from './chips';
 import { FieldsCache, SQL_PLACEHOLDER, SQL_PROMPT, addFilter, askValue, fetchValues, fieldSource, filterableTables, typeIn, type AskSql, type FieldType, type FilterableTable } from './add-filter';
 import { filterDecorationProvider } from './decorations';
-import { ADD_PILL, addPill, fetchPill, filterMenuProvider, type PillSource } from './offer';
+import { ADD_PILL, addPill, fetchPill, filterMenuProvider, type FieldPill, type PillSource } from './offer';
 import { OP_ICONS, OP_SIGNS, opsOf } from './ops';
 import { pillButton, pillField, pillLabel, type PillField } from './pill-key';
 import { Schemas } from '../sql-library/schemas';
@@ -40,7 +40,7 @@ export const filters: Extension = {
       : undefined;
     subscriptions.push(
       widgets.registerDataPointMenuProvider(filterMenuProvider),
-      commands.registerCommand(ADD_PILL, (dataUrl: string, field: string, op: FilterOp, value: string) => addPill(query, dataUrl, field, op, value)),
+      commands.registerCommand(ADD_PILL, (dataUrl: string, pills: readonly FieldPill[]) => addPill(query, dataUrl, pills)),
       // what a chart did with the pills: "ignores host = a" (muted), "skipped: …"
       widgets.registerDecorationProvider(filterDecorationProvider),
       // a table cell's SQL filters ("Filter: Contains this value")

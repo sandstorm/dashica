@@ -667,10 +667,10 @@ describe('click to filter', () => {
     const widget = { type: 'barVertical', props: {}, dataUrl: '/p/shop/api/1', filterable: ['host'] } as unknown as RenderedWidget['widget'];
     const items = menuProviders[0].provideDataPointMenuItems({ widget, url: (path) => path, lastResult: undefined }, [{ field: 'host', value: 'a' }]);
     expect(items).toMatchObject([
-      { label: 'host = a', command: 'filters.addPill', arguments: ['/p/shop/api/1', 'host', 'eq', 'a'] },
-      { label: 'host ≠ a', command: 'filters.addPill', arguments: ['/p/shop/api/1', 'host', 'ne', 'a'] },
+      { label: 'host = a', command: 'filters.addPill', arguments: ['/p/shop/api/1', [{ field: 'host', op: 'eq', value: 'a' }]] },
+      { label: 'host ≠ a', command: 'filters.addPill', arguments: ['/p/shop/api/1', [{ field: 'host', op: 'ne', value: 'a' }]] },
     ]);
-    await commands.get('filters.addPill')!('/p/shop/api/1', 'host', 'ne', 'a');
+    await commands.get('filters.addPill')!('/p/shop/api/1', [{ field: 'host', op: 'ne', value: 'a' }]);
 
     const asked = new URL(fetched.at(-1)!, 'http://x');
     expect([asked.pathname, Object.fromEntries(asked.searchParams)]).toEqual(['/p/shop/api/1/pill', { field: 'host', op: 'ne', value: 'a' }]);

@@ -94,8 +94,9 @@ type Node struct {
 	// query); empty for a widget without a query.
 	RowsURL string `json:"rowsUrl,omitempty"`
 	// Filterable are the aliases of its fields a click may filter by, each a pill on its table (`<dataUrl>/pill`): its
-	// fields that hold categories (sql.IsCategory, no constant), when its query has a table (sql.From, sql.Table) and
-	// does not skip filters; empty for every other widget.
+	// dimensions and its builder query's GROUP BY that hold categories (filterableFields: sql.IsCategory, no constant),
+	// when its query has a table (sql.From, sql.Table) and does not skip filters; empty for every other widget. A click
+	// on a chart offers exactly these.
 	Filterable []string `json:"filterable,omitempty"`
 	// Computed are those of Filterable that are more than a column of Table (an expression, a FilterAs, a renamed
 	// column, any field of a SQL file: sql.ColumnOf): "add filter" lists them as computed fields, the others among the
@@ -417,22 +418,25 @@ type filterTarget struct {
 	query sql.SqlQueryable
 }
 
-// filterableFields are the fields of `chart` a pill filters by: its dimensions that hold categories, each alias once,
-// without a SQL file's or string's columns it selects as a constant (`'darkred' AS color`, sql.IsConstantColumn, its
-// text read with deps.FileSystem; a file that cannot be read has none); none when its query has no table or skips
-// filters.
+// filterableFields are the fields of `chart` a pill filters by: its dimensions, then the GROUP BY of its builder query
+// (an instance a time bar groups by beside its Fill), those that hold categories, each alias once, without a SQL
+// file's or string's columns it selects as a constant (`'darkred' AS color`, sql.IsConstantColumn, its text read with
+// deps.FileSystem; a file that cannot be read has none); none when its query has no table or skips filters.
 func filterableFields(deps rendering.Dependencies, chart withQuery) []sql.SqlField {
 	d, ok := chart.(withDimensions)
 	query := chart.Query()
 	if _, hasTable := sql.TableOf(query); !ok || !hasTable || query.ShouldSkipFilters() {
 		return nil
 	}
+	candidates := d.dimensions()
 	text := ""
-	if _, builder := query.(*sql.SqlQuery); !builder {
+	if builder, ok := query.(*sql.SqlQuery); ok {
+		candidates = append(candidates, builder.GroupByFields()...)
+	} else {
 		text, _ = sql.BuildWithFS(query, deps.FileSystem)
 	}
 	var fields []sql.SqlField
-	for _, field := range d.dimensions() {
+	for _, field := range candidates {
 		if field == nil || !sql.IsCategory(field) || slices.ContainsFunc(fields, func(f sql.SqlField) bool { return f.Alias() == field.Alias() }) {
 			continue
 		}

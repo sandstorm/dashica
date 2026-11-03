@@ -57,13 +57,13 @@ describe('timeLine', () => {
     const rows = { time: [T0, T0 + QUARTER, T0, T0 + QUARTER], cnt: [3, 5, 1, 2], host: ['a', 'a', 'b', 'b'], session: ['s1', 's1', 's2', 's2'] };
     const lines = (widgetContainer: HTMLElement) => [...widgetContainer.querySelectorAll<SVGPathElement>('[aria-label="line"] path')];
 
-    it('on a line offers its zField, then its strokeField, for the chart', async () => {
+    it('on a line offers its row’s values of the fields the server lets it filter by, in their order, for the chart', async () => {
       testbed.serve('/p/shop/api/1/query', rows);
       testbed.serve('/p/shop/api/2/query', rows);
       const strokeField = { kind: 'expr' as const, alias: 'host' };
       const zField = { kind: 'expr' as const, alias: 'session' };
-      const bothElement = testbed.render({ type: 'timeLine', props: { x, y, strokeField, zField }, dataUrl: '/p/shop/api/1', filterable }).widgetContainer;
-      const strokeOnlyElement = testbed.render({ type: 'timeLine', props: { x, y, strokeField }, dataUrl: '/p/shop/api/2', filterable }).widgetContainer;
+      const bothElement = testbed.render({ type: 'timeLine', props: { x, y, strokeField, zField }, dataUrl: '/p/shop/api/1', filterable: ['session', 'host'] }).widgetContainer;
+      const strokeOnlyElement = testbed.render({ type: 'timeLine', props: { x, y, strokeField }, dataUrl: '/p/shop/api/2', filterable: ['host'] }).widgetContainer;
       await inView();
       await clickMark(lines(bothElement)[1]);
       await clickMark(lines(strokeOnlyElement)[1]);
@@ -75,7 +75,7 @@ describe('timeLine', () => {
 
     it('on the drag area offers the line Plot points at below it', async () => {
       testbed.serve('/p/shop/api/1/query', rows);
-      const { widgetContainer } = testbed.render({ type: 'timeLine', props: { x, y, strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1', filterable });
+      const { widgetContainer } = testbed.render({ type: 'timeLine', props: { x, y, strokeField: { kind: 'expr', alias: 'host' } }, dataUrl: '/p/shop/api/1', filterable: ['host'] });
       await inView();
       const overlayContainer = widgetContainer.querySelector('svg .overlay')!;
       await clickMark(lines(widgetContainer)[0], overlayContainer);

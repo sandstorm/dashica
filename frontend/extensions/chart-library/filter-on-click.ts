@@ -1,5 +1,4 @@
 import * as Plot from '@observablehq/plot';
-import type { SqlFieldProps } from '../../generated/zz_generated.dashica';
 import type { QueryResult, WidgetContext } from '../../hosts/widgets/widgets';
 import { columnTypesOf, dataPointOf } from './data-point';
 import './filter-on-click.css';
@@ -9,20 +8,18 @@ import './filter-on-click.css';
  * extension offers to filter by it): `mark` (the chart's mark function, `Plot.barY`) with the chart mark's `options`
  * (its tip left out) under the pointer transform the tip uses (`pointer`, the chart mark's `tip` pointer), so it points
  * at the same row as the tip, stacking included. A click while it points at a row shows `ctx`'s data point menu for
- * the row's categories: one data point per field of `fields` that is a category with a value, in order, each by its
- * alias (`dataPointOf`, with the column's type the answer names, `columnTypesOf`). Its element is an empty `g`, with
- * `d-filter-on-click--pointing` while it points at a row (the pointer cursor). `null` without a category among
- * `fields`. Every Plot chart type puts one after its mark.
+ * the row's values of `widget`'s `filterable` fields (page.json's, which the server chose): one data point per field
+ * with a value, in order (`dataPointOf`, with the column's type the answer names, `columnTypesOf`). Its element is an
+ * empty `g`, with `d-filter-on-click--pointing` while it points at a row (the pointer cursor). `null` without such a
+ * field. Every Plot chart type puts one after its mark.
  */
 export function filterOnClick<O extends Plot.MarkOptions>(
   mark: (data: QueryResult, options: Omit<O & FilterOnClickOptions, keyof FilterOnClickOptions>) => Plot.Markish,
   data: QueryResult,
-  { fields, ctx, pointer, ...options }: O & FilterOnClickOptions,
+  { widget, ctx, pointer, ...options }: O & FilterOnClickOptions,
 ): Plot.Markish {
-  const categories = fields.filter((field, at): field is SqlFieldProps => {
-    return field !== undefined && isCategory(field) && fields.findIndex((other) => other?.alias === field.alias) === at;
-  });
-  if (categories.length === 0) return null;
+  const fields = widget.filterable ?? [];
+  if (fields.length === 0) return null;
   const types = columnTypesOf(data);
   // the row each rendered element points at; the pointer replaces the element whenever it points elsewhere. A faceted
   // chart has one element per facet, and Plot's pointer empties the losing facets' elements only an animation frame later
@@ -43,9 +40,9 @@ export function filterOnClick<O extends Plot.MarkOptions>(
     svgElement.addEventListener('click', (event) => {
       const row = pointedRow(svgElement);
       if (!row) return;
-      const dataPoints = categories.flatMap((field) => {
-        const value = row[field.alias];
-        return value == null ? [] : [dataPointOf(field.alias, value, types)];
+      const dataPoints = fields.flatMap((field) => {
+        const value = row[field];
+        return value == null ? [] : [dataPointOf(field, value, types)];
       });
       if (dataPoints.length > 0) ctx.showDataPointMenu({ x: event.clientX, y: event.clientY }, dataPoints);
     });
@@ -73,8 +70,8 @@ export function filterOnClick<O extends Plot.MarkOptions>(
 }
 
 export interface FilterOnClickOptions {
-  /** The fields whose categories a click shows, each a channel's field as the chart maps it, in order. */
-  readonly fields: readonly (SqlFieldProps | undefined)[];
+  /** The widget whose `filterable` fields (page.json's aliases, in order) a click shows. */
+  readonly widget: { readonly filterable?: readonly string[] };
   /** The chart's widget context, whose data point menu a click shows. */
   readonly ctx: Pick<WidgetContext, 'showDataPointMenu'>;
   /**
@@ -88,8 +85,3 @@ export interface FilterOnClickOptions {
 }
 
 const POINTERS = { x: Plot.pointerX, y: Plot.pointerY, xy: Plot.pointer } as const;
-
-/** Whether `field` holds categories: not a measure (`count`), not a time bucket (`autoBucket`, a bucket size). */
-function isCategory(field: SqlFieldProps): boolean {
-  return field.kind !== 'count' && field.kind !== 'autoBucket' && !field.xBucketSizeMs;
-}

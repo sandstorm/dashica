@@ -61,7 +61,7 @@ describe('barVertical', () => {
       ]);
     });
 
-    it('offers each category of its row in the order of x, fill, fx, fy', async () => {
+    it('offers its row’s values of the fields the server lets it filter by, in their order', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], host: ['a', 'b'], region: ['eu', 'us'], cnt: [30, 2] });
       const props = { ...byStatus().props, fill: { kind: 'expr', alias: 'host' }, fx: { kind: 'expr', alias: 'region' } } as const;
       const { widgetContainer } = testbed.render(byStatus({ props }));
@@ -99,13 +99,13 @@ describe('barVertical', () => {
       expect(seen).toEqual(['touch', 'pen']);
     });
 
-    // a time bucket as x, which is never a candidate
-    const byBucket = (more: object = {}) => byStatus({ props: { ...byStatus().props, x: { kind: 'autoBucket', alias: 'status', xBucketSizeMs: 900000 } }, ...more });
+    // a time bucket as x, which the server never lets filter
+    const byBucket = (more: object = {}) => byStatus({ props: { ...byStatus().props, x: { kind: 'autoBucket', alias: 'status', xBucketSizeMs: 900000 } }, filterable: [], ...more });
 
-    it('offers the fill when the category is a time bucket, and nothing without a fill', async () => {
+    it('offers the fill when the category is a time bucket, and nothing without a field to filter by', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], host: ['a', 'b'], cnt: [30, 2] });
       const fill = { kind: 'expr', alias: 'host' } as const;
-      const { widgetContainer } = testbed.render(byBucket({ props: { ...byBucket().props, fill } }));
+      const { widgetContainer } = testbed.render(byBucket({ props: { ...byBucket().props, fill }, filterable: ['host'] }));
       await inView();
       await clickMark(bars(widgetContainer)[1]);
       expect(offered()).toEqual(['host = b']);
@@ -115,7 +115,7 @@ describe('barVertical', () => {
       expect(offers).toHaveLength(1);
     });
 
-    it('looks clickable while Plot points at a bar, and never without a category', async () => {
+    it('looks clickable while Plot points at a bar, and never without a field to filter by', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500'], cnt: [30, 2] });
       const { widgetContainer } = testbed.render(byStatus());
       const { widgetContainer: withoutElement } = testbed.render(byBucket());
@@ -128,13 +128,13 @@ describe('barVertical', () => {
       expect(withoutElement.querySelector('.d-filter-on-click')).toBeNull();
     });
 
-    it('never offers a measure, nor a NULL', async () => {
+    it('never offers a NULL, and nothing for a chart the server lets filter by nothing (a measure as x)', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', null], host: ['a', 'b'], cnt: [30, 2] });
       const { widgetContainer } = testbed.render(byStatus({ props: { ...byStatus().props, fill: { kind: 'expr', alias: 'host' } } }));
       await inView();
       await clickMark(bars(widgetContainer)[1]);
       expect(offered()).toEqual(['host = b']);
-      const { widgetContainer: measuredElement } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } } });
+      const { widgetContainer: measuredElement } = testbed.render({ ...byStatus(), props: { x: { kind: 'count', alias: 'cnt' }, y: { kind: 'count', alias: 'cnt' } }, filterable: [] });
       await inView();
       if (bars(measuredElement)[0]) await clickMark(bars(measuredElement)[0]);
       expect(offers).toHaveLength(1);
@@ -142,7 +142,7 @@ describe('barVertical', () => {
 
     it('offers the facet of a bar whose x is a time bucket', async () => {
       testbed.serve('/p/shop/api/1/query', { status: ['200', '500', '200'], region: ['eu', 'eu', 'us'], cnt: [30, 2, 4] });
-      const { widgetContainer } = testbed.render(byBucket({ props: { ...byBucket().props, fx: { kind: 'expr', alias: 'region' } } }));
+      const { widgetContainer } = testbed.render(byBucket({ props: { ...byBucket().props, fx: { kind: 'expr', alias: 'region' } }, filterable: ['region'] }));
       await inView();
       await clickMark(bars(widgetContainer).at(-1)!);
       expect(offered()).toEqual(['region = us']);

@@ -59,8 +59,8 @@ describe('timeBar', () => {
     };
     const bars = (widgetContainer: HTMLElement) => [...widgetContainer.querySelectorAll<SVGRectElement>('g[aria-label="rect"] rect')];
 
-    it('on a bar offers its fill, never its time bucket or measure, for the chart', async () => {
-      const widgetContainer = render();
+    it('on a bar offers its row’s values of the fields the server lets it filter by, for the chart', async () => {
+      const widgetContainer = render({ filterable: ['level'] });
       await inView();
       await clickMark(bars(widgetContainer)[1]);
       expect(offers.map(({ dataPoints, widget }) => ({ dataPoints, dataUrl: dataUrlOf(widget) }))).toEqual([
@@ -69,7 +69,7 @@ describe('timeBar', () => {
     });
 
     it('on the drag area offers the bar Plot points at below it, again on the next click', async () => {
-      const widgetContainer = render();
+      const widgetContainer = render({ filterable: ['level'] });
       await inView();
       const overlay = () => widgetContainer.querySelector('svg .overlay')!;
       await clickMark(bars(widgetContainer)[2], overlay());
@@ -132,7 +132,7 @@ describe('timeBar', () => {
 
     it('on a bar without a fill offers its facet', async () => {
       const { fill: _, ...unfilled } = props;
-      const widgetContainer = render({ props: { ...unfilled, fy: { kind: 'expr', alias: 'region' } } });
+      const widgetContainer = render({ props: { ...unfilled, fy: { kind: 'expr', alias: 'region' } }, filterable: ['region'] });
       await inView();
       await clickMark(bars(widgetContainer).at(-1)!);
       expect(offered()).toEqual(['region = us']);

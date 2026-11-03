@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // Tests for offer.ts: what a click offers (filterMenuProvider): per data point of a field the widget filters by, one
-// item per op of its type with its own sign and icon, for a time or a number the comparisons too, each running
-// `filters.addPill` with the widget's dataUrl; none for other fields or a widget without filterable ones. The pill
-// added (addPill), none on a failed /pill, which rejects with the server's message. The request of /pill (fetchPill).
+// item per op of its type with its own sign and icon, for a time or a number the comparisons too, for two or more one
+// that filters by all at once, each running `filters.addPill` with the widget's dataUrl; none for other fields or a
+// widget without filterable ones. The pills added (addPill), none on a failed /pill, which rejects with the server's
+// message. The request of /pill (fetchPill).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WidgetNode } from '../../generated/zz_generated.dashica';
 import { QueryHost } from '../../hosts/query/query';
@@ -54,12 +55,31 @@ describe('filterMenuProvider', () => {
       'Exclude status ≠ 500',
       'Filter instance = web-1',
       'Exclude instance ≠ web-1',
+      'Filter status = 500 AND instance = web-1',
     ]);
     const items = filterMenuProvider.provideDataPointMenuItems({ widget: chart, url: (path) => path, lastResult: undefined }, [{ field: 'status', value: '500' }]);
     expect(items).toMatchObject([
-      { command: 'filters.addPill', arguments: ['/p/shop/api/3', 'status', 'eq', '500'] },
-      { command: 'filters.addPill', arguments: ['/p/shop/api/3', 'status', 'ne', '500'] },
+      { command: 'filters.addPill', arguments: ['/p/shop/api/3', [{ field: 'status', op: 'eq', value: '500' }]] },
+      { command: 'filters.addPill', arguments: ['/p/shop/api/3', [{ field: 'status', op: 'ne', value: '500' }]] },
     ]);
+  });
+
+  it('offers to filter by all data points at once, as the last item', () => {
+    const items = filterMenuProvider.provideDataPointMenuItems({ widget: chart, url: (path) => path, lastResult: undefined }, [
+      { field: 'instance', value: 'shop_a' },
+      { field: 'status', value: 'failed' },
+    ]) as readonly DataPointMenuItem[];
+    expect(items.at(-1)).toMatchObject({
+      label: 'instance = shop_a AND status = failed',
+      command: 'filters.addPill',
+      arguments: [
+        '/p/shop/api/3',
+        [
+          { field: 'instance', op: 'eq', value: 'shop_a' },
+          { field: 'status', op: 'eq', value: 'failed' },
+        ],
+      ],
+    });
   });
 
   it('offers ≥ and ≤ a time first, then the other ops of its type', () => {
@@ -84,16 +104,25 @@ describe('filterMenuProvider', () => {
 
 describe('addPill', () => {
   it('adds the pill the widget’s /pill makes to the chips', async () => {
-    await addPill(query, '/p/shop/api/3', 'instance', 'ne', 'web-1');
+    await addPill(query, '/p/shop/api/3', [{ field: 'instance', op: 'ne', value: 'web-1' }]);
 
     expect(query.get(FILTERS)).toEqual([pill('instance', 'ne', 'web-1')]);
     expect(fetched.at(-1)?.pathname).toBe('/p/shop/api/3/pill');
     expect(Object.fromEntries(fetched.at(-1)!.searchParams)).toEqual({ field: 'instance', op: 'ne', value: 'web-1' });
   });
 
+  it('adds all the pills at once', async () => {
+    await addPill(query, '/p/shop/api/3', [
+      { field: 'instance', op: 'eq', value: 'shop_a' },
+      { field: 'status', op: 'eq', value: 'failed' },
+    ]);
+
+    expect(query.get(FILTERS)).toEqual([pill('instance', 'eq', 'shop_a'), pill('status', 'eq', 'failed')]);
+  });
+
   it('adds none when the widget’s /pill fails, rejecting with the server’s message', async () => {
     refused = new Response('"status" cannot filter this chart\'s table', { status: 422 });
-    await expect(addPill(query, '/p/shop/api/3', 'status', 'eq', '500')).rejects.toThrow('422: "status" cannot filter this chart\'s table');
+    await expect(addPill(query, '/p/shop/api/3', [{ field: 'status', op: 'eq', value: '500' }])).rejects.toThrow('422: "status" cannot filter this chart\'s table');
     expect(query.get(FILTERS)).toEqual([]);
   });
 });

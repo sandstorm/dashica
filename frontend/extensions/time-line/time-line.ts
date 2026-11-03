@@ -1,5 +1,4 @@
 import * as Plot from '@observablehq/plot';
-import type { TimeLineProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
@@ -12,7 +11,7 @@ import { timeCursor } from '../chart-library/time-cursor';
 /**
  * The widget type `timeLine`: a line over time (`x`) through its measure (`y`), over the time range the server queried;
  * a line per value of `strokeField` (or of `zField`, in one color), else one in the color `stroke`. A click on a line
- * shows the data point menu of its `zField`, `strokeField` and facets (`filterOnClick`).
+ * shows the data point menu of its `filterable` fields (`filterOnClick`).
  */
 export const timeLine: Extension = {
   id: 'timeLine',
@@ -23,11 +22,12 @@ function renderTimeLine(widgetContainer: HTMLElement, widget: WidgetOf<'timeLine
   return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawTimeLine(result, widget.props, options, ctx),
+    draw: (result, options) => drawTimeLine(result, widget, options, ctx),
   });
 }
 
-function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
+function drawTimeLine(data: QueryResult, widget: WidgetOf<'timeLine'>, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
+  const { props } = widget;
   const schema = new SchemaAnalyzer(data);
   if (!(bucketSizeOf(data) ?? props.x.xBucketSizeMs)) {
     throw new Error('xBucketSize must be specified, or auto-bucketing must be activated via -- BUCKET: ... in the SQL query.');
@@ -81,7 +81,7 @@ function drawTimeLine(data: QueryResult, props: TimeLineProps, options: DrawOpti
     },
     marks: [
       Plot.line(data, { ...lines, tip }),
-      filterOnClick(Plot.line, data, { ...lines, pointer, fields: [props.zField, props.strokeField, props.fx, props.fy], ctx }),
+      filterOnClick(Plot.line, data, { ...lines, pointer, widget, ctx }),
       timeCursor(options.timeCursor),
       timeBrush(options.onTimeSelect),
       Plot.ruleY([0]),

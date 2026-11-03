@@ -74,6 +74,19 @@ func TestIsCategory_AConstantIsNone(t *testing.T) {
 	}
 }
 
+func TestIsCategory_AFieldDisabledInTheFilterPopupIsNone(t *testing.T) {
+	colour := Field("concat('hsl(', cityHash64(host) % 360, 'deg 60% 50%)')").WithAlias("color").DisableInFilterPopup()
+	if IsCategory(colour) {
+		t.Error("a field disabled in the filter popup is no category")
+	}
+	if _, ok := Condition(colour, OpEq, "hsl(42deg 60% 50%)"); ok {
+		t.Error("a field disabled in the filter popup makes no condition")
+	}
+	if colour.Alias() != "color" {
+		t.Errorf("Alias() = %q, want color", colour.Alias())
+	}
+}
+
 func TestIsConstantColumn_ALiteralSelectedAsTheColumn(t *testing.T) {
 	text := `SELECT
     'OK'                                           as status,

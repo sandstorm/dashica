@@ -1,5 +1,4 @@
 import * as Plot from '@observablehq/plot';
-import type { BarHorizontalProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
@@ -7,7 +6,7 @@ import { filterOnClick } from '../chart-library/filter-on-click';
 
 /**
  * The widget type `barHorizontal`: a bar per category (`y`), from left to right as long as its measure (`x`). A click
- * on a bar shows the data point menu of its category and fill (`filterOnClick`).
+ * on a bar shows the data point menu of its `filterable` fields (`filterOnClick`).
  */
 export const barHorizontal: Extension = {
   id: 'barHorizontal',
@@ -18,11 +17,12 @@ function renderBarHorizontal(widgetContainer: HTMLElement, widget: WidgetOf<'bar
   return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawBarHorizontal(result, widget.props, options, ctx),
+    draw: (result, options) => drawBarHorizontal(result, widget, options, ctx),
   });
 }
 
-function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
+function drawBarHorizontal(data: QueryResult, widget: WidgetOf<'barHorizontal'>, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
+  const { props } = widget;
   const bars: Plot.BarXOptions = { x: props.x.alias, y: props.y.alias, fill: props.fill?.alias ?? '#A8C1D1' };
   // the tip points by y, at the bar under the mouse, and so does a click (FilterOnClickOptions.pointer)
   const pointer = 'y';
@@ -48,7 +48,7 @@ function drawBarHorizontal(data: QueryResult, props: BarHorizontalProps, options
     },
     marks: [
       Plot.barX(data, { ...bars, tip: pointer }),
-      filterOnClick(Plot.barX, data, { ...bars, pointer, fields: [props.y, props.fill], ctx }),
+      filterOnClick(Plot.barX, data, { ...bars, pointer, widget, ctx }),
     ],
   });
 }

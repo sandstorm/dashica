@@ -1,5 +1,4 @@
 import * as Plot from '@observablehq/plot';
-import type { BarVerticalProps } from '../../generated/zz_generated.dashica';
 import type { Extension } from '../../hosts/extension-host/extension-host';
 import type { QueryResult, WidgetContext, WidgetOf } from '../../hosts/widgets/widgets';
 import { ChartFrame, type DrawOptions } from '../chart-library/chart-frame';
@@ -8,7 +7,7 @@ import { filterOnClick } from '../chart-library/filter-on-click';
 /**
  * The widget type `barVertical`: a bar per category (`x`) as high as its measure (`y`), the categories sorted by it when
  * `sortReverse` is set; `fx` / `fy` split it into facets. A click on a bar shows the data point menu of its
- * category, fill and facets (`filterOnClick`).
+ * `filterable` fields (`filterOnClick`).
  */
 export const barVertical: Extension = {
   id: 'barVertical',
@@ -19,11 +18,12 @@ function renderBarVertical(widgetContainer: HTMLElement, widget: WidgetOf<'barVe
   return new ChartFrame(widgetContainer, ctx, {
     title: widget.props.title,
     height: widget.props.height,
-    draw: (result, options) => drawBarVertical(result, widget.props, options, ctx),
+    draw: (result, options) => drawBarVertical(result, widget, options, ctx),
   });
 }
 
-function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
+function drawBarVertical(data: QueryResult, widget: WidgetOf<'barVertical'>, options: DrawOptions, ctx: Pick<WidgetContext, 'showDataPointMenu'>) {
+  const { props } = widget;
   const tipChannels = props.tipChannels && Object.keys(props.tipChannels).length > 0 ? props.tipChannels : undefined;
   // the tip points by x, at the bar under the mouse, and so does a click (FilterOnClickOptions.pointer)
   const pointer = 'x';
@@ -58,7 +58,7 @@ function drawBarVertical(data: QueryResult, props: BarVerticalProps, options: Dr
     },
     marks: [
       Plot.barY(data, { ...bars, tip: tipChannels ? { pointer, channels: tipChannels } : pointer }),
-      filterOnClick(Plot.barY, data, { ...bars, pointer, fields: [props.x, props.fill, props.fx, props.fy], ctx }),
+      filterOnClick(Plot.barY, data, { ...bars, pointer, widget, ctx }),
     ],
   });
 }
