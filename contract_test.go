@@ -44,11 +44,11 @@ func everyWidget() *dashboard.Builder {
 			Widget(widget.NewTimeHeatmap(logs).X(sql.Timestamp15Min()).Y(sql.Field("duration_ms")).YBucketSize(100)).
 			Widget(widget.NewTimeHeatmapOrdinal(logs).X(sql.Timestamp15Min()).Y(sql.Enum("status"))).
 			Widget(widget.NewStats(logs).Id("shop_stats")).
-			Widget(widget.NewTable(logs).Title("Latest").Limit(100))).
+			Widget(widget.NewTable(logs).Title("Latest").Limit(100)).
+			Widget(widget.NewFlameGraph(sql.New(sql.From("profiling_traces"))).Title("Profile"))).
 		Widget(widget.NewCheckboxGroup("level", "Level", []string{"error", "warn"})).
 		Widget(widget.NewTextInput("path", "Path").Placeholder("/api")).
 		Widget(widget.NewSchemaTable("http_logs")).
-		Widget(widget.NewSpeedscopeLink(logs)).
 		Widget(widget.NewAlertOverview("shop%")).
 		Widget(widget.NewAlertDetail("shop", "login_events"))
 }

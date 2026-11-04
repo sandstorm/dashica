@@ -30,6 +30,12 @@ export const workbench = {
               "group": "Details"
             },
             {
+              "dataUrl": "/p/shop/api/8",
+              "rowsUrl": "/p/shop/api/8/rows",
+              "title": "Profile",
+              "group": "Details"
+            },
+            {
               "dataUrl": "/p/shop/api/11",
               "title": "shop#login_events",
               "group": ""
@@ -239,6 +245,17 @@ export const page = {
           "rowsUrl": "/p/shop/api/7/rows",
           "table": "http_logs",
           "connection": "default"
+        },
+        "6": {
+          "type": "flameGraph",
+          "props": {
+            "height": 500,
+            "title": "Profile"
+          },
+          "dataUrl": "/p/shop/api/8",
+          "rowsUrl": "/p/shop/api/8/rows",
+          "table": "profiling_traces",
+          "connection": "default"
         }
       }
     },
@@ -266,11 +283,6 @@ export const page = {
       "props": {
         "table": "http_logs"
       },
-      "dataUrl": "/p/shop/api/8"
-    },
-    {
-      "type": "speedscopeLink",
-      "props": {},
       "dataUrl": "/p/shop/api/9"
     },
     {
