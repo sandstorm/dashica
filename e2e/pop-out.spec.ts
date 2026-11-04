@@ -1,17 +1,16 @@
 // Tests for views popped out into tabs: Details' "Pop out" opens a tab with the selected records side by side; Debug's
-// opens a tab with the active chart's debug info that stays with that chart when another becomes active; "Open
-// Speedscope" opens the viewer in a tab, in an iframe. A reload keeps none of them. A popped-out view's tab has only
-// the tabs in the top bar (no time range, no auto refresh) and no filter bar.
+// opens a tab with the active chart's debug info that stays with that chart when another becomes active. A reload
+// keeps none of them. A popped-out view's tab has only the tabs in the top bar (no time range, no auto refresh) and no
+// filter bar.
 //
 // The page defaults to the Sandstorm instance's "/templates/oekokiste-caddy-ingress" over the last 7 days, its table
-// "20 slowest requests" and its time bar "HTTP non-2xx status by type"; Speedscope's to "/profiling/clarcert-clarmap".
-// Others: DASHICA_E2E_RECORDS_PAGE, DASHICA_E2E_RECORDS_TABLE, DASHICA_E2E_RECORDS_OTHER, DASHICA_E2E_PROFILING_PAGE.
+// "20 slowest requests" and its time bar "HTTP non-2xx status by type". Others: DASHICA_E2E_RECORDS_PAGE,
+// DASHICA_E2E_RECORDS_TABLE, DASHICA_E2E_RECORDS_OTHER.
 import {expect, test, type Page} from '@playwright/test';
 
 const PAGE = process.env.DASHICA_E2E_RECORDS_PAGE || '/templates/oekokiste-caddy-ingress';
 const TABLE = process.env.DASHICA_E2E_RECORDS_TABLE || '20 slowest requests';
 const OTHER = process.env.DASHICA_E2E_RECORDS_OTHER || 'HTTP non-2xx status by type';
-const PROFILING = process.env.DASHICA_E2E_PROFILING_PAGE || '/profiling/clarcert-clarmap';
 
 const tabs = (page: Page) => page.getByTestId('wb-tab-bar').getByRole('tab');
 
@@ -79,13 +78,4 @@ test('Debug pops out into a tab that stays with its chart when another becomes a
     await table.getByText(TABLE, {exact: true}).click();
     await tabs(page).nth(1).click();
     await expect(page.locator('.d-debug-tab pre').first()).toHaveText(query!);
-});
-
-test('"Open Speedscope" opens the viewer in a tab of the workbench, in an iframe', async ({page}) => {
-    await page.goto(`${PROFILING}?time=1h`);
-    await page.getByRole('link', {name: 'Open Speedscope'}).click();
-    await expect(tabs(page)).toHaveCount(2);
-    await expect(tabs(page).nth(1)).toContainText('Speedscope');
-    await expect(page.locator('iframe.d-speedscope-tab')).toHaveAttribute('src', /\/viewer\/#profileURL=/);
-    await expect(page.getByLabel('Auto refresh')).toBeHidden();
 });

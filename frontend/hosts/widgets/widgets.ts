@@ -151,7 +151,7 @@ export interface WidgetContext extends Decorated {
    * neither, an aborted latest one puts back the status of the last answer.
    */
   runQuery(signal?: AbortSignal): Promise<QueryResult>;
-  /** `path` below the widget's handler with the page's query state (`/p/shop/api/8/speedscope-query?time=1h&sql=…`). */
+  /** `path` below the widget's handler with the page's query state (`/p/shop/api/8/debug?time=1h&sql=…`). */
   url(path: string): string;
   /** Renders `child` (a grid's area, a group's widget) into `childContainer`. */
   renderChild(childContainer: HTMLElement, child: WidgetNode): Disposable;

@@ -251,8 +251,7 @@ background tab never scrolls.
 
 **Opening and closing.**
 
-- **Opens a tab:** "Open in Explore view" (always a new tab); "Pop out" of Debug and Details, "Open Speedscope"
-  (`popOut`, §3.4.6); "Open in new tab" in a dashboard entry's menu
+- **Opens a tab:** "Open in Explore view" (always a new tab); "Pop out" of Debug and Details (`popOut`, §3.4.6); "Open in new tab" in a dashboard entry's menu
   (`dashboards/entry`); search everywhere with Cmd / Ctrl+Enter (`SearchItem.accept({ newTab })`) *(proposed)*. A plain
   click on a link navigates the active tab as today; Cmd / Ctrl / Shift / middle click stays the browser's (a new
   browser tab), since every tab's URL is a real link *(proposed)*.
@@ -429,10 +428,10 @@ widget. It is kept in memory only.
 - **No page bars (step 9y, D33):** while the active tab shows a popped-out view (`PageHost.showsPoppedView`), the top
   bar shows only the tabs and "+", and there is no filter bar: the workbench calls `UiHost.showPageBars(false)` on each
   change of the tabs, which withholds the items of the top and the filter bar (`Bar.withhold`: hidden as if there were
-  none, the tab bar stays). Decided once for every popped view (Debug, the Details comparison, Speedscope), not per
+  none, the tab bar stays). Decided once for every popped view (Debug, the Details comparison), not per
   extension; the extensions keep their items registered. *(proposed)* The time range and auto refresh go too, not only
-  the filter bar: Debug follows its widget in the page's tab, the Details comparison keeps its records, Speedscope
-  its profile of the click, so neither changes anything there; hidden rather than greyed, as nothing in such a tab
+  the filter bar: Debug follows its widget in the page's tab, the Details comparison keeps its records, so neither
+  changes anything there; hidden rather than greyed, as nothing in such a tab
   reads them. The status bar stays (its items are the workbench's, not the tab's).
 - **In memory only:** the stored tabs (`storedTabs(list, kept)`) leave out the popped tabs, so a reload closes them; a
   `#view=<id>` with no view in memory names no kind, so a link to it (or a reload while it is shown, the address bar
@@ -444,9 +443,6 @@ widget. It is kept in memory only.
   records kept then side by side (`drawComparison`: a row per field, a column per record, a row whose values
   differ tinted, a missing field empty). It keeps those records: the table clears its ticks on each answer, so
   following them would empty the tab on the next refresh *(proposed)*.
-- **Speedscope:** "Open Speedscope" opens a tab "Speedscope" with the viewer in an `<iframe>`, on the profile of the
-  page's state at the click; it stays a link, so a click with a modifier key or the middle button opens the viewer in a
-  browser tab as before *(proposed)*.
 
 ### 3.5 Extensions and UI code
 
@@ -517,7 +513,7 @@ result.headers                             // the answer's headers as they came;
                                            // columnTypesOf, resolvedTimeRangeOf, bucketSizeOf (chart-library), thresholdsOf (alerts)
 ctx.query                                  // the tab's QueryApi: get(TIME), set(TIME, v), onDidChange(TIME, l), requestParams (§3.7)
 ctx.query.onDidRequestRefresh              // time, filter, param or refresh changed
-ctx.url(path)                              // below the widget's handler, with the query state (Speedscope)
+ctx.url(path)                              // below the widget's handler, with the query state
 ctx.renderChild(childContainer, child)     // grid, collapsible
 ctx.showMenu(menuId, anchor)               // any menu for this widget (its context); the frame's "More": `widget/context`
 ctx.decorations, ctx.onDidChangeDecorations // what providers say about its answer (9af): badges, muted; drawn by ChartFrame
@@ -1007,7 +1003,7 @@ WHERE is gone. What exists today, and what changes:
 | `QueryState.Sql string` (`query.Get("sql")`); `SqlClause` adds `AND (<sql>)` after the window | `lib/httpserver/query_state.go`, `lib/httpserver/time_range.go` | `QueryState.Sql []string`; `SqlClause` adds `AND (<sql>)` per chip |
 
 Unchanged: how Go applies the result. `SqlClause` is still the one condition `prepare` adds as `sql.Where` (so a SQL
-file receives it in `{{DASHICA_FILTERS}}`), Speedscope adds it the same way, alerts read only `time`, Debug's
+file receives it in `{{DASHICA_FILTERS}}`), alerts read only `time`, Debug's
 `filterClause` shows it, `SkipFilters()` / `FromFileWithoutFilters` skip it. No contract change: `page.json`'s
 `filterButtons` (`{title, queryPart}`) stay, nothing is regenerated.
 
@@ -1451,7 +1447,7 @@ A widget has at most three things the page needs, and each is a standard library
 | What | Interface | Who |
 |---|---|---|
 | props | its fields tagged `dashica-gen:"client"` (the generated `marshalProps`) | every widget |
-| data | a chart: `Query() sql.SqlQueryable`, served by the framework's `queryHandler` (from 6.2); else `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | `Query`: the eight charts (`TimeBar`, `TimeLine`, `BarVertical`, `BarHorizontal`, `TimeHeatmap`, `TimeHeatmapOrdinal`, `Stats`, `Table`); `Handler`: `AlertOverview`, `AlertDetail`, `SpeedscopeLink`, `SchemaTable` (`/schema`) |
+| data | a chart: `Query() sql.SqlQueryable`, served by the framework's `queryHandler` (from 6.2); else `Handler(deps) http.Handler`, routed inside by an `http.ServeMux` | `Query`: the nine charts (`TimeBar`, `TimeLine`, `BarVertical`, `BarHorizontal`, `TimeHeatmap`, `TimeHeatmapOrdinal`, `Stats`, `Table`, `FlameGraph`); `Handler`: `AlertOverview`, `AlertDetail`, `SchemaTable` (`/schema`) |
 | children | `Children() iter.Seq2[string, WidgetDefinition]` | `Grid` (areas by name, sorted), `CollapsibleGroup` ("0", "1", …) |
 
 Everything else is **one** framework function, `widget.Mount`: the type name from the registry, the id, the URL, the
@@ -1463,7 +1459,7 @@ registration and the Node. A widget never sees the handler collector, its id or 
 | **Standard interfaces + one framework `Mount` (recommended)** | no own API to learn; URL, id and Node in one place; a widget is an ordinary `http.Handler`; the type name cannot be mistyped | what a widget does is spread over optional interfaces: forgetting `Handler` goes unnoticed by the compiler (the golden contract test shows a chart without `dataUrl`) |
 | A `Mount` method per widget, with helpers (`MountQuery`, `mountWithHandlers`) | everything a widget does in one method | each widget passes the collector, its type string and the Node through; registration, error checks and `DataURL` repeated per widget |
 | Two methods, `Describe` + `CollectHandlers` | describe without HTTP | the two-pass id coupling stays, only with JSON instead of templ |
-| Widgets declare only a query; the framework builds all handlers | widgets never touch HTTP | does not fit `AlertOverview` / `AlertDetail` (alert storage client), `SpeedscopeLink` (serves a viewer FS) |
+| Widgets declare only a query; the framework builds all handlers | widgets never touch HTTP | does not fit `AlertOverview` / `AlertDetail` (alert storage client) |
 
 `Handler(deps)` is not a standard signature: as an `http.Handler` itself (`ServeHTTP`) the widget would lack the
 ClickHouse manager and logger at request time, and passing them through `r.Context()` is implicit.
@@ -2114,9 +2110,8 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   the handlers that never apply one refused it): `QueryState.SqlClause(timeRange, cfg)` answers a non-empty
   `sql` with `ErrSqlNotEnabled` (a `QueryStateError`, so 400: "SQL filters are not enabled (sql_filter_enabled)")
   while it is off; an empty `sql` is no chip. So a chart's `/query`, `/debug`, `/rows`, `/sql`, `/values` and `/type`
-  (`QueryHandler.prepare`) and Speedscope refuse it before any query; `/time-range` and the alert widgets, which
-  apply no SQL chip, take it. Speedscope's handler answers a query state it cannot read with 400 (`httpError`), not
-  500.
+  (`QueryHandler.prepare`) refuse it before any query; `/time-range` and the alert widgets, which apply no SQL chip,
+  take it.
 - **Handlers get the config injected; no copied flags** (9v, D35): `rendering.Dependencies.Config` is the loaded
   `*config.Config`, read only, nothing request-specific; the handlers outside `Dependencies` have it as a field
   (`QueryHandler`, `SchemaHandler`, `ConnectionRowsHandler`; `TimeRangeHandler` needs none). Each checks the setting
@@ -2128,7 +2123,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   while the flag was off a pressed button failed the charts with 400 *(proposed: for one step)*; since 9b they add
   signed pills and work with the flag off.
 - **Tests:** Go `config` (the flag from the file and from the environment), `httpserver` (`SqlClause` off and on, an
-  empty `sql`; `/time-range` takes a chip, since 9v), `widget` (every data endpoint of a chart and Speedscope 400 off,
+  empty `sql`; `/time-range` takes a chip, since 9v), `widget` (every data endpoint of a chart 400 off,
   past the check on),
   `dashica` (`workbench.json` says it); vitest: the filter bar off (no funnel, since 9o no "SQL condition…", a SQL chip not edited, pills and "Add
   filter" stay), the table's cell menu off.
@@ -2149,8 +2144,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   `...` or an empty value.
 - **Applied** by `filter.Apply` to every query that does not skip filters, a SQL file without `sql.Table` too, each
   one Where after those of the fields; a query that skips filters names it in its Diagnostics as ignored
-  *(proposed: as it does a pill)*. Speedscope's query now opens and applies the pills too (`serveSpeedscope`), so a
-  button filters it as a SQL chip did *(proposed: also the pills on its table)*.
+  *(proposed: as it does a pill)*.
 - **The `...` inside quotes goes:** the value is a whole literal now, so the dashboards write `request__host = ...`,
   `path ILIKE concat(..., '%')`, `event_original::String ILIKE concat('%', ..., '%')`; `literalOf` and the client's
   matching of a SQL chip against a `queryPart` are gone, and a `?sql=` with a button's condition is a plain SQL chip.
@@ -2166,8 +2160,7 @@ The maintainer decided D16–D18 after D1–D15 were built, D19 after D16–D18,
   The buttons work with `sql_filter_enabled` off.
 - **Tests:** Go `filter` (`NewButton`, its key back through `Open`, `Apply` to a table, another one, a SQL file
   without table, after the fields, ignored when skipping filters), `dashboard` (`page.json`'s `key` and `url`,
-  `/button`'s pill and refusals), `widget` (a button's pill on a SQL file without table and another table, a tampered
-  pill 400 on Speedscope), the golden contract with a `...` button; vitest: `pillButton`, `buttonOf`, a button's
+  `/button`'s pill and refusals), `widget` (a button's pill on a SQL file without table and another table), the golden contract with a `...` button; vitest: `pillButton`, `buttonOf`, a button's
   pill pressed and released, a `...` button's value fetched, shown and replaced in place, a refused value, a button
   with SQL chips off; `e2e/filter-chips.spec.ts` (the button's `f`, a `...` button's value and its change).
 
@@ -2391,6 +2384,7 @@ each, until `rg -i 'deprecated:? \(workbench\)'` is empty. `/explore` shows "Exp
 | 9bp ✅ 2026-11-01 | **Search everywhere's files by what they are** (docs/conventions.md): `REFACTOR` 8592984 moves `search-everywhere/ui/{chart-search,command-search}.{ts,test.ts}` to `search-everywhere/providers/` and `ui/search-pick.{ts,test.ts}` up beside the entry `search-everywhere.ts`; the empty `ui/` goes; the pointer in `core/fuzzy/fuzzy.ts` follows | search everywhere |
 | 9bq ✅ 2026-11-01 | **What builds DOM is `draw…`** (docs/conventions.md "Names say what it does"): `REFACTOR` e8f259e renames Debug's `showDebug`, `showPipeline` and its panel's `showPanel`; the Explore view's `#show`, `#showNow`, `#showParameters`, `#showSqlNote`, `#showNotes`, `#showMessage`; `ChartFrame`'s `#showError`, `#showMessage`; the page host's `#showError`; the widgets host's `showWidgetError` (D22's text follows); the workbench's `showTabs`, `showGlobalMenu`. `show…` stays where it asks the ui host to present something (`showQuickPick`, `showInputBox`, `showContextMenu`, `showSqlInputBox`, `showDataPointMenu`, `#showDataPointMenuItems`, `showMenu`, the filter bar's `showBar`), for a tab (`showTab`) and where it only sets visibility, state or an attribute (`showPageBars`, the Explore view's `#showSqlPanel` and `#showEdited`, `Sash`'s `#showSize`, `showHref`, `showChecked`, `showForPage`, the page host's `#show`, which renders by `#render`). Deviations: the fields `#showing` / `#shown` of the Explore view keep their names *(proposed)* | names only |
 | 9br ✅ 2026-11-01 | **A chart's `/fields` answer is `ChartFields`** (docs/conventions.md, full names): `REFACTOR` 0015a15 renames TS `Fields` → `ChartFields` and `Column` → `ChartFieldColumn` (`add-filter.ts` and its test, by the TypeScript language service), Go `httpserver.Fields` → `httpserver.ChartFields`; its columns stay `clickhouse.ResultColumn`, which is no generic name. `STYLE` 01fc679 drops the "TODO RENAME" on `sql.SqlQueryable`, whose full name stays. Deviations: the Go rename by hand, as gopls is not installed (one type in one file) *(proposed)* | names only |
+| 9bs ✅ 2026-11-04 | **The flame graph widget replaces Speedscope**: the vendored Speedscope app (`app/speedscope` of the outer repository, built by `frontendBuild.mjs` into `speedscope_viewer/dist`, embedded and served by `SpeedscopeLink`) is gone with its extension `speedscope-link`. `widget.NewFlameGraph(query)` is a chart (`Query()`, props `title`, `height`): its query answers a row per call stack, `stack` (frames root first, separated by ";", Excimer's collapsed format) and `value` (samples), so ClickHouse aggregates (`GROUP BY stack`) and the chart frame brings title, spinner, error, Debug, pills and refresh. The extension `flame-graph` builds the call tree (`call-tree.ts`) and draws it on a canvas (`flame-graph-view.ts`): a click zooms to a frame, its ancestors full width above, kept on the frame of the same names when the page queries again; a regex search dims the other frames and tells the matched share; a table of the top functions by self or total samples, a click on one searches for it. Tests: Go `flame_graph_test.go`, the round trip, the golden contract; vitest `call-tree.test.ts`, `flame-graph.test.ts`; `e2e/flame-graph.spec.ts` (written, run by the maintainer). The Speedscope pop-out test of `e2e/pop-out.spec.ts` is gone. | Continuous Profiling dashboards |
 | 7+ | each planned when we get there: time selection + synchronized cursor, Go actions | |
 
 | Risk | Mitigation |

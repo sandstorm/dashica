@@ -43,7 +43,7 @@ the SQL authors write, and the features built on ClickHouse system tables.
 | Arrow to the browser | `QueryToHandler` streams the response body unchanged (`io.Copy`) | ClickHouse writes the Arrow IPC stream itself. Dashica never builds Arrow in Go |
 | Arrow in the frontend | `frontend/hosts/widgets/widgets.ts` (`QueryResult = Table & {...}`), `widgets-impl.ts` (`fetchQueryResult` → `Arrow.tableFromIPC(response)`) | every chart extension (`bar-vertical`, `time-line`, `heatmap`, `stats`, ...) reads an Arrow `Table`; database-neutral, as long as the server sends Arrow |
 | Arrow compatibility | `lib/clickhouse/arrow_compat.go` (`ensureArrowCompatible`) | `DESCRIBE (<query>)`, then `SELECT * REPLACE(toString(c) AS c)` for JSON / Dynamic / Variant columns |
-| Client selection | `clickhouse.ClientManager.GetClient(alias)`, `sql.OnDatabase(alias)`, `config.Config.ClickHouse` map | every alias is a ClickHouse server. Callers: `query_new.go` (by alias), and `"default"` hard-coded in `schema_table.go`, `speedscope_link.go`, `alert_detail.go`, `explore/*`, `alerting/*`, `httpserver/schema.go` |
+| Client selection | `clickhouse.ClientManager.GetClient(alias)`, `sql.OnDatabase(alias)`, `config.Config.ClickHouse` map | every alias is a ClickHouse server. Callers: `query_new.go` (by alias), and `"default"` hard-coded in `schema_table.go`, `alert_detail.go`, `explore/*`, `alerting/*`, `httpserver/schema.go` |
 
 The frontend needs no change for other databases: it reads Arrow and the `Dashica-*` headers. The headers stay the
 same; `clickhouseSummary` is simply absent.
@@ -291,7 +291,7 @@ An unknown type falls back to Utf8 of the driver's text form; the chart then sho
   session (`statement_timeout` / `max_execution_time`), so a dashboard with auto-refresh cannot hold a production
   database.
 - `rendering.Dependencies.ClickhouseClientManager` stays; a `SourceManager` beside it serves `QueryHandler.Run`.
-  The hard-coded `GetClient("default")` callers (alerts, schema, Explore, sampler, speedscope) keep using ClickHouse.
+  The hard-coded `GetClient("default")` callers (alerts, schema, Explore, sampler) keep using ClickHouse.
 - The free SQL filter chip is SQL of the widget's database. On a PostgreSQL widget, the user writes PostgreSQL.
 - `HandleDebug` gets `EXPLAIN` per dialect (PostgreSQL `EXPLAIN`, MySQL `EXPLAIN FORMAT=TREE`).
 

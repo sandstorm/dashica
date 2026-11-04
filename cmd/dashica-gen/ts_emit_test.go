@@ -31,7 +31,7 @@ func TestEmitTS_WidgetsAndDTOs(t *testing.T) {
 		// widget.Node per widget type: a data URL for a widget with a handler, a rows URL for a chart, children for a
 		// container
 		"  | { type: 'timeBar'; props: TimeBarProps; dataUrl: string; rowsUrl?: string; filterable?: string[]; computed?: string[]; table?: string; connection?: string }",
-		"  | { type: 'speedscopeLink'; props: SpeedscopeLinkProps; dataUrl: string }",
+		"  | { type: 'schemaTable'; props: SchemaTableProps; dataUrl: string }",
 		"  | { type: 'grid'; props: GridProps; children?: Record<string, WidgetNode> }",
 		"  | { type: 'markdown'; props: MarkdownProps }",
 		// a DTO after the structs it references, a widget.Node as WidgetNode

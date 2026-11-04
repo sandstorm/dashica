@@ -40,8 +40,8 @@ export interface PageApi {
   /** Closes the tab `id`, its page and its queries; the tab shown before it becomes active. The last tab stays. */
   closeTab(id: string): void;
   /**
-   * Opens `view` in a new tab after the active one, shown: Debug or Details popped out of their panel, Speedscope. The
-   * tab is the active tab's page with `#view=<tab id>` and keeps `view` in memory only: a reload or a link to it shows
+   * Opens `view` in a new tab after the active one, shown: Debug or Details popped out of their panel. The tab is the
+   * active tab's page with `#view=<tab id>` and keeps `view` in memory only: a reload or a link to it shows
    * the page.
    */
   popOut(view: PoppedView): Promise<void>;

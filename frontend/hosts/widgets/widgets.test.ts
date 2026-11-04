@@ -125,9 +125,9 @@ describe('WidgetsHost', () => {
     });
 
     it('names URLs below the widget’s handler with the page’s query state, its default time range included', () => {
-      expect(ctx.url('/speedscope-query')).toBe('/p/shop/api/1/speedscope-query?time=24h');
+      expect(ctx.url('/debug')).toBe('/p/shop/api/1/debug?time=24h');
       testbed.query.set(TEST_TIME, '1h');
-      expect(ctx.url('/speedscope-query')).toBe('/p/shop/api/1/speedscope-query?time=1h');
+      expect(ctx.url('/debug')).toBe('/p/shop/api/1/debug?time=1h');
     });
 
     it('shows a menu for the widget, with what it queried last', async () => {

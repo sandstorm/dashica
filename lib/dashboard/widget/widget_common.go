@@ -171,8 +171,8 @@ type withDimensions interface {
 	dimensions() []sql.SqlField
 }
 
-// withHandler is a widget with data beyond a query (alerts, Speedscope, the schema table): its handler answers the
-// requests below its URL ("/viewer/index.html", "/schema").
+// withHandler is a widget with data beyond a query (alerts, the schema table): its handler answers the
+// requests below its URL ("/query" of an alert overview, "/schema").
 type withHandler interface {
 	Handler(deps rendering.Dependencies) http.Handler
 }

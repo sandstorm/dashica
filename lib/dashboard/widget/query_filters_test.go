@@ -1,6 +1,6 @@
 // Tests for the pills a chart's query handler makes and applies (queryHandler, pillHandler, filterableFields), a
 // filter button's among them, the values it offers for them (valuesHandler), its fields (fieldsHandler, computedFields)
-// without a schema, the table and computed fields its node names and the pills of Speedscope's query.
+// without a schema, and the table and computed fields its node names.
 package widget
 
 import (
@@ -224,33 +224,6 @@ func TestQueryHandler_AButtonsPillAppliesWithoutATable(t *testing.T) {
 		if got := debug(t, chart, key); !strings.Contains(got.query, "(duration_ms >= '500')") || got.diagnostics != "" {
 			t.Errorf("%s: %+v", name, got)
 		}
-	}
-}
-
-func TestSpeedscope_ASqlChipIsABadRequestWhileSqlFiltersAreOff(t *testing.T) {
-	link := NewSpeedscopeLink(sql.New(sql.From("http_logs")))
-	target := "/speedscope-query?time=1h&sql=" + url.QueryEscape("status >= 500")
-	rec := httptest.NewRecorder()
-	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "sql_filter_enabled") {
-		t.Errorf("off: %d %s", rec.Code, rec.Body)
-	}
-	// on, the same request passes: the ClickHouse of testDeps is unreachable
-	deps := testDeps()
-	deps.Config.SqlFilterEnabled = true
-	rec = httptest.NewRecorder()
-	link.Handler(deps).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
-	if rec.Code == http.StatusBadRequest {
-		t.Errorf("on: %d %s", rec.Code, rec.Body)
-	}
-}
-
-func TestSpeedscope_ATamperedPillIsABadRequest(t *testing.T) {
-	link := NewSpeedscopeLink(sql.New(sql.From("http_logs")))
-	rec := httptest.NewRecorder()
-	link.Handler(testDeps()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/speedscope-query?time=1h&f=status:eq:500", nil))
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("%d %s", rec.Code, rec.Body)
 	}
 }
 
