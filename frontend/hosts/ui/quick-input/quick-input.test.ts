@@ -155,6 +155,20 @@ describe('showQuickPick', () => {
     expect([box(), document.activeElement]).toEqual([null, buttonElement]);
   });
 
+  it('shows inside the element in full screen, as the browser shows nothing else then', async () => {
+    const { hostContainer, quickInput, key, field } = setup();
+    const fullscreenElement = hostContainer.appendChild(document.createElement('div'));
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
+    try {
+      const picked = quickInput.showQuickPick([...ITEMS], { title: 'Frame', anchor: { x: 10, y: 20 } });
+      expect(fullscreenElement.querySelector('.d-workbench__quick-pick')).not.toBeNull();
+      key(field(), 'Escape');
+      expect(await picked).toBeUndefined();
+    } finally {
+      delete (document as { fullscreenElement?: unknown }).fullscreenElement;
+    }
+  });
+
   it('narrows by the label and the description read as one when neither alone matches, marking both', async () => {
     const { hostContainer, quickInput, type, field, options } = setup();
     void quickInput.showQuickPick([

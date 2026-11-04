@@ -19,8 +19,9 @@ import {
 
 /**
  * What `showQuickPick`, `showInputBox` and `createQuickPick` show: one box at a time over the workbench `hostContainer`
- * (a new one hides the open one), at its anchor (below an element, or at a point, kept inside the viewport) or at the
- * top in the middle; an input box's validation message below its field (its own one-line field, or the caller's,
+ * (a new one hides the open one), or inside the element in full screen when it does not contain the workbench, as the
+ * browser shows nothing outside it then; at its anchor (below an element, or at a point, kept inside the viewport) or at
+ * the top in the middle; an input box's validation message below its field (its own one-line field, or the caller's,
  * `InputBoxOptions.field`). With `accept` a choice runs it while the box stays, busy, and a failed one shows its error
  * in the box's message line. Escape or a mouse press elsewhere hides it; hiding gives the focus back to where it was. A
  * menu's box (`menu`) marks the element it is anchored at, its opener, `aria-expanded` while it is open.
@@ -231,7 +232,8 @@ export class QuickInput {
     };
     boxContainer.addEventListener('keydown', onkeydown);
     this.#open = { boxContainer, close };
-    this.hostContainer.append(boxContainer);
+    const fullscreenElement = doc.fullscreenElement;
+    (fullscreenElement && !fullscreenElement.contains(this.hostContainer) ? fullscreenElement : this.hostContainer).append(boxContainer);
     openerElement?.setAttribute('aria-expanded', 'true');
     place(boxContainer, anchor);
     doc.addEventListener('mousedown', outside, true);

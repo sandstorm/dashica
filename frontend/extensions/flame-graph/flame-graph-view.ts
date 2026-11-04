@@ -1,5 +1,6 @@
 // See flameGraph in flame-graph.ts.
 import { html } from 'htl';
+import { Maximize2, Minimize2, ZoomIn, ZoomOut, createElement } from 'lucide';
 import type { QueryResult } from '../../hosts/widgets/widgets';
 import { SchemaAnalyzer } from '../chart-library/schema';
 import { callTreeOf, functionCostsOf, heightOf, matchedValueOf, nodeAt, pathOf, type CallNode, type FunctionCost } from './call-tree';
@@ -11,6 +12,14 @@ const MIN_FRAME_WIDTH = 0.5;
 const MIN_LABEL_WIDTH = 24;
 const LABEL_PADDING = 3;
 const TOP_FUNCTIONS = 50;
+/** The smallest part of the zoomed frame the viewport shows: a millionth, a sample of a million fills the width. */
+const MIN_SPAN = 1e-6;
+/** How far a pointer moves (in px) before a press is a drag, not a click. */
+const DRAG_THRESHOLD = 3;
+/** A scroll of this many px (Ctrl/⌘ or a pinch) zooms by e: about 2× per notch of a mouse wheel. */
+const WHEEL_ZOOM_PX = 140;
+/** A wheel's line, for a scroll in lines (`deltaMode` 1) rather than pixels. */
+const WHEEL_LINE_PX = 16;
 
 /** A frame as drawn: its node, its row from the top and its horizontal extent in px. */
 interface FrameBox {
@@ -22,7 +31,31 @@ interface FrameBox {
   readonly ancestor: boolean;
 }
 
+/** A press on the graph: where it began and the viewport then, and whether it moved enough to pan. */
+interface Drag {
+  readonly x: number;
+  readonly viewStart: number;
+  moved: boolean;
+}
+
 type SortKey = 'self' | 'total';
+
+/** The menu a right click on a frame shows (`WidgetContext.showMenu`), the `flameGraph` extension's entries in it. */
+export const FRAME_MENU = 'flameGraph/frame';
+
+/** What the menu `flameGraph/frame` is shown for: a frame, by its function's name and its stack, and what to do in its graph. */
+export interface FrameMenuContext {
+  readonly name: string;
+  /** The frames from the root's first child down to this one, separated by ";", as the query's `stack` has them. */
+  readonly stack: string;
+  /** Zooms the graph to the frame. */
+  zoom(): void;
+  /** Searches the graph for the frame's function. */
+  search(): void;
+}
+
+/** Shows the menu `flameGraph/frame` at a point (a right click's `clientX` / `clientY`). */
+export type ShowFrameMenu = (anchor: { readonly x: number; readonly y: number }, context: FrameMenuContext) => void;
 
 /**
  * The flame graph of a query result's `stack` and `value` columns with its search box, zoom and top functions table.
@@ -33,7 +66,12 @@ export class FlameGraphView {
   readonly #rootElement: HTMLElement;
   readonly #searchElement: HTMLInputElement;
   readonly #resetElement: HTMLButtonElement;
+  readonly #zoomInElement: HTMLButtonElement;
+  readonly #zoomOutElement: HTMLButtonElement;
+  readonly #pathContainer: HTMLElement;
   readonly #statusElement: HTMLElement;
+  readonly #fullscreenElement: HTMLButtonElement;
+  readonly #graphContainer: HTMLElement;
   readonly #canvasElement: HTMLCanvasElement;
   readonly #tooltipElement: HTMLElement;
   readonly #sortElements: Record<SortKey, HTMLButtonElement>;
@@ -42,28 +80,49 @@ export class FlameGraphView {
   #tree: CallNode = callTreeOf([]);
   #costs: FunctionCost[] = [];
   #zoomed: CallNode = this.#tree;
+  /** The part of the zoomed frame the graph shows, as fractions of its samples: 0 to 1 shows all of it. */
+  #viewStart = 0;
+  #viewEnd = 1;
+  #drag: Drag | undefined;
+  /** Whether the press that ends in the next click was a drag, so the click zooms to nothing. */
+  #dragged = false;
   #matches: ((name: string) => boolean) | undefined;
   #sortKey: SortKey = 'self';
+  readonly #height: number;
+  /** The width the chart frame gives; the graph's own while it is full screen. */
+  #frameWidth = 0;
   #width = 0;
+  /** Follows the graph's width while it is full screen. */
+  #fullscreenResize: ResizeObserver | undefined;
   #colorSchemeDark = false;
   #boxes: FrameBox[] = [];
-  #hovered: CallNode | undefined;
+  /** The drawn frames by row, for the one under the pointer. */
+  #boxesByRow: FrameBox[][] = [];
+  /** The frame the tooltip shows. */
+  #tooltipNode: CallNode | undefined;
 
   /** `height`: the most the graph takes in px before it scrolls. */
-  constructor(height: number) {
+  constructor(height: number, showFrameMenu: ShowFrameMenu) {
+    this.#height = height;
     this.#searchElement = html`<input type="search" class="d-field d-field--mono d-flame-graph__search" placeholder="Search (regex)" aria-label="Search frames" oninput=${() => this.#search()} />`;
     this.#resetElement = html`<button type="button" class="d-button" disabled onclick=${() => this.#zoom(this.#tree)}>Reset zoom</button>`;
+    this.#zoomOutElement = html`<button type="button" class="d-button d-button--icon" title="Zoom out (−)" aria-label="Zoom out" onclick=${() => this.#zoomOut()}>${createElement(ZoomOut, { width: 16, height: 16 })}</button>`;
+    this.#zoomInElement = html`<button type="button" class="d-button d-button--icon" title="Zoom in (+)" aria-label="Zoom in" onclick=${() => this.#zoomBy(0.5, this.#width / 2)}>${createElement(ZoomIn, { width: 16, height: 16 })}</button>`;
+    this.#pathContainer = html`<span class="d-flame-graph__path"></span>`;
     this.#statusElement = html`<span class="d-flame-graph__status"></span>`;
-    this.#canvasElement = html`<canvas class="d-flame-graph__canvas" onmousemove=${(event: MouseEvent) => this.#hover(event)} onmouseleave=${() => this.#hover(undefined)} onclick=${(event: MouseEvent) => this.#click(event)}></canvas>`;
+    this.#fullscreenElement = html`<button type="button" class="d-button d-button--icon d-flame-graph__fullscreen" onclick=${() => this.#toggleFullscreen()}></button>`;
+    this.#canvasElement = html`<canvas class="d-flame-graph__canvas" tabindex="0" aria-label="Flame graph" onmousemove=${(event: MouseEvent) => this.#hover(event)} onmouseleave=${() => this.#hover(undefined)} onclick=${(event: MouseEvent) => this.#click(event)}></canvas>`;
     this.#tooltipElement = html`<div class="d-flame-graph__tooltip" hidden></div>`;
     this.#sortElements = {
       self: html`<button type="button" class="d-flame-graph__sort" onclick=${() => this.#sort('self')}>Self</button>`,
       total: html`<button type="button" class="d-flame-graph__sort" onclick=${() => this.#sort('total')}>Total</button>`,
     };
     this.#rowContainer = html`<tbody></tbody>`;
+    this.#graphContainer = html`<div class="d-flame-graph__graph" style=${{ 'max-height': `${height}px` }}>${this.#canvasElement}${this.#tooltipElement}</div>`;
     this.#rootElement = html`<div class="d-flame-graph">
-      <div class="d-flame-graph__toolbar">${this.#searchElement}${this.#resetElement}${this.#statusElement}</div>
-      <div class="d-flame-graph__graph" style=${{ 'max-height': `${height}px` }}>${this.#canvasElement}${this.#tooltipElement}</div>
+      <div class="d-flame-graph__toolbar">${this.#searchElement}${this.#zoomOutElement}${this.#zoomInElement}${this.#resetElement}${this.#statusElement}${this.#fullscreenElement}</div>
+      <nav class="d-flame-graph__trail" aria-label="Zoomed frames">${this.#pathContainer}<span class="d-flame-graph__hint">Click a frame to zoom to it · Ctrl/⌘ + scroll or pinch to zoom · drag to pan · keys + − 0 ← → Esc</span></nav>
+      ${this.#graphContainer}
       <div class="d-flame-graph__functions">
         <table class="d-flame-graph__table">
           <thead><tr><th>Function</th><th>${this.#sortElements.self}</th><th>${this.#sortElements.total}</th></tr></thead>
@@ -71,15 +130,86 @@ export class FlameGraphView {
         </table>
       </div>
     </div>`;
+    // listened to, not an `on…` attribute: htl wires those only where the element has the property, which jsdom lacks
+    this.#rootElement.addEventListener('fullscreenchange', () => this.#fullscreenChanged());
+    // not passive: a zoom or a pan keeps the page from scrolling
+    this.#canvasElement.addEventListener('wheel', (event) => this.#wheel(event), { passive: false });
+    this.#canvasElement.addEventListener('pointerdown', (event) => this.#pressed(event));
+    this.#canvasElement.addEventListener('pointermove', (event) => this.#dragTo(event));
+    this.#canvasElement.addEventListener('pointerup', () => this.#released());
+    this.#canvasElement.addEventListener('pointercancel', () => this.#released());
+    this.#canvasElement.addEventListener('keydown', (event) => this.#key(event));
+    this.#canvasElement.addEventListener('contextmenu', (event) => {
+      const box = this.#boxAt(event);
+      if (!box?.node.parent) return;
+      event.preventDefault();
+      const { node } = box;
+      showFrameMenu(
+        { x: event.clientX, y: event.clientY },
+        {
+          name: node.name,
+          stack: pathOf(node)
+            .slice(1)
+            .map((frame) => frame.name)
+            .join(';'),
+          zoom: () => this.#zoom(node),
+          search: () => this.#searchFor(node.name),
+        },
+      );
+    });
+    this.#drawFullscreenButton(false);
   }
 
   /** The flame graph of `result`, `width` px wide; the same element each time. */
   draw(result: QueryResult, width: number, colorSchemeDark: boolean): HTMLElement {
     if (result !== this.#result) this.#load(result);
-    this.#width = width;
+    this.#frameWidth = width;
+    if (!this.#fullscreenResize) this.#width = width;
     this.#colorSchemeDark = colorSchemeDark;
     this.#layout();
     return this.#rootElement;
+  }
+
+  dispose(): void {
+    this.#fullscreenResize?.disconnect();
+  }
+
+  #toggleFullscreen(): void {
+    const doc = this.#rootElement.ownerDocument;
+    const change = doc.fullscreenElement === this.#rootElement ? doc.exitFullscreen() : this.#rootElement.requestFullscreen();
+    change.catch((error: unknown) => {
+      this.#statusElement.textContent = `Full screen: ${error instanceof Error ? error.message : String(error)}`;
+    });
+  }
+
+  /** Entered or left full screen: the graph takes the screen's width and height, or the chart frame's again. */
+  #fullscreenChanged(): void {
+    const fullscreen = this.#rootElement.ownerDocument.fullscreenElement === this.#rootElement;
+    this.#rootElement.classList.toggle('d-flame-graph--fullscreen', fullscreen);
+    this.#graphContainer.style.maxHeight = fullscreen ? '' : `${this.#height}px`;
+    this.#drawFullscreenButton(fullscreen);
+    this.#fullscreenResize?.disconnect();
+    this.#fullscreenResize = undefined;
+    if (fullscreen) {
+      const browserWindow = this.#rootElement.ownerDocument.defaultView!;
+      this.#fullscreenResize = new browserWindow.ResizeObserver((entries) => {
+        const width = Math.round(entries[entries.length - 1].contentRect.width);
+        if (width === 0 || width === this.#width) return;
+        this.#width = width;
+        this.#layout();
+      });
+      this.#fullscreenResize.observe(this.#graphContainer);
+    } else {
+      this.#width = this.#frameWidth;
+      this.#layout();
+    }
+  }
+
+  #drawFullscreenButton(fullscreen: boolean): void {
+    const label = fullscreen ? 'Exit full screen' : 'Full screen';
+    this.#fullscreenElement.title = label;
+    this.#fullscreenElement.setAttribute('aria-label', label);
+    this.#fullscreenElement.replaceChildren(createElement(fullscreen ? Minimize2 : Maximize2, { width: 16, height: 16 }));
   }
 
   #load(result: QueryResult): void {
@@ -94,13 +224,114 @@ export class FlameGraphView {
     this.#tree = callTreeOf(stacks);
     this.#costs = functionCostsOf(this.#tree);
     this.#zoomed = nodeAt(this.#tree, zoomedPath);
-    this.#hovered = undefined;
+    this.#tooltipNode = undefined;
     this.#drawFunctions();
   }
 
+  /** Zooms to `node`, all of it shown. */
   #zoom(node: CallNode): void {
     this.#zoomed = node;
+    this.#viewStart = 0;
+    this.#viewEnd = 1;
     this.#layout();
+  }
+
+  /** Shows `start` to `end` of the zoomed frame, kept inside it and no narrower than MIN_SPAN. */
+  #view(start: number, end: number): void {
+    const span = Math.min(Math.max(end - start, MIN_SPAN), 1);
+    this.#viewStart = Math.min(Math.max(start, 0), 1 - span);
+    this.#viewEnd = this.#viewStart + span;
+    this.#layout();
+  }
+
+  /** Zooms the viewport by `factor` (below 1: in), the point `anchorX` px from the left staying where it is. */
+  #zoomBy(factor: number, anchorX: number): void {
+    const span = this.#viewEnd - this.#viewStart;
+    const anchor = this.#width > 0 ? anchorX / this.#width : 0.5;
+    const at = this.#viewStart + anchor * span;
+    const next = Math.min(Math.max(span * factor, MIN_SPAN), 1);
+    this.#view(at - anchor * next, at - anchor * next + next);
+  }
+
+  /** Zooms the viewport out; at all of the zoomed frame, to its parent. */
+  #zoomOut(): void {
+    if (this.#viewEnd - this.#viewStart < 1) this.#zoomBy(2, this.#width / 2);
+    else if (this.#zoomed.parent) this.#zoom(this.#zoomed.parent);
+  }
+
+  /** Moves the viewport by `dx` px, to the right for a positive one. */
+  #panBy(dx: number): void {
+    const shift = this.#width > 0 ? (dx / this.#width) * (this.#viewEnd - this.#viewStart) : 0;
+    this.#view(this.#viewStart + shift, this.#viewEnd + shift);
+  }
+
+  #wheel(event: WheelEvent): void {
+    const scale = event.deltaMode === 1 ? WHEEL_LINE_PX : 1;
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      this.#zoomBy(Math.exp((event.deltaY * scale) / WHEEL_ZOOM_PX), event.clientX - this.#canvasElement.getBoundingClientRect().left);
+      return;
+    }
+    const sideways = event.shiftKey ? event.deltaX || event.deltaY : Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : 0;
+    // a sideways scroll at all of the frame has nothing to pan: the page takes it
+    if (sideways === 0 || this.#viewEnd - this.#viewStart >= 1) return;
+    event.preventDefault();
+    this.#panBy(sideways * scale);
+  }
+
+  #pressed(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    // a drag released outside the graph gets no click to clear it
+    this.#dragged = false;
+    this.#drag = { x: event.clientX, viewStart: this.#viewStart, moved: false };
+    if (event.pointerId !== undefined) this.#canvasElement.setPointerCapture?.(event.pointerId);
+  }
+
+  #dragTo(event: PointerEvent): void {
+    const drag = this.#drag;
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < DRAG_THRESHOLD) return;
+    drag.moved = true;
+    const span = this.#viewEnd - this.#viewStart;
+    const start = drag.viewStart - (this.#width > 0 ? (dx / this.#width) * span : 0);
+    this.#view(start, start + span);
+  }
+
+  #released(): void {
+    this.#dragged = this.#drag?.moved ?? false;
+    this.#drag = undefined;
+  }
+
+  #key(event: KeyboardEvent): void {
+    const center = this.#width / 2;
+    const step = this.#width / 10;
+    switch (event.key) {
+      case '+':
+      case '=':
+        this.#zoomBy(0.5, center);
+        break;
+      case '-':
+      case '_':
+        this.#zoomOut();
+        break;
+      case '0':
+        this.#view(0, 1);
+        break;
+      case 'ArrowLeft':
+        this.#panBy(-step);
+        break;
+      case 'ArrowRight':
+        this.#panBy(step);
+        break;
+      case 'Escape':
+        if (this.#viewEnd - this.#viewStart >= 1 && !this.#zoomed.parent) return;
+        this.#zoomOut();
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
   }
 
   #search(): void {
@@ -114,21 +345,31 @@ export class FlameGraphView {
     this.#drawFunctions();
   }
 
-  /** Where each frame goes for the zoomed frame and the width, then draws them. */
+  /** Where each frame goes for the zoomed frame, the viewport and the width, then draws them. */
   #layout(): void {
     const ancestors = pathOf(this.#zoomed).slice(0, -1);
     const boxes: FrameBox[] = ancestors.map((node, row) => ({ node, row, x: 0, width: this.#width, ancestor: true }));
-    const place = (node: CallNode, row: number, x: number, width: number) => {
-      boxes.push({ node, row, x, width, ancestor: false });
-      let childX = x;
+    const pxPerFraction = this.#width / (this.#viewEnd - this.#viewStart);
+    // `start` and `span`: the frame's part of the zoomed frame's samples; drawn cut to what the viewport shows
+    const place = (node: CallNode, row: number, start: number, span: number) => {
+      const left = (start - this.#viewStart) * pxPerFraction;
+      const right = left + span * pxPerFraction;
+      if (right - left < MIN_FRAME_WIDTH || right <= 0 || left >= this.#width) return;
+      const x = Math.max(left, 0);
+      boxes.push({ node, row, x, width: Math.min(right, this.#width) - x, ancestor: false });
+      let childStart = start;
       for (const child of node.children) {
-        const childWidth = node.value > 0 ? (width * child.value) / node.value : 0;
-        if (childWidth >= MIN_FRAME_WIDTH) place(child, row + 1, childX, childWidth);
-        childX += childWidth;
+        const childSpan = node.value > 0 ? (span * child.value) / node.value : 0;
+        place(child, row + 1, childStart, childSpan);
+        childStart += childSpan;
       }
     };
-    if (this.#zoomed.value > 0) place(this.#zoomed, ancestors.length, 0, this.#width);
+    if (this.#zoomed.value > 0) place(this.#zoomed, ancestors.length, 0, 1);
     this.#boxes = boxes;
+    this.#boxesByRow = [];
+    for (const box of boxes) (this.#boxesByRow[box.row] ??= []).push(box);
+    this.#tooltipNode = undefined;
+    this.#tooltipElement.hidden = true;
 
     const rows = this.#zoomed.value > 0 ? ancestors.length + 1 + heightOf(this.#zoomed) : 0;
     const pixelRatio = this.#canvasElement.ownerDocument.defaultView?.devicePixelRatio ?? 1;
@@ -136,9 +377,28 @@ export class FlameGraphView {
     this.#canvasElement.height = Math.round(rows * ROW_HEIGHT * pixelRatio);
     this.#canvasElement.style.width = `${this.#width}px`;
     this.#canvasElement.style.height = `${rows * ROW_HEIGHT}px`;
-    this.#resetElement.disabled = this.#zoomed === this.#tree;
+    const unzoomed = this.#zoomed === this.#tree && this.#viewEnd - this.#viewStart >= 1;
+    this.#resetElement.disabled = unzoomed;
+    this.#zoomOutElement.disabled = unzoomed;
+    this.#zoomInElement.disabled = this.#viewEnd - this.#viewStart <= MIN_SPAN;
     this.#paint();
     this.#drawStatus();
+    this.#drawPath();
+  }
+
+  /** The zoomed frame's path from the root, each ancestor a button that zooms to it. */
+  #drawPath(): void {
+    const path = pathOf(this.#zoomed);
+    this.#pathContainer.replaceChildren(
+      ...path.flatMap((node, i) => {
+        const separator = i > 0 ? [html`<span class="d-flame-graph__separator" aria-hidden="true">›</span>`] : [];
+        const crumb =
+          i === path.length - 1
+            ? html`<span class="d-flame-graph__crumb" aria-current="location">${node.name}</span>`
+            : html`<button type="button" class="d-flame-graph__crumb" title="Zoom to ${node.name}" onclick=${() => this.#zoom(node)}>${node.name}</button>`;
+        return [...separator, crumb];
+      }),
+    );
   }
 
   #paint(): void {
@@ -157,10 +417,6 @@ export class FlameGraphView {
       context.globalAlpha = box.ancestor ? 0.6 : 1;
       context.fillStyle = matched ? frameColorOf(box.node.name, this.#colorSchemeDark) : token('--color-surface-subtle');
       context.fillRect(box.x, y, Math.max(box.width - 1, MIN_FRAME_WIDTH), ROW_HEIGHT - 1);
-      if (box.node === this.#hovered) {
-        context.strokeStyle = token('--color-text');
-        context.strokeRect(box.x + 0.5, y + 0.5, Math.max(box.width - 2, 0), ROW_HEIGHT - 2);
-      }
       if (box.width >= MIN_LABEL_WIDTH) {
         context.fillStyle = matched ? token('--color-text') : token('--color-text-muted');
         context.fillText(fittedLabelOf(context, box.node.name, box.width - 2 * LABEL_PADDING), box.x + LABEL_PADDING, y + ROW_HEIGHT / 2);
@@ -177,6 +433,8 @@ export class FlameGraphView {
     }
     const parts = [`${countOf(zoomed.value)} samples`];
     if (zoomed !== this.#tree) parts.push(`${percentOf(zoomed.value, this.#tree.value)} of all in ${zoomed.name}`);
+    const span = this.#viewEnd - this.#viewStart;
+    if (span < 1) parts.push(`${(1 / span).toFixed(1)}× zoom`);
     if (this.#matches) parts.push(`search matches ${percentOf(matchedValueOf(zoomed, this.#matches), zoomed.value)}`);
     this.#statusElement.textContent = parts.join(' · ');
   }
@@ -205,20 +463,21 @@ export class FlameGraphView {
 
   #hover(event: MouseEvent | undefined): void {
     const box = event && this.#boxAt(event);
-    if (box?.node !== this.#hovered) {
-      this.#hovered = box?.node;
-      this.#paint();
-    }
     if (!box || !event) {
       this.#tooltipElement.hidden = true;
+      this.#tooltipNode = undefined;
       return;
     }
     const { node } = box;
-    const total = this.#tree.value;
-    this.#tooltipElement.replaceChildren(
-      html`<div class="d-flame-graph__tooltip-name">${node.name}</div>`,
-      html`<div>${countOf(node.value)} samples (${percentOf(node.value, total)}), self ${countOf(node.self)} (${percentOf(node.self, total)})</div>`,
-    );
+    if (node !== this.#tooltipNode) {
+      this.#tooltipNode = node;
+      const total = this.#tree.value;
+      this.#tooltipElement.replaceChildren(
+        html`<div class="d-flame-graph__tooltip-name">${node.name}</div>`,
+        html`<div>${countOf(node.value)} samples (${percentOf(node.value, total)}), self ${countOf(node.self)} (${percentOf(node.self, total)})</div>`,
+        html`<div class="d-flame-graph__tooltip-hint">right click for more</div>`,
+      );
+    }
     this.#tooltipElement.hidden = false;
     const rect = this.#canvasElement.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -227,15 +486,20 @@ export class FlameGraphView {
   }
 
   #click(event: MouseEvent): void {
+    if (this.#dragged) {
+      this.#dragged = false;
+      return;
+    }
     const box = this.#boxAt(event);
-    if (box && box.node !== this.#zoomed) this.#zoom(box.node);
+    // the zoomed frame itself: all of it again
+    if (box) this.#zoom(box.node);
   }
 
   #boxAt(event: MouseEvent): FrameBox | undefined {
     const rect = this.#canvasElement.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const row = Math.floor((event.clientY - rect.top) / ROW_HEIGHT);
-    return this.#boxes.find((box) => box.row === row && x >= box.x && x < box.x + box.width);
+    return this.#boxesByRow[row]?.find((box) => x >= box.x && x < box.x + box.width);
   }
 }
 

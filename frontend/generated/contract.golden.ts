@@ -249,7 +249,7 @@ export const page = {
         "6": {
           "type": "flameGraph",
           "props": {
-            "height": 500,
+            "height": 800,
             "title": "Profile"
           },
           "dataUrl": "/p/shop/api/8",

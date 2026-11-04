@@ -17,6 +17,52 @@
     max-width: 100%;
 }
 
+/* the zoomed frames from the root, the controls' hint to their right */
+.d-flame-graph__trail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-4);
+    font-size: var(--text-sm);
+}
+
+.d-flame-graph__path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1);
+    min-width: 0;
+    font-family: var(--font-mono);
+}
+
+.d-flame-graph__crumb {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--color-text);
+    font: inherit;
+    word-break: break-all;
+}
+
+button.d-flame-graph__crumb {
+    color: var(--color-accent);
+    cursor: pointer;
+}
+
+button.d-flame-graph__crumb:hover {
+    text-decoration: underline;
+}
+
+.d-flame-graph__separator,
+.d-flame-graph__hint {
+    color: var(--color-text-muted);
+}
+
+.d-flame-graph__hint {
+    font-size: var(--text-xs);
+}
+
 .d-flame-graph__status {
     font-size: var(--text-sm);
     color: var(--color-text-muted);
@@ -33,6 +79,11 @@
 .d-flame-graph__canvas {
     display: block;
     cursor: pointer;
+    touch-action: pan-y;
+}
+
+.d-flame-graph__canvas:focus-visible {
+    outline: var(--border-width) solid var(--color-accent);
 }
 
 .d-flame-graph__tooltip {
@@ -52,6 +103,10 @@
 
 .d-flame-graph__tooltip-name {
     font-weight: var(--weight-bold);
+}
+
+.d-flame-graph__tooltip-hint {
+    color: var(--color-text-muted);
 }
 
 .d-flame-graph__functions {
@@ -111,4 +166,27 @@
     text-align: right;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+}
+
+/* full screen: the graph takes the height the toolbar and the table leave */
+.d-flame-graph--fullscreen {
+    height: 100%;
+    box-sizing: border-box;
+    padding: var(--space-4);
+    background: var(--color-surface);
+    color: var(--color-text);
+}
+
+.d-flame-graph--fullscreen .d-flame-graph__graph {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.d-flame-graph--fullscreen .d-flame-graph__functions {
+    flex: 0 0 auto;
+    max-height: 30vh;
+}
+
+.d-flame-graph__fullscreen {
+    margin-left: auto;
 }

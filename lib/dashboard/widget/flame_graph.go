@@ -11,7 +11,7 @@ type FlameGraph struct {
 	sql sql.SqlQueryable
 	// title is the flame graph's title shown above the widget.
 	title string `dashica-gen:"client"`
-	// height is the flame graph's height in pixels.
+	// height is the most the flame graph takes in pixels before it scrolls; in full screen, the screen's.
 	height int `dashica-gen:"client"`
 	// id is the stable widget id (its URL "<page>/api/<id>"); assigned by the page when empty.
 	id string
@@ -20,7 +20,7 @@ type FlameGraph struct {
 func NewFlameGraph(sql sql.SqlQueryable) *FlameGraph {
 	return &FlameGraph{
 		sql:    sql,
-		height: 500,
+		height: 800,
 	}
 }
 

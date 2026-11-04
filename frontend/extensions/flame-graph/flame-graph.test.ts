@@ -24,7 +24,6 @@ beforeEach(() => {
     setTransform() {},
     clearRect: () => (labels = []),
     fillRect() {},
-    strokeRect() {},
     fillText: (text: string) => labels.push(text),
     measureText: (text: string) => ({ width: text.length * 6 }),
   };
@@ -124,14 +123,139 @@ describe('flameGraph', () => {
     expect(functionsOf(widgetContainer).map(([name]) => name)).toEqual(['index.php', 'Foo::bar', 'PDO::query', 'render']);
   });
 
+  it('shows the frame menu on a right click: zoom, search, copy the name or the stack', async () => {
+    const widgetContainer = await renderProfile();
+    const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 1, clientY: 3 * ROW_HEIGHT + 2 });
+    canvasOf(widgetContainer).dispatchEvent(contextMenu);
+    expect(contextMenu.defaultPrevented).toBe(true);
+    expect(testbed.menus.map(({ menuId }) => menuId)).toEqual(['flameGraph/frame']);
+    const frame = testbed.menus[0].options.args![0] as { name: string; stack: string };
+    expect([frame.name, frame.stack]).toEqual(['PDO::query', 'index.php;Foo::bar;PDO::query']);
+    expect(testbed.ui.getMenuItems('flameGraph/frame', frame).map((item) => item.title)).toEqual([
+      'Zoom to frame',
+      'Search for this function',
+      'Copy function name',
+      'Copy stack (root first)',
+    ]);
+
+    const written: string[] = [];
+    vi.stubGlobal('navigator', { clipboard: { writeText: async (text: string) => void written.push(text) } });
+    await testbed.commands.executeCommand('flameGraph.copyStack', frame);
+    await testbed.commands.executeCommand('flameGraph.copyName', frame);
+    expect(written).toEqual(['index.php;Foo::bar;PDO::query', 'PDO::query']);
+    await testbed.commands.executeCommand('flameGraph.zoomToFrame', frame);
+    expect(statusOf(widgetContainer)).toBe('6 samples · 60.0% of all in PDO::query');
+    await testbed.commands.executeCommand('flameGraph.searchFunction', frame);
+    expect(widgetContainer.querySelector<HTMLInputElement>('.d-flame-graph__search')!.value).toBe('^PDO::query$');
+
+    // the root is no frame of the profile: the browser's menu
+    const onRoot = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 1, clientY: 2 });
+    canvasOf(widgetContainer).dispatchEvent(onRoot);
+    expect(onRoot.defaultPrevented).toBe(false);
+  });
+
   it('shows a tooltip for the frame under the pointer', async () => {
     const widgetContainer = await renderProfile();
     canvasOf(widgetContainer).dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 1, clientY: 3 * ROW_HEIGHT + 2 }));
     const tooltipElement = widgetContainer.querySelector<HTMLElement>('.d-flame-graph__tooltip')!;
     expect(tooltipElement.hidden).toBe(false);
-    expect(tooltipElement.textContent).toBe('PDO::query6 samples (60.0%), self 6 (60.0%)');
+    expect(tooltipElement.textContent).toBe('PDO::query6 samples (60.0%), self 6 (60.0%)right click for more');
     canvasOf(widgetContainer).dispatchEvent(new MouseEvent('mouseleave'));
     expect(tooltipElement.hidden).toBe(true);
+  });
+
+  it('goes full screen and back, the graph as wide as the screen meanwhile', async () => {
+    const widgetContainer = await renderProfile();
+    const rootElement = widgetContainer.querySelector<HTMLElement>('.d-flame-graph')!;
+    // jsdom has no Fullscreen API; one that switches at once, as a browser does after its animation
+    const switchTo = (element: Element | null) => {
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => element });
+      rootElement.dispatchEvent(new Event('fullscreenchange'));
+    };
+    rootElement.requestFullscreen = async () => switchTo(rootElement);
+    document.exitFullscreen = async () => switchTo(null);
+    const buttonElement = widgetContainer.querySelector<HTMLButtonElement>('.d-flame-graph__fullscreen')!;
+    expect(buttonElement.title).toBe('Full screen');
+
+    buttonElement.click();
+    await settle();
+    expect(rootElement.classList.contains('d-flame-graph--fullscreen')).toBe(true);
+    expect(buttonElement.title).toBe('Exit full screen');
+    expect(widgetContainer.querySelector<HTMLElement>('.d-flame-graph__graph')!.style.maxHeight).toBe('');
+    testbed.resize(1600);
+    expect(canvasOf(widgetContainer).style.width).toBe('1600px');
+
+    buttonElement.click();
+    await settle();
+    expect(rootElement.classList.contains('d-flame-graph--fullscreen')).toBe(false);
+    expect(buttonElement.title).toBe('Full screen');
+    expect(widgetContainer.querySelector<HTMLElement>('.d-flame-graph__graph')!.style.maxHeight).toBe('800px');
+    delete (document as { fullscreenElement?: unknown }).fullscreenElement;
+  });
+
+  it('zooms with Ctrl/⌘ + scroll around the pointer; a plain scroll is the page’s', async () => {
+    const widgetContainer = await renderProfile();
+    const plain = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -140, clientX: 0 });
+    canvasOf(widgetContainer).dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+    expect(statusOf(widgetContainer)).toBe('10 samples');
+
+    const zoom = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -140, ctrlKey: true, clientX: 0 });
+    canvasOf(widgetContainer).dispatchEvent(zoom);
+    expect(zoom.defaultPrevented).toBe(true);
+    expect(statusOf(widgetContainer)).toBe('10 samples · 2.7× zoom');
+    // the left edge stays: the frames there still show, render at the right end no longer
+    expect(labels).toEqual(['all', 'index.php', 'Foo::bar', 'PDO::query']);
+  });
+
+  it('pans by a drag, which zooms to no frame', async () => {
+    const widgetContainer = await renderProfile();
+    widgetContainer.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    expect(statusOf(widgetContainer)).toBe('10 samples · 2.0× zoom');
+    expect(labels).not.toContain('render');
+
+    const canvasElement = canvasOf(widgetContainer);
+    canvasElement.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 600, clientY: 2 }));
+    canvasElement.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 0, clientY: 2 }));
+    canvasElement.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 0, clientY: 2 }));
+    clickFrame(widgetContainer, 2);
+    expect(labels).toContain('render');
+    expect(statusOf(widgetContainer)).toBe('10 samples · 2.0× zoom');
+  });
+
+  it('zooms and pans with keys, Esc a step back', async () => {
+    const widgetContainer = await renderProfile();
+    const press = (key: string) => canvasOf(widgetContainer).dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }));
+    press('+');
+    press('+');
+    expect(statusOf(widgetContainer)).toBe('10 samples · 4.0× zoom');
+    press('-');
+    expect(statusOf(widgetContainer)).toBe('10 samples · 2.0× zoom');
+    press('0');
+    expect(statusOf(widgetContainer)).toBe('10 samples');
+
+    clickFrame(widgetContainer, 2);
+    press('+');
+    press('Escape');
+    expect(statusOf(widgetContainer)).toBe('9 samples · 90.0% of all in Foo::bar');
+    press('Escape');
+    expect(statusOf(widgetContainer)).toBe('10 samples · 100.0% of all in index.php');
+  });
+
+  it('shows the path of the zoomed frame, its ancestors zooming to them', async () => {
+    const widgetContainer = await renderProfile();
+    const crumbs = () => [...widgetContainer.querySelectorAll('.d-flame-graph__crumb')].map((crumbElement) => [crumbElement.tagName, crumbElement.textContent]);
+    expect(crumbs()).toEqual([['SPAN', 'all']]);
+
+    clickFrame(widgetContainer, 3);
+    expect(crumbs()).toEqual([
+      ['BUTTON', 'all'],
+      ['BUTTON', 'index.php'],
+      ['BUTTON', 'Foo::bar'],
+      ['SPAN', 'PDO::query'],
+    ]);
+    widgetContainer.querySelector<HTMLButtonElement>('button.d-flame-graph__crumb[title="Zoom to index.php"]')!.click();
+    expect(statusOf(widgetContainer)).toBe('10 samples · 100.0% of all in index.php');
   });
 
   it('names a missing column in the chart’s error', async () => {

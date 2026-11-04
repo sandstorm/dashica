@@ -8,7 +8,7 @@ import (
 
 func TestFlameGraph_Defaults(t *testing.T) {
 	f := NewFlameGraph(sql.New(sql.From("profiling_traces")))
-	if f.height != 500 || f.title != "" || f.id != "" {
+	if f.height != 800 || f.title != "" || f.id != "" {
 		t.Errorf("unexpected defaults: %+v", f)
 	}
 }
@@ -16,7 +16,7 @@ func TestFlameGraph_Defaults(t *testing.T) {
 func TestFlameGraph_Immutability(t *testing.T) {
 	original := NewFlameGraph(sql.New(sql.From("profiling_traces")))
 	changed := original.Title("Profile").Height(300).Id("profile").AdjustQuery(sql.Where("cnt > 0"))
-	if original.title != "" || original.height != 500 || original.id != "" {
+	if original.title != "" || original.height != 800 || original.id != "" {
 		t.Errorf("original mutated: %+v", original)
 	}
 	if changed.title != "Profile" || changed.height != 300 || changed.explicitId() != "profile" {
