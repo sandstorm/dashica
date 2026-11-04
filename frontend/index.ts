@@ -15,6 +15,7 @@ import { debug } from './extensions/debug/debug';
 import { details } from './extensions/details/details';
 import { exploreView } from './extensions/explore-view/explore-view';
 import { filters } from './extensions/filters/filters';
+import { flameGraph } from './extensions/flame-graph/flame-graph';
 import { grid } from './extensions/grid/grid';
 import { heatmap } from './extensions/heatmap/heatmap';
 import { markdown } from './extensions/markdown/markdown';
@@ -22,7 +23,6 @@ import { schema } from './extensions/schema/schema';
 import { schemaTable } from './extensions/schema-table/schema-table';
 import { refresh } from './extensions/refresh/refresh';
 import { searchEverywhere } from './extensions/search-everywhere/search-everywhere';
-import { speedscopeLink } from './extensions/speedscope-link/speedscope-link';
 import { stats } from './extensions/stats/stats';
 import { table } from './extensions/table/table';
 import { textInput } from './extensions/text-input/text-input';
@@ -54,10 +54,10 @@ const EXTENSIONS: readonly Extension[] = [
   heatmap,
   stats,
   table,
+  flameGraph,
   alerts,
   checkboxGroup,
   textInput,
-  speedscopeLink,
 ];
 
 declare global {

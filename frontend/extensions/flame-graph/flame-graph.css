@@ -1,0 +1,114 @@
+/* See flame-graph.ts. */
+.d-flame-graph {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.d-flame-graph__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.d-flame-graph__search {
+    width: 280px;
+    max-width: 100%;
+}
+
+.d-flame-graph__status {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* the graph scrolls vertically past its height; the tooltip is placed in its coordinates */
+.d-flame-graph__graph {
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.d-flame-graph__canvas {
+    display: block;
+    cursor: pointer;
+}
+
+.d-flame-graph__tooltip {
+    position: absolute;
+    z-index: var(--z-tooltip);
+    max-width: 560px;
+    padding: var(--space-1) var(--space-2);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-popover);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    pointer-events: none;
+    word-break: break-all;
+}
+
+.d-flame-graph__tooltip-name {
+    font-weight: var(--weight-bold);
+}
+
+.d-flame-graph__functions {
+    max-height: 320px;
+    overflow: auto;
+}
+
+.d-flame-graph__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.d-flame-graph__table th {
+    position: sticky;
+    top: 0;
+    background: var(--color-surface);
+    text-align: left;
+    font-weight: var(--weight-medium);
+    color: var(--color-text-muted);
+}
+
+.d-flame-graph__table th,
+.d-flame-graph__table td {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.d-flame-graph__sort {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.d-flame-graph__sort[aria-pressed='true'] {
+    color: var(--color-text);
+    font-weight: var(--weight-bold);
+}
+
+.d-flame-graph__function {
+    cursor: pointer;
+}
+
+.d-flame-graph__function:hover {
+    background: var(--color-hover);
+}
+
+.d-flame-graph__name {
+    font-family: var(--font-mono);
+    word-break: break-all;
+}
+
+.d-flame-graph__number {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
