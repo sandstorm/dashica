@@ -113,6 +113,13 @@ export class SideBar {
         if (this.#shown === id) this.#choose(null);
       },
       dismiss: () => this.#dismiss(),
+      nudge: () => {
+        if (entry.visible) return;
+        // taken off and put back after a reflow, so a nudge during the wiggle starts it anew
+        buttonElement.classList.remove(NUDGED);
+        void buttonElement.offsetWidth;
+        buttonElement.classList.add(NUDGED);
+      },
       dispose: () => this.#remove(id),
     };
   }
@@ -166,6 +173,7 @@ export class SideBar {
     // told after the layout is done, so a listener sees it as it is
     for (const [panelId, panel] of this.#panels) {
       const visible = panelId === id && panel.available;
+      if (visible) panel.buttonElement.classList.remove(NUDGED);
       if (visible === panel.visible) continue;
       panel.visible = visible;
       panel.visibility.fire();
@@ -390,6 +398,9 @@ const SIZES = {
   left: { unit: 'px', min: 200, max: 640, initial: 300, step: 16, label: 'Left panel width' },
   right: { unit: '%', min: 20, max: 80, initial: 50, step: 5, label: 'Right panel width' },
 } as const;
+
+/** A hidden panel's rail button after `Panel.nudge`, until the panel shows. */
+const NUDGED = 'd-workbench__rail-button--nudged';
 
 /** What can take the focus in a panel: the first of these gets it when the panel is shown from the keyboard. */
 const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';

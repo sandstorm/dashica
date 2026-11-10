@@ -1,16 +1,17 @@
+import { Copy, createElement } from 'lucide';
 import type { Commands } from '../../hosts/commands/commands';
 import type { Extension } from '../../hosts/extension-host/extension-host';
-import type { QueryResult, WidgetContext, WidgetOf, WidgetRecord } from '../../hosts/widgets/widgets';
+import type { DataPointMenuProvider, QueryResult, WidgetContext, WidgetOf, WidgetRecord } from '../../hosts/widgets/widgets';
 import { ChartFrame } from '../chart-library/chart-frame';
 import { drawTable, type TableCellMenuContext, type TableHeaderMenuContext } from '../chart-library/table';
 
 /**
- * The widget type `table`: the result rows (Tabulator) with a search box, filters per column, sticky tooltips that can
- * be pinned. Its ticked rows are its own: each change of them runs the command `details.showRecords` with the table
+ * The widget type `table`: the result rows (Tabulator) with a search box, filters per column. Its ticked rows are its
+ * own: each change of them runs the command `details.showRecords` with the table
  * and its ticked rows (`{ widget, records }`, Details shows them), as does each answer and the table's removal when
  * they clear rows that were ticked. The press on a checkbox makes the table active, as any press in a widget does.
  * A click on a cell shows the data point menu of its value (by its column's name), where the `filters` extension offers
- * to filter by it or exclude it.
+ * to filter by it or exclude it, and the table's "Copy value" (to the clipboard).
  * The entries of every table's menus, the widget's and Debug's: a cell's (`table/cell`) add a condition to the
  * page's SQL filter (the command `filters.addSql`), only while the server takes SQL chips (`workbench.json`'s
  * `sqlEnabled`); a column header's (`table/header`) size the columns.
@@ -24,6 +25,8 @@ export const table: Extension = {
       subscriptions.push(ui.registerMenuItem<TableCellMenuContext>('table/cell', { command: filter.command, title: filter.title, when: filter.when, order }));
     }
     subscriptions.push(
+      commands.registerCommand(COPY_VALUE, (text: string) => navigator.clipboard.writeText(text)),
+      widgets.registerDataPointMenuProvider(copyMenuProvider),
       commands.registerCommand('table.autoSizeColumn', (header: TableHeaderMenuContext) => header.autoSize()),
       commands.registerCommand('table.autoSizeColumns', (header: TableHeaderMenuContext) => header.autoSizeAll()),
       ui.registerMenuItem('table/header', { command: 'table.autoSizeColumn', title: 'Auto-size column (based on visible data)', order: 0 }),
@@ -37,6 +40,16 @@ const ADD_SQL = 'filters.addSql';
 
 /** The command a table runs with `{ widget, records }` on each change of its ticked rows (the `details` extension's). */
 const SHOW_RECORDS = 'details.showRecords';
+
+const COPY_VALUE = 'table.copyValue';
+
+/** "Copy value" in a table cell's data point menu: its value as the data point has it (a time as ISO 8601). */
+const copyMenuProvider: DataPointMenuProvider = {
+  provideDataPointMenuItems: ({ widget }, dataPoints) =>
+    widget.type === 'table'
+      ? dataPoints.map(({ value }) => ({ label: 'Copy value', icon: { svg: createElement(Copy).outerHTML, label: 'Copy' }, command: COPY_VALUE, arguments: [value] }))
+      : [],
+};
 
 function renderTable(widgetContainer: HTMLElement, widget: WidgetOf<'table'>, ctx: WidgetContext, commands: Commands): { dispose(): void } {
   /** The ticked rows, in the order ticked. */

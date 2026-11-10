@@ -12,7 +12,7 @@ import { details, drawComparison, drawRecord, recordsSelected } from './details'
 
 let bodyContainer: HTMLElement;
 let statusElement: HTMLElement;
-let panel: { visible: boolean; shown: number };
+let panel: { visible: boolean; shown: number; nudged: number };
 let visibility: EventEmitter<void>;
 let commands: Record<string, (...args: any[]) => unknown>;
 let popOutEnabled: () => boolean;
@@ -20,7 +20,7 @@ let popped: PoppedView[];
 
 beforeEach(() => {
   bodyContainer = document.body.appendChild(document.createElement('div'));
-  panel = { visible: false, shown: 0 };
+  panel = { visible: false, shown: 0, nudged: 0 };
   visibility = new EventEmitter<void>();
   commands = {};
   popped = [];
@@ -34,6 +34,7 @@ beforeEach(() => {
         },
         onDidChangeVisibility: visibility.event,
         show: () => panel.shown++,
+        nudge: () => panel.nudged++,
         dispose() {},
       }),
       registerBarItem: (_bar: string, itemElement: HTMLElement) => {
@@ -66,6 +67,14 @@ const showPanel = () => {
 const titles = () => [...bodyContainer.querySelectorAll('.d-view__title')].map((titleElement) => titleElement.textContent);
 
 describe('details', () => {
+  it('nudges the panel on each call with records, none when they clear', () => {
+    const table = tableNode();
+    show(table, [{ path: '/api' }]);
+    show(table, [{ path: '/api' }, { path: '/login' }]);
+    show(table, []);
+    expect(panel.nudged).toBe(2);
+  });
+
   it('says in the status bar how many records are shown, hidden while there are none; a click opens the panel', () => {
     expect(statusElement.hidden).toBe(true);
     const table = tableNode();

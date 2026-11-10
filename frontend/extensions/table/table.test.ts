@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell of a
-// category column showing the data point menu of its value for the table, a cell's menu (`table/cell`) adding a
+// Tests for table.ts: the rows drawn into a table, ticked rows given to `details.showRecords`, a click on a cell showing
+// the data point menu of its value for the table, with "Copy value", a cell's menu (`table/cell`) adding a
 // condition to the page's SQL filter by `filters.addSql` (none while SQL filters are off), a column header's
 // (`table/header`) sizing the columns.
 import { Field, List, Table, Utf8, vectorFromArray } from 'apache-arrow';
@@ -129,7 +129,7 @@ describe('table', () => {
     expect(offers).toEqual([]);
   });
 
-  it('offers only in its category columns: a measure, or a table without categories, offers nothing', async () => {
+  it('offers every cell’s value; only its category columns are marked as ones to filter by', async () => {
     testbed.serve('/p/shop/api/1/query', { path: ['/api'], cnt: [3] });
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['path'] });
     await inView();
@@ -137,19 +137,30 @@ describe('table', () => {
     const countCellElement = cellAt(widgetContainer, 'cnt', 0);
     expect(countCellElement.classList.contains('d-table__filterable')).toBe(false);
     countCellElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(offers).toEqual([]);
+    expect(offers.map(({ dataPoints }) => dataPoints)).toEqual([[{ field: 'cnt', value: '3' }]]);
     expect(cellAt(widgetContainer, 'path', 0).classList.contains('d-table__filterable')).toBe(true);
   });
 
-  it('offers nothing in a list column, even one named a category', async () => {
+  it('never marks a list column as one to filter by, even one named a category', async () => {
     testbed.serve('/p/shop/api/1/query', new Table({ tags: vectorFromArray([['a', 'b']], new List(new Field('item', new Utf8(), true))) }));
     const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1', filterable: ['tags'] });
     await inView();
 
-    const tagsElement = cellAt(widgetContainer, 'tags', 0);
-    expect(tagsElement.classList.contains('d-table__filterable')).toBe(false);
-    tagsElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(offers).toEqual([]);
+    expect(cellAt(widgetContainer, 'tags', 0).classList.contains('d-table__filterable')).toBe(false);
+  });
+
+  it('offers to copy a clicked cell’s value', async () => {
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void copied.push(text) }, configurable: true });
+    testbed.serve('/p/shop/api/1/query', { path: ['/api', '/login'] });
+    const { widgetContainer } = testbed.render({ type: 'table', props: { height: 500 }, dataUrl: '/p/shop/api/1' });
+    await inView();
+
+    cellAt(widgetContainer, 'path', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    const options = () => [...document.querySelectorAll<HTMLElement>('.d-workbench__quick-pick[aria-label="Data point"] [role=option]')];
+    expect(options().map((optionElement) => optionElement.textContent?.trim())).toEqual(['Copy value']);
+    options()[0].click();
+    await vi.waitFor(() => expect(copied).toEqual(['/login']));
   });
 
   it('keeps only the SQL entries no filter op says in a cell’s menu', async () => {

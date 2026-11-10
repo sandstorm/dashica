@@ -151,6 +151,17 @@ describe('WindowLayout', () => {
     expect(toggleElement.getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('nudge() marks the rail button of a hidden panel until it shows; a shown panel stays as it is', () => {
+    const { sidePanel, toggleElement } = setup();
+    const nudged = () => toggleElement.classList.contains('d-workbench__rail-button--nudged');
+    sidePanel.nudge();
+    expect(nudged()).toBe(true);
+    toggleElement.click();
+    expect(nudged()).toBe(false);
+    sidePanel.nudge();
+    expect(nudged()).toBe(false);
+  });
+
   it("someone's choice wins over the default, also for the next workbench in the session", () => {
     const { sidePanel, toggleElement, key, isOpen } = setup();
     toggleElement.click();

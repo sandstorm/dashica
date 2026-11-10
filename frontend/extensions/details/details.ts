@@ -16,8 +16,9 @@ import './details.css';
  * title, then a view per record, its fields one below the other (a JSON value pretty-printed, a value of several lines
  * as it is), drawn anew on each call, each view starting open. "Pop out" (the panel's menu `panel/details`, enabled
  * while records are shown) opens a tab comparing the records kept then side by side, a column per record, which keeps
- * them when the table's next answer clears its ticks. The status bar says "3 records selected" while there are some,
- * and is hidden while there are none; a click on it opens the panel.
+ * them when the table's next answer clears its ticks. While the panel is hidden, each call with records nudges its
+ * rail button (`Panel.nudge`). The status bar says "3 records selected" while there are some, and is hidden while
+ * there are none; a click on it opens the panel.
  */
 export const details: Extension = {
   id: 'details',
@@ -40,6 +41,7 @@ export const details: Extension = {
         if (given.records.length === 0 && shown && shown.widget !== given.widget) return;
         shown = given.records.length > 0 ? given : undefined;
         update();
+        if (shown) panel.nudge();
       }),
       commands.registerCommand(
         'details.popOut',

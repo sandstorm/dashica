@@ -327,6 +327,11 @@ export interface Panel {
   hide(): void;
   /** Closes it while it lies over the content (the narrow workbench's left side), e.g. after a dashboard was chosen. */
   dismiss(): void;
+  /**
+   * While it is hidden, its rail button wiggles once and stays tinted until it is shown: something new waits in it
+   * (Details' records). Nothing while it is shown.
+   */
+  nudge(): void;
   dispose(): void;
 }
 

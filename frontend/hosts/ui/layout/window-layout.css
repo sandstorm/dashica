@@ -99,6 +99,20 @@
 .d-workbench__rail-button[aria-disabled='true'] { opacity: var(--opacity-muted); cursor: default; }
 .d-workbench__rail-button[aria-disabled='true']:hover { background: none; color: var(--color-text-muted); }
 .d-workbench__rail-button svg { width: 16px; height: 16px; }
+/* its hidden panel has something new (Panel.nudge): ringed until shown, after one wiggle */
+.d-workbench__rail-button--nudged {
+  box-shadow: inset 0 0 0 var(--border-width) var(--color-accent);
+  color: var(--color-accent);
+  animation: d-workbench-nudge calc(4 * var(--duration-slow)) ease-in-out;
+}
+@keyframes d-workbench-nudge {
+  0%, 100% { transform: none; }
+  15% { transform: translateY(-3px) rotate(-12deg); }
+  30% { transform: translateY(-3px) rotate(10deg); }
+  45% { transform: translateY(-1px) rotate(-6deg); }
+  60% { transform: rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) { .d-workbench__rail-button--nudged { animation: none; } }
 .d-workbench__panel {
   position: relative;
   display: flex;
