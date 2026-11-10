@@ -2,9 +2,8 @@
 
 ## 1. Context and goal
 
-Users want to take the rows of a table widget out of Dashica as a CSV file, mainly to hand them to LLM agents. The
-table caps its rows (10 000 by default) and shows only the dashboard's time range, so copying from the screen is no
-option.
+Users want to take the rows of a table widget out of Dashica as a CSV file, mainly to hand them to LLM agents. The table
+caps its rows (10 000 by default) and shows only the dashboard's time range, so copying from the screen is no option.
 
 Goal:
 
@@ -46,8 +45,8 @@ filter popup, but nothing about export.
 
 ### 2.4 Limits
 
-No query has a row or time cap besides the widget's own `LIMIT`. ClickHouse limits the memory per query. The HTTP
-client to ClickHouse has a 30 second timeout that covers reading the whole response.
+No query has a row or time cap besides the widget's own `LIMIT`. ClickHouse limits the memory per query. The HTTP client
+to ClickHouse has a 30 second timeout that covers reading the whole response.
 
 ## 3. Solution
 
@@ -82,8 +81,8 @@ Because the default is `none`, every column has to be granted, aggregates such a
 the export from the query's select fields, matched by alias. Columns are selected by name in an outer query, so the
 inner query stays as it is.
 
-Tables backed by a `.sql` file or a SQL string have no field definitions and are not supported. The menu entry is
-hidden for them, and for tables whose fields are all `none`.
+Tables backed by a `.sql` file or a SQL string have no field definitions and are not supported. The menu entry is hidden
+for them, and for tables whose fields are all `none`.
 
 ### 3.3 Hashing
 
@@ -91,8 +90,8 @@ A hashed column holds a keyed hash (HMAC-SHA-256 or similar) of the value, keyed
 the same hash in every export, so rows can still be grouped and joined. Due to the secret, low-entropy values like IPv4
 addresses cannot be brute-forced back. Rotating `app_secret` changes all hashes.
 
-ClickHouse computes the hash in the outer select. The secret is thus part of the query text; that is fine, as query
-logs are disabled.
+ClickHouse computes the hash in the outer select. The secret is thus part of the query text; that is fine, as query logs
+are disabled.
 
 ### 3.4 The export route
 
